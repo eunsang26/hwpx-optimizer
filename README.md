@@ -22,7 +22,7 @@ HWPX 문서 최적화는 한글 HWPX 파일의 용량 원인을 분석하고, �
 - `analyze`, `report`, `verify`, `optimize`, `batch` CLI 명령
 - 파일 선택, 드래그앤드롭, 분석, 모드 선택, 최적화, 결과 확인, 설정을 지원하는 Electron 데스크톱 앱
 - 데스크톱 최적화 worker thread 처리, 진행률 표시, 취소
-- Linux unpacked, Windows unpacked, Windows portable 빌드
+- Linux unpacked, Windows unpacked, Windows portable EXE, Windows ZIP 빌드
 - Core, CLI, Desktop service/view-model 테스트
 
 아직 완료 전 확인이 필요한 항목:
@@ -68,6 +68,14 @@ Windows portable 실행 파일 만들기:
 ```bash
 npm run desktop:portable:win
 ```
+
+Windows 빠른 실행용 ZIP 만들기:
+
+```bash
+npm run desktop:zip:win
+```
+
+Windows에서 실행 시작이 빠른 배포 방식은 ZIP입니다. `release/HWPX Optimizer-0.1.0-x64.zip`을 한 번 압축 해제한 뒤 폴더 안의 `HWPX Optimizer.exe`를 실행하면 됩니다. 단일 portable EXE는 복사와 실행은 간단하지만, 시작할 때 앱 묶음을 임시 폴더로 풀기 때문에 ZIP 방식보다 실행 시작이 느릴 수 있습니다.
 
 사용 흐름:
 
@@ -210,6 +218,8 @@ Windows portable 릴리즈 후보 검증:
 ```bash
 npm run release:check:win-portable
 ```
+
+이 명령은 단일 portable EXE와 빠른 실행용 ZIP을 함께 생성하고 체크섬 manifest를 검증합니다.
 
 Windows installer 릴리즈 검증은 Windows release machine 또는 Windows CI runner에서 실행합니다.
 

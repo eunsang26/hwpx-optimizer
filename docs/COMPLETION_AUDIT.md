@@ -60,6 +60,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Linux unpacked build | `npm run desktop:pack` passed on 2026-05-08 | Verified |
 | Windows unpacked build | `npm run desktop:pack:win` passed on 2026-05-08 | Verified as build artifact only |
 | Windows portable artifact | `npm run desktop:portable:win`, `release/HWPX Optimizer-0.1.0-x64.exe` | Verified build artifact |
+| Windows fast-start ZIP artifact | `npm run desktop:zip:win`, `release/HWPX Optimizer-0.1.0-x64.zip` | Verified build artifact |
 | Windows portable release gate | `npm run release:check:win-portable` | Verified |
 | Windows sharp native runtime packaging | `package.json` `asarUnpack`, `scripts/prepare-win-sharp-runtime.mjs`, `scripts/verify-win-native-runtime.mjs`, `npm run release:verify-win-native` | Verified: `sharp-win32-x64.node`, `libvips-cpp.dll`, and `libvips-42.dll` are unpacked outside `app.asar` |
 | Desktop startup does not eagerly load sharp/core | `apps/desktop/src/main/desktopService.ts`, `apps/desktop/test/desktopService.lazy.test.ts` | Verified: desktop service module can import without loading `@hwpx-optimizer/core` |
@@ -278,6 +279,16 @@ Latest runtime performance update after worker and duplicate-transform cleanup:
 - Latest portable artifact: `release/HWPX Optimizer-0.1.0-x64.exe`.
 - Latest portable artifact SHA256: `01552fbdceed089731997e7b48511abf23c0292ee0e07881b74725e7a0306a17`.
 
+Latest Windows startup packaging update:
+
+- Added a Windows ZIP artifact for faster repeated startup after one-time extraction.
+- Root cause: the single portable EXE is convenient but has to self-extract the Electron app payload on each launch.
+- `npm run release:check:win-portable`: passed and now builds both `release/HWPX Optimizer-0.1.0-x64.exe` and `release/HWPX Optimizer-0.1.0-x64.zip`.
+- `release:verify-manifest`: verified 2 release artifacts.
+- Latest portable EXE SHA256: `9de6d2a9cb3a6d66cce56dedfa814802a86a548d106644a01545459c082f999c`.
+- Latest fast-start ZIP SHA256: `09787b6677e498abe2bce8a1d53fe15eb71c2720006fbd78fe52425d713433c2`.
+- Windows build now excludes Linux sharp optional packages from the packaged Windows app. Verified unpacked native runtime contains only the Windows sharp runtime files under `@img/sharp-win32-x64`.
+
 Latest real sample E2E after reference graph update:
 
 - `npm run cli -- analyze sample2.hwpx --report .tmp/real-sample-after-refgraph/sample2.analysis.json`: passed.
@@ -330,7 +341,8 @@ Desktop smoke evidence:
 
 Windows artifact evidence:
 
-- Portable Windows artifact: `release/HWPX Optimizer-0.1.0-x64.exe`, 94 MiB.
+- Portable Windows artifact: `release/HWPX Optimizer-0.1.0-x64.exe`, 95 MiB.
+- Fast-start Windows ZIP artifact: `release/HWPX Optimizer-0.1.0-x64.zip`, 142 MiB.
 - Windows unpacked directory: `release/win-unpacked`.
 - Checksum files: `release/release-manifest.json`, `release/SHA256SUMS.txt`; verified by `npm run release:verify-manifest`.
 - Desktop icon resources are generated under ignored `build/`.

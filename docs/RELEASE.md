@@ -67,13 +67,27 @@ Create a Windows x64 portable executable from Linux/WSL without NSIS:
 npm run desktop:portable:win
 ```
 
+Create a Windows x64 ZIP distribution for faster startup after one-time extraction:
+
+```bash
+npm run desktop:zip:win
+```
+
+Create both local Windows artifacts in one packaging pass:
+
+```bash
+npm run desktop:local:win
+```
+
 Create a Windows x64 installer build:
 
 ```bash
 npm run desktop:dist:win
 ```
 
-On Linux/WSL, the NSIS installer build requires `wine`. If `wine` is unavailable, use `desktop:portable:win` for a Windows portable `.exe` artifact or `desktop:pack:win` for a Windows unpacked folder build, then create the NSIS installer on a Windows release machine or a Linux environment with Wine configured.
+On Linux/WSL, the NSIS installer build requires `wine`. If `wine` is unavailable, use `desktop:local:win` for a Windows portable `.exe` artifact plus a ZIP distribution, or `desktop:pack:win` for a Windows unpacked folder build, then create the NSIS installer on a Windows release machine or a Linux environment with Wine configured.
+
+For user-facing downloads, prefer the ZIP artifact when startup speed matters. The portable single EXE is convenient, but it must unpack the app payload to a temporary directory at launch. The ZIP is extracted once by the user, so launching `HWPX Optimizer.exe` inside the extracted folder avoids that repeated self-extraction cost.
 
 ## Verification Before Release
 
@@ -108,7 +122,7 @@ On Linux/WSL without Wine, run the portable Windows release gate:
 npm run release:check:win-portable
 ```
 
-This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifact. It does not replace a clean Windows runtime test.
+This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact and `release/HWPX Optimizer-0.1.0-x64.zip` as a faster-starting extracted-folder distribution. It verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifacts. It does not replace a clean Windows runtime test.
 
 To verify the native Windows image runtime layout on an existing Windows build:
 
@@ -129,6 +143,8 @@ powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1
 powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sample sample2.hwpx -Mode balanced
 powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sample sample2.hwpx -AllModes
 ```
+
+For the ZIP artifact, extract `HWPX Optimizer-0.1.0-x64.zip`, open PowerShell in the extracted folder, and run the same script. The script defaults to `.\HWPX Optimizer.exe` when it is present.
 
 Use [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) for the full clean-machine manual and CLI verification pass before treating a Windows artifact as product-ready.
 
@@ -166,7 +182,7 @@ Before treating a build as releasable:
 2. Launch the unpacked app on the target platform.
 3. Verify the app can analyze and optimize a local HWPX file.
 4. Run `npm run desktop:pack:win` to confirm a Windows unpacked folder can be generated.
-5. Run `npm run desktop:portable:win` if a portable Windows artifact is acceptable for the release candidate.
+5. Run `npm run desktop:local:win` to create both the portable EXE and the faster-starting ZIP artifact.
 6. Run `scripts/windows-portable-smoke.ps1` on a clean Windows machine.
 7. Complete [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) on a clean Windows machine.
 8. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.

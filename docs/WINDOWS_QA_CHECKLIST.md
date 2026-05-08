@@ -12,7 +12,8 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 - Node.js 20 or newer, if running source-based checks.
 - A local HWPX sample file. Do not commit sample files.
 - A release artifact from `release/`, either:
-  - `HWPX Optimizer-0.1.0-x64.exe` portable build, or
+  - `HWPX Optimizer-0.1.0-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
+  - `HWPX Optimizer-0.1.0-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
   - the NSIS installer produced by `npm run release:check:win`.
 
 ## Artifact Integrity
@@ -21,6 +22,7 @@ From a PowerShell prompt in the project root:
 
 ```powershell
 Get-FileHash ".\release\HWPX Optimizer-0.1.0-x64.exe" -Algorithm SHA256
+Get-FileHash ".\release\HWPX Optimizer-0.1.0-x64.zip" -Algorithm SHA256
 ```
 
 Compare the hash with `release/SHA256SUMS.txt`.
@@ -44,6 +46,8 @@ Run without a sample first:
 powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1
 ```
 
+For the ZIP artifact, extract the ZIP first, open PowerShell in the extracted app folder, and run the same script. It will use `.\HWPX Optimizer.exe` by default.
+
 Run with a real local HWPX sample:
 
 ```powershell
@@ -60,7 +64,7 @@ powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sam
 
 Expected result:
 
-- The printed SHA256 matches `release\SHA256SUMS.txt`.
+- The printed SHA256 matches `release\SHA256SUMS.txt` when testing a release artifact directly. When testing the EXE inside an extracted ZIP, the script may warn that no checksum entry exists for the inner executable.
 - The app launches.
 - The smoke script exits with code 0.
 - The optimized output passes verifier.

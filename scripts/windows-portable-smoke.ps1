@@ -10,7 +10,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($Artifact -eq "") {
-  if (Test-Path -LiteralPath ".\HWPX Optimizer-0.1.0-x64.exe") {
+  if (Test-Path -LiteralPath ".\HWPX Optimizer.exe") {
+    $Artifact = ".\HWPX Optimizer.exe"
+  } elseif (Test-Path -LiteralPath ".\HWPX Optimizer-0.1.0-x64.exe") {
     $Artifact = ".\HWPX Optimizer-0.1.0-x64.exe"
   } else {
     $Artifact = "release\HWPX Optimizer-0.1.0-x64.exe"

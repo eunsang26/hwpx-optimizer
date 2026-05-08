@@ -20,6 +20,8 @@
     "desktop:pack": "npm run build && npm run desktop:icons && node scripts/run-electron-builder.mjs --dir",
     "desktop:pack:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win --x64 --dir -c.win.signAndEditExecutable=false",
     "desktop:portable:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win portable --x64 -c.win.signAndEditExecutable=false",
+    "desktop:zip:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win zip --x64 -c.win.signAndEditExecutable=false",
+    "desktop:local:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win portable zip --x64 -c.win.signAndEditExecutable=false",
     "desktop:dist:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win --x64",
     "test": "vitest run",
     "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
@@ -28,7 +30,7 @@
     "release:verify-manifest": "node scripts/verify-release-manifest.mjs",
     "release:verify-win-native": "node scripts/verify-win-native-runtime.mjs",
     "release:check": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win && npm run release:verify-win-native",
-    "release:check:win-portable": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:portable:win && npm run release:verify-win-native && npm run release:manifest && npm run release:verify-manifest",
+    "release:check:win-portable": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:local:win && npm run release:verify-win-native && npm run release:manifest && npm run release:verify-manifest",
     "release:check:win": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:dist:win && npm run release:verify-win-native",
     "cli": "tsx --conditions=development packages/cli/src/index.ts"
   },
@@ -57,7 +59,9 @@
           "dist/**/*"
         ]
       },
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!node_modules/@img/sharp-linux-x64/**/*",
+      "!node_modules/@img/sharp-libvips-linux-x64/**/*"
     ],
     "win": {
       "target": [
