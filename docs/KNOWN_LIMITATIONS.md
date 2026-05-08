@@ -18,7 +18,7 @@ This file separates release blockers from non-blockers so the project does not o
 - Display-size based image budgets depend on detectable HWPX picture size fields. If those fields are missing, fallback mode profile limits are used.
 - EXIF removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size.
 - Some safe-mode rewrites can make an individual entry slightly larger. The optimizer records skipped or applied actions so this can be audited.
-- Desktop settings UI is minimal and should be refined before public release.
+- Desktop settings controls are functional, but final visual QA on the target Windows desktop environment is still required.
 - Desktop progress is stage-based rather than per-image/action.
 - `npm audit` currently reports 0 vulnerabilities after dependency updates on 2026-05-08.
 
