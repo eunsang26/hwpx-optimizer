@@ -117,6 +117,8 @@ powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1
 powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sample sample2.hwpx -Mode balanced
 ```
 
+Use [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) for the full clean-machine manual and CLI verification pass before treating a Windows artifact as product-ready.
+
 If the portable artifact already exists and only the checksum files need to be refreshed:
 
 ```bash
@@ -153,8 +155,9 @@ Before treating a build as releasable:
 4. Run `npm run desktop:pack:win` to confirm a Windows unpacked folder can be generated.
 5. Run `npm run desktop:portable:win` if a portable Windows artifact is acceptable for the release candidate.
 6. Run `scripts/windows-portable-smoke.ps1` on a clean Windows machine.
-7. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
-8. Install or launch the generated artifact on a clean Windows machine.
+7. Complete [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) on a clean Windows machine.
+8. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
+9. Install or launch the generated artifact on a clean Windows machine.
 
 Suggested future scripts:
 

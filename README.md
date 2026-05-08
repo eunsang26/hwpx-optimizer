@@ -215,4 +215,5 @@ Sample user documents should stay local. The repository ignores root-level `samp
 - [Architecture](docs/ARCHITECTURE.md)
 - [Testing](docs/TESTING.md)
 - [Release](docs/RELEASE.md)
+- [Windows QA Checklist](docs/WINDOWS_QA_CHECKLIST.md)
 - [Known Limitations](docs/KNOWN_LIMITATIONS.md)
