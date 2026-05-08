@@ -213,6 +213,9 @@ Latest real sample E2E after reference graph update:
 Additional local sample validation:
 
 - `npm run cli -- analyze sample3.hwpx --report .tmp/real-sample-matrix/sample3.analysis.json`: passed.
+- `npm run cli -- optimize sample3.hwpx --mode safe --out .tmp/real-sample-matrix/sample3.safe.hwpx --report .tmp/real-sample-matrix/sample3.safe.report.json`: passed.
+- `npm run cli -- verify .tmp/real-sample-matrix/sample3.safe.hwpx`: passed.
+- `sample3.hwpx` safe-mode observed saving: 110.2 KiB / 0.49%; applied `optimize-png` 8 and `minify-xml` 7.
 - `npm run cli -- optimize sample3.hwpx --mode balanced --out .tmp/real-sample-matrix/sample3.balanced.hwpx --report .tmp/real-sample-matrix/sample3.balanced.report.json`: passed.
 - `npm run cli -- verify .tmp/real-sample-matrix/sample3.balanced.hwpx`: passed.
 - `sample3.hwpx` observed saving: 4.73 MiB / 21.50%; applied `optimize-png` 8, `resize-jpeg` 6, `clean-shape-comment` 1.
