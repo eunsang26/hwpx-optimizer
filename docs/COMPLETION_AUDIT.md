@@ -42,7 +42,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | CLI commands | `packages/cli/src/index.ts` | Implemented: analyze, report, verify, optimize, batch |
 | Desktop app | `apps/desktop/src/*` | Implemented |
 | Desktop preload bridge | `apps/desktop/src/preload.cjs`, `apps/desktop/src/preload.ts`, `xvfb-run -a npm run desktop:smoke` | Verified |
-| Desktop renderer IPC E2E | `xvfb-run -a npm run desktop:smoke` creates a synthetic HWPX, analyzes, optimizes through worker, and verifies output | Verified |
+| Desktop renderer IPC E2E | `npm run desktop:smoke` creates a synthetic HWPX, analyzes, optimizes through worker, and verifies output; `HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run desktop:smoke` verifies the same IPC path with a local real sample | Verified |
 | Desktop file select and drag/drop | `apps/desktop/src/renderer.ts`, `index.html` | Implemented |
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
 | Desktop mode selection | renderer radio controls | Implemented |
@@ -75,6 +75,7 @@ xvfb-run -a npm run desktop:smoke
 npm run desktop:pack
 npm run desktop:pack:win
 npm audit --json
+HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run desktop:smoke
 npm run cli -- analyze sample2.hwpx --report sample2.latest-analysis.json
 npm run cli -- optimize sample2.hwpx --mode balanced --out sample2.latest-balanced.hwpx --report sample2.latest-balanced.report.json
 npm run cli -- verify sample2.latest-balanced.hwpx
@@ -96,6 +97,7 @@ Sample2 evidence from the latest local run:
 Desktop smoke evidence:
 
 - Synthetic local HWPX is generated under `.tmp/electron-smoke`.
+- Local real HWPX desktop smoke can be run by setting `HWPX_OPT_SMOKE_INPUT`; this was verified with ignored `sample2.hwpx`.
 - Renderer preload API runs analyze, safe optimize, and verify.
 - Worker progress event is observed.
 
@@ -115,7 +117,7 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 
 - Windows installer artifact has not been generated in this environment because Wine is unavailable.
 - The app has not been installed and run on a clean Windows machine.
-- Manual desktop workflow QA with real HWPX files is not complete.
+- Manual installed desktop workflow QA with real HWPX files on a clean Windows machine is not complete.
 
 ## Non-Blocking Follow-Ups
 

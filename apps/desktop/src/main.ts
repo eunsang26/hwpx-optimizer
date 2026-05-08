@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 import JSZip from "jszip";
 import { mkdir, readFile as readFileFs, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
 import {
   analyzeDesktopFile,
@@ -143,7 +143,11 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   await rm(smokeDir, { recursive: true, force: true });
   await mkdir(smokeDir, { recursive: true });
   const smokeInputPath = join(smokeDir, "smoke.hwpx");
-  await writeFile(smokeInputPath, await createSmokeHwpxFixture());
+  const smokeSourcePath = process.env.HWPX_OPT_SMOKE_INPUT;
+  await writeFile(
+    smokeInputPath,
+    smokeSourcePath ? await readFileFs(resolve(smokeSourcePath)) : await createSmokeHwpxFixture()
+  );
 
   const result = (await window.webContents.executeJavaScript(`
     new Promise((resolve) => {

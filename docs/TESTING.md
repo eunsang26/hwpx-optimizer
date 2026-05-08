@@ -44,6 +44,12 @@ Desktop smoke test in Linux headless environments with Xvfb:
 xvfb-run -a npm run desktop:smoke
 ```
 
+Desktop smoke test with a local real HWPX sample:
+
+```bash
+HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run desktop:smoke
+```
+
 ## Current Coverage
 
 Core tests cover:
@@ -85,11 +91,11 @@ Desktop smoke tests cover:
 - Renderer asset loading.
 - Renderer initialization through the preload bridge.
 - Required desktop APIs including optimize progress and cancel.
-- Synthetic HWPX analysis through renderer-to-main IPC.
+- Synthetic HWPX analysis through renderer-to-main IPC, or a local real HWPX when `HWPX_OPT_SMOKE_INPUT` is set.
 - Safe optimization through the desktop worker thread.
 - Verification of the optimized output through the renderer API.
 
-The smoke test uses a synthetic local HWPX under `.tmp/electron-smoke`; it does not upload data or use user samples.
+The smoke test uses a synthetic local HWPX under `.tmp/electron-smoke` by default. When `HWPX_OPT_SMOKE_INPUT` is set, the app copies that local file into `.tmp/electron-smoke` for the run. It does not upload data, and sample files remain ignored by git.
 
 ## Fixture Strategy
 
