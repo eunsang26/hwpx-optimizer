@@ -11,13 +11,18 @@ import {
 import type { DesktopSettings, OptimizationMode } from "./main/desktopService.js";
 
 let mainWindow: BrowserWindow | null = null;
+const isSmokeTest = process.argv.includes("--smoke-test");
+if (isSmokeTest) {
+  app.setPath("userData", join(process.cwd(), ".tmp", "electron-smoke"));
+}
 
-async function createWindow(): Promise<void> {
+async function createWindow(): Promise<BrowserWindow> {
   mainWindow = new BrowserWindow({
     width: 1180,
     height: 780,
     minWidth: 920,
     minHeight: 640,
+    show: !isSmokeTest,
     title: "HWPX Optimizer",
     webPreferences: {
       preload: join(import.meta.dirname, "preload.js"),
@@ -27,11 +32,17 @@ async function createWindow(): Promise<void> {
   });
 
   await mainWindow.loadFile(join(import.meta.dirname, "index.html"));
+  return mainWindow;
 }
 
 app.whenReady().then(async () => {
   registerIpc();
   await createWindow();
+
+  if (isSmokeTest) {
+    app.quit();
+    return;
+  }
 
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) {

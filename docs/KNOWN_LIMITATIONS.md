@@ -5,7 +5,7 @@ This file separates release blockers from non-blockers so the project does not o
 ## Blockers Before Product Release
 
 - Desktop app has packaging scripts, but a Windows installer artifact has not been built and tested yet.
-- Desktop app has not passed a GUI smoke test in this environment.
+- Desktop app has an automated launch smoke test, but full manual GUI workflow testing is still required.
 - Verifier has safe-mode image format and dimension checks, but balanced/aggressive policies still need stricter comparison rules.
 - XML reference updates are not fully structural in all advanced paths.
 - Long-running desktop optimization is not isolated in a worker or child process.

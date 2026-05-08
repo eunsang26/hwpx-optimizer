@@ -32,6 +32,18 @@ Electron version check when the local cache is required:
 electron_config_cache=.npm-cache/electron npx electron --version
 ```
 
+Desktop smoke test with a real display session:
+
+```bash
+npm run desktop:smoke
+```
+
+Desktop smoke test in Linux headless environments with Xvfb:
+
+```bash
+xvfb-run -a npm run desktop:smoke
+```
+
 ## Current Coverage
 
 Core tests cover:
@@ -88,7 +100,7 @@ Real user sample files must not be committed. Root-level `sample*.hwpx`, `sample
 
 ## Manual Desktop Checks
 
-Manual GUI checks are not yet automated. Before a desktop release, run:
+Automated smoke checks only confirm that Electron can create and load the app window. Before a desktop release, still run:
 
 1. `npm run build`
 2. `npm run desktop:start`
