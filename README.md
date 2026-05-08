@@ -29,7 +29,6 @@ Not complete yet:
 - GUI smoke tests on a real display session.
 - Full mode-aware verifier comparison between original and optimized packages.
 - Broader HWPX reference graph coverage for uncommon XML reference forms.
-- Duplicate image reference consolidation.
 - Worker/process separation for long-running desktop optimization.
 
 See [Known Limitations](docs/KNOWN_LIMITATIONS.md) for the current blocker and non-blocker list.
@@ -161,6 +160,7 @@ Balanced mode targets the common large-document causes:
 - JPEG quality around 88.
 - PNG optimization.
 - Shape-comment metadata cleanup.
+- Duplicate image reference consolidation.
 
 Aggressive mode prioritizes file size:
 
@@ -168,6 +168,7 @@ Aggressive mode prioritizes file size:
 - Stronger image pixel budget.
 - JPEG quality around 80.
 - PNG palette optimization.
+- Duplicate image reference consolidation.
 - Higher chance of visible image differences.
 
 The analyzer reports opportunities before optimization so users can see why the file is large and which work is expected to save the most space.

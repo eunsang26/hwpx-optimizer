@@ -106,6 +106,7 @@ Current limitation: graph detection is conservative and partially pattern-based.
 - Resize oversized JPEGs according to mode profile and display budgets.
 - Optimize PNG resources.
 - Clean shape-comment metadata.
+- Consolidate duplicate image resources by redirecting XML image IDs to a canonical resource.
 - Record applied and skipped actions.
 - Update manifest `href` and `media-type` attributes through a parsed XML tree.
 

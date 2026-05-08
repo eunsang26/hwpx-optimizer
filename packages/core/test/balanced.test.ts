@@ -113,6 +113,42 @@ describe("balanced optimization", () => {
     ]);
   });
 
+  it("consolidates duplicate image references in balanced mode", async () => {
+    const png = await sharp({
+      create: {
+        width: 120,
+        height: 80,
+        channels: 3,
+        background: "#44aa88"
+      }
+    })
+      .png()
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.png" media-type="image/png"/><opf:item id="image2" href="BinData/image2.png" media-type="image/png"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hp:pic><hc:img binaryItemIDRef="image1"/></hp:pic><hp:pic><hc:img binaryItemIDRef="image2"/></hp:pic></root>`,
+        "BinData/image1.png": png,
+        "BinData/image2.png": png
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture);
+    const output = await readHwpxPackage(result.output);
+    const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
+    const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+
+    expect(output.entries.some((entry) => entry.path === "BinData/image1.png")).toBe(true);
+    expect(output.entries.some((entry) => entry.path === "BinData/image2.png")).toBe(false);
+    expect(content).toContain('id="image1"');
+    expect(content).not.toContain('id="image2"');
+    expect(section).toContain('binaryItemIDRef="image1"');
+    expect(section).not.toContain('binaryItemIDRef="image2"');
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "consolidate-duplicate-images", target: "BinData/image2.png" })
+    );
+  });
+
   it("resizes BMPs to the document display size budget while converting to PNG", async () => {
     const bmp = createBmp24(400, 200, [0xcc, 0xcc, 0xcc]);
     const fixture = await createReferencedImageFixtureWithDisplay({

@@ -104,6 +104,9 @@ async function optimizeHwpxBufferAdvanced(
     if (opportunity.action === "resize-jpeg") {
       return { type: "resize-jpeg" as const, target: opportunity.target, risk: "medium" as const };
     }
+    if (opportunity.action === "consolidate-duplicate-images") {
+      return { type: "consolidate-duplicate-images" as const, target: opportunity.target, risk: "medium" as const };
+    }
     return { type: opportunity.action, target: opportunity.target, risk: "safe" as const };
   });
   const plan = {

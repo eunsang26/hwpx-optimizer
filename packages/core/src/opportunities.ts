@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
@@ -38,6 +39,7 @@ export async function detectOptimizationOpportunities(
 ): Promise<OptimizationOpportunity[]> {
   const opportunities: OptimizationOpportunity[] = [];
   const resizeBudgets = getRecommendedImagePixelBudgets(pkg, profile.displayScale);
+  addDuplicateImageOpportunities(pkg, opportunities);
 
   for (const entry of pkg.entries) {
     if (entry.kind !== "image") continue;
@@ -117,6 +119,37 @@ export async function detectOptimizationOpportunities(
   }
 
   return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
+}
+
+function addDuplicateImageOpportunities(pkg: HwpxPackage, opportunities: OptimizationOpportunity[]): void {
+  const groups = new Map<string, Array<{ path: string; size: number }>>();
+  for (const entry of pkg.entries) {
+    if (entry.kind !== "image") continue;
+    const hash = createHash("sha256").update(entry.data).digest("hex");
+    const group = groups.get(hash) ?? [];
+    group.push({ path: entry.path, size: entry.size });
+    groups.set(hash, group);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const sorted = group.sort((left, right) => left.path.localeCompare(right.path));
+    for (const duplicate of sorted.slice(1)) {
+      opportunities.push({
+        id: `consolidate-duplicate-images:${duplicate.path}`,
+        label: "Consolidate duplicate image references",
+        action: "consolidate-duplicate-images",
+        target: duplicate.path,
+        beforeSize: duplicate.size,
+        afterSize: 0,
+        estimatedSavingBytes: duplicate.size,
+        confidence: "exact",
+        risk: "medium",
+        visualImpact: "none",
+        defaultEnabledIn: ["balanced", "aggressive"]
+      });
+    }
+  }
 }
 
 async function tryTransform(operation: () => Promise<Buffer>): Promise<Buffer | null> {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { XMLParser } from "fast-xml-parser";
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
@@ -45,12 +46,19 @@ async function verifyAgainstOriginal(input: { original: HwpxPackage; output: Hwp
   const outputPaths = new Set(input.output.entries.map((entry) => entry.path));
   const originalImages = new Map((await analyzeHwpxPackage(input.original)).images.map((image) => [image.path, image]));
   const outputImages = new Map((await analyzeHwpxPackage(input.output)).images.map((image) => [image.path, image]));
+  const originalDuplicatePathsByPath = duplicateImagePathsByPath(input.original);
 
   for (const resource of originalGraph.resources.values()) {
     if (!resource.referenced) continue;
     const originalImage = originalImages.get(resource.path);
     if (input.mode !== "safe" && originalImage) {
-      verifyAdvancedImage({ originalImage, outputImages, outputGraph, mode: input.mode });
+      verifyAdvancedImage({
+        originalImage,
+        outputImages,
+        outputGraph,
+        mode: input.mode,
+        originalDuplicatePaths: originalDuplicatePathsByPath.get(originalImage.path) ?? []
+      });
       continue;
     }
     if (!outputPaths.has(resource.path)) {
@@ -68,11 +76,13 @@ function verifyAdvancedImage(input: {
   outputImages: Map<string, ImageInventoryItem>;
   outputGraph: ReturnType<typeof buildReferenceGraph>;
   mode: Exclude<VerifyMode, "safe">;
+  originalDuplicatePaths: string[];
 }): void {
-  const candidatePaths = allowedAdvancedImagePaths(input.originalImage);
-  const outputImage = candidatePaths
-    .map((path) => input.outputImages.get(path))
-    .find((image): image is ImageInventoryItem => Boolean(image && input.outputGraph.resources.get(image.path)?.referenced));
+  const candidatePaths = allowedAdvancedImagePaths(input.originalImage, input.originalDuplicatePaths);
+  const outputImage =
+    candidatePaths
+      .map((path) => input.outputImages.get(path))
+      .find((image): image is ImageInventoryItem => Boolean(image && input.outputGraph.resources.get(image.path)?.referenced));
 
   if (!outputImage) {
     throw new Error(`Verification failed: referenced image removed ${input.originalImage.path}`);
@@ -121,8 +131,11 @@ function normalizeFormat(format: string): string {
   return normalized;
 }
 
-function allowedAdvancedImagePaths(image: ImageInventoryItem): string[] {
+function allowedAdvancedImagePaths(image: ImageInventoryItem, duplicatePaths: string[] = []): string[] {
   const paths = new Set([image.path]);
+  for (const duplicatePath of duplicatePaths) {
+    paths.add(duplicatePath);
+  }
   paths.add(replaceExtension(image.path, ".bmp"));
   paths.add(replaceExtension(image.path, ".png"));
   paths.add(replaceExtension(image.path, ".jpg"));
@@ -148,4 +161,26 @@ function isAllowedAdvancedFormat(originalImage: ImageInventoryItem, outputImage:
 
 function replaceExtension(path: string, extension: string): string {
   return path.replace(/\.[^.\/]+$/, extension);
+}
+
+function duplicateImagePathsByPath(pkg: HwpxPackage): Map<string, string[]> {
+  const byHash = new Map<string, string[]>();
+
+  for (const entry of pkg.entries) {
+    if (entry.kind !== "image") continue;
+    const hash = createHash("sha256").update(entry.data).digest("hex");
+    const paths = byHash.get(hash) ?? [];
+    paths.push(entry.path);
+    byHash.set(hash, paths);
+  }
+
+  const duplicatePathsByPath = new Map<string, string[]>();
+  for (const paths of byHash.values()) {
+    if (paths.length < 2) continue;
+    const sorted = paths.sort((left, right) => left.localeCompare(right));
+    for (const path of sorted) {
+      duplicatePathsByPath.set(path, sorted);
+    }
+  }
+  return duplicatePathsByPath;
 }

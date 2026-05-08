@@ -14,7 +14,7 @@ This file separates release blockers from non-blockers so the project does not o
 ## Non-Blockers For Continued Development
 
 - Some reference graph detection is conservative and may miss uncommon HWPX reference forms.
-- Duplicate image groups are detected but not yet consolidated.
+- Duplicate image consolidation currently handles byte-identical image files with manifest IDs. Near-duplicate visual matching is not implemented.
 - Embedded fonts and OLE objects are reported as risky resources but not optimized.
 - Display-size based image budgets depend on detectable HWPX picture size fields. If those fields are missing, fallback mode profile limits are used.
 - EXIF removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size.
