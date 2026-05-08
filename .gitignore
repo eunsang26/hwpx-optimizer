@@ -13,4 +13,5 @@ build/
 /sample*.hwpx
 /sample*.json
 /sample*.txt
+/결과/
 *:Zone.Identifier
