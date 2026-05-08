@@ -6,7 +6,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 - Desktop app is not packaged for Windows yet.
 - Desktop app has not passed a GUI smoke test in this environment.
-- Verifier does not yet compare original and optimized packages with a full mode-aware policy.
+- Verifier has safe-mode image format and dimension checks, but balanced/aggressive policies still need stricter comparison rules.
 - XML reference updates are not fully structural in all advanced paths.
 - Long-running desktop optimization is not isolated in a worker or child process.
 - No Windows release artifact has been built or tested.

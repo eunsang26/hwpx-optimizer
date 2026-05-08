@@ -125,8 +125,10 @@ Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a strong
 - Confirms the output ZIP opens.
 - Confirms XML entries parse.
 - Confirms referenced internal resources exist.
+- Compares original and output packages when a mode policy is provided.
+- Rejects safe-mode outputs that change referenced image dimensions or format.
 
-Current limitation: verifier is not yet fully mode-aware against the original package. It should eventually compare original and output dimensions, formats, and referenced resources according to each mode policy.
+Current limitation: advanced mode verification is still intentionally broad. It allows image conversion and resizing, but should eventually enforce more precise balanced/aggressive policy checks for allowed conversions, output dimensions, and reference updates.
 
 ### Report
 

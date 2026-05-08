@@ -29,7 +29,7 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
   const plan = createSafeOptimizationPlan({ pkg, analysis, graph });
   const optimized = await applySafeOptimizationPlan({ pkg, plan });
   const output = await writeHwpxPackage(optimized.pkg);
-  await verifyHwpxOutput(output);
+  await verifyHwpxOutput(output, { original: input, mode: "safe" });
 
   if (output.byteLength >= input.byteLength) {
     const report = createOptimizationReport({
@@ -112,7 +112,7 @@ async function optimizeHwpxBufferAdvanced(
   };
   const optimized = await applyBalancedOptimizationPlan({ pkg, plan, profile: settings.profile });
   const output = await writeHwpxPackage(optimized.pkg);
-  await verifyHwpxOutput(output);
+  await verifyHwpxOutput(output, { original: input, mode: settings.mode });
 
   if (!settings.options.allowLarger && output.byteLength >= input.byteLength) {
     const report = createOptimizationReport({
