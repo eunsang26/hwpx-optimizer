@@ -45,6 +45,14 @@
       "package.json",
       "apps/desktop/dist/**/*",
       "packages/core/dist/**/*",
+      {
+        "from": "packages/core",
+        "to": "node_modules/@hwpx-optimizer/core",
+        "filter": [
+          "package.json",
+          "dist/**/*"
+        ]
+      },
       "node_modules/**/*"
     ],
     "win": {
