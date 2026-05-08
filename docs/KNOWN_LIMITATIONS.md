@@ -8,7 +8,7 @@ This file separates release blockers from non-blockers so the project does not o
 - Desktop app has an automated launch smoke test, but full manual GUI workflow testing is still required.
 - Verifier checks mode-specific image format and dimension invariants, but it does not yet measure visual similarity or JPEG quality drift.
 - Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
-- Long-running desktop optimization is not isolated in a worker or child process.
+- Desktop optimization runs in a worker thread, but progress is currently coarse-grained rather than per-image/action.
 - No Windows build has been tested on a clean Windows machine.
 
 ## Non-Blockers For Continued Development

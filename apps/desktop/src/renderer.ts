@@ -39,6 +39,9 @@ const settingsButton = requireButton("settings-button");
 const settingsPanel = requireElement("settings-panel");
 const resultPanel = requireElement("result-panel");
 const resultSummary = requireElement("result-summary");
+const progressPanel = requireElement("progress-panel");
+const progressBar = requireElement("progress-bar");
+const progressItem = requireElement("progress-item");
 const analysisGrid = requireElement("analysis-grid");
 const opportunityList = requireElement("opportunity-list");
 const warningList = requireElement("warning-list");
@@ -46,6 +49,7 @@ const statusText = requireElement("status-text");
 const modeInputs = Array.from(document.querySelectorAll<HTMLInputElement>("input[name='mode']"));
 const openFileButton = requireButton("open-file-button");
 const openFolderButton = requireButton("open-folder-button");
+const cancelButton = requireButton("cancel-button");
 const settingDefaultMode = requireSelect("setting-default-mode");
 const settingSaveNext = requireInput("setting-save-next");
 const settingSaveReport = requireInput("setting-save-report");
@@ -82,6 +86,11 @@ async function init(): Promise<void> {
   });
 
   optimizeButton.addEventListener("click", optimizeCurrentFile);
+  cancelButton.addEventListener("click", async () => {
+    await window.hwpxOptimizer.cancelOptimize();
+    setStatus("Optimization cancelled.");
+    setIdle();
+  });
   settingsButton.addEventListener("click", () => settingsPanel.classList.toggle("is-open"));
   openFileButton.addEventListener("click", () => state.result && window.hwpxOptimizer.openPath(state.result.outputPath));
   openFolderButton.addEventListener("click", () => state.result && window.hwpxOptimizer.showItem(state.result.outputPath));
@@ -129,6 +138,9 @@ async function init(): Promise<void> {
   });
 
   renderModeWarning();
+  window.hwpxOptimizer.onOptimizeProgress((progress) => {
+    renderProgress(progress.percent, progress.item);
+  });
 }
 
 async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
@@ -180,6 +192,8 @@ async function optimizeCurrentFile(): Promise<void> {
   if (!state.filePath || !state.report) return;
   try {
     setBusy(`Optimizing in ${state.mode} mode...`);
+    progressPanel.hidden = false;
+    renderProgress(5, "Starting optimization");
     const response = await window.hwpxOptimizer.optimize({
       filePath: state.filePath,
       mode: state.mode,
@@ -193,6 +207,12 @@ async function optimizeCurrentFile(): Promise<void> {
   } finally {
     setIdle();
   }
+}
+
+function renderProgress(percent: number, item: string): void {
+  progressPanel.hidden = false;
+  progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  progressItem.textContent = item;
 }
 
 function renderAnalysis(report: OptimizationReport): void {
@@ -251,11 +271,13 @@ function setBusy(message: string): void {
   setStatus(message);
   optimizeButton.disabled = true;
   analyzeButton.disabled = true;
+  cancelButton.disabled = false;
 }
 
 function setIdle(): void {
   analyzeButton.disabled = !state.filePath;
   optimizeButton.disabled = !state.report;
+  cancelButton.disabled = true;
 }
 
 function setStatus(message: string): void {

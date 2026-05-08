@@ -2,15 +2,17 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 import { mkdir, readFile as readFileFs, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { Worker } from "node:worker_threads";
 import {
   analyzeDesktopFile,
   defaultDesktopSettings,
-  optimizeDesktopFile,
   verifyDesktopFile
 } from "./main/desktopService.js";
+import type { DesktopOptimizeResult } from "./main/desktopService.js";
 import type { DesktopSettings, OptimizationMode } from "./main/desktopService.js";
 
 let mainWindow: BrowserWindow | null = null;
+let activeOptimizeWorker: Worker | null = null;
 const isSmokeTest = process.argv.includes("--smoke-test");
 if (isSmokeTest) {
   app.setPath("userData", join(process.cwd(), ".tmp", "electron-smoke"));
@@ -81,10 +83,23 @@ function registerIpc(): void {
   ipcMain.handle(
     "hwpx:optimize",
     async (_event, input: { filePath: string; mode: OptimizationMode; outputDirectory?: string }) => {
+      if (activeOptimizeWorker) {
+        throw new Error("Another optimization is already running.");
+      }
       const settings = await loadSettings();
-      return optimizeDesktopFile({ ...input, settings });
+      return runOptimizeWorker({ ...input, settings }, (progress) => {
+        mainWindow?.webContents.send("hwpx:optimize-progress", progress);
+      });
     }
   );
+
+  ipcMain.handle("hwpx:cancel-optimize", async () => {
+    if (!activeOptimizeWorker) return { cancelled: false };
+    await activeOptimizeWorker.terminate();
+    activeOptimizeWorker = null;
+    mainWindow?.webContents.send("hwpx:optimize-progress", { percent: 0, item: "Optimization cancelled" });
+    return { cancelled: true };
+  });
 
   ipcMain.handle("hwpx:verify", async (_event, filePath: string) => verifyDesktopFile(filePath));
 
@@ -115,3 +130,41 @@ async function saveSettings(patch: Partial<DesktopSettings>): Promise<DesktopSet
 function settingsPath(): string {
   return join(app.getPath("userData"), "settings.json");
 }
+
+function runOptimizeWorker(
+  input: { filePath: string; mode: OptimizationMode; outputDirectory?: string; settings: DesktopSettings },
+  onProgress: (progress: { percent: number; item: string }) => void
+): Promise<DesktopOptimizeResult> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(join(import.meta.dirname, "main", "optimizeWorker.js"), { workerData: input });
+    activeOptimizeWorker = worker;
+
+    worker.on("message", (message: WorkerMessage) => {
+      if (message.type === "progress") {
+        onProgress({ percent: message.percent, item: message.item });
+      } else if (message.type === "complete") {
+        activeOptimizeWorker = null;
+        onProgress({ percent: 100, item: "Optimization complete" });
+        resolve(message.result);
+      } else if (message.type === "error") {
+        activeOptimizeWorker = null;
+        reject(new Error(message.message));
+      }
+    });
+    worker.on("error", (error) => {
+      activeOptimizeWorker = null;
+      reject(error);
+    });
+    worker.on("exit", (code) => {
+      if (activeOptimizeWorker === worker) {
+        activeOptimizeWorker = null;
+        if (code !== 0) reject(new Error("Optimization cancelled."));
+      }
+    });
+  });
+}
+
+type WorkerMessage =
+  | { type: "progress"; percent: number; item: string }
+  | { type: "complete"; result: DesktopOptimizeResult }
+  | { type: "error"; message: string };

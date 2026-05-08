@@ -21,6 +21,7 @@ Implemented:
 - Safe, balanced, and aggressive optimization modes.
 - CLI commands for analyze, report, verify, optimize, and batch.
 - Electron desktop app scaffold with file selection, drag/drop, analysis, mode selection, optimize, result links, and local settings.
+- Desktop optimization runs in a worker thread with progress updates and cancellation.
 - Vitest coverage for core, CLI, and desktop service/view-model behavior.
 
 Not complete yet:
@@ -29,7 +30,7 @@ Not complete yet:
 - GUI smoke tests on a real display session.
 - Full mode-aware verifier comparison between original and optimized packages.
 - Broader HWPX reference graph coverage for uncommon XML reference forms.
-- Worker/process separation for long-running desktop optimization.
+- Full manual desktop workflow testing on Windows.
 
 See [Known Limitations](docs/KNOWN_LIMITATIONS.md) for the current blocker and non-blocker list.
 

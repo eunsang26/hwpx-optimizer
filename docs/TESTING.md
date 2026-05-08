@@ -79,6 +79,14 @@ Desktop tests cover:
 - Report saving.
 - Verification call path.
 
+Desktop smoke tests cover:
+
+- Electron main process startup.
+- Renderer asset loading.
+- Preload bridge availability during window load.
+
+The optimization worker is covered by TypeScript build checks and desktop packaging checks. A richer end-to-end GUI test that starts an optimization from the renderer is still a release-hardening task.
+
 ## Fixture Strategy
 
 Synthetic HWPX fixtures live in `packages/core/test/fixtures.ts`. They build ZIP packages with controlled XML and resource entries.

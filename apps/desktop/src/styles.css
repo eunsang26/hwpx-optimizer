@@ -200,6 +200,26 @@ select {
   word-break: break-all;
 }
 
+.progress-track {
+  overflow: hidden;
+  height: 10px;
+  margin-top: 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.progress-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-2);
+  transition: width 160ms ease;
+}
+
+.progress-panel p {
+  margin-top: 10px;
+}
+
 .settings {
   display: none;
   position: fixed;
