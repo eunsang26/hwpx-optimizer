@@ -116,6 +116,7 @@ async function decodeForPsnr(data: Buffer, sampleSize: number): Promise<Buffer |
       ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } })
       : sharp(data);
     return await pipeline
+      .rotate()
       .removeAlpha()
       .resize(sampleSize, sampleSize, { fit: "fill", kernel: "lanczos3" })
       .raw()
