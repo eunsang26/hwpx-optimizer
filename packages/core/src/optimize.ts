@@ -1,7 +1,12 @@
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { applyBalancedOptimizationPlan } from "./balancedOptimizer.js";
 import { applySafeOptimizationPlan } from "./optimizer.js";
-import { aggressiveImageProfile, balancedImageProfile, detectOptimizationOpportunities } from "./opportunities.js";
+import {
+  aggressiveImageProfile,
+  balancedImageProfile,
+  detectEstimatedOptimizationOpportunities,
+  detectOptimizationOpportunities
+} from "./opportunities.js";
 import type { ImageOptimizationProfile } from "./opportunities.js";
 import { createSafeOptimizationPlan } from "./planner.js";
 import { createAnalysisReport, createOptimizationReport } from "./report.js";
@@ -9,12 +14,12 @@ import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
 import { verifyHwpxOutput } from "./verifier.js";
 import { writeHwpxPackage } from "./writer.js";
-import type { OptimizationReport } from "./types.js";
+import type { AppliedAction, OptimizationOpportunity, OptimizationReport } from "./types.js";
 
 export async function analyzeHwpxBuffer(input: Buffer): Promise<OptimizationReport> {
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
-  const opportunities = await detectOptimizationOpportunities(pkg);
+  const opportunities = await detectEstimatedOptimizationOpportunities(pkg);
   return createAnalysisReport(analysis, input.byteLength, opportunities);
 }
 
@@ -24,10 +29,10 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
 }> {
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
-  const opportunities = await detectOptimizationOpportunities(pkg);
   const graph = buildReferenceGraph(pkg);
   const plan = createSafeOptimizationPlan({ pkg, analysis, graph });
   const optimized = await applySafeOptimizationPlan({ pkg, plan });
+  const opportunities = createSafeOpportunitiesFromAppliedActions(optimized.applied);
   const output = await writeHwpxPackage(optimized.pkg);
   await verifyHwpxOutput(output, { original: input, mode: "safe" });
 
@@ -55,6 +60,32 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
     opportunities
   });
   return { output, report };
+}
+
+function createSafeOpportunitiesFromAppliedActions(actions: AppliedAction[]): OptimizationOpportunity[] {
+  const opportunities: OptimizationOpportunity[] = [];
+  for (const action of actions) {
+    if (action.type !== "strip-metadata" && action.type !== "optimize-png") continue;
+    if (action.beforeSize === undefined || action.afterSize === undefined) continue;
+
+    const estimatedSavingBytes = action.beforeSize - action.afterSize;
+    if (estimatedSavingBytes <= 0) continue;
+
+    opportunities.push({
+      id: `${action.type}:${action.target}`,
+      label: action.type === "strip-metadata" ? "Strip JPEG metadata" : "Optimize PNG losslessly",
+      action: action.type,
+      target: action.target,
+      estimatedSavingBytes,
+      beforeSize: action.beforeSize,
+      afterSize: action.afterSize,
+      confidence: "exact",
+      risk: "safe",
+      visualImpact: "none",
+      defaultEnabledIn: ["safe", "balanced", "aggressive"]
+    });
+  }
+  return opportunities;
 }
 
 export async function optimizeHwpxBufferBalanced(

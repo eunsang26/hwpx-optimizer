@@ -49,7 +49,7 @@ describe("desktop service", () => {
       "Optimizing document in safe mode",
       "Writing optimized document",
       "Writing JSON report",
-      "Verifying optimized document"
+      "Finalizing optimized document"
     ]);
     expect(progress.map((item) => item.percent)).toEqual([10, 35, 70, 82, 92]);
   });

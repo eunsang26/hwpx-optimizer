@@ -4,7 +4,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop app has automated launch smoke coverage and a user-confirmed basic Windows portable GUI run, but full all-mode Windows QA checklist coverage is still required.
+- Desktop app has automated launch smoke coverage and user-confirmed Windows portable smoke across safe, balanced, and aggressive modes, but broader manual QA is still required for drag/drop, settings persistence, repeated files, and more real-world documents.
 - Verifier checks mode-specific image format and dimension invariants, but it does not yet measure visual similarity or JPEG quality drift.
 - Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
 
@@ -22,6 +22,7 @@ This file separates release blockers from non-blockers so the project does not o
 - Embedded fonts and OLE objects are reported as risky resources but not optimized.
 - Display-size based image budgets depend on detectable HWPX picture size fields. If those fields are missing, fallback mode profile limits are used.
 - EXIF removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size.
+- Safe-mode optimization can still take time on image-heavy documents because it performs lossless image metadata/PNG processing and ZIP verification even when final savings are zero.
 - Some safe-mode rewrites can make an individual entry slightly larger. The optimizer records skipped or applied actions so this can be audited.
 - Desktop settings controls are functional, but final visual QA on the target Windows desktop environment is still required.
 - Desktop progress is stage-based rather than per-image/action.

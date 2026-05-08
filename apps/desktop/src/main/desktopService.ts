@@ -85,9 +85,7 @@ export async function optimizeDesktopFile(
     await writeFile(reportPath, JSON.stringify(result.report, null, 2));
   }
 
-  onProgress?.({ percent: 92, item: "Verifying optimized document" });
-  const { verifyHwpxOutput } = await loadCoreModule();
-  await verifyHwpxOutput(result.output);
+  onProgress?.({ percent: 92, item: "Finalizing optimized document" });
   return { outputPath, reportPath, report: result.report };
 }
 

@@ -82,6 +82,25 @@ describe("applySafeOptimizationPlan", () => {
       expect.objectContaining({ type: "optimize-png", target: "BinData/image1.png" })
     );
   });
+
+  it("skips XML minify when serialized XML would become larger", async () => {
+    const xml = Buffer.from("<root />");
+    const pkg: HwpxPackage = {
+      entries: [{ path: "Contents/section0.xml", data: xml, size: xml.byteLength, kind: "xml" }]
+    };
+    const plan: OptimizationPlan = {
+      mode: "safe",
+      actions: [{ type: "minify-xml", target: "Contents/section0.xml", risk: "safe" }]
+    };
+
+    const result = await applySafeOptimizationPlan({ pkg, plan });
+
+    expect(result.pkg.entries[0].data).toEqual(xml);
+    expect(result.applied).not.toContainEqual(expect.objectContaining({ type: "minify-xml" }));
+    expect(result.skipped).toContainEqual(
+      expect.objectContaining({ type: "minify-xml", target: "Contents/section0.xml" })
+    );
+  });
 });
 
 function segment(marker: number, payload: Buffer): Buffer {

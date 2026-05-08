@@ -70,9 +70,12 @@ export async function applySafeOptimizationPlan(input: {
       try {
         const minified = minifyXml(entry.data.toString("utf8"));
         const data = Buffer.from(minified);
-        entries.push({ ...entry, data, size: data.byteLength });
-        applied.push({ type: "minify-xml", target: entry.path, beforeSize: entry.size, afterSize: data.byteLength });
-        continue;
+        if (data.byteLength < entry.data.byteLength) {
+          entries.push({ ...entry, data, size: data.byteLength });
+          applied.push({ type: "minify-xml", target: entry.path, beforeSize: entry.size, afterSize: data.byteLength });
+          continue;
+        }
+        skipped.push({ type: "minify-xml", target: entry.path, beforeSize: entry.size, afterSize: data.byteLength });
       } catch {
         skipped.push({ type: "minify-xml", target: entry.path, beforeSize: entry.size });
       }

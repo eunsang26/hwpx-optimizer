@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import sharp from "sharp";
 import { analyzeHwpxBuffer, optimizeHwpxBufferSafe } from "../src/optimize.js";
 import { readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture } from "./fixtures.js";
@@ -39,5 +40,32 @@ describe("optimizeHwpxBufferSafe", () => {
 
     expect(report.originalSize).toBeGreaterThan(0);
     expect(report.images).toEqual([]);
+  });
+
+  it("does not compute advanced resize opportunities while optimizing in safe mode", async () => {
+    const jpg = await sharp({
+      create: {
+        width: 2400,
+        height: 1800,
+        channels: 3,
+        background: "#88aacc"
+      }
+    })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.JPG" media-type="image/jpg"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hc:img binaryItemIDRef="image1" /></root>`,
+        "BinData/image1.JPG": jpg
+      }
+    });
+
+    const analysis = await analyzeHwpxBuffer(input);
+    const result = await optimizeHwpxBufferSafe(input);
+
+    expect(analysis.opportunities).toContainEqual(expect.objectContaining({ action: "resize-jpeg" }));
+    expect(result.report.opportunities).not.toContainEqual(expect.objectContaining({ action: "resize-jpeg" }));
+    expect(result.report.opportunities.every((opportunity) => opportunity.risk === "safe")).toBe(true);
   });
 });

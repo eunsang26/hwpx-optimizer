@@ -69,7 +69,8 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Windows installer CI path | `.github/workflows/windows-release.yml`, GitHub Actions run `25554203465` | `npm run release:check:win` passed on Windows runner with artifact upload disabled |
 | Windows installer | Windows runner built the Windows installer through `release:check:win`; upload is optional for manual runs and enabled for tag builds | Verified in CI |
 | Windows portable GUI smoke | User copied `release/HWPX Optimizer-0.1.0-x64.exe` to a Windows desktop, launched it, optimized a sample HWPX, and confirmed the generated result opens | Verified basic runtime path |
-| Clean Windows full QA | no full all-mode clean-machine checklist result available in this environment | Partially verified |
+| Windows portable all-mode smoke | User ran `scripts/windows-portable-smoke.ps1` from the extracted portable folder with `-Sample .\sample2.hwpx -AllModes`; checksum matched and safe, balanced, and aggressive desktop smoke modes passed | Verified |
+| Clean Windows full QA | all-mode portable smoke is verified; broader manual QA for drag/drop, settings persistence, repeated files, and more real-world documents remains | Partially verified |
 | Sample files excluded | `.gitignore` sample rules; `git ls-files 'sample*'` returned empty | Verified |
 
 ## Latest Verification Commands
@@ -250,6 +251,18 @@ Latest user Windows portable GUI smoke:
 - User optimized a sample HWPX and placed the result in the output folder.
 - User confirmed the generated HWPX result opens.
 - This closes the previous Windows startup blocker involving Electron main-process `sharp` loading.
+- User then ran `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-portable-smoke.ps1 -Sample .\sample2.hwpx -AllModes` from `C:\projects\hwpx-optimizer-windows-portable-0.1.0`.
+- Portable artifact SHA256 was `38eb933b52cd9f54d0ac07b5318da1e85fc3fec7745df85192b04d20dda813a0`, and it matched `SHA256SUMS.txt`.
+- Desktop smoke passed for `safe`, `balanced`, and `aggressive`.
+
+Latest performance and portable release verification after fast analysis update:
+
+- `node packages/cli/dist/index.js analyze sample2.hwpx --report .tmp/perf-sample2-analysis-after.json --overwrite`: passed in `elapsed=0:01.49`, down from the previous measured `elapsed=0:06.17`.
+- `node packages/cli/dist/index.js optimize sample2.hwpx --mode safe --out .tmp/perf-sample2-safe-after3.hwpx --report .tmp/perf-sample2-safe-after3.json --overwrite`: passed in `elapsed=0:11.54`; safe mode produced no smaller output for this sample, as expected when the main savings require resize/BMP conversion.
+- `npm run release:check:win-portable`: passed.
+- Included release hygiene, 14 test files / 61 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, Windows sharp native unpack verification, manifest generation, and manifest verification.
+- Latest portable artifact: `release/HWPX Optimizer-0.1.0-x64.exe`.
+- Latest portable artifact SHA256: `fee5d7903fe620e5a4a886b739f227e7bd80dd0bb864e243326e983dab14722a`.
 
 Latest real sample E2E after reference graph update:
 

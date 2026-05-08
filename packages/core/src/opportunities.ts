@@ -100,24 +100,73 @@ export async function detectOptimizationOpportunities(
     }
   }
 
+  addShapeCommentOpportunities(pkg, opportunities);
+
+  return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
+}
+
+export async function detectEstimatedOptimizationOpportunities(
+  pkg: HwpxPackage,
+  profile: ImageOptimizationProfile = balancedImageProfile
+): Promise<OptimizationOpportunity[]> {
+  const opportunities: OptimizationOpportunity[] = [];
+  const resizeBudgets = getRecommendedImagePixelBudgets(pkg, profile.displayScale);
+  addDuplicateImageOpportunities(pkg, opportunities);
+
   for (const entry of pkg.entries) {
-    if (entry.kind !== "xml") continue;
-    const cleaned = cleanShapeComments(entry.data.toString("utf8"));
-    if (cleaned === entry.data.toString("utf8")) continue;
-    addOpportunityIfSmaller(opportunities, {
-      id: `clean-shape-comment:${entry.path}`,
-      label: "Clean image shape comments",
-      action: "clean-shape-comment",
-      target: entry.path,
-      beforeSize: entry.size,
-      afterSize: Buffer.byteLength(cleaned),
-      confidence: "exact",
-      risk: "safe",
-      visualImpact: "none",
-      defaultEnabledIn: ["balanced", "aggressive"]
-    });
+    if (entry.kind !== "image") continue;
+
+    const metadata = await readMetadata(entry.data);
+    const resizeBudget = normalizeResizeBudget(resizeBudgets.get(entry.path), profile);
+    if (isJpeg(entry.path) && shouldResize(metadata.width, metadata.height, resizeBudget, profile)) {
+      addOpportunityIfSmaller(opportunities, {
+        id: `resize-jpeg:${entry.path}`,
+        label: resizeBudget ? profile.opportunityLabel : "Resize oversized JPEG and recompress with MozJPEG",
+        action: "resize-jpeg",
+        target: entry.path,
+        beforeSize: entry.size,
+        afterSize: estimateJpegResizeSize(entry.size, metadata.width, metadata.height, resizeBudget, profile),
+        confidence: "estimated",
+        risk: "medium",
+        visualImpact: "medium",
+        defaultEnabledIn: ["balanced", "aggressive"]
+      });
+      continue;
+    }
+
+    if (isBmp(entry.path)) {
+      addOpportunityIfSmaller(opportunities, {
+        id: `convert-bmp-to-png:${entry.path}`,
+        label: "Convert BMP to PNG",
+        action: "convert-bmp-to-png",
+        target: entry.path,
+        beforeSize: entry.size,
+        afterSize: estimateBmpPngSize(entry.size, metadata.width, metadata.height, resizeBudget, profile),
+        confidence: "estimated",
+        risk: "medium",
+        visualImpact: metadata.width && metadata.height && Math.max(metadata.width, metadata.height) > profile.maxEdge ? "medium" : "low",
+        defaultEnabledIn: ["balanced", "aggressive"]
+      });
+      continue;
+    }
+
+    if (isPng(entry.path) && entry.size > 4096) {
+      addOpportunityIfSmaller(opportunities, {
+        id: `optimize-png:${entry.path}`,
+        label: "Optimize PNG losslessly",
+        action: "optimize-png",
+        target: entry.path,
+        beforeSize: entry.size,
+        afterSize: Math.round(entry.size * (profile.pngPalette ? 0.8 : 0.95)),
+        confidence: "estimated",
+        risk: "safe",
+        visualImpact: "none",
+        defaultEnabledIn: ["safe", "balanced", "aggressive"]
+      });
+    }
   }
 
+  addShapeCommentOpportunities(pkg, opportunities);
   return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
 }
 
@@ -149,6 +198,27 @@ function addDuplicateImageOpportunities(pkg: HwpxPackage, opportunities: Optimiz
         defaultEnabledIn: ["balanced", "aggressive"]
       });
     }
+  }
+}
+
+function addShapeCommentOpportunities(pkg: HwpxPackage, opportunities: OptimizationOpportunity[]): void {
+  for (const entry of pkg.entries) {
+    if (entry.kind !== "xml") continue;
+    const source = entry.data.toString("utf8");
+    const cleaned = cleanShapeComments(source);
+    if (cleaned === source) continue;
+    addOpportunityIfSmaller(opportunities, {
+      id: `clean-shape-comment:${entry.path}`,
+      label: "Clean image shape comments",
+      action: "clean-shape-comment",
+      target: entry.path,
+      beforeSize: entry.size,
+      afterSize: Buffer.byteLength(cleaned),
+      confidence: "exact",
+      risk: "safe",
+      visualImpact: "none",
+      defaultEnabledIn: ["balanced", "aggressive"]
+    });
   }
 }
 
@@ -293,6 +363,40 @@ function normalizeResizeBudget(
     width: Math.min(profile.maxEdge, Math.ceil(budget.width)),
     height: Math.min(profile.maxEdge, Math.ceil(budget.height))
   };
+}
+
+function estimateJpegResizeSize(
+  size: number,
+  width: number | undefined,
+  height: number | undefined,
+  budget: { width: number; height: number } | undefined,
+  profile: ImageOptimizationProfile
+): number {
+  const pixelRatio = estimatePixelRatio(width, height, budget ?? { width: profile.maxEdge, height: profile.maxEdge });
+  const qualityRatio = profile.jpegQuality / 95;
+  return Math.max(1024, Math.round(size * Math.min(0.95, pixelRatio * qualityRatio * 1.1)));
+}
+
+function estimateBmpPngSize(
+  size: number,
+  width: number | undefined,
+  height: number | undefined,
+  budget: { width: number; height: number } | undefined,
+  profile: ImageOptimizationProfile
+): number {
+  const pixelRatio = estimatePixelRatio(width, height, budget ?? { width: profile.maxEdge, height: profile.maxEdge });
+  const pngCompressionRatio = profile.pngPalette ? 0.35 : 0.5;
+  return Math.max(1024, Math.round(size * pixelRatio * pngCompressionRatio));
+}
+
+function estimatePixelRatio(
+  width: number | undefined,
+  height: number | undefined,
+  budget: { width: number; height: number }
+): number {
+  if (!width || !height) return 0.75;
+  const scale = Math.min(1, budget.width / width, budget.height / height);
+  return Math.max(0.01, scale * scale);
 }
 
 function isBmp(path: string): boolean {
