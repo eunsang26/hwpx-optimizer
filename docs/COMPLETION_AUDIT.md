@@ -132,6 +132,14 @@ Latest settings output-folder verification after commit `97d2d9f`:
 - `npm test`: passed, 13 files / 54 tests.
 - `npm run release:hygiene`: passed.
 
+Latest desktop settings smoke coverage after commit `b2551bc`:
+
+- `npm run desktop:smoke`: passed and verifies the Settings panel opens with output folder controls rendered.
+- `npm run typecheck`: passed.
+- `npm run build`: passed.
+- `npm test`: passed, 13 files / 54 tests.
+- `npm run release:hygiene`: passed.
+
 Sample2 evidence from the latest local run:
 
 - Original: 89.72 MiB
@@ -147,6 +155,7 @@ Desktop smoke evidence:
 - Local real HWPX desktop smoke can be run by setting `HWPX_OPT_SMOKE_INPUT`; this was verified with ignored `sample2.hwpx`.
 - Desktop worker paths for `balanced` and `aggressive` were verified by adding `HWPX_OPT_SMOKE_MODE`.
 - Renderer preload API runs analyze, optimize, progress events, and verify.
+- Smoke also opens the Settings panel and checks the output folder controls render.
 - Worker progress event is observed.
 
 Windows artifact evidence:
