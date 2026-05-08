@@ -48,6 +48,7 @@ const warningList = requireElement("warning-list");
 const statusText = requireElement("status-text");
 const modeInputs = Array.from(document.querySelectorAll<HTMLInputElement>("input[name='mode']"));
 const openFileButton = requireButton("open-file-button");
+const openReportButton = requireButton("open-report-button");
 const openFolderButton = requireButton("open-folder-button");
 const cancelButton = requireButton("cancel-button");
 const settingDefaultMode = requireSelect("setting-default-mode");
@@ -93,6 +94,10 @@ async function init(): Promise<void> {
   });
   settingsButton.addEventListener("click", () => settingsPanel.classList.toggle("is-open"));
   openFileButton.addEventListener("click", () => state.result && window.hwpxOptimizer.openPath(state.result.outputPath));
+  openReportButton.addEventListener(
+    "click",
+    () => state.result?.reportPath && window.hwpxOptimizer.openPath(state.result.reportPath)
+  );
   openFolderButton.addEventListener("click", () => state.result && window.hwpxOptimizer.showItem(state.result.outputPath));
 
   for (const input of modeInputs) {
@@ -253,6 +258,7 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
   ].join("");
   requireElement("output-path").textContent = outputPath;
   requireElement("report-path").textContent = reportPath ?? "Report disabled";
+  openReportButton.disabled = !reportPath;
 }
 
 function renderModeWarning(): void {
