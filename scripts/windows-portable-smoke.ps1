@@ -1,13 +1,21 @@
 param(
-  [string]$Artifact = "release\HWPX Optimizer-0.1.0-x64.exe",
+  [string]$Artifact = "",
   [string]$Sample = "",
   [ValidateSet("safe", "balanced", "aggressive")]
   [string]$Mode = "safe",
   [switch]$AllModes,
-  [string]$Sha256Sums = "release\SHA256SUMS.txt"
+  [string]$Sha256Sums = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Artifact -eq "") {
+  if (Test-Path -LiteralPath ".\HWPX Optimizer-0.1.0-x64.exe") {
+    $Artifact = ".\HWPX Optimizer-0.1.0-x64.exe"
+  } else {
+    $Artifact = "release\HWPX Optimizer-0.1.0-x64.exe"
+  }
+}
 
 if (-not (Test-Path -LiteralPath $Artifact)) {
   throw "Portable artifact not found: $Artifact"
@@ -15,9 +23,19 @@ if (-not (Test-Path -LiteralPath $Artifact)) {
 
 $artifactPath = (Resolve-Path -LiteralPath $Artifact).Path
 $artifactName = Split-Path -Path $artifactPath -Leaf
+$artifactDir = Split-Path -Path $artifactPath -Parent
 $artifactHash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Host "Artifact: $artifactPath"
 Write-Host "SHA256:   $artifactHash"
+
+if ($Sha256Sums -eq "") {
+  $localSums = Join-Path $artifactDir "SHA256SUMS.txt"
+  if (Test-Path -LiteralPath $localSums) {
+    $Sha256Sums = $localSums
+  } else {
+    $Sha256Sums = "release\SHA256SUMS.txt"
+  }
+}
 
 if (Test-Path -LiteralPath $Sha256Sums) {
   $expectedLine = Get-Content -LiteralPath $Sha256Sums | Where-Object { $_ -match "\s+$([regex]::Escape($artifactName))$" } | Select-Object -First 1
@@ -51,9 +69,9 @@ try {
   foreach ($currentMode in $modes) {
     $env:HWPX_OPT_SMOKE_MODE = $currentMode
     Write-Host "Running desktop smoke: mode=$currentMode"
-    & $artifactPath --smoke-test
-    if ($LASTEXITCODE -ne 0) {
-      throw "Desktop smoke failed with exit code $LASTEXITCODE for mode $currentMode"
+    $process = Start-Process -FilePath $artifactPath -ArgumentList "--smoke-test" -Wait -PassThru
+    if ($process.ExitCode -ne 0) {
+      throw "Desktop smoke failed with exit code $($process.ExitCode) for mode $currentMode"
     }
     Write-Host "Desktop smoke passed: $artifactPath ($currentMode)"
   }
