@@ -108,7 +108,19 @@ On Linux/WSL without Wine, run the portable Windows release gate:
 npm run release:check:win-portable
 ```
 
-This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifact. It does not replace a clean Windows runtime test.
+This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifact. It does not replace a clean Windows runtime test.
+
+To verify the native Windows image runtime layout on an existing Windows build:
+
+```bash
+npm run release:verify-win-native
+```
+
+This check requires the following files to exist under `release/win-unpacked/resources/app.asar.unpacked`:
+
+- `node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64.node`
+- `node_modules/@img/sharp-win32-x64/lib/libvips-cpp.dll`
+- `node_modules/@img/sharp-win32-x64/lib/libvips-42.dll`
 
 On a Windows machine, smoke-test the portable artifact:
 

@@ -61,6 +61,8 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Windows unpacked build | `npm run desktop:pack:win` passed on 2026-05-08 | Verified as build artifact only |
 | Windows portable artifact | `npm run desktop:portable:win`, `release/HWPX Optimizer-0.1.0-x64.exe` | Verified build artifact |
 | Windows portable release gate | `npm run release:check:win-portable` | Verified |
+| Windows sharp native runtime packaging | `package.json` `asarUnpack`, `scripts/prepare-win-sharp-runtime.mjs`, `scripts/verify-win-native-runtime.mjs`, `npm run release:verify-win-native` | Verified: `sharp-win32-x64.node`, `libvips-cpp.dll`, and `libvips-42.dll` are unpacked outside `app.asar` |
+| Desktop startup does not eagerly load sharp/core | `apps/desktop/src/main/desktopService.ts`, `apps/desktop/test/desktopService.lazy.test.ts` | Verified: desktop service module can import without loading `@hwpx-optimizer/core` |
 | Windows portable smoke script | `scripts/windows-portable-smoke.ps1` | Prepared, not executed in this Linux/WSL environment |
 | Windows clean-machine QA checklist | `docs/WINDOWS_QA_CHECKLIST.md` | Prepared, not executed |
 | Release checksum manifest | `npm run release:manifest`, `npm run release:verify-manifest`, `release/release-manifest.json`, `release/SHA256SUMS.txt` | Verified generated artifacts and checksums |
@@ -215,6 +217,22 @@ Latest portable release gate after commit `fd75546`:
 - `npm run release:check:win-portable`: passed.
 - Included release hygiene, 13 test files / 58 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, manifest generation, and manifest verification.
 - `release:verify-manifest`: verified 1 release artifact.
+
+Latest Windows desktop runtime packaging verification after commit `f359d95`:
+
+- `npm run release:check:win-portable`: passed.
+- `npm run release:verify-win-native`: passed.
+- Verified `release/win-unpacked/resources/app.asar.unpacked/node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64.node`.
+- Verified `release/win-unpacked/resources/app.asar.unpacked/node_modules/@img/sharp-win32-x64/lib/libvips-cpp.dll`.
+- Verified `release/win-unpacked/resources/app.asar.unpacked/node_modules/@img/sharp-win32-x64/lib/libvips-42.dll`.
+
+Latest desktop startup hardening verification after commit `7bc3f1c`:
+
+- `npm run release:check:win-portable`: passed.
+- Included release hygiene, 14 test files / 59 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, Windows sharp native unpack verification, manifest generation, and manifest verification.
+- `apps/desktop/test/desktopService.lazy.test.ts`: verifies desktop service import does not eagerly load `@hwpx-optimizer/core`.
+- Latest portable artifact: `release/HWPX Optimizer-0.1.0-x64.exe`.
+- Latest portable artifact SHA256: `faf5b7cc080b707d7980069bc7e84d88632d4e02665e7d03ce18301898b5e18e`.
 
 Latest real sample E2E after reference graph update:
 
