@@ -156,11 +156,15 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       const poll = () => {
         attempts += 1;
         if (document.body.dataset.appReady === "true" || attempts > 50) {
+          document.getElementById("settings-button")?.click();
           resolve({
             title: document.title,
             fileName: document.getElementById("file-name")?.textContent,
             appReady: document.body.dataset.appReady,
-            preloadApi: document.body.dataset.preloadApi
+            preloadApi: document.body.dataset.preloadApi,
+            settingsOpen: document.getElementById("settings-panel")?.classList.contains("is-open"),
+            settingsOutputButton: document.getElementById("setting-output-button")?.textContent,
+            settingsOutputResetButton: document.getElementById("setting-output-reset-button")?.textContent
           });
           return;
         }
@@ -173,6 +177,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     fileName?: string;
     appReady?: string;
     preloadApi?: string;
+    settingsOpen?: boolean;
+    settingsOutputButton?: string;
+    settingsOutputResetButton?: string;
   };
 
   if (result.title !== "HWPX Optimizer") {
@@ -183,6 +190,13 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   }
   if (result.appReady !== "true" || result.preloadApi !== "ready") {
     throw new Error(`Desktop smoke failed: renderer/preload init did not complete`);
+  }
+  if (
+    result.settingsOpen !== true ||
+    result.settingsOutputButton !== "Choose Output Folder" ||
+    result.settingsOutputResetButton !== "Use Original Folder"
+  ) {
+    throw new Error("Desktop smoke failed: settings output folder controls did not render");
   }
 
   const workflow = (await window.webContents.executeJavaScript(`
