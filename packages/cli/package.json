@@ -1,0 +1,11 @@
+{
+  "name": "@hwpx-optimizer/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "hwpx-opt": "dist/index.js"
+  },
+  "dependencies": {
+    "@hwpx-optimizer/core": "0.1.0"
+  }
+}

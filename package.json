@@ -1,0 +1,27 @@
+{
+  "name": "hwpx-optimizer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/cli"
+  ],
+  "scripts": {
+    "build": "tsc -b packages/core packages/cli",
+    "test": "vitest run",
+    "typecheck": "tsc -b packages/core packages/cli --pretty false",
+    "cli": "tsx packages/cli/src/index.ts"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0",
+    "jszip": "^3.10.1",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

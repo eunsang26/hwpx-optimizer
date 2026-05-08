@@ -1,0 +1,27 @@
+import { describe, expect, it } from "vitest";
+import { readHwpxPackage } from "../src/reader.js";
+import { createHwpxFixture } from "./fixtures.js";
+
+describe("readHwpxPackage", () => {
+  it("reads entries from a valid HWPX zip buffer", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        mimetype: "application/hwp+zip",
+        "Contents/content.hpf": '<opf:package xmlns:opf="http://www.idpf.org/2007/opf" />',
+        "Contents/section0.xml": "<root />"
+      }
+    });
+
+    const result = await readHwpxPackage(fixture);
+
+    expect(result.entries.map((entry) => entry.path).sort()).toEqual([
+      "Contents/content.hpf",
+      "Contents/section0.xml",
+      "mimetype"
+    ]);
+  });
+
+  it("fails clearly for an invalid zip buffer", async () => {
+    await expect(readHwpxPackage(Buffer.from("not a zip"))).rejects.toThrow(/Invalid HWPX package/);
+  });
+});
