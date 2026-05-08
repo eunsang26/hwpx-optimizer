@@ -28,7 +28,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Core engine exists | `packages/core/src/*` | Implemented |
 | HWPX ZIP reader | `packages/core/src/reader.ts`, `packages/core/test/reader.test.ts` | Implemented with required package file validation |
 | Package analyzer | `packages/core/src/analyzer.ts`, `packages/core/test/analyzer.test.ts` | Implemented |
-| Reference graph | `packages/core/src/referenceGraph.ts`, `packages/core/test/referenceGraph.test.ts` | Implemented with conservative coverage |
+| Reference graph | `packages/core/src/referenceGraph.ts`, `packages/core/test/referenceGraph.test.ts` | Implemented with manifest `id -> href` resolution, `binaryItemIDRef` usage tracking, and conservative fallback direct path detection |
 | Optimization planner | `packages/core/src/planner.ts`, `packages/core/test/planner.test.ts` | Implemented |
 | Safe optimizer | `packages/core/src/optimizer.ts`, `packages/core/src/optimize.ts`, `packages/core/test/optimizer.test.ts` | Implemented with XML minify, JPEG metadata segment stripping, lossless PNG optimization when smaller, unused BinData removal, ZIP repack, and rollback if output is not smaller |
 | Balanced optimizer | `packages/core/src/balancedOptimizer.ts`, `packages/core/test/balanced.test.ts` | Implemented |
@@ -187,6 +187,14 @@ Latest Windows installer gate after commit `be2b6d5`:
 - `npm run release:check:win`: failed at `desktop:dist:win`.
 - Pre-installer checks passed: release hygiene, 13 test files / 57 tests, typecheck, build, `npm audit`, and desktop smoke.
 - Failure reason: `wine is required`, so NSIS installer generation still needs a Windows release machine or a Wine-enabled Linux/WSL environment.
+
+Latest reference graph manifest-usage verification after commit `bab30c8`:
+
+- `npm test -- packages/core/test/referenceGraph.test.ts`: passed, 1 file / 2 tests.
+- `npm test`: passed, 13 files / 58 tests.
+- `npm run typecheck`: passed.
+- `npm run build`: passed.
+- `npm run release:hygiene`: passed.
 
 Sample2 evidence from the latest local run:
 
