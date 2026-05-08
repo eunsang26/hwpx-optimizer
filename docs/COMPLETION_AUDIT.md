@@ -109,6 +109,12 @@ Latest local safety verification after commit `9afe912`:
 - `git ls-files 'sample*'`: empty.
 - `git remote -v`: empty, so push is blocked until a remote is configured.
 
+Latest portable release gate after commit `9b9a2b7`:
+
+- `npm run release:check:win-portable`: passed.
+- Included release hygiene, 13 test files / 54 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, manifest generation, and manifest verification.
+- `release:verify-manifest`: verified 1 release artifact.
+
 Sample2 evidence from the latest local run:
 
 - Original: 89.72 MiB
