@@ -47,6 +47,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
 | Desktop mode selection | renderer radio controls | Implemented |
 | Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with stage-based progress |
+| Desktop result details | `apps/desktop/src/index.html`, `apps/desktop/src/renderer.ts` | Implemented with output file, output folder, and JSON report open actions |
 | Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `main.ts` local settings | Implemented |
 | Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
 | Local-only operation | no network/server code in app path; filesystem-only APIs | Implemented |
@@ -114,6 +115,14 @@ Latest portable release gate after commit `9b9a2b7`:
 - `npm run release:check:win-portable`: passed.
 - Included release hygiene, 13 test files / 54 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, manifest generation, and manifest verification.
 - `release:verify-manifest`: verified 1 release artifact.
+
+Latest desktop report-action verification after commit `96f7adf`:
+
+- `npm run typecheck`: passed.
+- `npm run build`: passed.
+- `npm run desktop:smoke`: passed.
+- `npm test`: passed, 13 files / 54 tests.
+- `npm run release:hygiene`: passed.
 
 Sample2 evidence from the latest local run:
 
