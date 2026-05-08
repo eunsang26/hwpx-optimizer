@@ -2,6 +2,10 @@ import JSZip from "jszip";
 import type { HwpxEntry, HwpxEntryKind, HwpxPackage } from "./types.js";
 
 export async function readHwpxPackage(input: Buffer): Promise<HwpxPackage> {
+  if (isHwpBinary(input)) {
+    throw new Error("Unsupported HWP binary file: save or export the document as .hwpx before optimizing");
+  }
+
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(input);
@@ -24,6 +28,11 @@ export async function readHwpxPackage(input: Buffer): Promise<HwpxPackage> {
   }
 
   return { entries };
+}
+
+function isHwpBinary(input: Buffer): boolean {
+  const oleCompoundSignature = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+  return input.subarray(0, oleCompoundSignature.length).equals(oleCompoundSignature);
 }
 
 export function classifyEntry(path: string): HwpxEntryKind {

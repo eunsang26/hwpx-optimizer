@@ -24,4 +24,12 @@ describe("readHwpxPackage", () => {
   it("fails clearly for an invalid zip buffer", async () => {
     await expect(readHwpxPackage(Buffer.from("not a zip"))).rejects.toThrow(/Invalid HWPX package/);
   });
+
+  it("fails clearly for an HWP binary buffer", async () => {
+    const hwpHeader = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+
+    await expect(readHwpxPackage(Buffer.concat([hwpHeader, Buffer.from("HWP Document File")]))).rejects.toThrow(
+      /Unsupported HWP binary file/
+    );
+  });
 });

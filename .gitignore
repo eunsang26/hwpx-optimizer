@@ -4,3 +4,6 @@ dist/
 packages/*/dist/
 packages/*/tsconfig.tsbuildinfo
 *.log
+/sample*.hwp
+/sample*.hwpx
+*:Zone.Identifier
