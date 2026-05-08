@@ -27,7 +27,7 @@ HWPX 문서 최적화는 한글 HWPX 파일의 용량 원인을 분석하고, �
 
 아직 완료 전 확인이 필요한 항목:
 
-- GitHub Actions Windows runner에서 NSIS installer 생성은 확인됐지만, artifact 업로드는 Actions storage quota 때문에 막힘
+- GitHub Actions Windows runner에서 NSIS installer 생성과 release gate 통과는 확인됨. artifact 업로드는 수동 실행 기본값에서 꺼져 있고, 태그 릴리즈 또는 명시적 선택 시에만 수행함
 - 깨끗한 Windows PC에서 수동 GUI QA 필요
 - 시각 유사도 자동 비교는 아직 없음
 - 특이한 HWPX XML 참조 형태는 더 많은 실제 문서 검증 필요

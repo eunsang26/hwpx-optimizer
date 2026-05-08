@@ -66,8 +66,8 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Windows portable smoke script | `scripts/windows-portable-smoke.ps1` | Prepared, not executed in this Linux/WSL environment |
 | Windows clean-machine QA checklist | `docs/WINDOWS_QA_CHECKLIST.md` | Prepared, not executed |
 | Release checksum manifest | `npm run release:manifest`, `npm run release:verify-manifest`, `release/release-manifest.json`, `release/SHA256SUMS.txt` | Verified generated artifacts and checksums |
-| Windows installer CI path | `.github/workflows/windows-release.yml`, `gh run 25545373705` on `codex/korean-ux` | `npm run release:check:win` passed on Windows runner |
-| Windows installer | Windows runner built `release/HWPX Optimizer-0.1.0-x64.exe`; upload step saw 1 file but failed on GitHub Actions storage quota | Generated in CI, artifact upload blocked externally |
+| Windows installer CI path | `.github/workflows/windows-release.yml`, GitHub Actions run `25554203465` | `npm run release:check:win` passed on Windows runner with artifact upload disabled |
+| Windows installer | Windows runner built the Windows installer through `release:check:win`; upload is optional for manual runs and enabled for tag builds | Verified in CI |
 | Clean Windows machine test | no clean Windows runtime available in this environment | Not verified |
 | Sample files excluded | `.gitignore` sample rules; `git ls-files 'sample*'` returned empty | Verified |
 
@@ -234,6 +234,14 @@ Latest desktop startup hardening verification after commit `7bc3f1c`:
 - Latest portable artifact: `release/HWPX Optimizer-0.1.0-x64.exe`.
 - Latest portable artifact SHA256: `faf5b7cc080b707d7980069bc7e84d88632d4e02665e7d03ce18301898b5e18e`.
 
+Latest Windows CI release gate after commit `4c6a99c`:
+
+- GitHub Actions run `25554203465`: success.
+- Head SHA: `4c6a99c55926cff4716ec72151c5a2fc5a3354d5`.
+- Event: `workflow_dispatch`.
+- `npm run release:check:win` passed on `windows-latest`.
+- Manual artifact upload was disabled, avoiding Actions storage quota failures.
+
 Latest real sample E2E after reference graph update:
 
 - `npm run cli -- analyze sample2.hwpx --report .tmp/real-sample-after-refgraph/sample2.analysis.json`: passed.
@@ -305,7 +313,6 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 
 ## Blockers To Completion
 
-- Windows NSIS installer generation now passes on GitHub Actions Windows runner, but installer artifact upload is blocked by GitHub Actions storage quota.
 - The portable or installed app has not been run on a clean Windows machine.
 - Manual installed desktop workflow QA with real HWPX files on a clean Windows machine is not complete.
 - Visual similarity comparison is not implemented; current verifier checks package integrity, references, image dimensions, and image formats.

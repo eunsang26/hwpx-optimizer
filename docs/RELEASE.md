@@ -143,7 +143,7 @@ Verify an existing manifest and checksum file against the artifact:
 npm run release:verify-manifest
 ```
 
-The repository also includes `.github/workflows/windows-release.yml`, which runs the Windows release gate on `workflow_dispatch` and `v*` tags, then uploads the generated installer artifact.
+The repository also includes `.github/workflows/windows-release.yml`, which runs the Windows release gate on `workflow_dispatch` and `v*` tags. Manual `workflow_dispatch` runs skip artifact upload by default to avoid Actions storage quota failures; set the `upload_artifact` input to `true` when an uploaded installer is needed. Tag builds upload the generated installer artifact.
 
 Then verify at least one HWPX end-to-end:
 

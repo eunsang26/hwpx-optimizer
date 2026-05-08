@@ -4,11 +4,17 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop app can produce Linux unpacked, Windows unpacked, Windows portable, and Windows NSIS installer builds. The latest GitHub Actions Windows run generated the installer, but artifact upload is blocked by Actions storage quota. Local Windows portable packaging now verifies that the `sharp` Windows native runtime is unpacked outside `app.asar`.
 - Desktop app has an automated launch smoke test, but full manual GUI workflow testing is still required.
 - Verifier checks mode-specific image format and dimension invariants, but it does not yet measure visual similarity or JPEG quality drift.
 - Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
 - No Windows build has been tested on a clean Windows machine.
+
+## Verified Release Infrastructure
+
+- Desktop app can produce Linux unpacked, Windows unpacked, Windows portable, and Windows NSIS installer builds.
+- GitHub Actions Windows release gate passes on `windows-latest` when artifact upload is disabled for manual runs.
+- Artifact upload is optional for manual workflow runs to avoid Actions storage quota failures. Tag builds still upload release artifacts.
+- Local Windows portable packaging verifies that the `sharp` Windows native runtime is unpacked outside `app.asar`.
 
 ## Non-Blockers For Continued Development
 
