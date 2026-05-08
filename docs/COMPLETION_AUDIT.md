@@ -74,6 +74,9 @@ npm audit --json
 npm run cli -- analyze sample2.hwpx --report sample2.latest-analysis.json
 npm run cli -- optimize sample2.hwpx --mode balanced --out sample2.latest-balanced.hwpx --report sample2.latest-balanced.report.json
 npm run cli -- verify sample2.latest-balanced.hwpx
+node packages/cli/dist/index.js analyze sample2.hwpx --report sample2.dist-analysis.json
+node packages/cli/dist/index.js optimize sample2.hwpx --mode balanced --out sample2.dist-balanced.hwpx --report sample2.dist-balanced.report.json
+node packages/cli/dist/index.js verify sample2.dist-balanced.hwpx
 git ls-files 'sample*'
 ```
 
@@ -83,6 +86,7 @@ Sample2 evidence from the latest local run:
 - Balanced optimized saving: 79.63 MiB, 88.75%
 - Applied: `convert-bmp-to-png` 18, `resize-jpeg` 6, `optimize-png` 4, `clean-shape-comment` 1
 - Output verifier: passed
+- Built CLI E2E path: passed with the same balanced optimization result
 - Sample inputs and generated outputs remain ignored by git.
 
 Expected environment failure:
