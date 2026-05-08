@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import sharp from "sharp";
 import { applySafeOptimizationPlan } from "../src/optimizer.js";
 import type { HwpxPackage, OptimizationPlan } from "../src/types.js";
 
@@ -25,6 +26,38 @@ describe("applySafeOptimizationPlan", () => {
     expect(optimized.includes(Buffer.from("JFIF"))).toBe(true);
     expect(optimized.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
     expect(optimized.subarray(-2)).toEqual(Buffer.from([0xff, 0xd9]));
+  });
+
+  it("optimizes PNG images losslessly when the result is smaller", async () => {
+    const png = await sharp({
+      create: {
+        width: 96,
+        height: 72,
+        channels: 4,
+        background: { r: 20, g: 160, b: 90, alpha: 1 }
+      }
+    })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+    const pkg: HwpxPackage = {
+      entries: [{ path: "BinData/image1.png", data: png, size: png.byteLength, kind: "image" }]
+    };
+    const plan: OptimizationPlan = {
+      mode: "safe",
+      actions: [{ type: "optimize-png", target: "BinData/image1.png", risk: "safe" }]
+    };
+
+    const result = await applySafeOptimizationPlan({ pkg, plan });
+    const optimized = result.pkg.entries[0].data;
+    const metadata = await sharp(optimized).metadata();
+
+    expect(optimized.byteLength).toBeLessThan(png.byteLength);
+    expect(metadata.format).toBe("png");
+    expect(metadata.width).toBe(96);
+    expect(metadata.height).toBe(72);
+    expect(result.applied).toContainEqual(
+      expect.objectContaining({ type: "optimize-png", target: "BinData/image1.png" })
+    );
   });
 });
 

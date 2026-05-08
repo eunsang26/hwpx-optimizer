@@ -1,4 +1,5 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
+import sharp from "sharp";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 
 export async function applySafeOptimizationPlan(input: {
@@ -37,6 +38,28 @@ export async function applySafeOptimizationPlan(input: {
       }
     }
 
+    const optimizePng = input.plan.actions.find(
+      (action) => action.type === "optimize-png" && action.target === entry.path
+    );
+    if (optimizePng) {
+      try {
+        const optimized = await optimizePngLosslessly(entry.data);
+        if (optimized.byteLength < entry.data.byteLength) {
+          entries.push({ ...entry, data: optimized, size: optimized.byteLength });
+          applied.push({
+            type: "optimize-png",
+            target: entry.path,
+            beforeSize: entry.size,
+            afterSize: optimized.byteLength
+          });
+          continue;
+        }
+        skipped.push({ type: "optimize-png", target: entry.path, beforeSize: entry.size });
+      } catch {
+        skipped.push({ type: "optimize-png", target: entry.path, beforeSize: entry.size });
+      }
+    }
+
     const minify = input.plan.actions.find(
       (action) => action.type === "minify-xml" && action.target === entry.path
     );
@@ -69,6 +92,10 @@ function stripImageMetadataLossless(path: string, data: Buffer): Buffer {
     return stripJpegMetadataSegments(data);
   }
   return data;
+}
+
+async function optimizePngLosslessly(data: Buffer): Promise<Buffer> {
+  return sharp(data).png({ compressionLevel: 9, adaptiveFiltering: true, palette: false }).toBuffer();
 }
 
 function stripJpegMetadataSegments(data: Buffer): Buffer {

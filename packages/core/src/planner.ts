@@ -17,6 +17,9 @@ export function createSafeOptimizationPlan(input: {
     if (image.hasMetadata && canStripMetadataLosslessly(image.path)) {
       actions.push({ type: "strip-metadata", target: image.path, risk: "safe" });
     }
+    if (canOptimizeLosslessly(image.path)) {
+      actions.push({ type: "optimize-png", target: image.path, risk: "safe" });
+    }
   }
 
   for (const resource of input.graph.resources.values()) {
@@ -32,4 +35,8 @@ export function createSafeOptimizationPlan(input: {
 
 function canStripMetadataLosslessly(path: string): boolean {
   return /\.(jpe?g)$/i.test(path);
+}
+
+function canOptimizeLosslessly(path: string): boolean {
+  return /\.png$/i.test(path);
 }
