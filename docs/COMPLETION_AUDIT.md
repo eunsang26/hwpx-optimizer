@@ -168,6 +168,14 @@ Latest portable release gate after commit `8c572cc`:
 - Included release hygiene, 13 test files / 57 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, manifest generation, and manifest verification.
 - `release:verify-manifest`: verified 1 release artifact.
 
+Latest PNG opportunity mode metadata verification after commit `cb6e2c8`:
+
+- `npm test -- packages/core/test/balanced.test.ts`: passed, 1 file / 9 tests.
+- `npm test`: passed, 13 files / 57 tests.
+- `npm run typecheck`: passed.
+- `npm run build`: passed.
+- `npm run release:hygiene`: passed.
+
 Sample2 evidence from the latest local run:
 
 - Original: 89.72 MiB
