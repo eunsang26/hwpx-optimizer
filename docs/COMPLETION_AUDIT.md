@@ -182,6 +182,12 @@ Latest portable release gate after commit `c5780fb`:
 - Included release hygiene, 13 test files / 57 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, manifest generation, and manifest verification.
 - `release:verify-manifest`: verified 1 release artifact.
 
+Latest Windows installer gate after commit `be2b6d5`:
+
+- `npm run release:check:win`: failed at `desktop:dist:win`.
+- Pre-installer checks passed: release hygiene, 13 test files / 57 tests, typecheck, build, `npm audit`, and desktop smoke.
+- Failure reason: `wine is required`, so NSIS installer generation still needs a Windows release machine or a Wine-enabled Linux/WSL environment.
+
 Sample2 evidence from the latest local run:
 
 - Original: 89.72 MiB
