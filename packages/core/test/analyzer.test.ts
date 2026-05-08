@@ -99,6 +99,52 @@ describe("analyzeHwpxPackage", () => {
     ]);
     expect(analysis.images[0]?.oversizeRatio).toBeCloseTo(9.375, 3);
   });
+
+  it("summarizes duplicate images, unused BinData, category sizes, and risky resources", async () => {
+    const png = await sharp({
+      create: {
+        width: 12,
+        height: 8,
+        channels: 3,
+        background: "#ffffff"
+      }
+    })
+      .png()
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": '<root><img href="BinData/image1.png" /></root>',
+        "BinData/image1.png": png,
+        "BinData/image2.png": png,
+        "BinData/unused.bin": Buffer.from("unused"),
+        "Object/embedded.ole": Buffer.from("ole"),
+        "Fonts/document.ttf": Buffer.from("font")
+      }
+    });
+
+    const pkg = await readHwpxPackage(fixture);
+    const analysis = await analyzeHwpxPackage(pkg);
+
+    expect(analysis.categorySizes.image).toBe(png.byteLength * 2);
+    expect(analysis.categorySizes.bindata).toBe(Buffer.byteLength("unused"));
+    expect(analysis.duplicateImages).toEqual([
+      expect.objectContaining({
+        paths: ["BinData/image1.png", "BinData/image2.png"],
+        count: 2,
+        wastedBytes: png.byteLength
+      })
+    ]);
+    expect(analysis.unusedBinData).toEqual([
+      expect.objectContaining({ path: "BinData/image2.png", kind: "image" }),
+      expect.objectContaining({ path: "BinData/unused.bin", kind: "bindata" })
+    ]);
+    expect(analysis.riskyResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "Object/embedded.ole", kind: "ole" }),
+        expect.objectContaining({ path: "Fonts/document.ttf", kind: "font" })
+      ])
+    );
+  });
 });
 
 function createBmp24(width: number, height: number): Buffer {

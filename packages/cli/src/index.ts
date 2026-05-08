@@ -218,7 +218,10 @@ function renderHumanReport(inputPath: string, report: OptimizationReport): strin
     `Original: ${formatBytes(report.originalSize)}`,
     `Images: ${report.images.length}`,
     `BMP candidates: ${report.images.filter((image) => image.isBmpCandidate).length}`,
-    `Images with metadata: ${report.images.filter((image) => image.hasMetadata).length}`
+    `Images with metadata: ${report.images.filter((image) => image.hasMetadata).length}`,
+    `Duplicate image groups: ${report.duplicateImages.length}`,
+    `Unused BinData candidates: ${report.unusedBinData.length}`,
+    `Risky resources: ${report.riskyResources.length}`
   ];
   if (report.opportunityGroups.length > 0) {
     lines.push("Opportunities:");

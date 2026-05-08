@@ -65,6 +65,10 @@ describe("optimization reports", () => {
         targets: ["Contents/section0.xml"]
       }
     ]);
+    expect(report.categorySizes).toEqual(analysisFixture.categorySizes);
+    expect(report.duplicateImages).toEqual(analysisFixture.duplicateImages);
+    expect(report.unusedBinData).toEqual(analysisFixture.unusedBinData);
+    expect(report.riskyResources).toEqual(analysisFixture.riskyResources);
   });
 });
 
@@ -78,7 +82,26 @@ const analysisFixture: PackageAnalysis = {
     bindata: 0,
     other: 0
   },
-  images: []
+  categorySizes: {
+    xml: 10_000,
+    image: 0,
+    font: 0,
+    ole: 0,
+    bindata: 0,
+    other: 0
+  },
+  images: [],
+  duplicateImages: [
+    {
+      hash: "abc",
+      paths: ["BinData/a.png", "BinData/b.png"],
+      count: 2,
+      totalBytes: 200,
+      wastedBytes: 100
+    }
+  ],
+  unusedBinData: [{ path: "BinData/unused.bin", kind: "bindata", size: 50 }],
+  riskyResources: [{ path: "Object/embedded.ole", kind: "ole", size: 10, reason: "OLE object" }]
 };
 
 function opportunity(input: Partial<OptimizationOpportunity> & Pick<OptimizationOpportunity, "action" | "target">): OptimizationOpportunity {

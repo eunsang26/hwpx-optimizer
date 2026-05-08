@@ -14,7 +14,11 @@ export function createAnalysisReport(
 ): OptimizationReport {
   return {
     originalSize,
+    categorySizes: analysis.categorySizes,
     images: analysis.images,
+    duplicateImages: analysis.duplicateImages,
+    unusedBinData: analysis.unusedBinData,
+    riskyResources: analysis.riskyResources,
     actions: { planned: [], applied: [], skipped: [] },
     opportunities,
     opportunityGroups: groupOpportunities(opportunities),
@@ -38,7 +42,11 @@ export function createOptimizationReport(input: {
     optimizedSize: input.optimizedSize,
     savedBytes,
     savedPercent: input.originalSize === 0 ? 0 : (savedBytes / input.originalSize) * 100,
+    categorySizes: input.analysis.categorySizes,
     images: input.analysis.images,
+    duplicateImages: input.analysis.duplicateImages,
+    unusedBinData: input.analysis.unusedBinData,
+    riskyResources: input.analysis.riskyResources,
     actions: {
       planned: input.planned,
       applied: input.applied,

@@ -41,7 +41,32 @@ export type ImageDisplaySummary = ImageDisplayReference & {
 export type PackageAnalysis = {
   totalSize: number;
   entriesByKind: Record<HwpxEntryKind, number>;
+  categorySizes: Record<HwpxEntryKind, number>;
   images: ImageInventoryItem[];
+  duplicateImages: DuplicateImageGroup[];
+  unusedBinData: UnusedResource[];
+  riskyResources: RiskyResource[];
+};
+
+export type DuplicateImageGroup = {
+  hash: string;
+  paths: string[];
+  count: number;
+  totalBytes: number;
+  wastedBytes: number;
+};
+
+export type UnusedResource = {
+  path: string;
+  kind: HwpxEntryKind;
+  size: number;
+};
+
+export type RiskyResource = {
+  path: string;
+  kind: "font" | "ole";
+  size: number;
+  reason: string;
 };
 
 export type ResourceReference = {
@@ -110,7 +135,11 @@ export type OptimizationReport = {
   optimizedSize?: number;
   savedBytes?: number;
   savedPercent?: number;
+  categorySizes: Record<HwpxEntryKind, number>;
   images: ImageInventoryItem[];
+  duplicateImages: DuplicateImageGroup[];
+  unusedBinData: UnusedResource[];
+  riskyResources: RiskyResource[];
   actions: {
     planned: OptimizationAction[];
     applied: AppliedAction[];
