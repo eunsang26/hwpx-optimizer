@@ -202,6 +202,14 @@ Latest portable release gate after commit `fd75546`:
 - Included release hygiene, 13 test files / 58 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, manifest generation, and manifest verification.
 - `release:verify-manifest`: verified 1 release artifact.
 
+Latest real sample E2E after reference graph update:
+
+- `npm run cli -- analyze sample2.hwpx --report .tmp/real-sample-after-refgraph/sample2.analysis.json`: passed.
+- `npm run cli -- optimize sample2.hwpx --mode balanced --out .tmp/real-sample-after-refgraph/sample2.balanced.hwpx --report .tmp/real-sample-after-refgraph/sample2.balanced.report.json`: passed.
+- `npm run cli -- verify .tmp/real-sample-after-refgraph/sample2.balanced.hwpx`: passed.
+- Observed saving remained 79.63 MiB / 88.75%.
+- Applied actions: `convert-bmp-to-png` 18, `resize-jpeg` 6, `optimize-png` 4, `clean-shape-comment` 1.
+
 Sample2 evidence from the latest local run:
 
 - Original: 89.72 MiB
