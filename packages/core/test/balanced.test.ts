@@ -292,7 +292,11 @@ async function createReferencedImageFixtureWithDisplay(input: {
 
 async function createStoredFixture(entries: Record<string, string | Buffer>): Promise<Buffer> {
   const zip = new JSZip();
-  for (const [path, value] of Object.entries(entries)) {
+  for (const [path, value] of Object.entries({
+    "Contents/content.hpf": '<opf:package xmlns:opf="http://www.idpf.org/2007/opf" />',
+    "Contents/section0.xml": "<root />",
+    ...entries
+  })) {
     zip.file(path, value, { compression: "STORE" });
   }
   return Buffer.from(await zip.generateAsync({ type: "nodebuffer", compression: "STORE" }));

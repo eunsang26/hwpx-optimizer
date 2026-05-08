@@ -20,7 +20,12 @@ describe("createSafeOptimizationPlan", () => {
 
     const plan = createSafeOptimizationPlan({ pkg, analysis, graph });
 
-    expect(plan.actions.map((action) => action.type)).toEqual(["minify-xml", "remove-unused", "repack-zip"]);
+    expect(plan.actions.map((action) => action.type)).toEqual([
+      "minify-xml",
+      "minify-xml",
+      "remove-unused",
+      "repack-zip"
+    ]);
     expect(plan.actions).not.toContainEqual(expect.objectContaining({ type: "convert-bmp" }));
   });
 

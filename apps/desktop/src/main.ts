@@ -227,6 +227,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
 
 async function createSmokeHwpxFixture(): Promise<Buffer> {
   const zip = new JSZip();
+  zip.file("Contents/content.hpf", '<opf:package xmlns:opf="http://www.idpf.org/2007/opf" />');
   zip.file("Contents/section0.xml", '<root><img href="BinData/used.bin" /></root>');
   zip.file("BinData/used.bin", "used");
   zip.file("BinData/unused.bin", "unused");

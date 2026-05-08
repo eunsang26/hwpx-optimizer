@@ -45,6 +45,7 @@ input.hwpx
 - Opens HWPX as ZIP.
 - Rejects invalid ZIP data.
 - Rejects legacy binary HWP input with a clear message.
+- Requires the minimum HWPX package structure: `Contents/content.hpf` and at least one `Contents/section*.xml`.
 - Loads entries as buffers.
 - Classifies XML, image, font, OLE, BinData, and other files.
 
@@ -125,6 +126,7 @@ Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a strong
 `packages/core/src/verifier.ts`
 
 - Confirms the output ZIP opens.
+- Confirms the minimum HWPX package structure is present.
 - Confirms XML entries parse.
 - Confirms referenced internal resources exist.
 - Compares original and output packages when a mode policy is provided.

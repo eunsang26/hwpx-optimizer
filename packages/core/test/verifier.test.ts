@@ -4,6 +4,17 @@ import { verifyHwpxOutput } from "../src/verifier.js";
 import { createHwpxFixture } from "./fixtures.js";
 
 describe("verifyHwpxOutput", () => {
+  it("rejects outputs without required HWPX package files", async () => {
+    const output = await createHwpxFixture({
+      includeRequiredFiles: false,
+      entries: {
+        "BinData/used.bin": Buffer.from("used")
+      }
+    });
+
+    await expect(verifyHwpxOutput(output)).rejects.toThrow(/missing required files/i);
+  });
+
   it("rejects safe-mode outputs that change image dimensions", async () => {
     const originalImage = await createJpeg(120, 80);
     const resizedImage = await createJpeg(60, 40);
@@ -66,6 +77,7 @@ describe("verifyHwpxOutput", () => {
 async function createReferencedImageFixture(path: string, image: Buffer): Promise<Buffer> {
   return createHwpxFixture({
     entries: {
+      "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="${path}" media-type="image/${path.split(".").pop()?.toLowerCase() ?? "unknown"}"/></opf:manifest></opf:package>`,
       "Contents/section0.xml": `<root><img href="${path}" /></root>`,
       [path]: image
     }

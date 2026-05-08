@@ -18,7 +18,11 @@ describe("optimizeHwpxBufferSafe", () => {
 
     expect(result.report.originalSize).toBe(input.byteLength);
     expect(result.report.optimizedSize).toBeLessThanOrEqual(result.report.originalSize);
-    expect(output.entries.map((entry) => entry.path).sort()).toEqual(["BinData/used.bin", "Contents/section0.xml"]);
+    expect(output.entries.map((entry) => entry.path).sort()).toEqual([
+      "BinData/used.bin",
+      "Contents/content.hpf",
+      "Contents/section0.xml"
+    ]);
     expect(result.report.actions.applied).toContainEqual(
       expect.objectContaining({ type: "remove-unused", target: "BinData/unused.bin" })
     );

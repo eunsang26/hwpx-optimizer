@@ -25,6 +25,17 @@ describe("readHwpxPackage", () => {
     await expect(readHwpxPackage(Buffer.from("not a zip"))).rejects.toThrow(/Invalid HWPX package/);
   });
 
+  it("fails clearly when required HWPX package files are missing", async () => {
+    const fixture = await createHwpxFixture({
+      includeRequiredFiles: false,
+      entries: {
+        "BinData/image1.png": Buffer.from("not really png")
+      }
+    });
+
+    await expect(readHwpxPackage(fixture)).rejects.toThrow(/missing required files/i);
+  });
+
   it("fails clearly for an HWP binary buffer", async () => {
     const hwpHeader = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 

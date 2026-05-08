@@ -27,6 +27,7 @@ export async function readHwpxPackage(input: Buffer): Promise<HwpxPackage> {
     });
   }
 
+  validateHwpxStructure(entries);
   return { entries };
 }
 
@@ -46,4 +47,19 @@ export function classifyEntry(path: string): HwpxEntryKind {
   if (/\.(ttf|otf|woff|woff2)$/i.test(lower)) return "font";
   if (/\.(ole|bin)$/i.test(lower)) return "ole";
   return "other";
+}
+
+function validateHwpxStructure(entries: HwpxEntry[]): void {
+  const paths = new Set(entries.map((entry) => entry.path));
+  const missing: string[] = [];
+  if (!paths.has("Contents/content.hpf")) {
+    missing.push("Contents/content.hpf");
+  }
+  if (!entries.some((entry) => /^Contents\/section\d+\.xml$/i.test(entry.path))) {
+    missing.push("Contents/section*.xml");
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`Invalid HWPX package: missing required files ${missing.join(", ")}`);
+  }
 }

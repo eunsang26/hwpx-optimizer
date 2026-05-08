@@ -26,7 +26,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Requirement | Evidence | Status |
 | --- | --- | --- |
 | Core engine exists | `packages/core/src/*` | Implemented |
-| HWPX ZIP reader | `packages/core/src/reader.ts`, `packages/core/test/reader.test.ts` | Implemented |
+| HWPX ZIP reader | `packages/core/src/reader.ts`, `packages/core/test/reader.test.ts` | Implemented with required package file validation |
 | Package analyzer | `packages/core/src/analyzer.ts`, `packages/core/test/analyzer.test.ts` | Implemented |
 | Reference graph | `packages/core/src/referenceGraph.ts`, `packages/core/test/referenceGraph.test.ts` | Implemented with conservative coverage |
 | Optimization planner | `packages/core/src/planner.ts`, `packages/core/test/planner.test.ts` | Implemented |
@@ -37,7 +37,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Oversized image resizing | display-budget resizing in `packages/core/src/imageDisplay.ts` and `opportunities.ts` | Implemented |
 | Duplicate image consolidation | `consolidate-duplicate-images` action and balanced test | Implemented for byte-identical manifest images |
 | XML manifest updates use parser | `packages/core/src/balancedOptimizer.ts` uses `fast-xml-parser` preserve-order AST | Implemented |
-| Verifier | `packages/core/src/verifier.ts`, `packages/core/test/verifier.test.ts` | Implemented with mode image invariants |
+| Verifier | `packages/core/src/verifier.ts`, `packages/core/test/verifier.test.ts` | Implemented with required package checks and mode image invariants |
 | Report generator | `packages/core/src/report.ts`, `packages/core/test/report.test.ts` | Implemented |
 | CLI commands | `packages/cli/src/index.ts` | Implemented: analyze, report, verify, optimize, batch |
 | Desktop app | `apps/desktop/src/*` | Implemented |
