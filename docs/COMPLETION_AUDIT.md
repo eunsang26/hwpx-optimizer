@@ -154,6 +154,14 @@ Latest portable release gate after commit `b57200c`:
 - Included release hygiene, 13 test files / 56 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, manifest generation, and manifest verification.
 - `release:verify-manifest`: verified 1 release artifact.
 
+Latest safe metadata no-op verification after commit `580ad03`:
+
+- `npm test -- packages/core/test/optimizer.test.ts`: passed, 1 file / 3 tests.
+- `npm test`: passed, 13 files / 57 tests.
+- `npm run typecheck`: passed.
+- `npm run build`: passed.
+- `npm run release:hygiene`: passed.
+
 Sample2 evidence from the latest local run:
 
 - Original: 89.72 MiB
