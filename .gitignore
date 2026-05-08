@@ -1,0 +1,16 @@
+node_modules/
+.npm-cache/
+dist/
+packages/*/dist/
+packages/*/tsconfig.tsbuildinfo
+apps/*/dist/
+apps/*/tsconfig.tsbuildinfo
+release/
+build/
+*.log
+.tmp/
+/sample*.hwp
+/sample*.hwpx
+/sample*.json
+/sample*.txt
+*:Zone.Identifier

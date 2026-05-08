@@ -1,0 +1,21 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+const api = {
+  selectHwpx: () => ipcRenderer.invoke("dialog:select-hwpx"),
+  selectDirectory: () => ipcRenderer.invoke("dialog:select-directory"),
+  loadSettings: () => ipcRenderer.invoke("settings:load"),
+  saveSettings: (patch) => ipcRenderer.invoke("settings:save", patch),
+  analyze: (filePath) => ipcRenderer.invoke("hwpx:analyze", filePath),
+  optimize: (input) => ipcRenderer.invoke("hwpx:optimize", input),
+  cancelOptimize: () => ipcRenderer.invoke("hwpx:cancel-optimize"),
+  onOptimizeProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on("hwpx:optimize-progress", listener);
+    return () => ipcRenderer.off("hwpx:optimize-progress", listener);
+  },
+  verify: (filePath) => ipcRenderer.invoke("hwpx:verify", filePath),
+  showItem: (filePath) => ipcRenderer.invoke("shell:show-item", filePath),
+  openPath: (filePath) => ipcRenderer.invoke("shell:open-path", filePath)
+};
+
+contextBridge.exposeInMainWorld("hwpxOptimizer", api);
