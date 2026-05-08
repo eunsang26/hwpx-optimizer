@@ -227,6 +227,7 @@ npm run release:check:win
 - `sample*.hwp`
 - `sample*.json`
 - `sample*.txt`
+- `결과/`
 
 실수로 staging되면 커밋 전에 반드시 제외하세요.
 

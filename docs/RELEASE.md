@@ -198,6 +198,7 @@ Do not include:
 - User sample HWPX/HWP documents.
 - Generated optimization outputs.
 - Generated report JSON or text files.
+- Local `결과/` output folders.
 - Local Electron caches.
 - `node_modules`.
 

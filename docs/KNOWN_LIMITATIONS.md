@@ -56,5 +56,6 @@ The repository ignores root-level:
 - `sample*.hwpx`
 - `sample*.json`
 - `sample*.txt`
+- `결과/`
 
 If a sample file is accidentally staged, unstage it before committing.

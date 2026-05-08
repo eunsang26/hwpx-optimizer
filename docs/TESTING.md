@@ -121,7 +121,7 @@ Fixture categories still needed for broader product confidence:
 - Embedded font HWPX.
 - Broken or malformed HWPX.
 
-Real user sample files must not be committed. Root-level `sample*.hwpx`, `sample*.hwp`, `sample*.json`, and `sample*.txt` are ignored.
+Real user sample files and local optimization outputs must not be committed. Root-level `sample*.hwpx`, `sample*.hwp`, `sample*.json`, `sample*.txt`, and `결과/` are ignored.
 
 ## Manual Desktop Checks
 
