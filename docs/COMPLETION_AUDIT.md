@@ -230,11 +230,12 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 - Windows NSIS installer artifact has not been generated in this environment because Wine is unavailable.
 - The portable or installed app has not been run on a clean Windows machine.
 - Manual installed desktop workflow QA with real HWPX files on a clean Windows machine is not complete.
+- Visual similarity comparison is not implemented; current verifier checks package integrity, references, image dimensions, and image formats.
+- Reference graph detection is conservative and needs broader real-world HWPX coverage before product release.
+- No git remote is configured, so commits could not be pushed and remote Windows CI could not be triggered.
 
 ## Non-Blocking Follow-Ups
 
 - Progress updates are stage-based. Per-image/action progress would improve UX.
-- Reference graph coverage is conservative and should be expanded with more real-world HWPX samples.
-- Visual similarity comparison is not implemented.
-- Desktop UI is functional but still needs final product polish.
+- Desktop UI is functional, but final visual QA should happen on the target Windows desktop environment.
 - Continue routine dependency monitoring before each release.
