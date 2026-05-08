@@ -8,34 +8,32 @@ const runtimeRoot = join(process.cwd(), ".tmp", "win-sharp-runtime");
 const runtimePackage = join(runtimeRoot, "node_modules", "@img", "sharp-win32-x64");
 const nodeModulesPackage = join(process.cwd(), "node_modules", "@img", "sharp-win32-x64");
 const npmCache = join(process.cwd(), ".npm-cache", "npm");
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmArgs = [
+  "install",
+  "--prefix",
+  runtimeRoot,
+  "--force",
+  "--omit=dev",
+  "--ignore-scripts",
+  "--no-audit",
+  "--no-fund",
+  "--no-package-lock",
+  "--cache",
+  npmCache,
+  "@img/sharp-win32-x64@0.33.5"
+];
+const npmCommand = process.platform === "win32" ? "cmd.exe" : "npm";
+const npmCommandArgs = process.platform === "win32" ? ["/d", "/s", "/c", "npm", ...npmArgs] : npmArgs;
 
 await rm(runtimeRoot, { recursive: true, force: true });
 await mkdir(runtimeRoot, { recursive: true });
 await mkdir(npmCache, { recursive: true });
 
-await execFileAsync(
-  npmCommand,
-  [
-    "install",
-    "--prefix",
-    runtimeRoot,
-    "--force",
-    "--omit=dev",
-    "--ignore-scripts",
-    "--no-audit",
-    "--no-fund",
-    "--no-package-lock",
-    "--cache",
-    npmCache,
-    "@img/sharp-win32-x64@0.33.5"
-  ],
-  {
-    cwd: process.cwd(),
-    env: process.env,
-    maxBuffer: 1024 * 1024 * 10
-  }
-);
+await execFileAsync(npmCommand, npmCommandArgs, {
+  cwd: process.cwd(),
+  env: process.env,
+  maxBuffer: 1024 * 1024 * 10
+});
 
 await rm(nodeModulesPackage, { recursive: true, force: true });
 await mkdir(join(process.cwd(), "node_modules", "@img"), { recursive: true });
