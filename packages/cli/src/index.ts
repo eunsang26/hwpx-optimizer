@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "@hwpx-optimizer/core";
+import {
+  analyzeHwpxBuffer,
+  optimizeHwpxBufferAggressive,
+  optimizeHwpxBufferBalanced,
+  optimizeHwpxBufferSafe,
+  verifyHwpxOutput
+} from "@hwpx-optimizer/core";
 import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
 
 export async function runCli(argv: string[]): Promise<number> {
@@ -24,20 +30,37 @@ export async function runCli(argv: string[]): Promise<number> {
       return 0;
     }
 
+    if (command === "report") {
+      const report = await analyzeHwpxBuffer(await readFile(inputPath));
+      const text = renderHumanReport(inputPath, report);
+      const reportPath = options.out ?? `${inputPath}.report.txt`;
+      await writeFile(reportPath, text);
+      console.log(text);
+      console.log(`Report: ${reportPath}`);
+      return 0;
+    }
+
+    if (command === "verify") {
+      await verifyHwpxOutput(await readFile(inputPath));
+      console.log(`Verified: ${inputPath}`);
+      return 0;
+    }
+
+    if (command === "batch") {
+      const summary = await runBatch(inputPath, options);
+      console.log(`Batch complete: ${summary.optimized} optimized, ${summary.failed} failed`);
+      console.log(`Report: ${summary.reportPath}`);
+      return 0;
+    }
+
     if (command === "optimize") {
       const mode = options.mode ?? "safe";
-      if (mode !== "safe" && mode !== "balanced") {
-        console.error("Only --mode safe and --mode balanced are supported");
+      if (!isOptimizationMode(mode)) {
+        console.error("Only --mode safe, --mode balanced, and --mode aggressive are supported");
         return 1;
       }
       const input = await readFile(inputPath);
-      const result =
-        mode === "balanced"
-          ? await optimizeHwpxBufferBalanced(input, {
-              actions: parseActionList(options.actions),
-              allowLarger: options["allow-larger"] === "true"
-            })
-          : await optimizeHwpxBufferSafe(input);
+      const result = await optimizeByMode(input, mode, options);
       const outputPath = options.out ?? defaultOutputPath(inputPath);
       const reportPath = options.report ?? `${outputPath}.report.json`;
       await writeFile(outputPath, result.output);
@@ -82,7 +105,10 @@ function defaultOutputPath(inputPath: string): string {
 function printUsage(): void {
   console.error("Usage:");
   console.error("  hwpx-opt analyze <file.hwpx> [--report report.json]");
-  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced [--actions action1,action2] [--allow-larger] [--out output.hwpx] [--report report.json]");
+  console.error("  hwpx-opt report <file.hwpx> [--out report.txt]");
+  console.error("  hwpx-opt verify <file.hwpx>");
+  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--out output.hwpx] [--report report.json]");
+  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive --out output-directory");
 }
 
 function printAnalysisSummary(inputPath: string, report: OptimizationReport): void {
@@ -115,6 +141,102 @@ function printOptimizationSummary(report: OptimizationReport): void {
   console.log(`Applied: ${counts.map(([type, count]) => `${type} ${count}`).join(", ")}`);
 }
 
+async function optimizeByMode(
+  input: Buffer,
+  mode: OptimizationMode,
+  options: Record<string, string>
+): Promise<{ output: Buffer; report: OptimizationReport }> {
+  if (mode === "safe") return optimizeHwpxBufferSafe(input);
+  const advancedOptions = {
+    actions: parseActionList(options.actions),
+    allowLarger: options["allow-larger"] === "true"
+  };
+  if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advancedOptions);
+  return optimizeHwpxBufferBalanced(input, advancedOptions);
+}
+
+async function runBatch(
+  inputDir: string,
+  options: Record<string, string>
+): Promise<{ optimized: number; failed: number; reportPath: string }> {
+  const mode = options.mode ?? "safe";
+  if (!isOptimizationMode(mode)) {
+    throw new Error("Only --mode safe, --mode balanced, and --mode aggressive are supported");
+  }
+  const outputDir = options.out ?? join(inputDir, "optimized");
+  await mkdir(outputDir, { recursive: true });
+
+  const files = (await readdir(inputDir, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  const results: BatchFileResult[] = [];
+
+  for (const file of files) {
+    const sourcePath = join(inputDir, file);
+    try {
+      const result = await optimizeByMode(await readFile(sourcePath), mode, options);
+      const outputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
+      const reportPath = `${outputPath}.report.json`;
+      await writeFile(outputPath, result.output);
+      await writeFile(reportPath, JSON.stringify(result.report, null, 2));
+      results.push({ input: file, status: "optimized", output: outputPath, report: reportPath });
+    } catch (error) {
+      results.push({
+        input: file,
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  const reportPath = join(outputDir, "batch-report.json");
+  await writeFile(
+    reportPath,
+    JSON.stringify(
+      {
+        mode,
+        inputDir,
+        outputDir,
+        results
+      },
+      null,
+      2
+    )
+  );
+  return {
+    optimized: results.filter((result) => result.status === "optimized").length,
+    failed: results.filter((result) => result.status === "failed").length,
+    reportPath
+  };
+}
+
+function renderHumanReport(inputPath: string, report: OptimizationReport): string {
+  const lines = [
+    "HWPX Optimization Report",
+    `File: ${inputPath}`,
+    `Original: ${formatBytes(report.originalSize)}`,
+    `Images: ${report.images.length}`,
+    `BMP candidates: ${report.images.filter((image) => image.isBmpCandidate).length}`,
+    `Images with metadata: ${report.images.filter((image) => image.hasMetadata).length}`
+  ];
+  if (report.opportunityGroups.length > 0) {
+    lines.push("Opportunities:");
+    for (const group of report.opportunityGroups) {
+      lines.push(`- ${group.action}: ${formatTargetCount(group.count)}, ~${formatBytes(group.estimatedSavingBytes)}`);
+    }
+  } else {
+    lines.push("Opportunities: none");
+  }
+  if (report.warnings.length > 0) {
+    lines.push("Warnings:");
+    for (const warning of report.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 function countAppliedActions(actions: AppliedAction[]): Array<[AppliedAction["type"], number]> {
   const counts = new Map<AppliedAction["type"], number>();
   for (const action of actions) {
@@ -141,6 +263,16 @@ function parseActionList(value?: string): string[] | undefined {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+type OptimizationMode = "safe" | "balanced" | "aggressive";
+
+type BatchFileResult =
+  | { input: string; status: "optimized"; output: string; report: string }
+  | { input: string; status: "failed"; error: string };
+
+function isOptimizationMode(value: string): value is OptimizationMode {
+  return value === "safe" || value === "balanced" || value === "aggressive";
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

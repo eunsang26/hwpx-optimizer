@@ -117,3 +117,18 @@ export async function optimizeHwpxBufferBalanced(
   });
   return { output, report };
 }
+
+export async function optimizeHwpxBufferAggressive(
+  input: Buffer,
+  options: { actions?: string[]; allowLarger?: boolean } = {}
+): Promise<{
+  output: Buffer;
+  report: OptimizationReport;
+}> {
+  const result = await optimizeHwpxBufferBalanced(input, options);
+  const warning = "Aggressive mode prioritizes file size and may introduce visible image quality differences.";
+  if (!result.report.warnings.includes(warning)) {
+    result.report.warnings.push(warning);
+  }
+  return result;
+}
