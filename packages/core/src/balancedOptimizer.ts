@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import { mapLimit } from "./concurrency.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
-import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageBalancedWithBudget } from "./opportunities.js";
-import type { ImageOptimizationProfile } from "./opportunities.js";
+import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageActionWithBudget } from "./opportunities.js";
+import type { ImageOptimizationProfile, TransformImageAction } from "./opportunities.js";
 import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan } from "./types.js";
 import { getStringAttribute, getXmlAttributes, isXmlNode, setAttribute } from "./xmlNode.js";
 import type { XmlNode } from "./xmlNode.js";
@@ -24,18 +24,25 @@ export async function applyBalancedOptimizationPlan(input: {
   const skipped: AppliedAction[] = [...consolidated.skipped];
   const transformTargets = new Set(
     input.plan.actions
-      .filter((action) => action.type === "convert-bmp-to-png" || action.type === "resize-jpeg" || action.type === "optimize-png")
+      .filter(
+        (action) =>
+          action.type === "convert-bmp-to-png" ||
+          action.type === "convert-tiff-to-png" ||
+          action.type === "resize-jpeg" ||
+          action.type === "resize-png" ||
+          action.type === "strip-metadata" ||
+          action.type === "optimize-png"
+      )
       .map((action) => action.target)
   );
   const pathUpdates = new Map<string, string>();
   const mediaTypeUpdates = new Map<string, string>();
   const resizeBudgets = getRecommendedImagePixelBudgets(consolidated.pkg, profile.displayScale);
 
-  type TransformAction = "convert-bmp-to-png" | "resize-jpeg" | "optimize-png";
-  type TransformTask = { index: number; entry: HwpxEntry; action: TransformAction };
+  type TransformTask = { index: number; entry: HwpxEntry; action: TransformImageAction };
   type TransformOutcome =
-    | { index: number; entry: HwpxEntry; action: TransformAction; status: "transformed"; outputPath: string; data: Buffer }
-    | { index: number; entry: HwpxEntry; action: TransformAction; status: "skipped"; size?: number };
+    | { index: number; entry: HwpxEntry; action: TransformImageAction; status: "transformed"; outputPath: string; data: Buffer }
+    | { index: number; entry: HwpxEntry; action: TransformImageAction; status: "skipped"; size?: number };
 
   const transformedEntries = new Array<HwpxEntry>(consolidated.pkg.entries.length);
   const tasks: TransformTask[] = [];
@@ -46,7 +53,15 @@ export async function applyBalancedOptimizationPlan(input: {
     }
 
     const action = input.plan.actions.find((item) => item.target === entry.path);
-    if (!action || (action.type !== "convert-bmp-to-png" && action.type !== "resize-jpeg" && action.type !== "optimize-png")) {
+    if (
+      !action ||
+      (action.type !== "convert-bmp-to-png" &&
+        action.type !== "convert-tiff-to-png" &&
+        action.type !== "resize-jpeg" &&
+        action.type !== "resize-png" &&
+        action.type !== "strip-metadata" &&
+        action.type !== "optimize-png")
+    ) {
       transformedEntries[index] = entry;
       continue;
     }
@@ -56,9 +71,10 @@ export async function applyBalancedOptimizationPlan(input: {
 
   const outcomes = await mapLimit(tasks, IMAGE_TRANSFORM_CONCURRENCY, async (task): Promise<TransformOutcome> => {
     try {
-      const transformed = await transformImageBalancedWithBudget(
+      const transformed = await transformImageActionWithBudget(
         task.entry.path,
         task.entry.data,
+        task.action,
         resizeBudgets.get(task.entry.path),
         profile
       );

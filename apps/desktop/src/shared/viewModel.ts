@@ -77,6 +77,8 @@ const ACTION_LABELS: Record<OptimizationOpportunityGroup["action"], string> = {
   "optimize-png": "PNG 무손실 최적화",
   "convert-bmp-to-png": "BMP를 PNG로 변환",
   "resize-jpeg": "큰 JPEG 리사이즈",
+  "resize-png": "큰 PNG 리사이즈",
+  "convert-tiff-to-png": "TIFF를 PNG로 변환",
   "clean-shape-comment": "이미지 설명 메타데이터 정리",
   "consolidate-duplicate-images": "중복 이미지 참조 정리"
 };

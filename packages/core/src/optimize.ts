@@ -113,8 +113,19 @@ async function optimizeHwpxBufferAdvanced(
         risk: "medium" as const
       };
     }
+    if (opportunity.action === "convert-tiff-to-png") {
+      return {
+        type: "convert-tiff-to-png" as const,
+        target: opportunity.target,
+        outputPath: opportunity.target.replace(/\.[^.\/]+$/, ".png"),
+        risk: "medium" as const
+      };
+    }
     if (opportunity.action === "resize-jpeg") {
       return { type: "resize-jpeg" as const, target: opportunity.target, risk: "medium" as const };
+    }
+    if (opportunity.action === "resize-png") {
+      return { type: "resize-png" as const, target: opportunity.target, risk: "medium" as const };
     }
     if (opportunity.action === "consolidate-duplicate-images") {
       return { type: "consolidate-duplicate-images" as const, target: opportunity.target, risk: "medium" as const };
@@ -211,6 +222,22 @@ function createOptimizationOpportunityFromAppliedAction(action: AppliedAction): 
     };
   }
 
+  if (action.type === "convert-tiff-to-png") {
+    return {
+      id: `${action.type}:${action.target}`,
+      label: "Convert TIFF to PNG",
+      action: action.type,
+      target: action.target,
+      estimatedSavingBytes,
+      beforeSize: action.beforeSize,
+      afterSize: action.afterSize,
+      confidence: "exact",
+      risk: "medium",
+      visualImpact: "low",
+      defaultEnabledIn: ["balanced", "aggressive"]
+    };
+  }
+
   if (action.type === "resize-jpeg") {
     return {
       id: `${action.type}:${action.target}`,
@@ -223,6 +250,22 @@ function createOptimizationOpportunityFromAppliedAction(action: AppliedAction): 
       confidence: "exact",
       risk: "medium",
       visualImpact: "medium",
+      defaultEnabledIn: ["balanced", "aggressive"]
+    };
+  }
+
+  if (action.type === "resize-png") {
+    return {
+      id: `${action.type}:${action.target}`,
+      label: "Resize PNG to document display budget",
+      action: action.type,
+      target: action.target,
+      estimatedSavingBytes,
+      beforeSize: action.beforeSize,
+      afterSize: action.afterSize,
+      confidence: "exact",
+      risk: "medium",
+      visualImpact: "low",
       defaultEnabledIn: ["balanced", "aggressive"]
     };
   }

@@ -86,6 +86,8 @@ export type OptimizationAction =
   | { type: "strip-metadata"; target: string; risk: "safe" }
   | { type: "convert-bmp-to-png"; target: string; risk: "medium"; outputPath: string }
   | { type: "resize-jpeg"; target: string; risk: "medium" }
+  | { type: "resize-png"; target: string; risk: "medium" }
+  | { type: "convert-tiff-to-png"; target: string; risk: "medium"; outputPath: string }
   | { type: "optimize-png"; target: string; risk: "safe" }
   | { type: "clean-shape-comment"; target: string; risk: "safe" }
   | { type: "consolidate-duplicate-images"; target: string; risk: "medium" }
@@ -104,6 +106,8 @@ export type OptimizationOpportunity = {
     | "strip-metadata"
     | "convert-bmp-to-png"
     | "resize-jpeg"
+    | "resize-png"
+    | "convert-tiff-to-png"
     | "optimize-png"
     | "clean-shape-comment"
     | "consolidate-duplicate-images";

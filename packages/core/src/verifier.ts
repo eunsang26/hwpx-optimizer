@@ -179,6 +179,7 @@ function verifySafeImages(input: {
 function normalizeFormat(format: string): string {
   const normalized = format.toLowerCase();
   if (normalized === "jpg") return "jpeg";
+  if (normalized === "tif") return "tiff";
   return normalized;
 }
 
@@ -194,6 +195,9 @@ function allowedAdvancedImagePaths(image: ImageInventoryItem, duplicatePaths: st
   if (normalizeFormat(image.format) === "bmp") {
     paths.add(replaceExtension(image.path, ".png"));
   }
+  if (normalizeFormat(image.format) === "tiff") {
+    paths.add(replaceExtension(image.path, ".png"));
+  }
   if (normalizeFormat(image.format) === "jpeg") {
     paths.add(replaceExtension(image.path, ".jpg"));
     paths.add(replaceExtension(image.path, ".jpeg"));
@@ -205,6 +209,7 @@ function isAllowedAdvancedFormat(originalImage: ImageInventoryItem, outputImage:
   const original = normalizeFormat(originalImage.format);
   const output = normalizeFormat(outputImage.format);
   if (original === "bmp") return output === "bmp" || output === "png";
+  if (original === "tiff") return output === "tiff" || output === "png";
   if (original === "jpeg") return output === "jpeg";
   if (original === "png") return output === "png";
   return original === output;

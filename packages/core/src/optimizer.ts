@@ -104,7 +104,7 @@ async function optimizePngLosslessly(data: Buffer): Promise<Buffer> {
   return sharp(data).png({ compressionLevel: 9, adaptiveFiltering: true, palette: false }).toBuffer();
 }
 
-function stripJpegMetadataSegments(data: Buffer): Buffer {
+export function stripJpegMetadataSegments(data: Buffer): Buffer {
   if (data.length < 4 || data[0] !== 0xff || data[1] !== 0xd8) {
     return data;
   }
@@ -150,7 +150,7 @@ function stripJpegMetadataSegments(data: Buffer): Buffer {
       break;
     }
 
-    if (!isRemovableJpegMetadataMarker(marker)) {
+    if (!isRemovableJpegMetadataSegment(marker, data, markerOffset + 3, segmentEnd)) {
       chunks.push(data.subarray(segmentStart, segmentEnd));
     }
 
@@ -160,6 +160,12 @@ function stripJpegMetadataSegments(data: Buffer): Buffer {
   return Buffer.concat(chunks);
 }
 
-function isRemovableJpegMetadataMarker(marker: number): boolean {
-  return marker === 0xe1 || marker === 0xed || marker === 0xfe;
+function isRemovableJpegMetadataSegment(marker: number, data: Buffer, payloadStart: number, segmentEnd: number): boolean {
+  if (marker === 0xed || marker === 0xfe) return true;
+  if (marker !== 0xe1) return false;
+  // APP1 carries both EXIF and XMP; preserving EXIF keeps orientation stable.
+  if (payloadStart + 6 <= segmentEnd && data.subarray(payloadStart, payloadStart + 6).toString("ascii") === "Exif\0\0") {
+    return false;
+  }
+  return true;
 }

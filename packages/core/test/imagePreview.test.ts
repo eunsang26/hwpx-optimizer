@@ -178,6 +178,23 @@ describe("computePsnr", () => {
     const psnr = await computePsnr(Buffer.from("not an image"), Buffer.from("also not"));
     expect(psnr).toBeNull();
   });
+
+  it("aligns EXIF-rotated JPEGs before comparing so PSNR stays high", async () => {
+    const gradient = await sharp({
+      create: { width: 192, height: 128, channels: 3, background: "#88aacc" }
+    })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+    const tagged = await sharp(gradient)
+      .withMetadata({ orientation: 6 })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+    const physicallyRotated = await sharp(tagged).rotate().jpeg({ quality: 80 }).toBuffer();
+
+    const psnr = await computePsnr(tagged, physicallyRotated);
+    expect(psnr).not.toBeNull();
+    expect(psnr).toBeGreaterThan(20);
+  });
 });
 
 function createBmp24(width: number, height: number, rgb: [number, number, number]): Buffer {

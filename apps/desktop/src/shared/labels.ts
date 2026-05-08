@@ -43,6 +43,7 @@ const ACTION_LABELS: Record<string, string> = {
   "resize-jpeg": "큰 JPEG 리사이즈",
   "resize-png": "큰 PNG 리사이즈",
   "convert-bmp-to-png": "BMP를 PNG로 변환",
+  "convert-tiff-to-png": "TIFF를 PNG로 변환",
   "remove-unused": "미사용 리소스 제거",
   "minify-xml": "문서 XML 정리",
   "repack-zip": "HWPX 재압축",

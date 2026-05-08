@@ -42,6 +42,32 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(report.images).toEqual([]);
   });
 
+  it("preserves EXIF orientation while stripping JPEG metadata in safe mode", async () => {
+    const baseline = await sharp({
+      create: { width: 320, height: 240, channels: 3, background: "#445566" }
+    })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+    const tagged = await sharp(baseline)
+      .withMetadata({ orientation: 6 })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": '<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.jpg" media-type="image/jpeg"/></opf:manifest></opf:package>',
+        "Contents/section0.xml": '<root><hc:img binaryItemIDRef="image1" /></root>',
+        "BinData/image1.jpg": tagged
+      }
+    });
+
+    const result = await optimizeHwpxBufferSafe(input);
+    const output = await readHwpxPackage(result.output);
+    const image = output.entries.find((entry) => entry.path === "BinData/image1.jpg");
+    const metadata = await sharp(image?.data).metadata();
+
+    expect(metadata.orientation).toBe(6);
+  });
+
   it("does not compute advanced resize opportunities while optimizing in safe mode", async () => {
     const jpg = await sharp({
       create: {

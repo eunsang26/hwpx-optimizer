@@ -214,6 +214,20 @@ const ACTION_CATALOG: Array<{
     visualImpact: "medium"
   },
   {
+    action: "resize-png",
+    description: "Resize oversized PNGs to display-size budget while keeping PNG output",
+    modes: "balanced, aggressive",
+    risk: "medium",
+    visualImpact: "low"
+  },
+  {
+    action: "convert-tiff-to-png",
+    description: "Decode TIFF and re-encode as PNG (with optional resize)",
+    modes: "balanced, aggressive",
+    risk: "medium",
+    visualImpact: "low~medium"
+  },
+  {
     action: "clean-shape-comment",
     description: "Strip private filename / dimension lines inside <hp:shapeComment> blocks",
     modes: "balanced, aggressive",

@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { randomBytes } from "node:crypto";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
-import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced } from "../src/optimize.js";
+import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
 import { readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture } from "./fixtures.js";
 
@@ -41,7 +41,7 @@ describe("balanced optimization", () => {
       "image1": { path: "BinData/image1.bmp", mediaType: "image/bmp", data: bmp }
     });
 
-    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const result = await optimizeHwpxBufferBalanced(fixture);
     const output = await readHwpxPackage(result.output);
     const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
 
@@ -72,7 +72,7 @@ describe("balanced optimization", () => {
       }
     });
 
-    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const result = await optimizeHwpxBufferBalanced(fixture);
     const output = await readHwpxPackage(result.output);
     const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
 
@@ -120,6 +120,104 @@ describe("balanced optimization", () => {
     ]);
   });
 
+  it("preserves EXIF orientation through balanced JPEG resize", async () => {
+    const physicalLandscape = await sharp({
+      create: { width: 2400, height: 1800, channels: 3, background: "#88aacc" }
+    })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+    const tagged = await sharp(physicalLandscape)
+      .withMetadata({ orientation: 6 })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+    const fixture = await createReferencedImageFixtureWithDisplay({
+      id: "image1",
+      path: "BinData/image1.jpg",
+      mediaType: "image/jpeg",
+      data: tagged,
+      widthHwpUnit: 7200,
+      heightHwpUnit: 5400
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const image = output.entries.find((entry) => entry.path === "BinData/image1.jpg");
+    const metadata = await sharp(image?.data).metadata();
+
+    expect(metadata.orientation).toBe(6);
+    expect(metadata.width).toBeGreaterThan(0);
+    expect(metadata.height).toBeGreaterThan(0);
+  });
+
+  it("resizes PNGs to the document display size budget in balanced mode", async () => {
+    const png = await sharp({
+      create: {
+        width: 4000,
+        height: 3000,
+        channels: 3,
+        background: "#44aa88"
+      }
+    })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+    const fixture = await createReferencedImageFixtureWithDisplay({
+      id: "image1",
+      path: "BinData/image1.png",
+      mediaType: "image/png",
+      data: png,
+      widthHwpUnit: 7200,
+      heightHwpUnit: 5400
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const image = output.entries.find((entry) => entry.path === "BinData/image1.png");
+    const metadata = await sharp(image?.data).metadata();
+
+    expect(metadata.format).toBe("png");
+    expect(metadata.width).toBe(192);
+    expect(metadata.height).toBe(144);
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "resize-png", target: "BinData/image1.png" })
+    );
+    expect(result.report.actions.applied).not.toContainEqual(
+      expect.objectContaining({ type: "optimize-png", target: "BinData/image1.png" })
+    );
+  });
+
+  it("does not resize PNGs in safe mode", async () => {
+    const png = await sharp({
+      create: {
+        width: 4000,
+        height: 3000,
+        channels: 3,
+        background: "#44aa88"
+      }
+    })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+    const fixture = await createReferencedImageFixtureWithDisplay({
+      id: "image1",
+      path: "BinData/image1.png",
+      mediaType: "image/png",
+      data: png,
+      widthHwpUnit: 7200,
+      heightHwpUnit: 5400
+    });
+
+    const result = await optimizeHwpxBufferSafe(fixture);
+    const output = await readHwpxPackage(result.output);
+    const image = output.entries.find((entry) => entry.path === "BinData/image1.png");
+    const metadata = await sharp(image?.data).metadata();
+
+    expect(metadata.format).toBe("png");
+    expect(metadata.width).toBe(4000);
+    expect(metadata.height).toBe(3000);
+    expect(result.report.actions.applied).not.toContainEqual(
+      expect.objectContaining({ type: "resize-png", target: "BinData/image1.png" })
+    );
+  });
+
   it("consolidates duplicate image references in balanced mode", async () => {
     const png = await sharp({
       create: {
@@ -140,7 +238,7 @@ describe("balanced optimization", () => {
       }
     });
 
-    const result = await optimizeHwpxBufferBalanced(fixture);
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
     const output = await readHwpxPackage(result.output);
     const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
     const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
@@ -176,6 +274,56 @@ describe("balanced optimization", () => {
     expect(metadata.height).toBe(100);
   });
 
+  it("converts TIFF to PNG and updates content.hpf manifest references", async () => {
+    const tiff = await sharp({
+      create: {
+        width: 640,
+        height: 360,
+        channels: 3,
+        background: "#d8dde6"
+      }
+    })
+      .tiff({ compression: "none" })
+      .toBuffer();
+    const fixture = await createReferencedImageFixture({
+      image1: { path: "BinData/image1.tiff", mediaType: "image/tiff", data: tiff }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture);
+    const output = await readHwpxPackage(result.output);
+    const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
+    const image = output.entries.find((entry) => entry.path === "BinData/image1.png");
+    const metadata = await sharp(image?.data).metadata();
+
+    expect(output.entries.some((entry) => entry.path === "BinData/image1.tiff")).toBe(false);
+    expect(image).toBeDefined();
+    expect(metadata.format).toBe("png");
+    expect(content).toContain('href="BinData/image1.png"');
+    expect(content).toContain('media-type="image/png"');
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "convert-tiff-to-png", target: "BinData/image1.tiff" })
+    );
+  });
+
+  it("does not report TIFF conversion when PNG output would not be smaller", async () => {
+    const raw = Buffer.alloc(100 * 100 * 3);
+    for (let index = 0; index < raw.length; index += 1) {
+      raw[index] = (index * 37) % 256;
+    }
+    const tiff = await sharp(raw, { raw: { width: 100, height: 100, channels: 3 } })
+      .tiff({ compression: "jpeg", quality: 30 })
+      .toBuffer();
+    const fixture = await createReferencedImageFixture({
+      image1: { path: "BinData/tiny.tif", mediaType: "image/tiff", data: tiff }
+    });
+
+    const report = await analyzeHwpxBuffer(fixture);
+
+    expect(report.opportunities).not.toContainEqual(
+      expect.objectContaining({ action: "convert-tiff-to-png", target: "BinData/tiny.tif" })
+    );
+  });
+
   it("reports PNG optimization and shapeComment cleanup as advanced opportunities", async () => {
     const png = await sharp({
       create: {
@@ -207,6 +355,101 @@ describe("balanced optimization", () => {
         }),
         expect.objectContaining({ action: "clean-shape-comment", target: "Contents/section0.xml" })
       ])
+    );
+  });
+
+  it("strips JPEG metadata in balanced mode without resizing", async () => {
+    const jpeg = await createJpegWithLargeMetadata({
+      width: 320,
+      height: 180,
+      metadataBytes: 16_384
+    });
+    const fixture = await createReferencedImageFixture({
+      image1: { path: "BinData/photo.jpg", mediaType: "image/jpeg", data: jpeg }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture);
+    const output = await readHwpxPackage(result.output);
+    const image = output.entries.find((entry) => entry.path === "BinData/photo.jpg");
+    const metadata = await sharp(image?.data).metadata();
+
+    expect(image?.data.includes(Buffer.from("http://ns.adobe.com/xap/1.0/"))).toBe(false);
+    expect(image?.size).toBeLessThan(jpeg.byteLength);
+    expect(metadata.format).toBe("jpeg");
+    expect(metadata.width).toBe(320);
+    expect(metadata.height).toBe(180);
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "strip-metadata", target: "BinData/photo.jpg" })
+    );
+  });
+
+  it("does not report strip-metadata separately for JPEGs that will be resized", async () => {
+    const jpeg = await createJpegWithLargeMetadata({
+      width: 2400,
+      height: 1800,
+      metadataBytes: 16_384
+    });
+    const fixture = await createReferencedImageFixtureWithDisplay({
+      id: "image1",
+      path: "BinData/photo.jpg",
+      mediaType: "image/jpeg",
+      data: jpeg,
+      widthHwpUnit: 7200,
+      heightHwpUnit: 5400
+    });
+
+    const report = await analyzeHwpxBuffer(fixture);
+
+    expect(report.opportunities).toContainEqual(
+      expect.objectContaining({ action: "resize-jpeg", target: "BinData/photo.jpg" })
+    );
+    expect(report.opportunities).not.toContainEqual(
+      expect.objectContaining({ action: "strip-metadata", target: "BinData/photo.jpg" })
+    );
+  });
+
+  it("reports strip-metadata when an oversized JPEG would not shrink by resizing", async () => {
+    const jpeg = await createJpegWithLargeMetadata({
+      width: 4000,
+      height: 1,
+      metadataBytes: 256
+    });
+    const fixture = await createReferencedImageFixture({
+      image1: { path: "BinData/wide.jpg", mediaType: "image/jpeg", data: jpeg }
+    });
+
+    const report = await analyzeHwpxBuffer(fixture);
+
+    expect(report.opportunities).not.toContainEqual(
+      expect.objectContaining({ action: "resize-jpeg", target: "BinData/wide.jpg" })
+    );
+    expect(report.opportunities).toContainEqual(
+      expect.objectContaining({ action: "strip-metadata", target: "BinData/wide.jpg" })
+    );
+  });
+
+  it("applies strip-metadata without resizing when resize would not shrink an oversized JPEG", async () => {
+    const jpeg = await createJpegWithLargeMetadata({
+      width: 4000,
+      height: 1,
+      metadataBytes: 256
+    });
+    const fixture = await createReferencedImageFixture({
+      image1: { path: "BinData/wide.jpg", mediaType: "image/jpeg", data: jpeg }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const image = output.entries.find((entry) => entry.path === "BinData/wide.jpg");
+    const metadata = await sharp(image?.data).metadata();
+
+    expect(metadata.width).toBe(4000);
+    expect(metadata.height).toBe(1);
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "strip-metadata", target: "BinData/wide.jpg" })
+    );
+    expect(result.report.actions.applied).not.toContainEqual(
+      expect.objectContaining({ type: "resize-jpeg", target: "BinData/wide.jpg" })
     );
   });
 
@@ -356,4 +599,34 @@ function createBmp24(width: number, height: number, rgb: [number, number, number
     }
   }
   return buffer;
+}
+
+async function createJpegWithLargeMetadata(input: {
+  width: number;
+  height: number;
+  metadataBytes: number;
+}): Promise<Buffer> {
+  const jpeg = await sharp({
+    create: {
+      width: input.width,
+      height: input.height,
+      channels: 3,
+      background: "#88aacc"
+    }
+  })
+    .jpeg({ quality: 95 })
+    .toBuffer();
+  const xmpPayload = Buffer.concat([
+    Buffer.from("http://ns.adobe.com/xap/1.0/\0"),
+    Buffer.alloc(input.metadataBytes, "x")
+  ]);
+  return Buffer.concat([jpeg.subarray(0, 2), jpegSegment(0xe1, xmpPayload), jpeg.subarray(2)]);
+}
+
+function jpegSegment(marker: number, payload: Buffer): Buffer {
+  const header = Buffer.alloc(4);
+  header[0] = 0xff;
+  header[1] = marker;
+  header.writeUInt16BE(payload.byteLength + 2, 2);
+  return Buffer.concat([header, payload]);
 }

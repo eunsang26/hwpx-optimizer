@@ -4,10 +4,12 @@ import { applySafeOptimizationPlan } from "../src/optimizer.js";
 import type { HwpxPackage, OptimizationPlan } from "../src/types.js";
 
 describe("applySafeOptimizationPlan", () => {
-  it("strips JPEG metadata segments without re-encoding image bytes", async () => {
+  it("strips XMP and IPTC segments while preserving EXIF orientation in JPEGs", async () => {
     const jpeg = Buffer.concat([
       Buffer.from([0xff, 0xd8]),
-      segment(0xe1, Buffer.from("Exif\0\0metadata")),
+      segment(0xe1, Buffer.from("Exif\0\0orientation-data")),
+      segment(0xe1, Buffer.from("http://ns.adobe.com/xap/1.0/\0xmp-data")),
+      segment(0xed, Buffer.from("iptc-data")),
       segment(0xe0, Buffer.from("JFIF\0keep")),
       Buffer.from([0xff, 0xda, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04, 0xff, 0xd9])
     ]);
@@ -22,10 +24,14 @@ describe("applySafeOptimizationPlan", () => {
     const result = await applySafeOptimizationPlan({ pkg, plan });
     const optimized = result.pkg.entries[0].data;
 
-    expect(optimized.includes(Buffer.from("Exif"))).toBe(false);
+    expect(optimized.includes(Buffer.from("Exif"))).toBe(true);
+    expect(optimized.includes(Buffer.from("orientation-data"))).toBe(true);
+    expect(optimized.includes(Buffer.from("http://ns.adobe.com/xap/1.0/"))).toBe(false);
+    expect(optimized.includes(Buffer.from("iptc-data"))).toBe(false);
     expect(optimized.includes(Buffer.from("JFIF"))).toBe(true);
     expect(optimized.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
     expect(optimized.subarray(-2)).toEqual(Buffer.from([0xff, 0xd9]));
+    expect(optimized.byteLength).toBeLessThan(jpeg.byteLength);
   });
 
   it("skips JPEG metadata stripping when no removable segment is present", async () => {
