@@ -30,7 +30,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Package analyzer | `packages/core/src/analyzer.ts`, `packages/core/test/analyzer.test.ts` | Implemented |
 | Reference graph | `packages/core/src/referenceGraph.ts`, `packages/core/test/referenceGraph.test.ts` | Implemented with conservative coverage |
 | Optimization planner | `packages/core/src/planner.ts`, `packages/core/test/planner.test.ts` | Implemented |
-| Safe optimizer | `packages/core/src/optimizer.ts`, `packages/core/src/optimize.ts` | Implemented |
+| Safe optimizer | `packages/core/src/optimizer.ts`, `packages/core/src/optimize.ts`, `packages/core/test/optimizer.test.ts` | Implemented with XML minify, JPEG metadata segment stripping, lossless PNG optimization when smaller, unused BinData removal, ZIP repack, and rollback if output is not smaller |
 | Balanced optimizer | `packages/core/src/balancedOptimizer.ts`, `packages/core/test/balanced.test.ts` | Implemented |
 | Aggressive optimizer | `packages/core/src/opportunities.ts`, `packages/core/test/aggressive.test.ts` | Implemented |
 | BMP to PNG | `convert-bmp-to-png` action in balanced/aggressive paths | Implemented |
@@ -138,6 +138,14 @@ Latest desktop settings smoke coverage after commit `b2551bc`:
 - `npm run typecheck`: passed.
 - `npm run build`: passed.
 - `npm test`: passed, 13 files / 54 tests.
+- `npm run release:hygiene`: passed.
+
+Latest safe PNG optimization verification after commit `a1f842c`:
+
+- `npm test -- packages/core/test/planner.test.ts packages/core/test/optimizer.test.ts`: passed, 2 files / 5 tests.
+- `npm test`: passed, 13 files / 56 tests.
+- `npm run typecheck`: passed.
+- `npm run build`: passed.
 - `npm run release:hygiene`: passed.
 
 Sample2 evidence from the latest local run:
