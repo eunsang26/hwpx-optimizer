@@ -1,11 +1,14 @@
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
-import { cleanShapeComments, outputMediaType, transformImageBalancedWithBudget } from "./opportunities.js";
+import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageBalancedWithBudget } from "./opportunities.js";
+import type { ImageOptimizationProfile } from "./opportunities.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 
 export async function applyBalancedOptimizationPlan(input: {
   pkg: HwpxPackage;
   plan: OptimizationPlan;
+  profile?: ImageOptimizationProfile;
 }): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[] }> {
+  const profile = input.profile ?? balancedImageProfile;
   const applied: AppliedAction[] = [];
   const skipped: AppliedAction[] = [];
   const transformTargets = new Set(
@@ -15,7 +18,7 @@ export async function applyBalancedOptimizationPlan(input: {
   );
   const pathUpdates = new Map<string, string>();
   const mediaTypeUpdates = new Map<string, string>();
-  const resizeBudgets = getRecommendedImagePixelBudgets(input.pkg);
+  const resizeBudgets = getRecommendedImagePixelBudgets(input.pkg, profile.displayScale);
 
   const transformedEntries = [];
   for (const entry of input.pkg.entries) {
@@ -31,7 +34,7 @@ export async function applyBalancedOptimizationPlan(input: {
     }
 
     try {
-      const transformed = await transformImageBalancedWithBudget(entry.path, entry.data, resizeBudgets.get(entry.path));
+      const transformed = await transformImageBalancedWithBudget(entry.path, entry.data, resizeBudgets.get(entry.path), profile);
       pathUpdates.set(entry.path, transformed.outputPath);
       mediaTypeUpdates.set(transformed.outputPath, outputMediaType(transformed.outputPath));
       transformedEntries.push({

@@ -66,7 +66,7 @@ export type OptimizationAction =
   | { type: "repack-zip"; target: "*"; risk: "safe" };
 
 export type OptimizationPlan = {
-  mode: "safe" | "balanced";
+  mode: "safe" | "balanced" | "aggressive";
   actions: OptimizationAction[];
 };
 

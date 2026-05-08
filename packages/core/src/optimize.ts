@@ -1,7 +1,8 @@
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { applyBalancedOptimizationPlan } from "./balancedOptimizer.js";
 import { applySafeOptimizationPlan } from "./optimizer.js";
-import { detectOptimizationOpportunities } from "./opportunities.js";
+import { aggressiveImageProfile, balancedImageProfile, detectOptimizationOpportunities } from "./opportunities.js";
+import type { ImageOptimizationProfile } from "./opportunities.js";
 import { createSafeOptimizationPlan } from "./planner.js";
 import { createAnalysisReport, createOptimizationReport } from "./report.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
@@ -63,12 +64,33 @@ export async function optimizeHwpxBufferBalanced(
   output: Buffer;
   report: OptimizationReport;
 }> {
+  return optimizeHwpxBufferAdvanced(input, {
+    options,
+    mode: "balanced",
+    profile: balancedImageProfile,
+    rollbackWarning: "Balanced mode did not produce a smaller file; original package bytes returned."
+  });
+}
+
+async function optimizeHwpxBufferAdvanced(
+  input: Buffer,
+  settings: {
+    options: { actions?: string[]; allowLarger?: boolean };
+    mode: "balanced" | "aggressive";
+    profile: ImageOptimizationProfile;
+    rollbackWarning: string;
+    warnings?: string[];
+  }
+): Promise<{
+  output: Buffer;
+  report: OptimizationReport;
+}> {
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
-  const opportunities = await detectOptimizationOpportunities(pkg);
+  const opportunities = await detectOptimizationOpportunities(pkg, settings.profile);
   const selectedOpportunities =
-    options.actions && options.actions.length > 0
-      ? opportunities.filter((opportunity) => options.actions?.includes(opportunity.action))
+    settings.options.actions && settings.options.actions.length > 0
+      ? opportunities.filter((opportunity) => settings.options.actions?.includes(opportunity.action))
       : opportunities;
   const actions = selectedOpportunities.map((opportunity) => {
     if (opportunity.action === "convert-bmp-to-png") {
@@ -85,14 +107,14 @@ export async function optimizeHwpxBufferBalanced(
     return { type: opportunity.action, target: opportunity.target, risk: "safe" as const };
   });
   const plan = {
-    mode: "balanced" as const,
+    mode: settings.mode,
     actions: [...actions, { type: "repack-zip" as const, target: "*" as const, risk: "safe" as const }]
   };
-  const optimized = await applyBalancedOptimizationPlan({ pkg, plan });
+  const optimized = await applyBalancedOptimizationPlan({ pkg, plan, profile: settings.profile });
   const output = await writeHwpxPackage(optimized.pkg);
   await verifyHwpxOutput(output);
 
-  if (!options.allowLarger && output.byteLength >= input.byteLength) {
+  if (!settings.options.allowLarger && output.byteLength >= input.byteLength) {
     const report = createOptimizationReport({
       analysis,
       originalSize: input.byteLength,
@@ -101,7 +123,7 @@ export async function optimizeHwpxBufferBalanced(
       applied: [],
       skipped: [...optimized.applied, ...optimized.skipped],
       opportunities,
-      warnings: ["Balanced mode did not produce a smaller file; original package bytes returned."]
+      warnings: [settings.rollbackWarning, ...(settings.warnings ?? [])]
     });
     return { output: Buffer.from(input), report };
   }
@@ -113,7 +135,8 @@ export async function optimizeHwpxBufferBalanced(
     planned: plan.actions,
     applied: optimized.applied,
     skipped: optimized.skipped,
-    opportunities
+    opportunities,
+    warnings: settings.warnings
   });
   return { output, report };
 }
@@ -125,10 +148,11 @@ export async function optimizeHwpxBufferAggressive(
   output: Buffer;
   report: OptimizationReport;
 }> {
-  const result = await optimizeHwpxBufferBalanced(input, options);
-  const warning = "Aggressive mode prioritizes file size and may introduce visible image quality differences.";
-  if (!result.report.warnings.includes(warning)) {
-    result.report.warnings.push(warning);
-  }
-  return result;
+  return optimizeHwpxBufferAdvanced(input, {
+    options,
+    mode: "aggressive",
+    profile: aggressiveImageProfile,
+    rollbackWarning: "Aggressive mode did not produce a smaller file; original package bytes returned.",
+    warnings: ["Aggressive mode prioritizes file size and may introduce visible image quality differences."]
+  });
 }

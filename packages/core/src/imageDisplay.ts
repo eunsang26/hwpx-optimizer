@@ -37,7 +37,7 @@ export function extractImageDisplayReferences(pkg: HwpxPackage): Map<string, Ima
   return refsByPath;
 }
 
-export function getRecommendedImagePixelBudgets(pkg: HwpxPackage): Map<string, { width: number; height: number }> {
+export function getRecommendedImagePixelBudgets(pkg: HwpxPackage, scale = 2): Map<string, { width: number; height: number }> {
   const budgets = new Map<string, { width: number; height: number }>();
   for (const [path, refs] of extractImageDisplayReferences(pkg)) {
     const largest = [...refs].sort(
@@ -45,8 +45,8 @@ export function getRecommendedImagePixelBudgets(pkg: HwpxPackage): Map<string, {
     )[0];
     if (!largest) continue;
     budgets.set(path, {
-      width: largest.widthPx96 * 2,
-      height: largest.heightPx96 * 2
+      width: Math.ceil(largest.widthPx96 * scale),
+      height: Math.ceil(largest.heightPx96 * scale)
     });
   }
   return budgets;
