@@ -1,8 +1,16 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const api = {
   selectHwpx: () => ipcRenderer.invoke("dialog:select-hwpx"),
   selectDirectory: () => ipcRenderer.invoke("dialog:select-directory"),
+  getPathForFile: (file) => {
+    if (!file || typeof webUtils?.getPathForFile !== "function") return "";
+    try {
+      return webUtils.getPathForFile(file) ?? "";
+    } catch {
+      return "";
+    }
+  },
   loadSettings: () => ipcRenderer.invoke("settings:load"),
   saveSettings: (patch) => ipcRenderer.invoke("settings:save", patch),
   analyze: (filePath) => ipcRenderer.invoke("hwpx:analyze", filePath),

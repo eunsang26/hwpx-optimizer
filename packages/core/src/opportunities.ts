@@ -269,7 +269,7 @@ export function cleanShapeComments(xml: string): string {
 
 export function outputMediaType(path: string): string {
   if (/\.png$/i.test(path)) return "image/png";
-  if (/\.jpe?g$/i.test(path)) return "image/jpg";
+  if (/\.jpe?g$/i.test(path)) return "image/jpeg";
   if (/\.bmp$/i.test(path)) return "image/bmp";
   return "application/octet-stream";
 }

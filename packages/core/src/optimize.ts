@@ -42,19 +42,27 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
       optimizedSize: input.byteLength,
       planned: plan.actions,
       applied: [],
-      skipped: [...optimized.applied, ...optimized.skipped],
+      skipped: [
+        ...optimized.applied,
+        ...optimized.skipped,
+        { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
+      ],
       opportunities,
       warnings: ["Safe mode did not produce a smaller file; original package bytes returned."]
     });
-    return { output: Buffer.from(input), report };
+    return { output: input, report };
   }
 
+  const applied: AppliedAction[] = [
+    ...optimized.applied,
+    { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
+  ];
   const report = createOptimizationReport({
     analysis,
     originalSize: input.byteLength,
     optimizedSize: output.byteLength,
     planned: plan.actions,
-    applied: optimized.applied,
+    applied,
     skipped: optimized.skipped,
     opportunities
   });
@@ -129,19 +137,27 @@ async function optimizeHwpxBufferAdvanced(
       optimizedSize: input.byteLength,
       planned: plan.actions,
       applied: [],
-      skipped: [...optimized.applied, ...optimized.skipped],
+      skipped: [
+        ...optimized.applied,
+        ...optimized.skipped,
+        { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
+      ],
       opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
       warnings: [settings.rollbackWarning, ...(settings.warnings ?? [])]
     });
-    return { output: Buffer.from(input), report };
+    return { output: input, report };
   }
 
+  const applied: AppliedAction[] = [
+    ...optimized.applied,
+    { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
+  ];
   const report = createOptimizationReport({
     analysis,
     originalSize: input.byteLength,
     optimizedSize: output.byteLength,
     planned: plan.actions,
-    applied: optimized.applied,
+    applied,
     skipped: optimized.skipped,
     opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
     warnings: settings.warnings

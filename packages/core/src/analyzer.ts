@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
+import { mapLimit } from "./concurrency.js";
 import { extractImageDisplayReferences } from "./imageDisplay.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import type {
@@ -62,22 +63,6 @@ export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnaly
     unusedBinData: findUnusedBinData(pkg),
     riskyResources: findRiskyResources(pkg)
   };
-}
-
-async function mapLimit<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  async function worker(): Promise<void> {
-    while (nextIndex < items.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      results[index] = await mapper(items[index]);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
-  return results;
 }
 
 async function inspectImage(

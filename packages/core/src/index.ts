@@ -1,6 +1,7 @@
 export * from "./analyzer.js";
 export * from "./balancedOptimizer.js";
 export * from "./bmp.js";
+export * from "./concurrency.js";
 export * from "./imageDisplay.js";
 export * from "./optimize.js";
 export * from "./optimizer.js";

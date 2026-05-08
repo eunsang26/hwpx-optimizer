@@ -149,12 +149,20 @@ async function init(): Promise<void> {
     event.preventDefault();
     dropZone.classList.remove("is-over");
     const file = event.dataTransfer?.files.item(0);
-    const path = (file as (File & { path?: string }) | null)?.path;
-    if (path?.toLowerCase().endsWith(".hwpx")) {
-      await loadFile(path);
-    } else {
+    if (!file) {
       setStatus("HWPX 파일만 선택할 수 있습니다.");
+      return;
     }
+    const path = resolveDroppedFilePath(file);
+    if (path && path.toLowerCase().endsWith(".hwpx")) {
+      await loadFile(path);
+      return;
+    }
+    if (file.name.toLowerCase().endsWith(".hwpx")) {
+      setStatus("드롭한 파일의 경로를 확인할 수 없습니다. 파일 선택 버튼을 사용하세요.");
+      return;
+    }
+    setStatus("HWPX 파일만 선택할 수 있습니다.");
   });
 
   renderModeWarning();
@@ -178,9 +186,12 @@ function renderSettings(settings: DesktopSettings): void {
   settingSaveReport.checked = settings.saveReport;
   settingPreventOverwrite.checked = settings.preventOverwrite;
   settingAggressiveWarning.checked = settings.showAggressiveWarning;
-  settingOutputDirectory.textContent = settings.outputDirectory
-    ? `저장 위치: ${settings.outputDirectory}`
-    : "저장 위치: 원본 문서 폴더";
+  const usingOriginal = settings.saveNextToOriginal || !settings.outputDirectory;
+  settingOutputDirectory.textContent = usingOriginal
+    ? "저장 위치: 원본 문서 폴더"
+    : `저장 위치: ${settings.outputDirectory}`;
+  settingOutputButton.disabled = settings.saveNextToOriginal;
+  settingOutputResetButton.disabled = settings.saveNextToOriginal && !settings.outputDirectory;
 }
 
 async function loadFile(path: string): Promise<void> {
@@ -188,11 +199,19 @@ async function loadFile(path: string): Promise<void> {
   state.report = undefined;
   state.result = undefined;
   resultPanel.hidden = true;
-  fileName.textContent = path.split(/[\\/]/).pop() ?? path;
+  const baseName = path.split(/[\\/]/).pop() ?? path;
+  fileName.textContent = baseName;
   fileMeta.textContent = path;
   analyzeButton.disabled = false;
   optimizeButton.disabled = true;
+  if (looksLikeOptimizedFileName(baseName)) {
+    setStatus("이미 최적화된 파일로 보입니다. 추가 절감 효과는 작을 수 있습니다.");
+  }
   await analyzeFile(path);
+}
+
+function looksLikeOptimizedFileName(name: string): boolean {
+  return /\.optimized(?:-\d+)?\.hwpx$/i.test(name);
 }
 
 async function analyzeFile(path: string): Promise<void> {
@@ -362,6 +381,16 @@ function setStatus(message: string): void {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function resolveDroppedFilePath(file: File): string {
+  const legacyPath = (file as File & { path?: string }).path;
+  if (typeof legacyPath === "string" && legacyPath.length > 0) return legacyPath;
+  const api = window.hwpxOptimizer;
+  if (typeof api?.getPathForFile === "function") {
+    return api.getPathForFile(file);
+  }
+  return "";
 }
 
 function escapeHtml(value: string): string {

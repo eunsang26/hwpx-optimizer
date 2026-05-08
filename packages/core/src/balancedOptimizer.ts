@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
+import { mapLimit } from "./concurrency.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageBalancedWithBudget } from "./opportunities.js";
 import type { ImageOptimizationProfile } from "./opportunities.js";
-import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
+import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan } from "./types.js";
+
+const IMAGE_TRANSFORM_CONCURRENCY = 4;
 
 export async function applyBalancedOptimizationPlan(input: {
   pkg: HwpxPackage;
@@ -26,50 +29,72 @@ export async function applyBalancedOptimizationPlan(input: {
   const mediaTypeUpdates = new Map<string, string>();
   const resizeBudgets = getRecommendedImagePixelBudgets(consolidated.pkg, profile.displayScale);
 
-  const transformedEntries = [];
-  for (const entry of consolidated.pkg.entries) {
+  type TransformAction = "convert-bmp-to-png" | "resize-jpeg" | "optimize-png";
+  type TransformTask = { index: number; entry: HwpxEntry; action: TransformAction };
+  type TransformOutcome =
+    | { index: number; entry: HwpxEntry; action: TransformAction; status: "transformed"; outputPath: string; data: Buffer }
+    | { index: number; entry: HwpxEntry; action: TransformAction; status: "skipped"; size?: number };
+
+  const transformedEntries = new Array<HwpxEntry>(consolidated.pkg.entries.length);
+  const tasks: TransformTask[] = [];
+  for (const [index, entry] of consolidated.pkg.entries.entries()) {
     if (!transformTargets.has(entry.path)) {
-      transformedEntries.push(entry);
+      transformedEntries[index] = entry;
       continue;
     }
 
     const action = input.plan.actions.find((item) => item.target === entry.path);
     if (!action || (action.type !== "convert-bmp-to-png" && action.type !== "resize-jpeg" && action.type !== "optimize-png")) {
-      transformedEntries.push(entry);
+      transformedEntries[index] = entry;
       continue;
     }
 
+    tasks.push({ index, entry, action: action.type });
+  }
+
+  const outcomes = await mapLimit(tasks, IMAGE_TRANSFORM_CONCURRENCY, async (task): Promise<TransformOutcome> => {
     try {
-      const transformed = await transformImageBalancedWithBudget(entry.path, entry.data, resizeBudgets.get(entry.path), profile);
-      if (transformed.data.byteLength >= entry.data.byteLength) {
-        transformedEntries.push(entry);
-        skipped.push({
-          type: action.type,
-          target: entry.path,
-          beforeSize: entry.size,
-          afterSize: transformed.data.byteLength
-        });
-        continue;
+      const transformed = await transformImageBalancedWithBudget(
+        task.entry.path,
+        task.entry.data,
+        resizeBudgets.get(task.entry.path),
+        profile
+      );
+      if (transformed.data.byteLength >= task.entry.data.byteLength) {
+        return { ...task, status: "skipped", size: transformed.data.byteLength };
       }
-      pathUpdates.set(entry.path, transformed.outputPath);
-      mediaTypeUpdates.set(transformed.outputPath, outputMediaType(transformed.outputPath));
-      transformedEntries.push({
-        ...entry,
-        path: transformed.outputPath,
-        data: transformed.data,
-        size: transformed.data.byteLength,
-        kind: "image" as const
-      });
-      applied.push({
-        type: action.type,
-        target: entry.path,
-        beforeSize: entry.size,
-        afterSize: transformed.data.byteLength
-      });
+      return { ...task, status: "transformed", outputPath: transformed.outputPath, data: transformed.data };
     } catch {
-      transformedEntries.push(entry);
-      skipped.push({ type: action.type, target: entry.path, beforeSize: entry.size });
+      return { ...task, status: "skipped" };
     }
+  });
+
+  for (const outcome of outcomes) {
+    if (outcome.status === "skipped") {
+      transformedEntries[outcome.index] = outcome.entry;
+      skipped.push({
+        type: outcome.action,
+        target: outcome.entry.path,
+        beforeSize: outcome.entry.size,
+        ...(outcome.size === undefined ? {} : { afterSize: outcome.size })
+      });
+      continue;
+    }
+    pathUpdates.set(outcome.entry.path, outcome.outputPath);
+    mediaTypeUpdates.set(outcome.outputPath, outputMediaType(outcome.outputPath));
+    transformedEntries[outcome.index] = {
+      ...outcome.entry,
+      path: outcome.outputPath,
+      data: outcome.data,
+      size: outcome.data.byteLength,
+      kind: "image"
+    };
+    applied.push({
+      type: outcome.action,
+      target: outcome.entry.path,
+      beforeSize: outcome.entry.size,
+      afterSize: outcome.data.byteLength
+    });
   }
 
   const entries = transformedEntries.map((entry) => {

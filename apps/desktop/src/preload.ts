@@ -1,8 +1,16 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 const api = {
   selectHwpx: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-hwpx"),
   selectDirectory: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-directory"),
+  getPathForFile: (file: File): string => {
+    if (!file || typeof webUtils?.getPathForFile !== "function") return "";
+    try {
+      return webUtils.getPathForFile(file) ?? "";
+    } catch {
+      return "";
+    }
+  },
   loadSettings: () => ipcRenderer.invoke("settings:load"),
   saveSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("settings:save", patch),
   analyze: (filePath: string) => ipcRenderer.invoke("hwpx:analyze", filePath),

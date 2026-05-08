@@ -3,13 +3,19 @@ import { XMLParser } from "fast-xml-parser";
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
-import type { HwpxPackage, ImageInventoryItem } from "./types.js";
+import type { HwpxEntry, HwpxPackage, ImageInventoryItem } from "./types.js";
+import { computePerceptualHash, hammingDistance, PERCEPTUAL_HASH_BIT_COUNT } from "./visualSimilarity.js";
 
 export type VerifyMode = "safe" | "balanced" | "aggressive";
 
 export type VerifyHwpxOutputOptions = {
   original?: Buffer;
   mode?: VerifyMode;
+};
+
+const VISUAL_SIMILARITY_LIMITS: Record<Exclude<VerifyMode, "safe">, number> = {
+  balanced: 16,
+  aggressive: 22
 };
 
 export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutputOptions = {}): Promise<void> {
@@ -47,18 +53,26 @@ async function verifyAgainstOriginal(input: { original: HwpxPackage; output: Hwp
   const originalImages = new Map((await analyzeHwpxPackage(input.original)).images.map((image) => [image.path, image]));
   const outputImages = new Map((await analyzeHwpxPackage(input.output)).images.map((image) => [image.path, image]));
   const originalDuplicatePathsByPath = duplicateImagePathsByPath(input.original);
+  const visualPairs: Array<{ original: HwpxEntry; output: HwpxEntry }> = [];
+  const originalImageEntries = new Map(input.original.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
+  const outputImageEntries = new Map(input.output.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
 
   for (const resource of originalGraph.resources.values()) {
     if (!resource.referenced) continue;
     const originalImage = originalImages.get(resource.path);
     if (input.mode !== "safe" && originalImage) {
-      verifyAdvancedImage({
+      const outputImage = verifyAdvancedImage({
         originalImage,
         outputImages,
         outputGraph,
         mode: input.mode,
         originalDuplicatePaths: originalDuplicatePathsByPath.get(originalImage.path) ?? []
       });
+      const originalEntry = originalImageEntries.get(originalImage.path);
+      const outputEntry = outputImageEntries.get(outputImage.path);
+      if (originalEntry && outputEntry) {
+        visualPairs.push({ original: originalEntry, output: outputEntry });
+      }
       continue;
     }
     if (!outputPaths.has(resource.path)) {
@@ -68,6 +82,37 @@ async function verifyAgainstOriginal(input: { original: HwpxPackage; output: Hwp
 
   if (input.mode === "safe") {
     verifySafeImages({ originalImages, outputImages, originalGraph });
+    return;
+  }
+
+  await verifyVisualSimilarityPairs(visualPairs, input.mode);
+}
+
+async function verifyVisualSimilarityPairs(
+  pairs: Array<{ original: HwpxEntry; output: HwpxEntry }>,
+  mode: Exclude<VerifyMode, "safe">
+): Promise<void> {
+  if (pairs.length === 0) return;
+  const limit = VISUAL_SIMILARITY_LIMITS[mode];
+  const seenOutputPaths = new Set<string>();
+  const uniquePairs = pairs.filter((pair) => {
+    if (seenOutputPaths.has(pair.output.path)) return false;
+    seenOutputPaths.add(pair.output.path);
+    return true;
+  });
+
+  for (const pair of uniquePairs) {
+    const [originalHash, outputHash] = await Promise.all([
+      computePerceptualHash(pair.original.data),
+      computePerceptualHash(pair.output.data)
+    ]);
+    if (!originalHash || !outputHash) continue;
+    const distance = hammingDistance(originalHash, outputHash);
+    if (distance > limit) {
+      throw new Error(
+        `Verification failed: ${mode} mode visual difference too large (${distance}/${PERCEPTUAL_HASH_BIT_COUNT} bits) for ${pair.original.path}`
+      );
+    }
   }
 }
 
@@ -77,7 +122,7 @@ function verifyAdvancedImage(input: {
   outputGraph: ReturnType<typeof buildReferenceGraph>;
   mode: Exclude<VerifyMode, "safe">;
   originalDuplicatePaths: string[];
-}): void {
+}): ImageInventoryItem {
   const candidatePaths = allowedAdvancedImagePaths(input.originalImage, input.originalDuplicatePaths);
   const outputImage =
     candidatePaths
@@ -101,6 +146,8 @@ function verifyAdvancedImage(input: {
   ) {
     throw new Error(`Verification failed: ${input.mode} mode image dimensions enlarged ${input.originalImage.path}`);
   }
+
+  return outputImage;
 }
 
 function verifySafeImages(input: {
