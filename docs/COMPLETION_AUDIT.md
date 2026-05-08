@@ -56,6 +56,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop packaging config | `package.json` electron-builder config | Implemented |
 | Linux unpacked build | `npm run desktop:pack` passed on 2026-05-08 | Verified |
 | Windows unpacked build | `npm run desktop:pack:win` passed on 2026-05-08 | Verified as build artifact only |
+| Windows installer CI path | `.github/workflows/windows-release.yml`, `npm run release:check:win` | Prepared, not executed in this environment |
 | Windows installer | `npm run desktop:dist:win` reaches packaging but fails without Wine in WSL/Linux | Blocked in this environment |
 | Clean Windows machine test | no clean Windows runtime available in this environment | Not verified |
 | Sample files excluded | `.gitignore` sample rules; `git ls-files 'sample*'` returned empty | Verified |

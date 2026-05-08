@@ -82,6 +82,16 @@ npm run release:check
 
 This gate runs tests, typecheck, build, audit, desktop smoke, current-platform unpacked packaging, and Windows unpacked packaging. It does not replace the final Windows installer build or clean Windows install test.
 
+On a Windows release machine or Windows CI runner, run:
+
+```bash
+npm run release:check:win
+```
+
+This gate builds the Windows NSIS installer through `desktop:dist:win`.
+
+The repository also includes `.github/workflows/windows-release.yml`, which runs the Windows release gate on `workflow_dispatch` and `v*` tags, then uploads the generated installer artifact.
+
 Then verify at least one HWPX end-to-end:
 
 ```bash

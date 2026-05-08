@@ -22,6 +22,7 @@
     "test": "vitest run",
     "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
     "release:check": "npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win",
+    "release:check:win": "npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:dist:win",
     "cli": "tsx --conditions=development packages/cli/src/index.ts"
   },
   "build": {
