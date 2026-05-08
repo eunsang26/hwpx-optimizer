@@ -24,7 +24,9 @@ export async function runCli(argv: string[]): Promise<number> {
   try {
     if (command === "analyze") {
       const report = await analyzeHwpxBuffer(await readFile(inputPath));
-      const reportPath = options.report ?? `${inputPath}.report.json`;
+      const requestedReportPath = options.report ?? `${inputPath}.report.json`;
+      const reportPath =
+        options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       await writeFile(reportPath, JSON.stringify(report, null, 2));
       console.log(`Analyzed ${inputPath}`);
       printAnalysisSummary(inputPath, report);
@@ -35,7 +37,9 @@ export async function runCli(argv: string[]): Promise<number> {
     if (command === "report") {
       const report = await analyzeHwpxBuffer(await readFile(inputPath));
       const text = renderHumanReport(inputPath, report);
-      const reportPath = options.out ?? `${inputPath}.report.txt`;
+      const requestedReportPath = options.out ?? `${inputPath}.report.txt`;
+      const reportPath =
+        options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       await writeFile(reportPath, text);
       console.log(text);
       console.log(`Report: ${reportPath}`);

@@ -54,6 +54,20 @@ describe("runCli", () => {
     expect(logs.join("\n")).toContain("Suggested: hwpx-opt optimize");
   });
 
+  it("does not overwrite existing analysis reports by default", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const reportPath = join(dir, "report.json");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(reportPath, "existing");
+
+    const code = await runCli(["analyze", inputPath, "--report", reportPath]);
+
+    expect(code).toBe(0);
+    expect(await readFile(reportPath, "utf8")).toBe("existing");
+    expect((await readFile(join(dir, "report-2.json"))).byteLength).toBeGreaterThan(0);
+  });
+
   it("optimizes a file and writes output plus report", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
@@ -165,6 +179,20 @@ describe("runCli", () => {
     expect(text).toContain("HWPX Optimization Report");
     expect(text).toContain("Original:");
     expect(text).toContain("Images:");
+  });
+
+  it("does not overwrite existing human-readable reports by default", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const reportPath = join(dir, "report.txt");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(reportPath, "existing");
+
+    const code = await runCli(["report", inputPath, "--out", reportPath]);
+
+    expect(code).toBe(0);
+    expect(await readFile(reportPath, "utf8")).toBe("existing");
+    expect(await readFile(join(dir, "report-2.txt"), "utf8")).toContain("HWPX Optimization Report");
   });
 
   it("batch-optimizes HWPX files and records per-file failures", async () => {

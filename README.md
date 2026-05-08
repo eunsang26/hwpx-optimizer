@@ -108,7 +108,7 @@ Allow an individual optimized resource to be kept even if it becomes larger:
 npm run cli -- optimize input.hwpx --mode balanced --allow-larger
 ```
 
-The CLI avoids overwriting existing outputs by adding a numeric suffix. To explicitly overwrite the requested output/report path:
+The CLI avoids overwriting existing output and report files by adding a numeric suffix. To explicitly overwrite the requested path:
 
 ```bash
 npm run cli -- optimize input.hwpx --mode safe --out output.hwpx --overwrite
