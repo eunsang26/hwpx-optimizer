@@ -68,6 +68,18 @@ describe("runCli", () => {
     expect((await readFile(join(dir, "report-2.json"))).byteLength).toBeGreaterThan(0);
   });
 
+  it("never overwrites the original input file with an analysis report", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const original = await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } });
+    await writeFile(inputPath, original);
+
+    const code = await runCli(["analyze", inputPath, "--report", inputPath, "--overwrite"]);
+
+    expect(code).toBe(1);
+    expect(await readFile(inputPath)).toEqual(original);
+  });
+
   it("optimizes a file and writes output plus report", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
@@ -126,6 +138,29 @@ describe("runCli", () => {
     await writeFile(inputPath, original);
 
     const code = await runCli(["optimize", inputPath, "--mode", "safe", "--out", inputPath, "--overwrite"]);
+
+    expect(code).toBe(1);
+    expect(await readFile(inputPath)).toEqual(original);
+  });
+
+  it("never overwrites the original input file with an optimization report", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const outputPath = join(dir, "output.hwpx");
+    const original = await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } });
+    await writeFile(inputPath, original);
+
+    const code = await runCli([
+      "optimize",
+      inputPath,
+      "--mode",
+      "safe",
+      "--out",
+      outputPath,
+      "--report",
+      inputPath,
+      "--overwrite"
+    ]);
 
     expect(code).toBe(1);
     expect(await readFile(inputPath)).toEqual(original);
@@ -205,6 +240,18 @@ describe("runCli", () => {
     expect(code).toBe(0);
     expect(await readFile(reportPath, "utf8")).toBe("existing");
     expect(await readFile(join(dir, "report-2.txt"), "utf8")).toContain("HWPX Optimization Report");
+  });
+
+  it("never overwrites the original input file with a human-readable report", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const original = await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } });
+    await writeFile(inputPath, original);
+
+    const code = await runCli(["report", inputPath, "--out", inputPath, "--overwrite"]);
+
+    expect(code).toBe(1);
+    expect(await readFile(inputPath)).toEqual(original);
   });
 
   it("batch-optimizes HWPX files and records per-file failures", async () => {

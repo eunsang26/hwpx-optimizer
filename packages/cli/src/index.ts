@@ -27,6 +27,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const requestedReportPath = options.report ?? `${inputPath}.report.json`;
       const reportPath =
         options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
+      assertDoesNotTargetInput(reportPath, inputPath, "report");
       await writeFile(reportPath, JSON.stringify(report, null, 2));
       console.log(`Analyzed ${inputPath}`);
       printAnalysisSummary(inputPath, report);
@@ -40,6 +41,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const requestedReportPath = options.out ?? `${inputPath}.report.txt`;
       const reportPath =
         options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
+      assertDoesNotTargetInput(reportPath, inputPath, "report");
       await writeFile(reportPath, text);
       console.log(text);
       console.log(`Report: ${reportPath}`);
@@ -70,11 +72,10 @@ export async function runCli(argv: string[]): Promise<number> {
       const overwrite = options.overwrite === "true";
       const requestedOutputPath = options.out ?? defaultOutputPath(inputPath);
       const outputPath = overwrite ? requestedOutputPath : await nextAvailablePath(requestedOutputPath);
-      if (resolve(outputPath) === resolve(inputPath)) {
-        throw new Error("Refusing to overwrite the original input file.");
-      }
+      assertDoesNotTargetInput(outputPath, inputPath, "output");
       const requestedReportPath = options.report ?? `${outputPath}.report.json`;
       const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
+      assertDoesNotTargetInput(reportPath, inputPath, "report");
       await writeFile(outputPath, result.output);
       await writeFile(reportPath, JSON.stringify(result.report, null, 2));
       console.log(`Optimized ${inputPath}`);
@@ -129,6 +130,21 @@ async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path, constants.F_OK);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+function assertDoesNotTargetInput(targetPath: string, inputPath: string, kind: "output" | "report"): void {
+  if (pathsReferToSameFile(targetPath, inputPath)) {
+    throw new Error(`Refusing to overwrite the original input file with ${kind}.`);
+  }
+}
+
+function pathsReferToSameFile(left: string, right: string): boolean {
+  if (resolve(left) === resolve(right)) return true;
+  try {
+    return realpathSync(left) === realpathSync(right);
   } catch {
     return false;
   }
