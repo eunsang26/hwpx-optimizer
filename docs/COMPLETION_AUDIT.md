@@ -50,7 +50,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `main.ts` local settings | Implemented |
 | Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
 | Local-only operation | no network/server code in app path; filesystem-only APIs | Implemented |
-| Original file preservation | output path generation in `desktopService.ts`; CLI writes separate output | Implemented |
+| Original file preservation and overwrite prevention | output path generation in `desktopService.ts`; CLI non-overwrite suffixing with explicit `--overwrite` opt-in | Implemented |
 | JSON reports | CLI and desktop service report write paths | Implemented |
 | Docs | `README.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/RELEASE.md`, `docs/KNOWN_LIMITATIONS.md` | Implemented |
 | Desktop packaging config | `package.json` electron-builder config | Implemented |

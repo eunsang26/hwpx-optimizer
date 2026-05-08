@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { realpathSync } from "node:fs";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { constants, realpathSync } from "node:fs";
+import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   analyzeHwpxBuffer,
@@ -63,8 +63,11 @@ export async function runCli(argv: string[]): Promise<number> {
       }
       const input = await readFile(inputPath);
       const result = await optimizeByMode(input, mode, options);
-      const outputPath = options.out ?? defaultOutputPath(inputPath);
-      const reportPath = options.report ?? `${outputPath}.report.json`;
+      const overwrite = options.overwrite === "true";
+      const requestedOutputPath = options.out ?? defaultOutputPath(inputPath);
+      const outputPath = overwrite ? requestedOutputPath : await nextAvailablePath(requestedOutputPath);
+      const requestedReportPath = options.report ?? `${outputPath}.report.json`;
+      const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       await writeFile(outputPath, result.output);
       await writeFile(reportPath, JSON.stringify(result.report, null, 2));
       console.log(`Optimized ${inputPath}`);
@@ -104,12 +107,32 @@ function defaultOutputPath(inputPath: string): string {
   return join(dirname(inputPath), `${name}.optimized.hwpx`);
 }
 
+async function nextAvailablePath(path: string): Promise<string> {
+  if (!(await pathExists(path))) return path;
+  const ext = extname(path);
+  const base = path.slice(0, path.length - ext.length);
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${base}-${index}${ext}`;
+    if (!(await pathExists(candidate))) return candidate;
+  }
+  throw new Error(`Could not create a non-overwriting output path for ${path}`);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function printUsage(): void {
   console.error("Usage:");
   console.error("  hwpx-opt analyze <file.hwpx> [--report report.json]");
   console.error("  hwpx-opt report <file.hwpx> [--out report.txt]");
   console.error("  hwpx-opt verify <file.hwpx>");
-  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--out output.hwpx] [--report report.json]");
+  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json]");
   console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive --out output-directory");
 }
 

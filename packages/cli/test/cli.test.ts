@@ -77,6 +77,34 @@ describe("runCli", () => {
     expect(logs.join("\n")).toContain("Applied:");
   });
 
+  it("does not overwrite existing optimized output files by default", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const existingOutput = join(dir, "input.optimized.hwpx");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(existingOutput, "existing");
+
+    const code = await runCli(["optimize", inputPath, "--mode", "safe"]);
+
+    expect(code).toBe(0);
+    expect(await readFile(existingOutput, "utf8")).toBe("existing");
+    expect((await readFile(join(dir, "input.optimized-2.hwpx"))).byteLength).toBeGreaterThan(0);
+    expect((await readFile(join(dir, "input.optimized-2.hwpx.report.json"))).byteLength).toBeGreaterThan(0);
+  });
+
+  it("overwrites existing output files only when requested", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const outputPath = join(dir, "output.hwpx");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(outputPath, "existing");
+
+    const code = await runCli(["optimize", inputPath, "--mode", "safe", "--out", outputPath, "--overwrite"]);
+
+    expect(code).toBe(0);
+    expect(await readFile(outputPath, "utf8")).not.toBe("existing");
+  });
+
   it("accepts balanced mode", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
