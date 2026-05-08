@@ -205,10 +205,16 @@ Latest portable release gate after commit `fd75546`:
 Latest real sample E2E after reference graph update:
 
 - `npm run cli -- analyze sample2.hwpx --report .tmp/real-sample-after-refgraph/sample2.analysis.json`: passed.
+- `npm run cli -- optimize sample2.hwpx --mode safe --out .tmp/real-sample-after-refgraph/sample2.safe.hwpx --report .tmp/real-sample-after-refgraph/sample2.safe.report.json`: passed.
+- `npm run cli -- verify .tmp/real-sample-after-refgraph/sample2.safe.hwpx`: passed.
+- Safe mode produced no smaller output and returned original bytes as designed; verifier passed.
 - `npm run cli -- optimize sample2.hwpx --mode balanced --out .tmp/real-sample-after-refgraph/sample2.balanced.hwpx --report .tmp/real-sample-after-refgraph/sample2.balanced.report.json`: passed.
 - `npm run cli -- verify .tmp/real-sample-after-refgraph/sample2.balanced.hwpx`: passed.
 - Observed saving remained 79.63 MiB / 88.75%.
 - Applied actions: `convert-bmp-to-png` 18, `resize-jpeg` 6, `optimize-png` 4, `clean-shape-comment` 1.
+- `npm run cli -- optimize sample2.hwpx --mode aggressive --out .tmp/real-sample-after-refgraph/sample2.aggressive.hwpx --report .tmp/real-sample-after-refgraph/sample2.aggressive.report.json`: passed.
+- `npm run cli -- verify .tmp/real-sample-after-refgraph/sample2.aggressive.hwpx`: passed.
+- Aggressive mode observed saving: 86.43 MiB / 96.33%; applied `convert-bmp-to-png` 18, `resize-jpeg` 7, `optimize-png` 4, `clean-shape-comment` 1.
 
 Additional local sample validation:
 
