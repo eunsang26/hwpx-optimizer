@@ -29,6 +29,31 @@ describe("desktop service", () => {
     await expect(verifyDesktopFile(result.outputPath)).resolves.toEqual({ ok: true });
   });
 
+  it("reports staged optimization progress", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "input.hwpx");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    const progress: Array<{ percent: number; item: string }> = [];
+
+    await optimizeDesktopFile(
+      {
+        filePath: inputPath,
+        mode: "safe",
+        settings: defaultDesktopSettings
+      },
+      (item) => progress.push(item)
+    );
+
+    expect(progress.map((item) => item.item)).toEqual([
+      "Reading HWPX package",
+      "Optimizing document in safe mode",
+      "Writing optimized document",
+      "Writing JSON report",
+      "Verifying optimized document"
+    ]);
+    expect(progress.map((item) => item.percent)).toEqual([10, 35, 70, 82, 92]);
+  });
+
   it("prevents overwriting existing optimized files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");

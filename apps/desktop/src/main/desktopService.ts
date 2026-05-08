@@ -47,24 +47,39 @@ export type DesktopOptimizeResult = {
   report: OptimizationReport;
 };
 
+export type DesktopProgress = {
+  percent: number;
+  item: string;
+};
+
 export async function analyzeDesktopFile(filePath: string): Promise<DesktopAnalysisResult> {
   const report = await analyzeHwpxBuffer(await readFile(filePath));
   return { filePath, report };
 }
 
-export async function optimizeDesktopFile(input: DesktopOptimizeInput): Promise<DesktopOptimizeResult> {
+export async function optimizeDesktopFile(
+  input: DesktopOptimizeInput,
+  onProgress?: (progress: DesktopProgress) => void
+): Promise<DesktopOptimizeResult> {
+  onProgress?.({ percent: 10, item: "Reading HWPX package" });
   const source = await readFile(input.filePath);
+
+  onProgress?.({ percent: 35, item: `Optimizing document in ${input.mode} mode` });
   const result = await optimizeByMode(source, input.mode);
+
+  onProgress?.({ percent: 70, item: "Writing optimized document" });
   const outputPath = nextOutputPath(input.filePath, input.outputDirectory ?? input.settings.outputDirectory, input.settings);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, result.output);
 
   let reportPath: string | undefined;
   if (input.settings.saveReport) {
+    onProgress?.({ percent: 82, item: "Writing JSON report" });
     reportPath = `${outputPath}.report.json`;
     await writeFile(reportPath, JSON.stringify(result.report, null, 2));
   }
 
+  onProgress?.({ percent: 92, item: "Verifying optimized document" });
   await verifyHwpxOutput(result.output);
   return { outputPath, reportPath, report: result.report };
 }

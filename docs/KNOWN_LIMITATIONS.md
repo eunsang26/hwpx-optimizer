@@ -8,7 +8,6 @@ This file separates release blockers from non-blockers so the project does not o
 - Desktop app has an automated launch smoke test, but full manual GUI workflow testing is still required.
 - Verifier checks mode-specific image format and dimension invariants, but it does not yet measure visual similarity or JPEG quality drift.
 - Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
-- Desktop optimization runs in a worker thread, but progress is currently coarse-grained rather than per-image/action.
 - No Windows build has been tested on a clean Windows machine.
 
 ## Non-Blockers For Continued Development
@@ -20,6 +19,7 @@ This file separates release blockers from non-blockers so the project does not o
 - EXIF removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size.
 - Some safe-mode rewrites can make an individual entry slightly larger. The optimizer records skipped or applied actions so this can be audited.
 - Desktop settings UI is minimal and should be refined before public release.
+- Desktop progress is stage-based rather than per-image/action.
 - `npm audit` currently reports 0 vulnerabilities after dependency updates on 2026-05-08.
 
 ## Safe Mode Caveats

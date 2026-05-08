@@ -13,9 +13,7 @@ function post(message: WorkerMessage): void {
 
 try {
   const input = workerData as DesktopOptimizeInput;
-  post({ type: "progress", percent: 15, item: "Reading HWPX package" });
-  const result = await optimizeDesktopFile(input);
-  post({ type: "progress", percent: 90, item: "Writing optimized document" });
+  const result = await optimizeDesktopFile(input, (progress) => post({ type: "progress", ...progress }));
   post({ type: "complete", result });
 } catch (error) {
   post({ type: "error", message: error instanceof Error ? error.message : String(error) });

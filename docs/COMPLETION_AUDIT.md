@@ -46,7 +46,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop file select and drag/drop | `apps/desktop/src/renderer.ts`, `index.html` | Implemented |
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
 | Desktop mode selection | renderer radio controls | Implemented |
-| Desktop progress and cancel | `optimizeWorker.ts`, `main.ts`, `renderer.ts` | Implemented with coarse progress |
+| Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with stage-based progress |
 | Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `main.ts` local settings | Implemented |
 | Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
 | Local-only operation | no network/server code in app path; filesystem-only APIs | Implemented |
@@ -108,7 +108,7 @@ Desktop smoke evidence:
 - Synthetic local HWPX is generated under `.tmp/electron-smoke`.
 - Local real HWPX desktop smoke can be run by setting `HWPX_OPT_SMOKE_INPUT`; this was verified with ignored `sample2.hwpx`.
 - Desktop worker paths for `balanced` and `aggressive` were verified by adding `HWPX_OPT_SMOKE_MODE`.
-- Renderer preload API runs analyze, safe optimize, and verify.
+- Renderer preload API runs analyze, optimize, progress events, and verify.
 - Worker progress event is observed.
 
 Windows artifact evidence:
@@ -137,7 +137,7 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 
 ## Non-Blocking Follow-Ups
 
-- Progress updates are coarse-grained. Per-action progress would improve UX.
+- Progress updates are stage-based. Per-image/action progress would improve UX.
 - Reference graph coverage is conservative and should be expanded with more real-world HWPX samples.
 - Visual similarity comparison is not implemented.
 - Desktop UI is functional but still needs final product polish and icon branding.
