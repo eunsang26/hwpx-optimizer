@@ -32,6 +32,35 @@ describe("verifyHwpxOutput", () => {
 
     await expect(verifyHwpxOutput(output, { original, mode: "safe" })).rejects.toThrow(/safe mode image format changed/);
   });
+
+  it("rejects balanced-mode outputs that convert referenced JPEGs to PNG", async () => {
+    const originalImage = await createJpeg(120, 80);
+    const pngImage = await createPng(120, 80);
+    const original = await createReferencedImageFixture("BinData/image1.jpg", originalImage);
+    const output = await createReferencedImageFixture("BinData/image1.png", pngImage);
+
+    await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(
+      /balanced mode image conversion is not allowed/
+    );
+  });
+
+  it("rejects aggressive-mode outputs that enlarge referenced images", async () => {
+    const originalImage = await createJpeg(120, 80);
+    const enlargedImage = await createJpeg(240, 160);
+    const original = await createReferencedImageFixture("BinData/image1.jpg", originalImage);
+    const output = await createReferencedImageFixture("BinData/image1.jpg", enlargedImage);
+
+    await expect(verifyHwpxOutput(output, { original, mode: "aggressive" })).rejects.toThrow(
+      /aggressive mode image dimensions enlarged/
+    );
+  });
+
+  it("allows balanced-mode outputs that convert referenced BMPs to PNG", async () => {
+    const original = await createReferencedImageFixture("BinData/image1.bmp", createBmp24(120, 80));
+    const output = await createReferencedImageFixture("BinData/image1.png", await createPng(120, 80));
+
+    await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).resolves.toBeUndefined();
+  });
 });
 
 async function createReferencedImageFixture(path: string, image: Buffer): Promise<Buffer> {
@@ -54,4 +83,43 @@ async function createJpeg(width: number, height: number): Promise<Buffer> {
   })
     .jpeg({ quality: 95 })
     .toBuffer();
+}
+
+async function createPng(width: number, height: number): Promise<Buffer> {
+  return sharp({
+    create: {
+      width,
+      height,
+      channels: 3,
+      background: "#33aa77"
+    }
+  })
+    .png()
+    .toBuffer();
+}
+
+function createBmp24(width: number, height: number): Buffer {
+  const rowSize = Math.ceil((width * 3) / 4) * 4;
+  const pixelDataSize = rowSize * height;
+  const fileSize = 54 + pixelDataSize;
+  const buffer = Buffer.alloc(fileSize);
+  buffer.write("BM", 0, "ascii");
+  buffer.writeUInt32LE(fileSize, 2);
+  buffer.writeUInt32LE(54, 10);
+  buffer.writeUInt32LE(40, 14);
+  buffer.writeInt32LE(width, 18);
+  buffer.writeInt32LE(height, 22);
+  buffer.writeUInt16LE(1, 26);
+  buffer.writeUInt16LE(24, 28);
+  buffer.writeUInt32LE(pixelDataSize, 34);
+  for (let y = 0; y < height; y += 1) {
+    const row = 54 + y * rowSize;
+    for (let x = 0; x < width; x += 1) {
+      const offset = row + x * 3;
+      buffer[offset] = 0x77;
+      buffer[offset + 1] = 0xaa;
+      buffer[offset + 2] = 0x33;
+    }
+  }
+  return buffer;
 }

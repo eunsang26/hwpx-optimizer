@@ -41,6 +41,7 @@ function verifyParsedXml(pkg: HwpxPackage): void {
 
 async function verifyAgainstOriginal(input: { original: HwpxPackage; output: HwpxPackage; mode: VerifyMode }): Promise<void> {
   const originalGraph = buildReferenceGraph(input.original);
+  const outputGraph = buildReferenceGraph(input.output);
   const outputPaths = new Set(input.output.entries.map((entry) => entry.path));
   const originalImages = new Map((await analyzeHwpxPackage(input.original)).images.map((image) => [image.path, image]));
   const outputImages = new Map((await analyzeHwpxPackage(input.output)).images.map((image) => [image.path, image]));
@@ -48,7 +49,10 @@ async function verifyAgainstOriginal(input: { original: HwpxPackage; output: Hwp
   for (const resource of originalGraph.resources.values()) {
     if (!resource.referenced) continue;
     const originalImage = originalImages.get(resource.path);
-    if (input.mode !== "safe" && originalImage) continue;
+    if (input.mode !== "safe" && originalImage) {
+      verifyAdvancedImage({ originalImage, outputImages, outputGraph, mode: input.mode });
+      continue;
+    }
     if (!outputPaths.has(resource.path)) {
       throw new Error(`Verification failed: referenced resource removed ${resource.path}`);
     }
@@ -56,6 +60,36 @@ async function verifyAgainstOriginal(input: { original: HwpxPackage; output: Hwp
 
   if (input.mode === "safe") {
     verifySafeImages({ originalImages, outputImages, originalGraph });
+  }
+}
+
+function verifyAdvancedImage(input: {
+  originalImage: ImageInventoryItem;
+  outputImages: Map<string, ImageInventoryItem>;
+  outputGraph: ReturnType<typeof buildReferenceGraph>;
+  mode: Exclude<VerifyMode, "safe">;
+}): void {
+  const candidatePaths = allowedAdvancedImagePaths(input.originalImage);
+  const outputImage = candidatePaths
+    .map((path) => input.outputImages.get(path))
+    .find((image): image is ImageInventoryItem => Boolean(image && input.outputGraph.resources.get(image.path)?.referenced));
+
+  if (!outputImage) {
+    throw new Error(`Verification failed: referenced image removed ${input.originalImage.path}`);
+  }
+
+  if (!isAllowedAdvancedFormat(input.originalImage, outputImage)) {
+    throw new Error(`Verification failed: ${input.mode} mode image conversion is not allowed ${input.originalImage.path}`);
+  }
+
+  if (
+    input.originalImage.width &&
+    input.originalImage.height &&
+    outputImage.width &&
+    outputImage.height &&
+    (outputImage.width > input.originalImage.width || outputImage.height > input.originalImage.height)
+  ) {
+    throw new Error(`Verification failed: ${input.mode} mode image dimensions enlarged ${input.originalImage.path}`);
   }
 }
 
@@ -85,4 +119,33 @@ function normalizeFormat(format: string): string {
   const normalized = format.toLowerCase();
   if (normalized === "jpg") return "jpeg";
   return normalized;
+}
+
+function allowedAdvancedImagePaths(image: ImageInventoryItem): string[] {
+  const paths = new Set([image.path]);
+  paths.add(replaceExtension(image.path, ".bmp"));
+  paths.add(replaceExtension(image.path, ".png"));
+  paths.add(replaceExtension(image.path, ".jpg"));
+  paths.add(replaceExtension(image.path, ".jpeg"));
+  if (normalizeFormat(image.format) === "bmp") {
+    paths.add(replaceExtension(image.path, ".png"));
+  }
+  if (normalizeFormat(image.format) === "jpeg") {
+    paths.add(replaceExtension(image.path, ".jpg"));
+    paths.add(replaceExtension(image.path, ".jpeg"));
+  }
+  return [...paths];
+}
+
+function isAllowedAdvancedFormat(originalImage: ImageInventoryItem, outputImage: ImageInventoryItem): boolean {
+  const original = normalizeFormat(originalImage.format);
+  const output = normalizeFormat(outputImage.format);
+  if (original === "bmp") return output === "bmp" || output === "png";
+  if (original === "jpeg") return output === "jpeg";
+  if (original === "png") return output === "png";
+  return original === output;
+}
+
+function replaceExtension(path: string, extension: string): string {
+  return path.replace(/\.[^.\/]+$/, extension);
 }

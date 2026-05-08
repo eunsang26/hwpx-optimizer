@@ -128,8 +128,11 @@ Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a strong
 - Confirms referenced internal resources exist.
 - Compares original and output packages when a mode policy is provided.
 - Rejects safe-mode outputs that change referenced image dimensions or format.
+- Rejects balanced/aggressive outputs that remove referenced images without an allowed replacement.
+- Rejects balanced/aggressive image conversions outside the current policy: BMP may become PNG, JPEG must remain JPEG, and PNG must remain PNG.
+- Rejects balanced/aggressive outputs that enlarge referenced image dimensions.
 
-Current limitation: advanced mode verification is still intentionally broad. It allows image conversion and resizing, but should eventually enforce more precise balanced/aggressive policy checks for allowed conversions, output dimensions, and reference updates.
+Current limitation: advanced mode verification still checks structural invariants rather than exact quality or visual similarity.
 
 ### Report
 
