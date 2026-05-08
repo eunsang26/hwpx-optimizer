@@ -49,11 +49,19 @@ npm run desktop:pack
 
 The packaging script stores Electron downloads under the project-local `.npm-cache/electron` directory. This avoids relying on a writable home-directory cache in locked-down environments.
 
+Create an unpacked Windows x64 folder from Linux/WSL without executable resource editing:
+
+```bash
+npm run desktop:pack:win
+```
+
 Create a Windows x64 installer build:
 
 ```bash
 npm run desktop:dist:win
 ```
+
+On Linux/WSL, the installer build requires `wine`. If `wine` is unavailable, use `desktop:pack:win` for a Windows unpacked folder build and create the installer on a Windows release machine or a Linux environment with Wine configured.
 
 ## Verification Before Release
 
@@ -85,8 +93,9 @@ Before treating a build as releasable:
 1. Run `npm run desktop:pack`.
 2. Launch the unpacked app on the target platform.
 3. Verify the app can analyze and optimize a local HWPX file.
-4. Run `npm run desktop:dist:win` on a Windows release machine or a verified cross-build environment.
-5. Install the generated artifact on a clean Windows machine.
+4. Run `npm run desktop:pack:win` to confirm a Windows unpacked folder can be generated.
+5. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment.
+6. Install the generated artifact on a clean Windows machine.
 
 Suggested future scripts:
 

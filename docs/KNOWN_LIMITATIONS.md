@@ -4,12 +4,12 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop app has packaging scripts, but a Windows installer artifact has not been built and tested yet.
+- Desktop app can produce Linux and Windows unpacked builds in this environment, but a Windows installer artifact still requires a Windows or Wine-enabled release machine.
 - Desktop app has an automated launch smoke test, but full manual GUI workflow testing is still required.
 - Verifier checks mode-specific image format and dimension invariants, but it does not yet measure visual similarity or JPEG quality drift.
 - Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
 - Long-running desktop optimization is not isolated in a worker or child process.
-- No Windows release artifact has been built or tested on a clean Windows machine.
+- No Windows build has been tested on a clean Windows machine.
 
 ## Non-Blockers For Continued Development
 
