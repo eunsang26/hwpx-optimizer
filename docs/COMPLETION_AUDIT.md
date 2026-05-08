@@ -59,6 +59,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Windows unpacked build | `npm run desktop:pack:win` passed on 2026-05-08 | Verified as build artifact only |
 | Windows portable artifact | `npm run desktop:portable:win`, `release/HWPX Optimizer-0.1.0-x64.exe` | Verified build artifact |
 | Windows portable release gate | `npm run release:check:win-portable` | Verified |
+| Windows portable smoke script | `scripts/windows-portable-smoke.ps1` | Prepared, not executed in this Linux/WSL environment |
 | Release checksum manifest | `npm run release:manifest`, `npm run release:verify-manifest`, `release/release-manifest.json`, `release/SHA256SUMS.txt` | Verified generated artifacts and checksums |
 | Windows installer CI path | `.github/workflows/windows-release.yml`, `npm run release:check:win` | Prepared, not executed in this environment |
 | Windows installer | `npm run desktop:dist:win` reaches packaging but fails without Wine in WSL/Linux | Blocked in this environment |
@@ -135,7 +136,7 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 ## Blockers To Completion
 
 - Windows NSIS installer artifact has not been generated in this environment because Wine is unavailable.
-- The app has not been installed and run on a clean Windows machine.
+- The portable or installed app has not been run on a clean Windows machine.
 - Manual installed desktop workflow QA with real HWPX files on a clean Windows machine is not complete.
 
 ## Non-Blocking Follow-Ups

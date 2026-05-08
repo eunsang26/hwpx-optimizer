@@ -110,6 +110,13 @@ npm run release:check:win-portable
 
 This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifact. It does not replace a clean Windows runtime test.
 
+On a Windows machine, smoke-test the portable artifact:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1
+powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sample sample2.hwpx -Mode balanced
+```
+
 If the portable artifact already exists and only the checksum files need to be refreshed:
 
 ```bash
@@ -145,8 +152,9 @@ Before treating a build as releasable:
 3. Verify the app can analyze and optimize a local HWPX file.
 4. Run `npm run desktop:pack:win` to confirm a Windows unpacked folder can be generated.
 5. Run `npm run desktop:portable:win` if a portable Windows artifact is acceptable for the release candidate.
-6. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
-7. Install or launch the generated artifact on a clean Windows machine.
+6. Run `scripts/windows-portable-smoke.ps1` on a clean Windows machine.
+7. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
+8. Install or launch the generated artifact on a clean Windows machine.
 
 Suggested future scripts:
 
