@@ -2,7 +2,7 @@
 
 import { constants, realpathSync } from "node:fs";
 import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   analyzeHwpxBuffer,
@@ -70,6 +70,9 @@ export async function runCli(argv: string[]): Promise<number> {
       const overwrite = options.overwrite === "true";
       const requestedOutputPath = options.out ?? defaultOutputPath(inputPath);
       const outputPath = overwrite ? requestedOutputPath : await nextAvailablePath(requestedOutputPath);
+      if (resolve(outputPath) === resolve(inputPath)) {
+        throw new Error("Refusing to overwrite the original input file.");
+      }
       const requestedReportPath = options.report ?? `${outputPath}.report.json`;
       const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       await writeFile(outputPath, result.output);

@@ -119,6 +119,18 @@ describe("runCli", () => {
     expect(await readFile(outputPath, "utf8")).not.toBe("existing");
   });
 
+  it("never overwrites the original input file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const original = await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } });
+    await writeFile(inputPath, original);
+
+    const code = await runCli(["optimize", inputPath, "--mode", "safe", "--out", inputPath, "--overwrite"]);
+
+    expect(code).toBe(1);
+    expect(await readFile(inputPath)).toEqual(original);
+  });
+
   it("accepts balanced mode", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
