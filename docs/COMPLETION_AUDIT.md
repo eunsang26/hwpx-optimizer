@@ -67,6 +67,7 @@ Passed:
 npm test
 npm run typecheck
 npm run build
+npm run release:check
 xvfb-run -a npm run desktop:smoke
 npm run desktop:pack
 npm run desktop:pack:win

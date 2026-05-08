@@ -74,6 +74,14 @@ npm run build
 electron_config_cache=.npm-cache/electron npx electron --version
 ```
 
+Or run the consolidated local release gate:
+
+```bash
+npm run release:check
+```
+
+This gate runs tests, typecheck, build, audit, desktop smoke, current-platform unpacked packaging, and Windows unpacked packaging. It does not replace the final Windows installer build or clean Windows install test.
+
 Then verify at least one HWPX end-to-end:
 
 ```bash
