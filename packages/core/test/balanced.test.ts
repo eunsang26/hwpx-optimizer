@@ -53,6 +53,13 @@ describe("balanced optimization", () => {
     expect(result.report.actions.applied).toContainEqual(
       expect.objectContaining({ type: "convert-bmp-to-png", target: "BinData/image1.bmp" })
     );
+    expect(result.report.opportunities).toContainEqual(
+      expect.objectContaining({
+        action: "convert-bmp-to-png",
+        target: "BinData/image1.bmp",
+        confidence: "exact"
+      })
+    );
   });
 
   it("updates manifest media types structurally regardless of attribute order", async () => {

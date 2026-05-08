@@ -264,6 +264,20 @@ Latest performance and portable release verification after fast analysis update:
 - Latest portable artifact: `release/HWPX Optimizer-0.1.0-x64.exe`.
 - Latest portable artifact SHA256: `fee5d7903fe620e5a4a886b739f227e7bd80dd0bb864e243326e983dab14722a`.
 
+Latest runtime performance update after worker and duplicate-transform cleanup:
+
+- Analysis now runs in a desktop worker thread instead of Electron main process, so large-file analysis does not block the UI event loop.
+- Production startup no longer eagerly imports `jszip`; it is loaded only for smoke-test fixture generation.
+- Image inventory inspection uses bounded concurrency for metadata reads.
+- Balanced/aggressive optimization no longer performs full image transforms during planning and then repeats the same transforms during application. Planning uses estimates; final report uses exact applied action sizes.
+- `node packages/cli/dist/index.js analyze sample2.hwpx --report .tmp/perf-sample2-analysis-speed2.json --overwrite`: passed in `elapsed=0:01.65`, `maxrss=401808KB`.
+- `node packages/cli/dist/index.js optimize sample2.hwpx --mode balanced --out .tmp/perf-sample2-balanced-speed2.hwpx --report .tmp/perf-sample2-balanced-speed2.json --overwrite`: passed in `elapsed=0:08.42`, down from the previous measured `elapsed=0:12.85`, with the same `79.63 MiB` saved.
+- `node packages/cli/dist/index.js optimize sample2.hwpx --mode aggressive --out .tmp/perf-sample2-aggressive-speed2.hwpx --report .tmp/perf-sample2-aggressive-speed2.json --overwrite`: passed in `elapsed=0:10.70`, down from the previous measured `elapsed=0:18.01`, with the same `86.43 MiB` saved.
+- `npm run desktop:smoke`: passed with analysis worker path.
+- `npm run release:check:win-portable`: passed.
+- Latest portable artifact: `release/HWPX Optimizer-0.1.0-x64.exe`.
+- Latest portable artifact SHA256: `01552fbdceed089731997e7b48511abf23c0292ee0e07881b74725e7a0306a17`.
+
 Latest real sample E2E after reference graph update:
 
 - `npm run cli -- analyze sample2.hwpx --report .tmp/real-sample-after-refgraph/sample2.analysis.json`: passed.
@@ -335,7 +349,7 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 
 ## Blockers To Completion
 
-- Full Windows QA checklist across safe, balanced, aggressive, settings persistence, drag/drop, and repeated samples is not complete.
+- Windows portable smoke across safe, balanced, and aggressive is complete; broader manual QA for settings persistence, drag/drop, and repeated samples is not complete.
 - Visual similarity comparison is not implemented; current verifier checks package integrity, references, image dimensions, and image formats.
 - Reference graph detection is conservative and needs broader real-world HWPX coverage before product release.
 

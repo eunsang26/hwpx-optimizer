@@ -5,7 +5,6 @@ import {
   aggressiveImageProfile,
   balancedImageProfile,
   detectEstimatedOptimizationOpportunities,
-  detectOptimizationOpportunities
 } from "./opportunities.js";
 import type { ImageOptimizationProfile } from "./opportunities.js";
 import { createSafeOptimizationPlan } from "./planner.js";
@@ -32,7 +31,7 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
   const graph = buildReferenceGraph(pkg);
   const plan = createSafeOptimizationPlan({ pkg, analysis, graph });
   const optimized = await applySafeOptimizationPlan({ pkg, plan });
-  const opportunities = createSafeOpportunitiesFromAppliedActions(optimized.applied);
+  const opportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied);
   const output = await writeHwpxPackage(optimized.pkg);
   await verifyHwpxOutput(output, { original: input, mode: "safe" });
 
@@ -60,32 +59,6 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
     opportunities
   });
   return { output, report };
-}
-
-function createSafeOpportunitiesFromAppliedActions(actions: AppliedAction[]): OptimizationOpportunity[] {
-  const opportunities: OptimizationOpportunity[] = [];
-  for (const action of actions) {
-    if (action.type !== "strip-metadata" && action.type !== "optimize-png") continue;
-    if (action.beforeSize === undefined || action.afterSize === undefined) continue;
-
-    const estimatedSavingBytes = action.beforeSize - action.afterSize;
-    if (estimatedSavingBytes <= 0) continue;
-
-    opportunities.push({
-      id: `${action.type}:${action.target}`,
-      label: action.type === "strip-metadata" ? "Strip JPEG metadata" : "Optimize PNG losslessly",
-      action: action.type,
-      target: action.target,
-      estimatedSavingBytes,
-      beforeSize: action.beforeSize,
-      afterSize: action.afterSize,
-      confidence: "exact",
-      risk: "safe",
-      visualImpact: "none",
-      defaultEnabledIn: ["safe", "balanced", "aggressive"]
-    });
-  }
-  return opportunities;
 }
 
 export async function optimizeHwpxBufferBalanced(
@@ -118,7 +91,7 @@ async function optimizeHwpxBufferAdvanced(
 }> {
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
-  const opportunities = await detectOptimizationOpportunities(pkg, settings.profile);
+  const opportunities = await detectEstimatedOptimizationOpportunities(pkg, settings.profile);
   const selectedOpportunities =
     settings.options.actions && settings.options.actions.length > 0
       ? opportunities.filter((opportunity) => settings.options.actions?.includes(opportunity.action))
@@ -145,6 +118,7 @@ async function optimizeHwpxBufferAdvanced(
     actions: [...actions, { type: "repack-zip" as const, target: "*" as const, risk: "safe" as const }]
   };
   const optimized = await applyBalancedOptimizationPlan({ pkg, plan, profile: settings.profile });
+  const exactOpportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied);
   const output = await writeHwpxPackage(optimized.pkg);
   await verifyHwpxOutput(output, { original: input, mode: settings.mode });
 
@@ -156,7 +130,7 @@ async function optimizeHwpxBufferAdvanced(
       planned: plan.actions,
       applied: [],
       skipped: [...optimized.applied, ...optimized.skipped],
-      opportunities,
+      opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
       warnings: [settings.rollbackWarning, ...(settings.warnings ?? [])]
     });
     return { output: Buffer.from(input), report };
@@ -169,10 +143,107 @@ async function optimizeHwpxBufferAdvanced(
     planned: plan.actions,
     applied: optimized.applied,
     skipped: optimized.skipped,
-    opportunities,
+    opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
     warnings: settings.warnings
   });
   return { output, report };
+}
+
+function createOptimizationOpportunitiesFromAppliedActions(actions: AppliedAction[]): OptimizationOpportunity[] {
+  const opportunities: OptimizationOpportunity[] = [];
+  for (const action of actions) {
+    const opportunity = createOptimizationOpportunityFromAppliedAction(action);
+    if (opportunity) opportunities.push(opportunity);
+  }
+  return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
+}
+
+function createOptimizationOpportunityFromAppliedAction(action: AppliedAction): OptimizationOpportunity | null {
+  if (action.beforeSize === undefined || action.afterSize === undefined) return null;
+  const estimatedSavingBytes = action.beforeSize - action.afterSize;
+  if (estimatedSavingBytes <= 0) return null;
+
+  if (action.type === "strip-metadata" || action.type === "optimize-png") {
+    return {
+      id: `${action.type}:${action.target}`,
+      label: action.type === "strip-metadata" ? "Strip JPEG metadata" : "Optimize PNG losslessly",
+      action: action.type,
+      target: action.target,
+      estimatedSavingBytes,
+      beforeSize: action.beforeSize,
+      afterSize: action.afterSize,
+      confidence: "exact",
+      risk: "safe",
+      visualImpact: "none",
+      defaultEnabledIn: ["safe", "balanced", "aggressive"]
+    };
+  }
+
+  if (action.type === "convert-bmp-to-png") {
+    return {
+      id: `${action.type}:${action.target}`,
+      label: "Convert BMP to PNG",
+      action: action.type,
+      target: action.target,
+      estimatedSavingBytes,
+      beforeSize: action.beforeSize,
+      afterSize: action.afterSize,
+      confidence: "exact",
+      risk: "medium",
+      visualImpact: "low",
+      defaultEnabledIn: ["balanced", "aggressive"]
+    };
+  }
+
+  if (action.type === "resize-jpeg") {
+    return {
+      id: `${action.type}:${action.target}`,
+      label: "Resize oversized JPEG and recompress with MozJPEG",
+      action: action.type,
+      target: action.target,
+      estimatedSavingBytes,
+      beforeSize: action.beforeSize,
+      afterSize: action.afterSize,
+      confidence: "exact",
+      risk: "medium",
+      visualImpact: "medium",
+      defaultEnabledIn: ["balanced", "aggressive"]
+    };
+  }
+
+  if (action.type === "clean-shape-comment") {
+    return {
+      id: `${action.type}:${action.target}`,
+      label: "Clean image shape comments",
+      action: action.type,
+      target: action.target,
+      estimatedSavingBytes,
+      beforeSize: action.beforeSize,
+      afterSize: action.afterSize,
+      confidence: "exact",
+      risk: "safe",
+      visualImpact: "none",
+      defaultEnabledIn: ["balanced", "aggressive"]
+    };
+  }
+
+  if (action.type === "consolidate-duplicate-images") {
+    return {
+      id: `${action.type}:${action.target}`,
+      label: "Consolidate duplicate image references",
+      action: action.type,
+      target: action.target,
+      estimatedSavingBytes,
+      beforeSize: action.beforeSize,
+      afterSize: action.afterSize,
+      confidence: "exact",
+      risk: "medium",
+      visualImpact: "none",
+      defaultEnabledIn: ["balanced", "aggressive"]
+    };
+  }
+
+  return null;
 }
 
 export async function optimizeHwpxBufferAggressive(

@@ -25,7 +25,7 @@ This file separates release blockers from non-blockers so the project does not o
 - Safe-mode optimization can still take time on image-heavy documents because it performs lossless image metadata/PNG processing and ZIP verification even when final savings are zero.
 - Some safe-mode rewrites can make an individual entry slightly larger. The optimizer records skipped or applied actions so this can be audited.
 - Desktop settings controls are functional, but final visual QA on the target Windows desktop environment is still required.
-- Desktop progress is stage-based rather than per-image/action.
+- Desktop analysis and optimization run off the main UI path, but progress is still stage-based rather than per-image/action.
 - `npm audit` currently reports 0 vulnerabilities after dependency updates on 2026-05-08.
 
 ## Safe Mode Caveats

@@ -41,6 +41,16 @@ export async function applyBalancedOptimizationPlan(input: {
 
     try {
       const transformed = await transformImageBalancedWithBudget(entry.path, entry.data, resizeBudgets.get(entry.path), profile);
+      if (transformed.data.byteLength >= entry.data.byteLength) {
+        transformedEntries.push(entry);
+        skipped.push({
+          type: action.type,
+          target: entry.path,
+          beforeSize: entry.size,
+          afterSize: transformed.data.byteLength
+        });
+        continue;
+      }
       pathUpdates.set(entry.path, transformed.outputPath);
       mediaTypeUpdates.set(transformed.outputPath, outputMediaType(transformed.outputPath));
       transformedEntries.push({

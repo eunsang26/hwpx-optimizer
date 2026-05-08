@@ -1,15 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
-import JSZip from "jszip";
 import { mkdir, readFile as readFileFs, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
-import {
-  analyzeDesktopFile,
-  defaultDesktopSettings,
-  verifyDesktopFile
-} from "./main/desktopService.js";
-import type { DesktopOptimizeResult } from "./main/desktopService.js";
+import { defaultDesktopSettings, verifyDesktopFile } from "./main/desktopService.js";
+import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
 import type { DesktopSettings, OptimizationMode } from "./main/desktopService.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -85,7 +80,7 @@ function registerIpc(): void {
   ipcMain.handle("settings:load", loadSettings);
   ipcMain.handle("settings:save", async (_event, patch: Partial<DesktopSettings>) => saveSettings(patch));
 
-  ipcMain.handle("hwpx:analyze", async (_event, filePath: string) => analyzeDesktopFile(filePath));
+  ipcMain.handle("hwpx:analyze", async (_event, filePath: string) => runAnalyzeWorker(filePath));
 
   ipcMain.handle(
     "hwpx:optimize",
@@ -250,12 +245,31 @@ function parseSmokeMode(value: string | undefined): OptimizationMode {
 }
 
 async function createSmokeHwpxFixture(): Promise<Buffer> {
+  const { default: JSZip } = await import("jszip");
   const zip = new JSZip();
   zip.file("Contents/content.hpf", '<opf:package xmlns:opf="http://www.idpf.org/2007/opf" />');
   zip.file("Contents/section0.xml", '<root><img href="BinData/used.bin" /></root>');
   zip.file("BinData/used.bin", "used");
   zip.file("BinData/unused.bin", "unused");
   return Buffer.from(await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }));
+}
+
+function runAnalyzeWorker(filePath: string): Promise<DesktopAnalysisResult> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(join(import.meta.dirname, "main", "analyzeWorker.js"), { workerData: filePath });
+
+    worker.on("message", (message: AnalyzeWorkerMessage) => {
+      if (message.type === "complete") {
+        resolve(message.result);
+      } else if (message.type === "error") {
+        reject(new Error(message.message));
+      }
+    });
+    worker.on("error", reject);
+    worker.on("exit", (code) => {
+      if (code !== 0) reject(new Error("Analysis worker exited unexpectedly."));
+    });
+  });
 }
 
 function runOptimizeWorker(
@@ -294,4 +308,8 @@ function runOptimizeWorker(
 type WorkerMessage =
   | { type: "progress"; percent: number; item: string }
   | { type: "complete"; result: DesktopOptimizeResult }
+  | { type: "error"; message: string };
+
+type AnalyzeWorkerMessage =
+  | { type: "complete"; result: DesktopAnalysisResult }
   | { type: "error"; message: string };

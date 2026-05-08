@@ -32,7 +32,7 @@ export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnaly
     other: 0
   };
 
-  const images: ImageInventoryItem[] = [];
+  const imageInputs: Array<{ path: string; data: Buffer; size: number; displayRefs: ImageDisplayReference[] }> = [];
   let totalSize = 0;
   const displaysByPath = extractImageDisplayReferences(pkg);
 
@@ -41,9 +41,17 @@ export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnaly
     entriesByKind[entry.kind] += 1;
     categorySizes[entry.kind] += entry.size;
     if (entry.kind === "image") {
-      images.push(await inspectImage(entry.path, entry.data, entry.size, displaysByPath.get(entry.path) ?? []));
+      imageInputs.push({
+        path: entry.path,
+        data: entry.data,
+        size: entry.size,
+        displayRefs: displaysByPath.get(entry.path) ?? []
+      });
     }
   }
+  const images = await mapLimit(imageInputs, 4, (image) =>
+    inspectImage(image.path, image.data, image.size, image.displayRefs)
+  );
 
   return {
     totalSize,
@@ -54,6 +62,22 @@ export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnaly
     unusedBinData: findUnusedBinData(pkg),
     riskyResources: findRiskyResources(pkg)
   };
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
 }
 
 async function inspectImage(
