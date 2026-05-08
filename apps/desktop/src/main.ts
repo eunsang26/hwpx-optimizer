@@ -121,9 +121,9 @@ function registerIpc(): void {
   );
 
   ipcMain.handle("hwpx:cancel-optimize", async () => {
-    if (!activeOptimizeWorker) return { cancelled: false };
-    await activeOptimizeWorker.terminate();
-    activeOptimizeWorker = null;
+    const worker = activeOptimizeWorker;
+    if (!worker) return { cancelled: false };
+    await worker.terminate();
     mainWindow?.webContents.send("hwpx:optimize-progress", { percent: 0, item: "Optimization cancelled" });
     return { cancelled: true };
   });
@@ -316,28 +316,32 @@ function runOptimizeWorker(
   return new Promise((resolve, reject) => {
     const worker = new Worker(join(import.meta.dirname, "main", "optimizeWorker.js"), { workerData: input });
     activeOptimizeWorker = worker;
+    let settled = false;
+    const settle = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (activeOptimizeWorker === worker) activeOptimizeWorker = null;
+      action();
+    };
 
     worker.on("message", (message: WorkerMessage) => {
       if (message.type === "progress") {
         onProgress({ percent: message.percent, item: message.item });
       } else if (message.type === "complete") {
-        activeOptimizeWorker = null;
         onProgress({ percent: 100, item: "Optimization complete" });
-        resolve(message.result);
+        settle(() => resolve(message.result));
       } else if (message.type === "error") {
-        activeOptimizeWorker = null;
-        reject(new Error(message.message));
+        settle(() => reject(new Error(message.message)));
       }
     });
     worker.on("error", (error) => {
-      activeOptimizeWorker = null;
-      reject(error);
+      settle(() => reject(error));
     });
     worker.on("exit", (code) => {
-      if (activeOptimizeWorker === worker) {
-        activeOptimizeWorker = null;
-        if (code !== 0) reject(new Error("Optimization cancelled."));
-      }
+      settle(() => {
+        if (code === 0) reject(new Error("Optimization worker exited unexpectedly."));
+        else reject(new Error("Optimization cancelled."));
+      });
     });
   });
 }

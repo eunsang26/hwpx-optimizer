@@ -50,8 +50,13 @@ const CATEGORY_LABELS: Record<HwpxEntryKind, string> = {
 
 const CATEGORY_ORDER: HwpxEntryKind[] = ["image", "xml", "font", "ole", "bindata", "other"];
 
+const ESTIMATED_SAVING_DISPLAY_RATIO = 0.95;
+
 export function createAnalysisViewModel(report: OptimizationReport): AnalysisViewModel {
-  const estimatedSaving = report.opportunityGroups.reduce((sum, group) => sum + group.estimatedSavingBytes, 0);
+  const estimatedSavingRaw = report.opportunityGroups.reduce((sum, group) => sum + group.estimatedSavingBytes, 0);
+  const cap = Math.max(0, Math.floor(report.originalSize * ESTIMATED_SAVING_DISPLAY_RATIO));
+  const cappedSaving = report.originalSize > 0 ? Math.min(estimatedSavingRaw, cap) : estimatedSavingRaw;
+  const wasCapped = estimatedSavingRaw > cappedSaving;
   return {
     originalSizeLabel: formatBytes(report.originalSize),
     imageCount: report.images.length,
@@ -60,7 +65,7 @@ export function createAnalysisViewModel(report: OptimizationReport): AnalysisVie
     unusedResourceCount: report.unusedBinData.length,
     duplicateGroupCount: report.duplicateImages.length,
     riskyResourceCount: report.riskyResources.length,
-    estimatedSavingLabel: formatBytes(estimatedSaving),
+    estimatedSavingLabel: wasCapped ? `최대 ${formatBytes(cappedSaving)}` : formatBytes(cappedSaving),
     topOpportunities: report.opportunityGroups.slice(0, 5).map((group) => ({
       action: group.action,
       count: group.count,

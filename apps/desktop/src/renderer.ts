@@ -369,6 +369,7 @@ async function analyzeFile(path: string): Promise<void> {
 
 async function optimizeCurrentFile(): Promise<void> {
   if (!state.filePath || !state.report) return;
+  let succeeded = false;
   try {
     setBusy(`${modeLabel(state.mode)} 모드로 최적화하는 중입니다...`);
     progressPanel.hidden = false;
@@ -382,10 +383,13 @@ async function optimizeCurrentFile(): Promise<void> {
     state.result = response;
     renderResult(response.report, response.outputPath, response.reportPath);
     setStatus("최적화가 완료되었습니다. 결과 파일을 확인하세요.");
+    succeeded = true;
   } catch (error) {
     setStatus(errorMessage(error));
   } finally {
     setIdle();
+    progressPanel.hidden = true;
+    if (!succeeded) renderProgress(0, "");
   }
 }
 

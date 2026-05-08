@@ -23,16 +23,25 @@ export function progressLabel(item: string): string {
   return PROGRESS_LABELS[item] ?? item;
 }
 
-const WARNING_PATTERNS: Array<[RegExp, string]> = [
-  [/OLE objects can be user-visible/i, "OLE 객체는 문서에서 보일 수 있어 자동으로 제거하지 않습니다."],
-  [/Safe mode did not produce a smaller file/i, "안전 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."],
-  [/Balanced mode did not produce a smaller file/i, "균형 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."],
-  [/Aggressive mode did not produce a smaller file/i, "최대 압축 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."],
-  [/may introduce visible image quality differences/i, "최대 압축은 이미지 품질 차이가 보일 수 있습니다."]
+const WARNING_PATTERNS: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
+  [/OLE objects can be user-visible/i, () => "OLE 객체는 문서에서 보일 수 있어 자동으로 제거하지 않습니다."],
+  [/Embedded fonts can affect document appearance/i, () => "임베디드 폰트는 문서 외형에 영향을 줄 수 있어 자동으로 제거하지 않습니다."],
+  [/Safe mode did not produce a smaller file/i, () => "안전 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."],
+  [/Balanced mode did not produce a smaller file/i, () => "균형 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."],
+  [/Aggressive mode did not produce a smaller file/i, () => "최대 압축 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."],
+  [/may introduce visible image quality differences/i, () => "최대 압축은 이미지 품질 차이가 보일 수 있습니다."],
+  [
+    /BMP candidate detected;[^:]*:\s*(.+)$/i,
+    (match) => `BMP 이미지 발견: ${match[1] ?? ""} — 균형/최대 압축 모드에서 PNG로 변환하면 크기를 줄일 수 있습니다.`
+  ]
 ];
 
 export function warningLabel(warning: string): string {
-  return WARNING_PATTERNS.find(([pattern]) => pattern.test(warning))?.[1] ?? warning;
+  for (const [pattern, build] of WARNING_PATTERNS) {
+    const match = warning.match(pattern);
+    if (match) return build(match);
+  }
+  return warning;
 }
 
 const ACTION_LABELS: Record<string, string> = {

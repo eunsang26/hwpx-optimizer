@@ -30,6 +30,14 @@ describe("shared labels", () => {
     expect(warningLabel("Aggressive mode did not produce a smaller file; original package bytes returned.")).toBe(
       "최대 압축 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."
     );
+    expect(warningLabel("Embedded fonts can affect document appearance if removed.")).toBe(
+      "임베디드 폰트는 문서 외형에 영향을 줄 수 있어 자동으로 제거하지 않습니다."
+    );
+    expect(
+      warningLabel("BMP candidate detected; convert-bmp-to-png may reduce size: BinData/image1.bmp")
+    ).toBe(
+      "BMP 이미지 발견: BinData/image1.bmp — 균형/최대 압축 모드에서 PNG로 변환하면 크기를 줄일 수 있습니다."
+    );
     expect(warningLabel("Untranslated warning")).toBe("Untranslated warning");
   });
 
