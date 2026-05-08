@@ -39,7 +39,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | XML manifest updates use parser | `packages/core/src/balancedOptimizer.ts` uses `fast-xml-parser` preserve-order AST | Implemented |
 | Verifier | `packages/core/src/verifier.ts`, `packages/core/test/verifier.test.ts` | Implemented with required package checks and mode image invariants |
 | Report generator | `packages/core/src/report.ts`, `packages/core/test/report.test.ts` | Implemented |
-| CLI commands | `packages/cli/src/index.ts` | Implemented: analyze, report, verify, optimize, batch |
+| CLI commands | `packages/cli/src/index.ts`, `packages/cli/package.json`, `packages/cli/test/cli.test.ts` | Implemented: `hwpx-opt` bin plus analyze, report, verify, optimize, batch |
 | Desktop app | `apps/desktop/src/*` | Implemented |
 | Desktop preload bridge | `apps/desktop/src/preload.cjs`, `apps/desktop/src/preload.ts`, `xvfb-run -a npm run desktop:smoke` | Verified |
 | Desktop renderer IPC E2E | `npm run desktop:smoke` creates a synthetic HWPX, analyzes, optimizes through worker, and verifies output; `HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=balanced/aggressive npm run desktop:smoke` verifies the same IPC path with a local real sample and non-safe modes | Verified |
@@ -94,6 +94,7 @@ npm run cli -- verify sample2.latest-balanced.hwpx
 node packages/cli/dist/index.js analyze sample2.hwpx --report sample2.dist-analysis.json
 node packages/cli/dist/index.js optimize sample2.hwpx --mode balanced --out sample2.dist-balanced.hwpx --report sample2.dist-balanced.report.json
 node packages/cli/dist/index.js verify sample2.dist-balanced.hwpx
+node_modules/.bin/hwpx-opt analyze sample2.hwpx --report .tmp/cli-bin-smoke/sample2.analysis.json
 git ls-files 'sample*'
 ```
 

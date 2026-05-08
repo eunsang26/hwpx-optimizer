@@ -1,11 +1,22 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { createHwpxFixture } from "../../core/test/fixtures.js";
-import { runCli } from "../src/index.js";
+import { isCliEntrypoint, runCli } from "../src/index.js";
 
 describe("runCli", () => {
+  it("recognizes workspace bin symlinks as CLI entrypoints", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-bin-"));
+    const target = join(dir, "index.js");
+    const link = join(dir, "hwpx-opt");
+    await writeFile(target, "#!/usr/bin/env node\n");
+    await symlink(target, link);
+
+    expect(isCliEntrypoint(pathToFileURL(target).href, link)).toBe(true);
+  });
+
   it("analyzes a file and writes a report", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");

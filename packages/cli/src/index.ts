@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   analyzeHwpxBuffer,
   optimizeHwpxBufferAggressive,
@@ -278,6 +280,16 @@ function isOptimizationMode(value: string): value is OptimizationMode {
   return value === "safe" || value === "balanced" || value === "aggressive";
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+export function isCliEntrypoint(metaUrl: string, argvPath = process.argv[1]): boolean {
+  if (!argvPath) return false;
+  const modulePath = fileURLToPath(metaUrl);
+  try {
+    return realpathSync(modulePath) === realpathSync(argvPath);
+  } catch {
+    return modulePath === argvPath;
+  }
+}
+
+if (isCliEntrypoint(import.meta.url)) {
   process.exitCode = await runCli(process.argv.slice(2));
 }

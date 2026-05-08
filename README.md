@@ -60,6 +60,12 @@ Run the CLI through the workspace script during development:
 npm run cli -- analyze input.hwpx
 ```
 
+After `npm install`, the workspace bin is also available:
+
+```bash
+node_modules/.bin/hwpx-opt analyze input.hwpx
+```
+
 Analyze a document and write a JSON report:
 
 ```bash
