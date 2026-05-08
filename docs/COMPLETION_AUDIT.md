@@ -70,8 +70,19 @@ xvfb-run -a npm run desktop:smoke
 npm run desktop:pack
 npm run desktop:pack:win
 npm audit --json
+npm run cli -- analyze sample2.hwpx --report sample2.latest-analysis.json
+npm run cli -- optimize sample2.hwpx --mode balanced --out sample2.latest-balanced.hwpx --report sample2.latest-balanced.report.json
+npm run cli -- verify sample2.latest-balanced.hwpx
 git ls-files 'sample*'
 ```
+
+Sample2 evidence from the latest local run:
+
+- Original: 89.72 MiB
+- Balanced optimized saving: 79.63 MiB, 88.75%
+- Applied: `convert-bmp-to-png` 18, `resize-jpeg` 6, `optimize-png` 4, `clean-shape-comment` 1
+- Output verifier: passed
+- Sample inputs and generated outputs remain ignored by git.
 
 Expected environment failure:
 
