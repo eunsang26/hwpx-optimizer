@@ -3,6 +3,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "@hwpx-optimizer/core";
+import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
 
 export async function runCli(argv: string[]): Promise<number> {
   const [command, inputPath, ...rest] = argv;
@@ -18,6 +19,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const reportPath = options.report ?? `${inputPath}.report.json`;
       await writeFile(reportPath, JSON.stringify(report, null, 2));
       console.log(`Analyzed ${inputPath}`);
+      printAnalysisSummary(inputPath, report);
       console.log(`Report: ${reportPath}`);
       return 0;
     }
@@ -41,6 +43,7 @@ export async function runCli(argv: string[]): Promise<number> {
       await writeFile(outputPath, result.output);
       await writeFile(reportPath, JSON.stringify(result.report, null, 2));
       console.log(`Optimized ${inputPath}`);
+      printOptimizationSummary(result.report);
       console.log(`Output: ${outputPath}`);
       console.log(`Report: ${reportPath}`);
       return 0;
@@ -80,6 +83,56 @@ function printUsage(): void {
   console.error("Usage:");
   console.error("  hwpx-opt analyze <file.hwpx> [--report report.json]");
   console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced [--actions action1,action2] [--allow-larger] [--out output.hwpx] [--report report.json]");
+}
+
+function printAnalysisSummary(inputPath: string, report: OptimizationReport): void {
+  console.log(`Original: ${formatBytes(report.originalSize)}`);
+  if (report.opportunityGroups.length === 0) {
+    console.log("Opportunities: none");
+    return;
+  }
+
+  console.log("Opportunities:");
+  for (const group of report.opportunityGroups) {
+    console.log(
+      `- ${group.action}: ${formatTargetCount(group.count)}, ~${formatBytes(group.estimatedSavingBytes)} potential saving`
+    );
+  }
+  console.log(`Suggested: hwpx-opt optimize ${inputPath} --mode balanced`);
+}
+
+function printOptimizationSummary(report: OptimizationReport): void {
+  const savedBytes = report.savedBytes ?? 0;
+  const savedPercent = report.savedPercent ?? 0;
+  console.log(`Saved: ${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
+
+  const counts = countAppliedActions(report.actions.applied);
+  if (counts.length === 0) {
+    console.log("Applied: none");
+    return;
+  }
+
+  console.log(`Applied: ${counts.map(([type, count]) => `${type} ${count}`).join(", ")}`);
+}
+
+function countAppliedActions(actions: AppliedAction[]): Array<[AppliedAction["type"], number]> {
+  const counts = new Map<AppliedAction["type"], number>();
+  for (const action of actions) {
+    counts.set(action.type, (counts.get(action.type) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((left, right) => right[1] - left[1]);
+}
+
+function formatTargetCount(count: number): string {
+  return count === 1 ? "1 target" : `${count} targets`;
+}
+
+function formatBytes(bytes: number): string {
+  const sign = bytes < 0 ? "-" : "";
+  const absolute = Math.abs(bytes);
+  if (absolute < 1024) return `${sign}${absolute} B`;
+  if (absolute < 1024 * 1024) return `${sign}${(absolute / 1024).toFixed(1)} KiB`;
+  return `${sign}${(absolute / 1024 / 1024).toFixed(2)} MiB`;
 }
 
 function parseActionList(value?: string): string[] | undefined {

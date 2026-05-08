@@ -67,6 +67,20 @@ export type OptimizationOpportunity = {
   defaultEnabledIn: Array<"safe" | "balanced" | "aggressive">;
 };
 
+export type OptimizationOpportunityGroup = {
+  action: OptimizationOpportunity["action"];
+  label: string;
+  count: number;
+  estimatedSavingBytes: number;
+  beforeSize: number;
+  afterSize: number;
+  confidence: OptimizationOpportunity["confidence"];
+  risk: OptimizationOpportunity["risk"];
+  visualImpact: OptimizationOpportunity["visualImpact"];
+  defaultEnabledIn: Array<"safe" | "balanced" | "aggressive">;
+  targets: string[];
+};
+
 export type AppliedAction = {
   type: OptimizationAction["type"];
   target: string;
@@ -86,5 +100,6 @@ export type OptimizationReport = {
     skipped: AppliedAction[];
   };
   opportunities: OptimizationOpportunity[];
+  opportunityGroups: OptimizationOpportunityGroup[];
   warnings: string[];
 };
