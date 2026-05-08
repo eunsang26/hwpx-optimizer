@@ -6,4 +6,5 @@ packages/*/tsconfig.tsbuildinfo
 *.log
 /sample*.hwp
 /sample*.hwpx
+/sample*.json
 *:Zone.Identifier

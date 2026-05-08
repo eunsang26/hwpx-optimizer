@@ -1,8 +1,8 @@
 import type { AppliedAction, OptimizationAction, OptimizationReport, PackageAnalysis } from "./types.js";
 
-export function createAnalysisReport(analysis: PackageAnalysis): OptimizationReport {
+export function createAnalysisReport(analysis: PackageAnalysis, originalSize = analysis.totalSize): OptimizationReport {
   return {
-    originalSize: analysis.totalSize,
+    originalSize,
     images: analysis.images,
     actions: { planned: [], applied: [], skipped: [] },
     warnings: createWarnings(analysis)
@@ -11,24 +11,26 @@ export function createAnalysisReport(analysis: PackageAnalysis): OptimizationRep
 
 export function createOptimizationReport(input: {
   analysis: PackageAnalysis;
+  originalSize: number;
   optimizedSize: number;
   planned: OptimizationAction[];
   applied: AppliedAction[];
   skipped: AppliedAction[];
+  warnings?: string[];
 }): OptimizationReport {
-  const savedBytes = input.analysis.totalSize - input.optimizedSize;
+  const savedBytes = input.originalSize - input.optimizedSize;
   return {
-    originalSize: input.analysis.totalSize,
+    originalSize: input.originalSize,
     optimizedSize: input.optimizedSize,
     savedBytes,
-    savedPercent: input.analysis.totalSize === 0 ? 0 : (savedBytes / input.analysis.totalSize) * 100,
+    savedPercent: input.originalSize === 0 ? 0 : (savedBytes / input.originalSize) * 100,
     images: input.analysis.images,
     actions: {
       planned: input.planned,
       applied: input.applied,
       skipped: input.skipped
     },
-    warnings: createWarnings(input.analysis)
+    warnings: [...createWarnings(input.analysis), ...(input.warnings ?? [])]
   };
 }
 

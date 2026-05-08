@@ -1,5 +1,4 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
-import sharp from "sharp";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 
 export async function applySafeOptimizationPlan(input: {
@@ -24,7 +23,7 @@ export async function applySafeOptimizationPlan(input: {
     );
     if (strip) {
       try {
-        const optimized = await sharp(entry.data).toBuffer();
+        const optimized = stripImageMetadataLossless(entry.path, entry.data);
         entries.push({ ...entry, data: optimized, size: optimized.byteLength });
         applied.push({
           type: "strip-metadata",
@@ -63,4 +62,71 @@ function minifyXml(xml: string): string {
   const parser = new XMLParser({ ignoreAttributes: false, preserveOrder: true });
   const builder = new XMLBuilder({ ignoreAttributes: false, preserveOrder: true, suppressEmptyNode: false });
   return builder.build(parser.parse(xml));
+}
+
+function stripImageMetadataLossless(path: string, data: Buffer): Buffer {
+  if (/\.(jpe?g)$/i.test(path)) {
+    return stripJpegMetadataSegments(data);
+  }
+  return data;
+}
+
+function stripJpegMetadataSegments(data: Buffer): Buffer {
+  if (data.length < 4 || data[0] !== 0xff || data[1] !== 0xd8) {
+    return data;
+  }
+
+  const chunks: Buffer[] = [data.subarray(0, 2)];
+  let offset = 2;
+
+  while (offset < data.length) {
+    if (data[offset] !== 0xff) {
+      chunks.push(data.subarray(offset));
+      break;
+    }
+
+    let markerOffset = offset;
+    while (markerOffset < data.length && data[markerOffset] === 0xff) {
+      markerOffset += 1;
+    }
+    if (markerOffset >= data.length) break;
+
+    const marker = data[markerOffset];
+    const segmentStart = offset;
+
+    if (marker === 0xda || marker === 0xd9) {
+      chunks.push(data.subarray(segmentStart));
+      break;
+    }
+
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      chunks.push(data.subarray(segmentStart, markerOffset + 1));
+      offset = markerOffset + 1;
+      continue;
+    }
+
+    if (markerOffset + 2 >= data.length) {
+      chunks.push(data.subarray(segmentStart));
+      break;
+    }
+
+    const length = data.readUInt16BE(markerOffset + 1);
+    const segmentEnd = markerOffset + 1 + length;
+    if (length < 2 || segmentEnd > data.length) {
+      chunks.push(data.subarray(segmentStart));
+      break;
+    }
+
+    if (!isRemovableJpegMetadataMarker(marker)) {
+      chunks.push(data.subarray(segmentStart, segmentEnd));
+    }
+
+    offset = segmentEnd;
+  }
+
+  return Buffer.concat(chunks);
+}
+
+function isRemovableJpegMetadataMarker(marker: number): boolean {
+  return marker === 0xe1 || marker === 0xed || marker === 0xfe;
 }

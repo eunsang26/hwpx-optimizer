@@ -23,4 +23,22 @@ describe("createSafeOptimizationPlan", () => {
     expect(plan.actions.map((action) => action.type)).toEqual(["minify-xml", "remove-unused", "repack-zip"]);
     expect(plan.actions).not.toContainEqual(expect.objectContaining({ type: "convert-bmp" }));
   });
+
+  it("does not remove unreferenced non-BinData package images in safe mode", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": "<root />",
+        "Preview/PrvImage.png": Buffer.from("preview")
+      }
+    });
+    const pkg = await readHwpxPackage(fixture);
+    const analysis = await analyzeHwpxPackage(pkg);
+    const graph = buildReferenceGraph(pkg);
+
+    const plan = createSafeOptimizationPlan({ pkg, analysis, graph });
+
+    expect(plan.actions).not.toContainEqual(
+      expect.objectContaining({ type: "remove-unused", target: "Preview/PrvImage.png" })
+    );
+  });
 });

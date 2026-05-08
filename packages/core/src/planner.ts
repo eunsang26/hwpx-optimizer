@@ -14,13 +14,13 @@ export function createSafeOptimizationPlan(input: {
   }
 
   for (const image of input.analysis.images) {
-    if (image.hasMetadata && !image.isBmpCandidate) {
+    if (image.hasMetadata && canStripMetadataLosslessly(image.path)) {
       actions.push({ type: "strip-metadata", target: image.path, risk: "safe" });
     }
   }
 
   for (const resource of input.graph.resources.values()) {
-    if (!resource.referenced) {
+    if (!resource.referenced && resource.path.startsWith("BinData/")) {
       actions.push({ type: "remove-unused", target: resource.path, risk: "safe" });
     }
   }
@@ -28,4 +28,8 @@ export function createSafeOptimizationPlan(input: {
   actions.push({ type: "repack-zip", target: "*", risk: "safe" });
 
   return { mode: "safe", actions };
+}
+
+function canStripMetadataLosslessly(path: string): boolean {
+  return /\.(jpe?g)$/i.test(path);
 }
