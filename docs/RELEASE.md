@@ -102,12 +102,18 @@ On Linux/WSL without Wine, run the portable Windows release gate:
 npm run release:check:win-portable
 ```
 
-This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact and writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`. It does not replace a clean Windows runtime test.
+This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifact. It does not replace a clean Windows runtime test.
 
 If the portable artifact already exists and only the checksum files need to be refreshed:
 
 ```bash
 npm run release:manifest
+```
+
+Verify an existing manifest and checksum file against the artifact:
+
+```bash
+npm run release:verify-manifest
 ```
 
 The repository also includes `.github/workflows/windows-release.yml`, which runs the Windows release gate on `workflow_dispatch` and `v*` tags, then uploads the generated installer artifact.
