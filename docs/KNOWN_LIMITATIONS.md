@@ -20,7 +20,7 @@ This file separates release blockers from non-blockers so the project does not o
 - EXIF removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size.
 - Some safe-mode rewrites can make an individual entry slightly larger. The optimizer records skipped or applied actions so this can be audited.
 - Desktop settings UI is minimal and should be refined before public release.
-- `npm audit` currently reports moderate dependency advisories. These have not been triaged yet.
+- `npm audit` currently reports 0 vulnerabilities after dependency updates on 2026-05-08.
 
 ## Safe Mode Caveats
 

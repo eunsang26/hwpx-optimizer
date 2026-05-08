@@ -69,6 +69,7 @@ npm run build
 xvfb-run -a npm run desktop:smoke
 npm run desktop:pack
 npm run desktop:pack:win
+npm audit --json
 git ls-files 'sample*'
 ```
 
@@ -96,4 +97,4 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 - Reference graph coverage is conservative and should be expanded with more real-world HWPX samples.
 - Visual similarity comparison is not implemented.
 - Desktop UI is functional but still needs final product polish and icon branding.
-- `npm audit` still reports moderate dependency advisories and needs release triage.
+- Continue routine dependency monitoring before each release.
