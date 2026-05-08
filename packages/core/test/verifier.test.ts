@@ -82,6 +82,15 @@ describe("verifyHwpxOutput", () => {
     );
   });
 
+  it("includes dimensions, format, and EXIF orientation in the PSNR rejection message", async () => {
+    const original = await createReferencedImageFixture("BinData/image1.png", await createGradientPng(96, 64));
+    const output = await createReferencedImageFixture("BinData/image1.png", await createInvertedGradientPng(96, 64));
+
+    await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(
+      /96×64 png ori=1 → 96×64 png ori=1/
+    );
+  });
+
   it("allows aggressive-mode outputs that stay above the PSNR minimum", async () => {
     const gradient = await createGradientPng(192, 128);
     const originalJpeg = await sharp(gradient).jpeg({ quality: 95 }).toBuffer();

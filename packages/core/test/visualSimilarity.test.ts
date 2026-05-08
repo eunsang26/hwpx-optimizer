@@ -1,16 +1,16 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
-  computePerceptualHash,
+  computeAverageHash,
   hammingDistance,
-  PERCEPTUAL_HASH_BIT_COUNT
+  AVERAGE_HASH_BIT_COUNT
 } from "../src/visualSimilarity.js";
 
-describe("visualSimilarity", () => {
+describe("computeAverageHash", () => {
   it("yields zero distance for identical images", async () => {
     const data = await gradientImage(64, 64);
-    const left = await computePerceptualHash(data);
-    const right = await computePerceptualHash(data);
+    const left = await computeAverageHash(data);
+    const right = await computeAverageHash(data);
     expect(left).not.toBeNull();
     expect(right).not.toBeNull();
     expect(hammingDistance(left!, right!)).toBe(0);
@@ -19,8 +19,8 @@ describe("visualSimilarity", () => {
   it("yields a small distance for compressed-but-equivalent JPEG vs PNG", async () => {
     const png = await gradientImage(96, 64);
     const jpeg = await sharp(png).jpeg({ quality: 80 }).toBuffer();
-    const left = await computePerceptualHash(png);
-    const right = await computePerceptualHash(jpeg);
+    const left = await computeAverageHash(png);
+    const right = await computeAverageHash(jpeg);
     expect(left).not.toBeNull();
     expect(right).not.toBeNull();
     const distance = hammingDistance(left!, right!);
@@ -28,20 +28,20 @@ describe("visualSimilarity", () => {
   });
 
   it("yields a large distance for visibly different images", async () => {
-    const left = await computePerceptualHash(await gradientImage(64, 64));
-    const right = await computePerceptualHash(await invertedGradientImage(64, 64));
+    const left = await computeAverageHash(await gradientImage(64, 64));
+    const right = await computeAverageHash(await invertedGradientImage(64, 64));
     expect(left).not.toBeNull();
     expect(right).not.toBeNull();
     expect(hammingDistance(left!, right!)).toBeGreaterThanOrEqual(20);
   });
 
   it("returns null for non-image buffers without throwing", async () => {
-    const result = await computePerceptualHash(Buffer.from("not an image"));
+    const result = await computeAverageHash(Buffer.from("not an image"));
     expect(result).toBeNull();
   });
 
   it("uses a 64-bit hash", () => {
-    expect(PERCEPTUAL_HASH_BIT_COUNT).toBe(64);
+    expect(AVERAGE_HASH_BIT_COUNT).toBe(64);
   });
 });
 

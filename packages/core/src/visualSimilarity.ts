@@ -3,11 +3,28 @@ import sharp from "sharp";
 const HASH_SIZE = 8;
 const HASH_PIXELS = HASH_SIZE * HASH_SIZE;
 
-export type PerceptualHash = {
+export type AverageHash = {
   bits: Uint8Array;
 };
 
-export async function computePerceptualHash(data: Buffer): Promise<PerceptualHash | null> {
+/**
+ * Computes an 8x8 grayscale average hash (aHash). NOT a DCT-based pHash.
+ *
+ * Pipeline: removeAlpha → grayscale → resize to 8x8 (lanczos3) → bit_i = pixel_i >= mean ? 1 : 0.
+ *
+ * Use cases that fit aHash:
+ *   - cheap near-duplicate candidate listing
+ *   - fingerprinting for cache keys
+ *
+ * Use cases that DO NOT fit aHash (have stronger metrics elsewhere):
+ *   - quality drift after compression  → use computePsnr (imagePreview.ts)
+ *   - byte-identical duplicate detection → use SHA-256 (analyzer.ts)
+ *   - flip/rotate detection             → compare candidate transforms explicitly
+ *
+ * The HWPX optimizer does not currently use this function in any release path.
+ * It is retained as a building block for future near-duplicate candidate reports.
+ */
+export async function computeAverageHash(data: Buffer): Promise<AverageHash | null> {
   try {
     const raw = await sharp(data)
       .removeAlpha()
@@ -31,7 +48,7 @@ export async function computePerceptualHash(data: Buffer): Promise<PerceptualHas
   }
 }
 
-export function hammingDistance(left: PerceptualHash, right: PerceptualHash): number {
+export function hammingDistance(left: AverageHash, right: AverageHash): number {
   let distance = 0;
   for (let index = 0; index < HASH_PIXELS; index += 1) {
     if (left.bits[index] !== right.bits[index]) distance += 1;
@@ -39,4 +56,4 @@ export function hammingDistance(left: PerceptualHash, right: PerceptualHash): nu
   return distance;
 }
 
-export const PERCEPTUAL_HASH_BIT_COUNT = HASH_PIXELS;
+export const AVERAGE_HASH_BIT_COUNT = HASH_PIXELS;

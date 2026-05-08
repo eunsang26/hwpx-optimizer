@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { XMLParser } from "fast-xml-parser";
+import sharp from "sharp";
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { computePsnr } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
@@ -109,11 +110,53 @@ async function verifyVisualSimilarityPairs(
     const psnr = await computePsnr(pair.original.data, pair.output.data);
     if (psnr === null) continue;
     if (psnr < minimum) {
+      const diff = await describeImagePairDiff(pair.original, pair.output);
+      const suffix = diff ? ` ${diff}` : "";
       throw new Error(
-        `Verification failed: ${mode} mode image quality too low (PSNR ${psnr.toFixed(2)} dB, minimum ${minimum} dB) for ${pair.original.path}`
+        `Verification failed: ${mode} mode image quality too low (PSNR ${psnr.toFixed(2)} dB, minimum ${minimum} dB) for ${pair.original.path}${suffix}`
       );
     }
   }
+}
+
+async function describeImagePairDiff(original: HwpxEntry, output: HwpxEntry): Promise<string> {
+  const [originalMeta, outputMeta] = await Promise.all([
+    safeReadMetadata(original.data),
+    safeReadMetadata(output.data)
+  ]);
+  const originalDescription = formatImageMetadata(originalMeta);
+  const outputDescription = formatImageMetadata(outputMeta);
+  if (!originalDescription && !outputDescription) return "";
+  return `(${originalDescription || "?"} → ${outputDescription || "?"})`;
+}
+
+type ImageMetadataSnapshot = {
+  width?: number;
+  height?: number;
+  orientation?: number;
+  format?: string;
+};
+
+async function safeReadMetadata(data: Buffer): Promise<ImageMetadataSnapshot> {
+  try {
+    const meta = await sharp(data).metadata();
+    return {
+      width: meta.width,
+      height: meta.height,
+      orientation: meta.orientation,
+      format: typeof meta.format === "string" ? meta.format : undefined
+    };
+  } catch {
+    return {};
+  }
+}
+
+function formatImageMetadata(meta: ImageMetadataSnapshot): string {
+  const parts: string[] = [];
+  if (meta.width && meta.height) parts.push(`${meta.width}×${meta.height}`);
+  if (meta.format) parts.push(meta.format);
+  parts.push(`ori=${meta.orientation ?? 1}`);
+  return parts.join(" ");
 }
 
 function verifyAdvancedImage(input: {

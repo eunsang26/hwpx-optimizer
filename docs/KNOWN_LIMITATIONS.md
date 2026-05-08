@@ -6,7 +6,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 - Desktop drag/drop now uses Electron `webUtils.getPathForFile`, but final hands-on QA on Windows for repeated files, very large packages, and settings persistence remains pending.
 - Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
-- JPEG quality drift estimation (PSNR/SSIM continuous metric) is not yet implemented; the perceptual-hash gate covers gross structural drift only.
+- SSIM-based image quality scoring is not yet implemented. Balanced and aggressive mode quality gating currently uses PSNR plus image format/dimension invariants.
 
 ## Verified Release Infrastructure
 
@@ -15,7 +15,7 @@ This file separates release blockers from non-blockers so the project does not o
 - GitHub Actions Windows release gate passes on `windows-latest` when artifact upload is disabled for manual runs.
 - Artifact upload is optional for manual workflow runs to avoid Actions storage quota failures. Tag builds still upload release artifacts.
 - Local Windows portable packaging verifies that the `sharp` Windows native runtime is unpacked outside `app.asar`.
-- Verifier checks mode-specific image format and dimension invariants and now also rejects balanced/aggressive outputs whose perceptual-hash distance exceeds the per-mode threshold (balanced 16/64, aggressive 22/64) — see `packages/core/src/visualSimilarity.ts`.
+- Verifier checks mode-specific image format and dimension invariants and rejects balanced/aggressive outputs whose per-image PSNR drops below the per-mode minimum (balanced 18 dB, aggressive 14 dB). The reject error includes the original/output dimensions, format, and EXIF orientation to make catastrophic regressions (rotation bake, dimension swap) self-explanatory. PSNR computation lives in `packages/core/src/imagePreview.ts`. The 8x8 average hash in `packages/core/src/visualSimilarity.ts` is retained as a building block for future near-duplicate candidate listing but is NOT used as a release gate.
 - HWPX zip-slip defense: reader rejects entries whose path contains `..`, `.`, drive letters, leading slash, or empty segments.
 
 ## Non-Blockers For Continued Development
