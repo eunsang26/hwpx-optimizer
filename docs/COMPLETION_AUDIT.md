@@ -70,7 +70,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Windows installer CI path | `.github/workflows/windows-release.yml`, GitHub Actions run `25554203465` | `npm run release:check:win` passed on Windows runner with artifact upload disabled |
 | Windows installer | Windows runner built the Windows installer through `release:check:win`; upload is optional for manual runs and enabled for tag builds | Verified in CI |
 | Windows portable GUI smoke | User copied `release/HWPX Optimizer-0.1.0-x64.exe` to a Windows desktop, launched it, optimized a sample HWPX, and confirmed the generated result opens | Verified basic runtime path |
-| Windows portable all-mode smoke | User ran `scripts/windows-portable-smoke.ps1` from the extracted portable folder with `-Sample .\sample2.hwpx -AllModes`; checksum matched and safe, balanced, and aggressive desktop smoke modes passed | Verified |
+| Windows portable all-mode smoke | User ran `scripts/windows-portable-smoke.ps1` from the extracted portable folder with `-Sample .\sample2.hwpx -AllModes`; checksum matched and safe, balanced, and aggressive desktop smoke modes passed. Re-run on 2026-05-09 against the 0.1.0 ZIP build with `-Sample ..\sample3.hwpx -AllModes`; safe, balanced, and aggressive modes all reported "Desktop smoke passed". Inner-EXE checksum warning is expected when running from inside the extracted ZIP. | Verified |
 | Clean Windows full QA | all-mode portable smoke is verified; broader manual QA for drag/drop, settings persistence, repeated files, and more real-world documents remains | Partially verified |
 | Sample files excluded | `.gitignore` sample rules; `git ls-files 'sample*'` returned empty | Verified |
 
