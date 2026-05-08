@@ -4,12 +4,12 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop app is not packaged for Windows yet.
+- Desktop app has packaging scripts, but a Windows installer artifact has not been built and tested yet.
 - Desktop app has not passed a GUI smoke test in this environment.
 - Verifier has safe-mode image format and dimension checks, but balanced/aggressive policies still need stricter comparison rules.
 - XML reference updates are not fully structural in all advanced paths.
 - Long-running desktop optimization is not isolated in a worker or child process.
-- No Windows release artifact has been built or tested.
+- No Windows release artifact has been built or tested on a clean Windows machine.
 
 ## Non-Blockers For Continued Development
 

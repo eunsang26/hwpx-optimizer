@@ -41,6 +41,20 @@ Start desktop from the built main process:
 npm run desktop:start
 ```
 
+Create an unpacked desktop build for the current platform:
+
+```bash
+npm run desktop:pack
+```
+
+The packaging script stores Electron downloads under the project-local `.npm-cache/electron` directory. This avoids relying on a writable home-directory cache in locked-down environments.
+
+Create a Windows x64 installer build:
+
+```bash
+npm run desktop:dist:win
+```
+
 ## Verification Before Release
 
 Run:
@@ -64,22 +78,22 @@ Sample files and generated sample reports are local-only and ignored by git.
 
 ## Desktop Packaging Status
 
-Packaging is not complete yet. The project currently starts Electron in development mode after `npm run build`.
+The project has an `electron-builder` configuration and scripts for unpacked desktop builds and Windows x64 installer builds.
 
-Recommended next packaging step:
+Before treating a build as releasable:
 
-1. Add `electron-builder` as a dev dependency.
-2. Add app metadata and Windows target config.
-3. Build an unpacked Windows directory first.
-4. Verify the app can analyze and optimize a local HWPX file.
-5. Add installer target only after unpacked app checks pass.
+1. Run `npm run desktop:pack`.
+2. Launch the unpacked app on the target platform.
+3. Verify the app can analyze and optimize a local HWPX file.
+4. Run `npm run desktop:dist:win` on a Windows release machine or a verified cross-build environment.
+5. Install the generated artifact on a clean Windows machine.
 
 Suggested future scripts:
 
 ```json
 {
-  "desktop:pack": "npm run build && electron-builder --dir",
-  "desktop:dist": "npm run build && electron-builder --win"
+  "desktop:dist:linux": "npm run build && electron-builder --linux",
+  "desktop:dist:mac": "npm run build && electron-builder --mac"
 }
 ```
 

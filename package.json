@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "Local HWPX document size optimizer",
+  "author": "HWPX Optimizer contributors",
+  "main": "apps/desktop/dist/main.js",
   "workspaces": [
     "apps/desktop",
     "packages/core",
@@ -12,9 +15,45 @@
     "build": "tsc -b packages/core packages/cli apps/desktop && npm run desktop:assets",
     "desktop:assets": "node apps/desktop/scripts/copy-assets.mjs",
     "desktop:start": "npm run build && electron apps/desktop/dist/main.js",
+    "desktop:pack": "npm run build && node scripts/run-electron-builder.mjs --dir",
+    "desktop:dist:win": "npm run build && node scripts/run-electron-builder.mjs --win --x64",
     "test": "vitest run",
     "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
     "cli": "tsx --conditions=development packages/cli/src/index.ts"
+  },
+  "build": {
+    "appId": "local.hwpxoptimizer.app",
+    "productName": "HWPX Optimizer",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "extraMetadata": {
+      "main": "apps/desktop/dist/main.js"
+    },
+    "files": [
+      "package.json",
+      "apps/desktop/dist/**/*",
+      "packages/core/dist/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    }
   },
   "dependencies": {
     "fast-xml-parser": "^4.5.0",
@@ -24,6 +63,7 @@
   "devDependencies": {
     "@types/node": "^20.12.12",
     "electron": "^42.0.0",
+    "electron-builder": "^26.8.1",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4"
