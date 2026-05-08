@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { decodeBmp } from "./bmp.js";
 import type { HwpxEntryKind, HwpxPackage, ImageInventoryItem, PackageAnalysis } from "./types.js";
 
 export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnalysis> {
@@ -27,6 +28,19 @@ export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnaly
 
 async function inspectImage(path: string, data: Buffer, size: number): Promise<ImageInventoryItem> {
   const extension = extensionFormat(path);
+  const bmp = decodeBmp(data);
+  if (bmp) {
+    return {
+      path,
+      size,
+      format: "bmp",
+      width: bmp.width,
+      height: bmp.height,
+      hasMetadata: false,
+      isBmpCandidate: true
+    };
+  }
+
   try {
     const metadata = await sharp(data).metadata();
     const metadataFormat = metadata.format ? String(metadata.format) : undefined;

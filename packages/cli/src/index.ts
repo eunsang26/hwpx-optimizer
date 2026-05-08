@@ -2,7 +2,7 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { analyzeHwpxBuffer, optimizeHwpxBufferSafe } from "@hwpx-optimizer/core";
+import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "@hwpx-optimizer/core";
 
 export async function runCli(argv: string[]): Promise<number> {
   const [command, inputPath, ...rest] = argv;
@@ -23,11 +23,16 @@ export async function runCli(argv: string[]): Promise<number> {
     }
 
     if (command === "optimize") {
-      if ((options.mode ?? "safe") !== "safe") {
-        console.error("Only --mode safe is supported in v1");
+      const mode = options.mode ?? "safe";
+      if (mode !== "safe" && mode !== "balanced") {
+        console.error("Only --mode safe and --mode balanced are supported");
         return 1;
       }
-      const result = await optimizeHwpxBufferSafe(await readFile(inputPath));
+      const input = await readFile(inputPath);
+      const result =
+        mode === "balanced"
+          ? await optimizeHwpxBufferBalanced(input, { actions: parseActionList(options.actions) })
+          : await optimizeHwpxBufferSafe(input);
       const outputPath = options.out ?? defaultOutputPath(inputPath);
       const reportPath = options.report ?? `${outputPath}.report.json`;
       await writeFile(outputPath, result.output);
@@ -71,7 +76,15 @@ function defaultOutputPath(inputPath: string): string {
 function printUsage(): void {
   console.error("Usage:");
   console.error("  hwpx-opt analyze <file.hwpx> [--report report.json]");
-  console.error("  hwpx-opt optimize <file.hwpx> --mode safe [--out output.hwpx] [--report report.json]");
+  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced [--actions action1,action2] [--out output.hwpx] [--report report.json]");
+}
+
+function parseActionList(value?: string): string[] | undefined {
+  if (!value) return undefined;
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

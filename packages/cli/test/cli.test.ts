@@ -33,4 +33,18 @@ describe("runCli", () => {
     const report = JSON.parse(await readFile(reportPath, "utf8")) as { optimizedSize: number };
     expect(report.optimizedSize).toBeGreaterThan(0);
   });
+
+  it("accepts balanced mode", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const outputPath = join(dir, "output.hwpx");
+    const reportPath = join(dir, "report.json");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const code = await runCli(["optimize", inputPath, "--mode", "balanced", "--out", outputPath, "--report", reportPath]);
+
+    expect(code).toBe(0);
+    const report = JSON.parse(await readFile(reportPath, "utf8")) as { originalSize: number };
+    expect(report.originalSize).toBeGreaterThan(0);
+  });
 });

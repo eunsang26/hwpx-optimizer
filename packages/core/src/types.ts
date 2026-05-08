@@ -41,12 +41,28 @@ export type ReferenceGraph = {
 export type OptimizationAction =
   | { type: "minify-xml"; target: string; risk: "safe" }
   | { type: "strip-metadata"; target: string; risk: "safe" }
+  | { type: "convert-bmp-to-png"; target: string; risk: "medium"; outputPath: string }
+  | { type: "resize-jpeg"; target: string; risk: "medium" }
   | { type: "remove-unused"; target: string; risk: "safe" }
   | { type: "repack-zip"; target: "*"; risk: "safe" };
 
 export type OptimizationPlan = {
-  mode: "safe";
+  mode: "safe" | "balanced";
   actions: OptimizationAction[];
+};
+
+export type OptimizationOpportunity = {
+  id: string;
+  label: string;
+  action: "strip-metadata" | "convert-bmp-to-png" | "resize-jpeg" | "optimize-png" | "clean-shape-comment";
+  target: string;
+  estimatedSavingBytes: number;
+  beforeSize: number;
+  afterSize: number;
+  confidence: "exact" | "estimated";
+  risk: "safe" | "medium" | "high";
+  visualImpact: "none" | "low" | "medium" | "high";
+  defaultEnabledIn: Array<"safe" | "balanced" | "aggressive">;
 };
 
 export type AppliedAction = {
@@ -67,5 +83,6 @@ export type OptimizationReport = {
     applied: AppliedAction[];
     skipped: AppliedAction[];
   };
+  opportunities: OptimizationOpportunity[];
   warnings: string[];
 };
