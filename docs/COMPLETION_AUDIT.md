@@ -244,6 +244,7 @@ Desktop smoke evidence:
 - Synthetic local HWPX is generated under `.tmp/electron-smoke`.
 - Local real HWPX desktop smoke can be run by setting `HWPX_OPT_SMOKE_INPUT`; this was verified with ignored `sample2.hwpx`.
 - Desktop worker paths for `balanced` and `aggressive` were verified by adding `HWPX_OPT_SMOKE_MODE`.
+- `HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=safe npm run desktop:smoke`: passed.
 - `HWPX_OPT_SMOKE_INPUT=sample3.hwpx HWPX_OPT_SMOKE_MODE=aggressive npm run desktop:smoke`: passed.
 - Renderer preload API runs analyze, optimize, progress events, and verify.
 - Smoke also opens the Settings panel and checks the output folder controls render.
