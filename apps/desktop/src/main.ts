@@ -27,7 +27,7 @@ async function createWindow(): Promise<BrowserWindow> {
     show: !isSmokeTest,
     title: "HWPX Optimizer",
     webPreferences: {
-      preload: join(import.meta.dirname, "preload.js"),
+      preload: join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -37,21 +37,28 @@ async function createWindow(): Promise<BrowserWindow> {
   return mainWindow;
 }
 
-app.whenReady().then(async () => {
-  registerIpc();
-  await createWindow();
+app.whenReady()
+  .then(async () => {
+    registerIpc();
+    const window = await createWindow();
 
-  if (isSmokeTest) {
-    app.quit();
-    return;
-  }
-
-  app.on("activate", async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      await createWindow();
+    if (isSmokeTest) {
+      await runSmokeAssertions(window);
+      app.quit();
+      return;
     }
+
+    app.on("activate", async () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        await createWindow();
+      }
+    });
+  })
+  .catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    app.quit();
   });
-});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
@@ -129,6 +136,43 @@ async function saveSettings(patch: Partial<DesktopSettings>): Promise<DesktopSet
 
 function settingsPath(): string {
   return join(app.getPath("userData"), "settings.json");
+}
+
+async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
+  const result = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        if (document.body.dataset.appReady === "true" || attempts > 50) {
+          resolve({
+            title: document.title,
+            fileName: document.getElementById("file-name")?.textContent,
+            appReady: document.body.dataset.appReady,
+            preloadApi: document.body.dataset.preloadApi
+          });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    title?: string;
+    fileName?: string;
+    appReady?: string;
+    preloadApi?: string;
+  };
+
+  if (result.title !== "HWPX Optimizer") {
+    throw new Error(`Desktop smoke failed: unexpected title ${String(result.title)}`);
+  }
+  if (result.fileName !== "Drop an HWPX file") {
+    throw new Error(`Desktop smoke failed: renderer did not load expected start view`);
+  }
+  if (result.appReady !== "true" || result.preloadApi !== "ready") {
+    throw new Error(`Desktop smoke failed: renderer/preload init did not complete`);
+  }
 }
 
 function runOptimizeWorker(

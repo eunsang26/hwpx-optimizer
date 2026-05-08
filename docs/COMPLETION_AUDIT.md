@@ -41,6 +41,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Report generator | `packages/core/src/report.ts`, `packages/core/test/report.test.ts` | Implemented |
 | CLI commands | `packages/cli/src/index.ts` | Implemented: analyze, report, verify, optimize, batch |
 | Desktop app | `apps/desktop/src/*` | Implemented |
+| Desktop preload bridge | `apps/desktop/src/preload.cjs`, `apps/desktop/src/preload.ts`, `xvfb-run -a npm run desktop:smoke` | Verified |
 | Desktop file select and drag/drop | `apps/desktop/src/renderer.ts`, `index.html` | Implemented |
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
 | Desktop mode selection | renderer radio controls | Implemented |

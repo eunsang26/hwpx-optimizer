@@ -83,7 +83,8 @@ Desktop smoke tests cover:
 
 - Electron main process startup.
 - Renderer asset loading.
-- Preload bridge availability during window load.
+- Renderer initialization through the preload bridge.
+- Required desktop APIs including optimize progress and cancel.
 
 The optimization worker is covered by TypeScript build checks and desktop packaging checks. A richer end-to-end GUI test that starts an optimization from the renderer is still a release-hardening task.
 

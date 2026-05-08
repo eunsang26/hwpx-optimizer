@@ -141,6 +141,8 @@ async function init(): Promise<void> {
   window.hwpxOptimizer.onOptimizeProgress((progress) => {
     renderProgress(progress.percent, progress.item);
   });
+  document.body.dataset.preloadApi = "ready";
+  document.body.dataset.appReady = "true";
 }
 
 async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
