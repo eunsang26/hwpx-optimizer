@@ -50,6 +50,13 @@ Desktop smoke test with a local real HWPX sample:
 HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run desktop:smoke
 ```
 
+Desktop smoke test with a local real HWPX sample and a non-safe mode:
+
+```bash
+HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=balanced npm run desktop:smoke
+HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=aggressive npm run desktop:smoke
+```
+
 ## Current Coverage
 
 Core tests cover:
@@ -92,10 +99,10 @@ Desktop smoke tests cover:
 - Renderer initialization through the preload bridge.
 - Required desktop APIs including optimize progress and cancel.
 - Synthetic HWPX analysis through renderer-to-main IPC, or a local real HWPX when `HWPX_OPT_SMOKE_INPUT` is set.
-- Safe optimization through the desktop worker thread.
+- Safe optimization through the desktop worker thread by default, or balanced/aggressive when `HWPX_OPT_SMOKE_MODE` is set.
 - Verification of the optimized output through the renderer API.
 
-The smoke test uses a synthetic local HWPX under `.tmp/electron-smoke` by default. When `HWPX_OPT_SMOKE_INPUT` is set, the app copies that local file into `.tmp/electron-smoke` for the run. It does not upload data, and sample files remain ignored by git.
+The smoke test uses a synthetic local HWPX under `.tmp/electron-smoke` by default. When `HWPX_OPT_SMOKE_INPUT` is set, the app copies that local file into `.tmp/electron-smoke` for the run. `HWPX_OPT_SMOKE_MODE` can be `safe`, `balanced`, or `aggressive`; invalid values fall back to `safe`. It does not upload data, and sample files remain ignored by git.
 
 ## Fixture Strategy
 

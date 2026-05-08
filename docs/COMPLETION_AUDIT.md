@@ -42,7 +42,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | CLI commands | `packages/cli/src/index.ts` | Implemented: analyze, report, verify, optimize, batch |
 | Desktop app | `apps/desktop/src/*` | Implemented |
 | Desktop preload bridge | `apps/desktop/src/preload.cjs`, `apps/desktop/src/preload.ts`, `xvfb-run -a npm run desktop:smoke` | Verified |
-| Desktop renderer IPC E2E | `npm run desktop:smoke` creates a synthetic HWPX, analyzes, optimizes through worker, and verifies output; `HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run desktop:smoke` verifies the same IPC path with a local real sample | Verified |
+| Desktop renderer IPC E2E | `npm run desktop:smoke` creates a synthetic HWPX, analyzes, optimizes through worker, and verifies output; `HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=balanced/aggressive npm run desktop:smoke` verifies the same IPC path with a local real sample and non-safe modes | Verified |
 | Desktop file select and drag/drop | `apps/desktop/src/renderer.ts`, `index.html` | Implemented |
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
 | Desktop mode selection | renderer radio controls | Implemented |
@@ -76,6 +76,8 @@ npm run desktop:pack
 npm run desktop:pack:win
 npm audit --json
 HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run desktop:smoke
+HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=balanced npm run desktop:smoke
+HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=aggressive npm run desktop:smoke
 npm run cli -- analyze sample2.hwpx --report sample2.latest-analysis.json
 npm run cli -- optimize sample2.hwpx --mode balanced --out sample2.latest-balanced.hwpx --report sample2.latest-balanced.report.json
 npm run cli -- verify sample2.latest-balanced.hwpx
@@ -98,6 +100,7 @@ Desktop smoke evidence:
 
 - Synthetic local HWPX is generated under `.tmp/electron-smoke`.
 - Local real HWPX desktop smoke can be run by setting `HWPX_OPT_SMOKE_INPUT`; this was verified with ignored `sample2.hwpx`.
+- Desktop worker paths for `balanced` and `aggressive` were verified by adding `HWPX_OPT_SMOKE_MODE`.
 - Renderer preload API runs analyze, safe optimize, and verify.
 - Worker progress event is observed.
 

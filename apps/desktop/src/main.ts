@@ -144,6 +144,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   await mkdir(smokeDir, { recursive: true });
   const smokeInputPath = join(smokeDir, "smoke.hwpx");
   const smokeSourcePath = process.env.HWPX_OPT_SMOKE_INPUT;
+  const smokeMode = parseSmokeMode(process.env.HWPX_OPT_SMOKE_MODE);
   await writeFile(
     smokeInputPath,
     smokeSourcePath ? await readFileFs(resolve(smokeSourcePath)) : await createSmokeHwpxFixture()
@@ -191,7 +192,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       const analysis = await window.hwpxOptimizer.analyze(${JSON.stringify(smokeInputPath)});
       const result = await window.hwpxOptimizer.optimize({
         filePath: ${JSON.stringify(smokeInputPath)},
-        mode: "safe",
+        mode: ${JSON.stringify(smokeMode)},
         outputDirectory: ${JSON.stringify(smokeDir)}
       });
       const verification = await window.hwpxOptimizer.verify(result.outputPath);
@@ -227,6 +228,11 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (!workflow.progressCount || workflow.progressCount < 1) {
     throw new Error("Desktop smoke failed: no optimization progress was emitted");
   }
+}
+
+function parseSmokeMode(value: string | undefined): OptimizationMode {
+  if (value === "safe" || value === "balanced" || value === "aggressive") return value;
+  return "safe";
 }
 
 async function createSmokeHwpxFixture(): Promise<Buffer> {
