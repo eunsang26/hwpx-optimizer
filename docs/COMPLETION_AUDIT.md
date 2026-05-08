@@ -48,7 +48,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop mode selection | renderer radio controls | Implemented |
 | Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with stage-based progress |
 | Desktop result details | `apps/desktop/src/index.html`, `apps/desktop/src/renderer.ts` | Implemented with output file, output folder, and JSON report open actions |
-| Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `main.ts` local settings | Implemented |
+| Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts` local settings | Implemented with default mode, output folder controls, report saving, overwrite prevention, and aggressive warning preferences |
 | Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
 | Local-only operation | no network/server code in app path; filesystem-only APIs | Implemented |
 | Original file preservation and overwrite prevention | output path generation in `desktopService.ts`; CLI non-overwrite suffixing; CLI rejects `optimize --out`, `optimize --report`, `analyze --report`, and `report --out` when the final target is the original input path | Implemented and regression-tested |
@@ -117,6 +117,14 @@ Latest portable release gate after commit `9b9a2b7`:
 - `release:verify-manifest`: verified 1 release artifact.
 
 Latest desktop report-action verification after commit `96f7adf`:
+
+- `npm run typecheck`: passed.
+- `npm run build`: passed.
+- `npm run desktop:smoke`: passed.
+- `npm test`: passed, 13 files / 54 tests.
+- `npm run release:hygiene`: passed.
+
+Latest settings output-folder verification after commit `97d2d9f`:
 
 - `npm run typecheck`: passed.
 - `npm run build`: passed.
