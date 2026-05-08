@@ -1,9 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
-import { mkdir, readFile as readFileFs, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile as readFileFs, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
-import { defaultDesktopSettings, verifyDesktopFile } from "./main/desktopService.js";
+import { defaultDesktopSettings, previewImageDiffs, verifyDesktopFile } from "./main/desktopService.js";
 import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
 import type { DesktopSettings, OptimizationMode } from "./main/desktopService.js";
 
@@ -69,6 +69,28 @@ function registerIpc(): void {
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
 
+  ipcMain.handle("dialog:select-hwpx-many", async () => {
+    const options: OpenDialogOptions = {
+      properties: ["openFile", "multiSelections"],
+      filters: [{ name: "HWPX 문서", extensions: ["hwpx"] }]
+    };
+    const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+    return result.canceled ? null : result.filePaths;
+  });
+
+  ipcMain.handle("dialog:select-hwpx-folder", async () => {
+    const options: OpenDialogOptions = { properties: ["openDirectory"] };
+    const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const directory = result.filePaths[0];
+    const entries = await readdir(directory, { withFileTypes: true });
+    const files = entries
+      .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name))
+      .map((entry) => join(directory, entry.name))
+      .sort();
+    return { directory, files };
+  });
+
   ipcMain.handle("dialog:select-directory", async () => {
     const options: OpenDialogOptions = {
       properties: ["openDirectory"]
@@ -84,7 +106,10 @@ function registerIpc(): void {
 
   ipcMain.handle(
     "hwpx:optimize",
-    async (_event, input: { filePath: string; mode: OptimizationMode; outputDirectory?: string }) => {
+    async (
+      _event,
+      input: { filePath: string; mode: OptimizationMode; outputDirectory?: string; actions?: string[] }
+    ) => {
       if (activeOptimizeWorker) {
         throw new Error("Another optimization is already running.");
       }
@@ -104,6 +129,12 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("hwpx:verify", async (_event, filePath: string) => verifyDesktopFile(filePath));
+
+  ipcMain.handle(
+    "hwpx:image-preview",
+    async (_event, input: { originalPath: string; optimizedPath: string; maxItems?: number }) =>
+      previewImageDiffs(input.originalPath, input.optimizedPath, { maxItems: input.maxItems })
+  );
 
   ipcMain.handle("shell:show-item", async (_event, filePath: string) => {
     shell.showItemInFolder(filePath);
@@ -273,7 +304,13 @@ function runAnalyzeWorker(filePath: string): Promise<DesktopAnalysisResult> {
 }
 
 function runOptimizeWorker(
-  input: { filePath: string; mode: OptimizationMode; outputDirectory?: string; settings: DesktopSettings },
+  input: {
+    filePath: string;
+    mode: OptimizationMode;
+    outputDirectory?: string;
+    actions?: string[];
+    settings: DesktopSettings;
+  },
   onProgress: (progress: { percent: number; item: string }) => void
 ): Promise<DesktopOptimizeResult> {
   return new Promise((resolve, reject) => {

@@ -28,7 +28,7 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
 }> {
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
-  const graph = buildReferenceGraph(pkg);
+  const graph = analysis.referenceGraph ?? buildReferenceGraph(pkg);
   const plan = createSafeOptimizationPlan({ pkg, analysis, graph });
   const optimized = await applySafeOptimizationPlan({ pkg, plan });
   const opportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied);

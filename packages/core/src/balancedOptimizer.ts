@@ -5,6 +5,8 @@ import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageBalancedWithBudget } from "./opportunities.js";
 import type { ImageOptimizationProfile } from "./opportunities.js";
 import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan } from "./types.js";
+import { getStringAttribute, getXmlAttributes, isXmlNode, setAttribute } from "./xmlNode.js";
+import type { XmlNode } from "./xmlNode.js";
 
 const IMAGE_TRANSFORM_CONCURRENCY = 4;
 
@@ -222,8 +224,6 @@ function updateManifestReferences(
   }
 }
 
-type XmlNode = Record<string, unknown>;
-
 function parseXml(xml: string): XmlNode[] {
   const parser = new XMLParser({ ignoreAttributes: false, preserveOrder: true, attributeNamePrefix: "" });
   return parser.parse(xml) as XmlNode[];
@@ -248,24 +248,22 @@ function updateHrefAttributes(
 
   let changed = false;
   for (const node of nodes) {
-    if (!node || typeof node !== "object") continue;
-    const item = node as XmlNode;
-    const attributes = item[":@"];
-    if (attributes && typeof attributes === "object") {
-      const attrs = attributes as Record<string, unknown>;
-      const href = attrs.href;
-      if (typeof href === "string") {
+    if (!isXmlNode(node)) continue;
+    const attrs = getXmlAttributes(node);
+    if (attrs) {
+      const href = getStringAttribute(attrs, "href");
+      if (href) {
         const updatedPath = pathUpdates.get(href);
         if (updatedPath) {
-          attrs.href = updatedPath;
+          setAttribute(attrs, "href", updatedPath);
           const updatedMediaType = mediaTypeUpdates.get(updatedPath);
-          if (updatedMediaType) attrs["media-type"] = updatedMediaType;
+          if (updatedMediaType) setAttribute(attrs, "media-type", updatedMediaType);
           changed = true;
         }
       }
     }
 
-    for (const value of Object.values(item)) {
+    for (const value of Object.values(node)) {
       if (Array.isArray(value) && updateHrefAttributes(value, pathUpdates, mediaTypeUpdates)) {
         changed = true;
       }
@@ -296,29 +294,27 @@ function updateDuplicateImageNodes(
   let changed = false;
   for (let index = nodes.length - 1; index >= 0; index -= 1) {
     const node = nodes[index];
-    if (!node || typeof node !== "object") continue;
-    const item = node as XmlNode;
-    const attributes = item[":@"];
-    if (attributes && typeof attributes === "object") {
-      const attrs = attributes as Record<string, unknown>;
-      const href = attrs.href;
-      const id = attrs.id;
-      if ((typeof href === "string" && removePaths.has(href)) || (typeof id === "string" && removeIds.has(id))) {
+    if (!isXmlNode(node)) continue;
+    const attrs = getXmlAttributes(node);
+    if (attrs) {
+      const href = getStringAttribute(attrs, "href");
+      const id = getStringAttribute(attrs, "id");
+      if ((href && removePaths.has(href)) || (id && removeIds.has(id))) {
         nodes.splice(index, 1);
         changed = true;
         continue;
       }
-      const binaryItemIDRef = attrs.binaryItemIDRef;
-      if (typeof binaryItemIDRef === "string") {
+      const binaryItemIDRef = getStringAttribute(attrs, "binaryItemIDRef");
+      if (binaryItemIDRef) {
         const updatedId = idUpdates.get(binaryItemIDRef);
         if (updatedId) {
-          attrs.binaryItemIDRef = updatedId;
+          setAttribute(attrs, "binaryItemIDRef", updatedId);
           changed = true;
         }
       }
     }
 
-    for (const value of Object.values(item)) {
+    for (const value of Object.values(node)) {
       if (Array.isArray(value) && updateDuplicateImageNodes(value, idUpdates, removeIds, removePaths)) {
         changed = true;
       }
@@ -331,16 +327,14 @@ function updateDuplicateImageNodes(
 function collectManifestItems(nodes: unknown, idByPath: Map<string, string>): void {
   if (!Array.isArray(nodes)) return;
   for (const node of nodes) {
-    if (!node || typeof node !== "object") continue;
-    const item = node as XmlNode;
-    const attributes = item[":@"];
-    if (attributes && typeof attributes === "object") {
-      const attrs = attributes as Record<string, unknown>;
-      if (typeof attrs.id === "string" && typeof attrs.href === "string") {
-        idByPath.set(attrs.href, attrs.id);
-      }
+    if (!isXmlNode(node)) continue;
+    const attrs = getXmlAttributes(node);
+    if (attrs) {
+      const id = getStringAttribute(attrs, "id");
+      const href = getStringAttribute(attrs, "href");
+      if (id && href) idByPath.set(href, id);
     }
-    for (const value of Object.values(item)) {
+    for (const value of Object.values(node)) {
       if (Array.isArray(value)) collectManifestItems(value, idByPath);
     }
   }

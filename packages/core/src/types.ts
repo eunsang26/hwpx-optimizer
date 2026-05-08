@@ -46,6 +46,7 @@ export type PackageAnalysis = {
   duplicateImages: DuplicateImageGroup[];
   unusedBinData: UnusedResource[];
   riskyResources: RiskyResource[];
+  referenceGraph?: ReferenceGraph;
 };
 
 export type DuplicateImageGroup = {

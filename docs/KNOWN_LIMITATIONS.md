@@ -4,9 +4,9 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop app has automated launch smoke coverage and user-confirmed Windows portable smoke across safe, balanced, and aggressive modes, but broader manual QA is still required for drag/drop, settings persistence, repeated files, and more real-world documents.
-- Verifier checks mode-specific image format and dimension invariants, but it does not yet measure visual similarity or JPEG quality drift.
+- Desktop drag/drop now uses Electron `webUtils.getPathForFile`, but final hands-on QA on Windows for repeated files, very large packages, and settings persistence remains pending.
 - Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
+- JPEG quality drift estimation (PSNR/SSIM continuous metric) is not yet implemented; the perceptual-hash gate covers gross structural drift only.
 
 ## Verified Release Infrastructure
 
@@ -15,6 +15,8 @@ This file separates release blockers from non-blockers so the project does not o
 - GitHub Actions Windows release gate passes on `windows-latest` when artifact upload is disabled for manual runs.
 - Artifact upload is optional for manual workflow runs to avoid Actions storage quota failures. Tag builds still upload release artifacts.
 - Local Windows portable packaging verifies that the `sharp` Windows native runtime is unpacked outside `app.asar`.
+- Verifier checks mode-specific image format and dimension invariants and now also rejects balanced/aggressive outputs whose perceptual-hash distance exceeds the per-mode threshold (balanced 16/64, aggressive 22/64) — see `packages/core/src/visualSimilarity.ts`.
+- HWPX zip-slip defense: reader rejects entries whose path contains `..`, `.`, drive letters, leading slash, or empty segments.
 
 ## Non-Blockers For Continued Development
 

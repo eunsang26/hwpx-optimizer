@@ -11,11 +11,12 @@ import type {
   ImageDisplayReference,
   ImageInventoryItem,
   PackageAnalysis,
+  ReferenceGraph,
   RiskyResource,
   UnusedResource
 } from "./types.js";
 
-export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnalysis> {
+export async function analyzeHwpxPackage(pkg: HwpxPackage, options: { graph?: ReferenceGraph } = {}): Promise<PackageAnalysis> {
   const entriesByKind: Record<HwpxEntryKind, number> = {
     xml: 0,
     image: 0,
@@ -54,14 +55,16 @@ export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnaly
     inspectImage(image.path, image.data, image.size, image.displayRefs)
   );
 
+  const graph = options.graph ?? buildReferenceGraph(pkg);
   return {
     totalSize,
     entriesByKind,
     categorySizes,
     images,
     duplicateImages: findDuplicateImages(pkg),
-    unusedBinData: findUnusedBinData(pkg),
-    riskyResources: findRiskyResources(pkg)
+    unusedBinData: findUnusedBinData(pkg, graph),
+    riskyResources: findRiskyResources(pkg),
+    referenceGraph: graph
   };
 }
 
@@ -170,8 +173,7 @@ function findDuplicateImages(pkg: HwpxPackage): DuplicateImageGroup[] {
     .sort((left, right) => right.wastedBytes - left.wastedBytes);
 }
 
-function findUnusedBinData(pkg: HwpxPackage): UnusedResource[] {
-  const graph = buildReferenceGraph(pkg);
+function findUnusedBinData(pkg: HwpxPackage, graph: ReferenceGraph): UnusedResource[] {
   const entriesByPath = new Map(pkg.entries.map((entry) => [entry.path, entry]));
   return [...graph.resources.values()]
     .filter((resource) => !resource.referenced && resource.path.startsWith("BinData/"))

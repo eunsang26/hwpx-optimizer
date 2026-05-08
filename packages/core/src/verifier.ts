@@ -50,8 +50,12 @@ async function verifyAgainstOriginal(input: { original: HwpxPackage; output: Hwp
   const originalGraph = buildReferenceGraph(input.original);
   const outputGraph = buildReferenceGraph(input.output);
   const outputPaths = new Set(input.output.entries.map((entry) => entry.path));
-  const originalImages = new Map((await analyzeHwpxPackage(input.original)).images.map((image) => [image.path, image]));
-  const outputImages = new Map((await analyzeHwpxPackage(input.output)).images.map((image) => [image.path, image]));
+  const originalImages = new Map(
+    (await analyzeHwpxPackage(input.original, { graph: originalGraph })).images.map((image) => [image.path, image])
+  );
+  const outputImages = new Map(
+    (await analyzeHwpxPackage(input.output, { graph: outputGraph })).images.map((image) => [image.path, image])
+  );
   const originalDuplicatePathsByPath = duplicateImagePathsByPath(input.original);
   const visualPairs: Array<{ original: HwpxEntry; output: HwpxEntry }> = [];
   const originalImageEntries = new Map(input.original.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));

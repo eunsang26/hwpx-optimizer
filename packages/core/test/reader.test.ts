@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readHwpxPackage } from "../src/reader.js";
+import { isSafePackagePath, readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture } from "./fixtures.js";
 
 describe("readHwpxPackage", () => {
@@ -34,6 +34,20 @@ describe("readHwpxPackage", () => {
     });
 
     await expect(readHwpxPackage(fixture)).rejects.toThrow(/missing required files/i);
+  });
+
+  it("isSafePackagePath flags traversal and absolute segments", () => {
+    expect(isSafePackagePath("BinData/foo.png")).toBe(true);
+    expect(isSafePackagePath("Contents/section0.xml")).toBe(true);
+    expect(isSafePackagePath("mimetype")).toBe(true);
+    expect(isSafePackagePath("../etc/passwd")).toBe(false);
+    expect(isSafePackagePath("BinData/../escape")).toBe(false);
+    expect(isSafePackagePath("./local")).toBe(false);
+    expect(isSafePackagePath("/absolute/path")).toBe(false);
+    expect(isSafePackagePath("\\absolute\\path")).toBe(false);
+    expect(isSafePackagePath("C:\\Windows\\system32")).toBe(false);
+    expect(isSafePackagePath("BinData//double")).toBe(false);
+    expect(isSafePackagePath("")).toBe(false);
   });
 
   it("fails clearly for an HWP binary buffer", async () => {

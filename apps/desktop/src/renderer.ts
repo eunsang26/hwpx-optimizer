@@ -1,4 +1,15 @@
-import { createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
+import { applyOptimizationResultToBatchItem, summarizeBatchItems } from "./shared/batchView.js";
+import { escapeHtml, fileNameFromPath, looksLikeOptimizedFileName } from "./shared/format.js";
+import { actionLabel, modeLabel, modeWarningMessage, progressLabel, warningLabel } from "./shared/labels.js";
+import {
+  actionToggleHtml,
+  batchItemRowHtml,
+  categoryBarHtml,
+  imageComparePairHtml,
+  metricHtml
+} from "./shared/templates.js";
+import { createActionToggles, createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
+import type { ActionToggleViewModel } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
 
@@ -8,6 +19,17 @@ declare global {
   }
 }
 
+type BatchItem = {
+  path: string;
+  fileName: string;
+  status: "pending" | "running" | "done" | "failed" | "cancelled";
+  outputPath?: string;
+  reportPath?: string;
+  savedBytes?: number;
+  savedPercent?: number;
+  error?: string;
+};
+
 type AppState = {
   filePath?: string;
   report?: OptimizationReport;
@@ -15,9 +37,19 @@ type AppState = {
   mode: "safe" | "balanced" | "aggressive";
   outputDirectory?: string;
   settings?: DesktopSettings;
+  actionSelections: Map<string, boolean>;
+  batchItems: BatchItem[];
+  batchRunning: boolean;
+  batchCancelled: boolean;
 };
 
-const state: AppState = { mode: "safe" };
+const state: AppState = {
+  mode: "safe",
+  actionSelections: new Map(),
+  batchItems: [],
+  batchRunning: false,
+  batchCancelled: false
+};
 
 type DesktopSettings = {
   defaultMode: AppState["mode"];
@@ -33,7 +65,14 @@ const fileName = requireElement("file-name");
 const fileMeta = requireElement("file-meta");
 const analyzeButton = requireButton("analyze-button");
 const chooseButton = requireButton("choose-button");
+const chooseManyButton = requireButton("choose-many-button");
+const chooseFolderButton = requireButton("choose-folder-button");
 const optimizeButton = requireButton("optimize-button");
+const batchPanel = requireElement("batch-panel");
+const batchList = requireElement("batch-list");
+const batchSummary = requireElement("batch-summary");
+const batchClearButton = requireButton("batch-clear");
+const batchRunButton = requireButton("batch-run");
 const outputButton = requireButton("output-button");
 const settingsButton = requireButton("settings-button");
 const settingsPanel = requireElement("settings-panel");
@@ -43,13 +82,26 @@ const progressPanel = requireElement("progress-panel");
 const progressBar = requireElement("progress-bar");
 const progressItem = requireElement("progress-item");
 const analysisGrid = requireElement("analysis-grid");
+const categoryChart = requireElement("category-chart");
 const opportunityList = requireElement("opportunity-list");
+const actionPanel = requireElement("action-panel");
+const actionPanelHint = requireElement("action-panel-hint");
+const actionCheckboxes = requireElement("action-checkboxes");
+const actionSelectAll = requireButton("action-select-all");
+const actionSelectNone = requireButton("action-select-none");
+const actionReset = requireButton("action-reset");
 const warningList = requireElement("warning-list");
 const statusText = requireElement("status-text");
 const modeInputs = Array.from(document.querySelectorAll<HTMLInputElement>("input[name='mode']"));
 const openFileButton = requireButton("open-file-button");
 const openReportButton = requireButton("open-report-button");
 const openFolderButton = requireButton("open-folder-button");
+const reverifyButton = requireButton("reverify-button");
+const compareButton = requireButton("compare-button");
+const compareModal = requireElement("compare-modal");
+const compareList = requireElement("compare-list");
+const compareSummary = requireElement("compare-summary");
+const compareCloseButton = requireButton("compare-close");
 const cancelButton = requireButton("cancel-button");
 const settingDefaultMode = requireSelect("setting-default-mode");
 const settingSaveNext = requireInput("setting-save-next");
@@ -75,6 +127,33 @@ async function init(): Promise<void> {
     if (selected) await loadFile(selected);
   });
 
+  chooseManyButton.addEventListener("click", async () => {
+    const selected = await window.hwpxOptimizer.selectHwpxMany();
+    if (selected && selected.length > 0) enterBatchMode(selected);
+  });
+
+  chooseFolderButton.addEventListener("click", async () => {
+    const result = await window.hwpxOptimizer.selectHwpxFolder();
+    if (!result) return;
+    if (result.files.length === 0) {
+      setStatus(`${result.directory} 안에 HWPX 파일이 없습니다.`);
+      return;
+    }
+    enterBatchMode(result.files);
+  });
+
+  batchClearButton.addEventListener("click", () => {
+    if (state.batchRunning) return;
+    state.batchItems = [];
+    renderBatchList();
+    batchPanel.hidden = true;
+    setStatus("배치 목록을 비웠습니다.");
+  });
+
+  batchRunButton.addEventListener("click", () => {
+    void runBatch();
+  });
+
   analyzeButton.addEventListener("click", async () => {
     if (state.filePath) await analyzeFile(state.filePath);
   });
@@ -90,6 +169,9 @@ async function init(): Promise<void> {
 
   optimizeButton.addEventListener("click", optimizeCurrentFile);
   cancelButton.addEventListener("click", async () => {
+    if (state.batchRunning) {
+      state.batchCancelled = true;
+    }
     await window.hwpxOptimizer.cancelOptimize();
     setStatus("최적화를 취소했습니다.");
     setIdle();
@@ -101,14 +183,40 @@ async function init(): Promise<void> {
     () => state.result?.reportPath && window.hwpxOptimizer.openPath(state.result.reportPath)
   );
   openFolderButton.addEventListener("click", () => state.result && window.hwpxOptimizer.showItem(state.result.outputPath));
+  reverifyButton.addEventListener("click", reverifyCurrentResult);
+  compareButton.addEventListener("click", openImageCompareModal);
+  compareCloseButton.addEventListener("click", closeImageCompareModal);
+  compareModal.addEventListener("click", (event) => {
+    if (event.target === compareModal) closeImageCompareModal();
+  });
 
   for (const input of modeInputs) {
     input.addEventListener("change", () => {
       state.mode = input.value as AppState["mode"];
       void saveSettings({ defaultMode: state.mode });
       renderModeWarning();
+      resetActionSelectionsToMode();
+      renderActionPanel();
     });
   }
+
+  actionSelectAll.addEventListener("click", () => {
+    setAllActionSelections(true);
+    renderActionPanel();
+  });
+  actionSelectNone.addEventListener("click", () => {
+    setAllActionSelections(false);
+    renderActionPanel();
+  });
+  actionReset.addEventListener("click", () => {
+    resetActionSelectionsToMode();
+    renderActionPanel();
+  });
+  actionCheckboxes.addEventListener("change", (event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target || target.type !== "checkbox") return;
+    state.actionSelections.set(target.value, target.checked);
+  });
 
   settingDefaultMode.addEventListener("change", () => {
     const nextMode = settingDefaultMode.value as AppState["mode"];
@@ -148,21 +256,42 @@ async function init(): Promise<void> {
   dropZone.addEventListener("drop", async (event) => {
     event.preventDefault();
     dropZone.classList.remove("is-over");
-    const file = event.dataTransfer?.files.item(0);
-    if (!file) {
+    const dropped = event.dataTransfer?.files;
+    if (!dropped || dropped.length === 0) {
       setStatus("HWPX 파일만 선택할 수 있습니다.");
       return;
     }
-    const path = resolveDroppedFilePath(file);
-    if (path && path.toLowerCase().endsWith(".hwpx")) {
-      await loadFile(path);
+    const paths: string[] = [];
+    let unresolved = 0;
+    let nonHwpx = 0;
+    for (const file of Array.from(dropped)) {
+      const path = resolveDroppedFilePath(file);
+      if (!path) {
+        if (file.name.toLowerCase().endsWith(".hwpx")) unresolved += 1;
+        else nonHwpx += 1;
+        continue;
+      }
+      if (path.toLowerCase().endsWith(".hwpx")) {
+        paths.push(path);
+      } else {
+        nonHwpx += 1;
+      }
+    }
+    if (paths.length === 0) {
+      if (unresolved > 0) {
+        setStatus("드롭한 파일의 경로를 확인할 수 없습니다. 파일 선택 버튼을 사용하세요.");
+      } else if (nonHwpx > 0) {
+        setStatus("HWPX 파일만 선택할 수 있습니다.");
+      } else {
+        setStatus("처리할 HWPX 파일을 찾지 못했습니다.");
+      }
       return;
     }
-    if (file.name.toLowerCase().endsWith(".hwpx")) {
-      setStatus("드롭한 파일의 경로를 확인할 수 없습니다. 파일 선택 버튼을 사용하세요.");
+    if (paths.length === 1) {
+      await loadFile(paths[0]);
       return;
     }
-    setStatus("HWPX 파일만 선택할 수 있습니다.");
+    enterBatchMode(paths);
   });
 
   renderModeWarning();
@@ -195,10 +324,21 @@ function renderSettings(settings: DesktopSettings): void {
 }
 
 async function loadFile(path: string): Promise<void> {
+  if (state.batchRunning) {
+    setStatus("일괄 처리 중에는 새 파일을 열 수 없습니다. 완료 후 다시 시도하세요.");
+    return;
+  }
+  state.batchItems = [];
+  batchPanel.hidden = true;
   state.filePath = path;
   state.report = undefined;
   state.result = undefined;
+  state.actionSelections.clear();
+  actionPanel.hidden = true;
+  actionCheckboxes.innerHTML = "";
   resultPanel.hidden = true;
+  compareButton.disabled = true;
+  closeImageCompareModal();
   const baseName = path.split(/[\\/]/).pop() ?? path;
   fileName.textContent = baseName;
   fileMeta.textContent = path;
@@ -210,16 +350,14 @@ async function loadFile(path: string): Promise<void> {
   await analyzeFile(path);
 }
 
-function looksLikeOptimizedFileName(name: string): boolean {
-  return /\.optimized(?:-\d+)?\.hwpx$/i.test(name);
-}
-
 async function analyzeFile(path: string): Promise<void> {
   try {
     setBusy("문서를 분석하는 중입니다...");
     const response = await window.hwpxOptimizer.analyze(path);
     state.report = response.report;
+    resetActionSelectionsToMode();
     renderAnalysis(response.report);
+    renderActionPanel();
     optimizeButton.disabled = false;
     setStatus("분석이 완료되었습니다. 최적화 방식을 선택하세요.");
   } catch (error) {
@@ -238,7 +376,8 @@ async function optimizeCurrentFile(): Promise<void> {
     const response = await window.hwpxOptimizer.optimize({
       filePath: state.filePath,
       mode: state.mode,
-      outputDirectory: state.outputDirectory
+      outputDirectory: state.outputDirectory,
+      actions: selectedActionsForOptimize()
     });
     state.result = response;
     renderResult(response.report, response.outputPath, response.reportPath);
@@ -259,15 +398,23 @@ function renderProgress(percent: number, item: string): void {
 function renderAnalysis(report: OptimizationReport): void {
   const view = createAnalysisViewModel(report);
   analysisGrid.innerHTML = [
-    metric("원본 용량", view.originalSizeLabel),
-    metric("이미지", String(view.imageCount)),
-    metric("BMP 후보", String(view.bmpCount)),
-    metric("메타데이터", String(view.metadataImageCount)),
-    metric("미사용 리소스", String(view.unusedResourceCount)),
-    metric("중복 이미지", String(view.duplicateGroupCount)),
-    metric("주의 리소스", String(view.riskyResourceCount)),
-    metric("예상 절감", view.estimatedSavingLabel)
+    metricHtml("원본 용량", view.originalSizeLabel),
+    metricHtml("이미지", String(view.imageCount)),
+    metricHtml("BMP 후보", String(view.bmpCount)),
+    metricHtml("메타데이터", String(view.metadataImageCount)),
+    metricHtml("미사용 리소스", String(view.unusedResourceCount)),
+    metricHtml("중복 이미지", String(view.duplicateGroupCount)),
+    metricHtml("주의 리소스", String(view.riskyResourceCount)),
+    metricHtml("예상 절감", view.estimatedSavingLabel)
   ].join("");
+
+  if (view.categoryBreakdown.length === 0) {
+    categoryChart.hidden = true;
+    categoryChart.innerHTML = "";
+  } else {
+    categoryChart.hidden = false;
+    categoryChart.innerHTML = view.categoryBreakdown.map(categoryBarHtml).join("");
+  }
 
   opportunityList.innerHTML =
     view.topOpportunities.length === 0
@@ -288,78 +435,66 @@ function renderAnalysis(report: OptimizationReport): void {
 function renderResult(report: OptimizationReport, outputPath: string, reportPath?: string): void {
   resultPanel.hidden = false;
   resultSummary.innerHTML = [
-    metric("결과 용량", formatBytes(report.optimizedSize ?? report.originalSize)),
-    metric("절감 용량", formatBytes(report.savedBytes ?? 0)),
-    metric("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`),
-    metric("수행 작업", `${report.actions.applied.length}개`)
+    metricHtml("결과 용량", formatBytes(report.optimizedSize ?? report.originalSize)),
+    metricHtml("절감 용량", formatBytes(report.savedBytes ?? 0)),
+    metricHtml("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`),
+    metricHtml("수행 작업", `${report.actions.applied.length}개`)
   ].join("");
   requireElement("output-path").textContent = outputPath;
   requireElement("report-path").textContent = reportPath ?? "리포트 저장이 꺼져 있습니다.";
   openReportButton.disabled = !reportPath;
+  reverifyButton.disabled = false;
+  compareButton.disabled = state.mode === "safe";
+}
+
+async function openImageCompareModal(): Promise<void> {
+  if (!state.filePath || !state.result) return;
+  compareModal.hidden = false;
+  compareSummary.textContent = "이미지 변경 사항을 불러오는 중입니다...";
+  compareList.innerHTML = "<p class=\"empty\">잠시만 기다려주세요...</p>";
+  try {
+    const pairs = await window.hwpxOptimizer.previewImageDiffs({
+      originalPath: state.filePath,
+      optimizedPath: state.result.outputPath
+    });
+    if (pairs.length === 0) {
+      compareSummary.textContent = "변경된 이미지가 없습니다.";
+      compareList.innerHTML = "<p class=\"empty\">표시할 이미지 변경 사항이 없습니다.</p>";
+      return;
+    }
+    compareSummary.textContent = `상위 ${pairs.length}개 이미지 변경 사항을 표시합니다.`;
+    compareList.innerHTML = pairs.map(imageComparePairHtml).join("");
+  } catch (error) {
+    compareSummary.textContent = "이미지 비교를 불러오지 못했습니다.";
+    compareList.innerHTML = `<p class="empty">${escapeHtml(errorMessage(error))}</p>`;
+  }
+}
+
+function closeImageCompareModal(): void {
+  compareModal.hidden = true;
+  compareList.innerHTML = "";
+}
+
+async function reverifyCurrentResult(): Promise<void> {
+  if (!state.result) return;
+  reverifyButton.disabled = true;
+  setStatus("결과 파일을 다시 검증하는 중입니다...");
+  try {
+    const response = await window.hwpxOptimizer.verify(state.result.outputPath);
+    setStatus(response.ok ? "결과 파일이 유효합니다." : "검증 결과를 받지 못했습니다.");
+  } catch (error) {
+    setStatus(`검증 실패: ${errorMessage(error)}`);
+  } finally {
+    reverifyButton.disabled = !state.result;
+  }
 }
 
 function renderModeWarning(): void {
   const warning = requireElement("mode-warning");
-  warning.textContent =
-    state.mode === "aggressive" && state.settings?.showAggressiveWarning !== false
-      ? "최대 압축은 이미지 품질 차이가 보일 수 있습니다."
-      : state.mode === "balanced"
-        ? "균형 모드는 표시 크기를 기준으로 큰 이미지와 BMP를 줄입니다."
-        : "안전 모드는 문서 외형 변화 가능성이 낮은 작업만 수행합니다.";
-}
-
-function modeLabel(mode: AppState["mode"]): string {
-  if (mode === "safe") return "안전";
-  if (mode === "balanced") return "균형";
-  return "최대 압축";
-}
-
-function actionLabel(action: string): string {
-  const labels: Record<string, string> = {
-    "remove-exif": "이미지 메타데이터 제거",
-    "compress-image": "이미지 무손실 최적화",
-    "optimize-png": "PNG 무손실 최적화",
-    "resize-jpeg": "큰 JPEG 리사이즈",
-    "resize-png": "큰 PNG 리사이즈",
-    "convert-bmp-to-png": "BMP를 PNG로 변환",
-    "remove-unused": "미사용 리소스 제거",
-    "minify-xml": "문서 XML 정리",
-    "repack-zip": "HWPX 재압축",
-    "clean-shape-comment": "이미지 설명 메타데이터 정리",
-    "consolidate-duplicate-images": "중복 이미지 참조 정리"
-  };
-  return labels[action] ?? action;
-}
-
-function progressLabel(item: string): string {
-  const labels: Record<string, string> = {
-    "Reading HWPX package": "HWPX 문서 구조를 읽는 중입니다",
-    "Writing optimized document": "최적화된 문서를 저장하는 중입니다",
-    "Writing JSON report": "JSON 리포트를 저장하는 중입니다",
-    "Verifying optimized document": "결과 문서를 검증하는 중입니다",
-    "Optimization complete": "최적화가 완료되었습니다",
-    "Optimization cancelled": "최적화가 취소되었습니다"
-  };
-  if (item.startsWith("Optimizing document in ")) {
-    const mode = item.includes("aggressive") ? "최대 압축" : item.includes("balanced") ? "균형" : "안전";
-    return `${mode} 모드로 문서를 최적화하는 중입니다`;
-  }
-  return labels[item] ?? item;
-}
-
-function warningLabel(warning: string): string {
-  const labels: Array<[RegExp, string]> = [
-    [/OLE objects can be user-visible/i, "OLE 객체는 문서에서 보일 수 있어 자동으로 제거하지 않습니다."],
-    [/Safe mode did not produce a smaller file/i, "안전 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."],
-    [/Balanced mode did not produce a smaller file/i, "균형 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."],
-    [/Aggressive mode did not produce a smaller file/i, "최대 압축 모드에서 더 작은 결과가 나오지 않아 원본 바이트를 유지했습니다."],
-    [/may introduce visible image quality differences/i, "최대 압축은 이미지 품질 차이가 보일 수 있습니다."]
-  ];
-  return labels.find(([pattern]) => pattern.test(warning))?.[1] ?? warning;
-}
-
-function metric(label: string, value: string): string {
-  return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  warning.textContent = modeWarningMessage({
+    mode: state.mode,
+    showAggressiveWarning: state.settings?.showAggressiveWarning ?? true
+  });
 }
 
 function setBusy(message: string): void {
@@ -383,6 +518,166 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function currentActionToggles(): ActionToggleViewModel[] {
+  if (!state.report) return [];
+  return createActionToggles(state.report, state.mode);
+}
+
+function resetActionSelectionsToMode(): void {
+  state.actionSelections.clear();
+  for (const toggle of currentActionToggles()) {
+    state.actionSelections.set(toggle.action, toggle.defaultEnabledForMode);
+  }
+}
+
+function setAllActionSelections(enabled: boolean): void {
+  for (const toggle of currentActionToggles()) {
+    state.actionSelections.set(toggle.action, enabled);
+  }
+}
+
+function isActionSelected(toggle: ActionToggleViewModel): boolean {
+  const stored = state.actionSelections.get(toggle.action);
+  return stored ?? toggle.defaultEnabledForMode;
+}
+
+function selectedActionsForOptimize(): string[] | undefined {
+  const toggles = currentActionToggles();
+  if (state.mode === "safe" || toggles.length === 0) return undefined;
+  const selected = toggles.filter(isActionSelected).map((toggle) => toggle.action);
+  if (selected.length === toggles.length) return undefined;
+  return selected;
+}
+
+function renderActionPanel(): void {
+  const toggles = currentActionToggles();
+  if (state.mode === "safe" || toggles.length === 0) {
+    actionPanel.hidden = true;
+    actionCheckboxes.innerHTML = "";
+    return;
+  }
+  actionPanel.hidden = false;
+  actionPanelHint.textContent =
+    state.mode === "aggressive"
+      ? "최대 압축 모드: 기본값은 모든 항목이 켜져 있습니다. 시각 영향이 큰 항목을 끌 수 있습니다."
+      : "균형 모드: 기본값은 시각 영향이 낮은 항목 위주입니다. 필요에 따라 조정하세요.";
+  actionCheckboxes.innerHTML = toggles
+    .map((toggle) => actionToggleHtml(toggle, isActionSelected(toggle)))
+    .join("");
+}
+
+function enterBatchMode(paths: string[]): void {
+  if (state.batchRunning) return;
+  state.filePath = undefined;
+  state.report = undefined;
+  state.result = undefined;
+  state.actionSelections.clear();
+  resultPanel.hidden = true;
+  actionPanel.hidden = true;
+  actionCheckboxes.innerHTML = "";
+  fileName.textContent = "여러 HWPX 일괄 처리";
+  fileMeta.textContent = `${paths.length}개 파일`;
+  analyzeButton.disabled = true;
+  optimizeButton.disabled = true;
+
+  const seen = new Set(state.batchItems.map((item) => item.path));
+  for (const path of paths) {
+    if (seen.has(path)) continue;
+    seen.add(path);
+    state.batchItems.push({
+      path,
+      fileName: fileNameFromPath(path),
+      status: "pending"
+    });
+  }
+  batchPanel.hidden = false;
+  renderBatchList();
+  setStatus(`${state.batchItems.length}개 파일이 일괄 처리 대기 중입니다.`);
+}
+
+function renderBatchList(): void {
+  batchSummary.textContent = summarizeBatchItems(state.batchItems, { running: state.batchRunning }).text;
+  batchList.innerHTML = state.batchItems
+    .map((item, index) => batchItemRowHtml(item, index, { running: state.batchRunning }))
+    .join("");
+  batchRunButton.disabled = state.batchRunning || !state.batchItems.some((item) => item.status === "pending");
+  batchClearButton.disabled = state.batchRunning;
+  batchRunButton.textContent = state.batchRunning ? "처리 중..." : "일괄 최적화";
+  batchList.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach((button) => {
+    button.addEventListener("click", () => handleBatchRowAction(button));
+  });
+}
+
+function handleBatchRowAction(button: HTMLButtonElement): void {
+  const action = button.dataset.action;
+  const index = Number(button.dataset.index ?? "-1");
+  const item = Number.isInteger(index) ? state.batchItems[index] : undefined;
+  if (!item) return;
+  if (action === "open-file" && item.outputPath) {
+    void window.hwpxOptimizer.openPath(item.outputPath);
+  } else if (action === "show-folder" && item.outputPath) {
+    void window.hwpxOptimizer.showItem(item.outputPath);
+  } else if (action === "open-report" && item.reportPath) {
+    void window.hwpxOptimizer.openPath(item.reportPath);
+  } else if (action === "remove") {
+    if (state.batchRunning) return;
+    state.batchItems.splice(index, 1);
+    if (state.batchItems.length === 0) {
+      batchPanel.hidden = true;
+      setStatus("배치 목록을 비웠습니다.");
+    }
+    renderBatchList();
+  }
+}
+
+async function runBatch(): Promise<void> {
+  if (state.batchRunning || state.batchItems.length === 0) return;
+  state.batchRunning = true;
+  state.batchCancelled = false;
+  cancelButton.disabled = false;
+  optimizeButton.disabled = true;
+  analyzeButton.disabled = true;
+  progressPanel.hidden = false;
+  renderBatchList();
+  setStatus(`${state.batchItems.filter((item) => item.status === "pending").length}개 파일을 처리합니다.`);
+
+  for (let index = 0; index < state.batchItems.length; index += 1) {
+    const item = state.batchItems[index];
+    if (item.status !== "pending") continue;
+    if (state.batchCancelled) {
+      item.status = "cancelled";
+      continue;
+    }
+    item.status = "running";
+    renderBatchList();
+    renderProgress(5, `${item.fileName} 처리 시작`);
+    try {
+      const response = await window.hwpxOptimizer.optimize({
+        filePath: item.path,
+        mode: state.mode,
+        outputDirectory: state.outputDirectory
+      });
+      Object.assign(item, applyOptimizationResultToBatchItem(item, response));
+    } catch (error) {
+      if (state.batchCancelled) {
+        item.status = "cancelled";
+      } else {
+        item.status = "failed";
+        item.error = errorMessage(error);
+      }
+    }
+    renderBatchList();
+  }
+
+  state.batchRunning = false;
+  cancelButton.disabled = true;
+  progressPanel.hidden = true;
+  renderBatchList();
+  const completed = state.batchItems.filter((item) => item.status === "done").length;
+  const failed = state.batchItems.filter((item) => item.status === "failed").length;
+  setStatus(`일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}.`);
+}
+
 function resolveDroppedFilePath(file: File): string {
   const legacyPath = (file as File & { path?: string }).path;
   if (typeof legacyPath === "string" && legacyPath.length > 0) return legacyPath;
@@ -391,13 +686,6 @@ function resolveDroppedFilePath(file: File): string {
     return api.getPathForFile(file);
   }
   return "";
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => {
-    const entities: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
-    return entities[char] ?? char;
-  });
 }
 
 function requireElement(id: string): HTMLElement {

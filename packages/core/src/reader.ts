@@ -18,6 +18,9 @@ export async function readHwpxPackage(input: Buffer): Promise<HwpxPackage> {
   const entries: HwpxEntry[] = [];
   for (const [path, file] of Object.entries(zip.files)) {
     if (file.dir) continue;
+    if (!isSafePackagePath(path)) {
+      throw new Error(`Invalid HWPX package: unsafe entry path ${path}`);
+    }
     const data = Buffer.from(await file.async("nodebuffer"));
     entries.push({
       path,
@@ -29,6 +32,17 @@ export async function readHwpxPackage(input: Buffer): Promise<HwpxPackage> {
 
   validateHwpxStructure(entries);
   return { entries };
+}
+
+export function isSafePackagePath(path: string): boolean {
+  if (!path) return false;
+  if (path.startsWith("/") || path.startsWith("\\")) return false;
+  if (/^[a-z]:/i.test(path)) return false;
+  const segments = path.replace(/\\/g, "/").split("/");
+  for (const segment of segments) {
+    if (segment === "" || segment === "." || segment === "..") return false;
+  }
+  return true;
 }
 
 function isHwpBinary(input: Buffer): boolean {

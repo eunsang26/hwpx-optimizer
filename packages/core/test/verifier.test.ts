@@ -72,7 +72,56 @@ describe("verifyHwpxOutput", () => {
 
     await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).resolves.toBeUndefined();
   });
+
+  it("rejects balanced-mode outputs whose perceptual hash drifted past the threshold", async () => {
+    const original = await createReferencedImageFixture("BinData/image1.png", await createGradientPng(96, 64));
+    const output = await createReferencedImageFixture("BinData/image1.png", await createInvertedGradientPng(96, 64));
+
+    await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(
+      /visual difference too large/
+    );
+  });
+
+  it("allows aggressive-mode outputs that stay within the perceptual hash threshold", async () => {
+    const gradient = await createGradientPng(192, 128);
+    const originalJpeg = await sharp(gradient).jpeg({ quality: 95 }).toBuffer();
+    const recompressed = await sharp(gradient).jpeg({ quality: 60 }).toBuffer();
+    const original = await createReferencedImageFixture("BinData/image1.jpg", originalJpeg);
+    const output = await createReferencedImageFixture("BinData/image1.jpg", recompressed);
+
+    await expect(verifyHwpxOutput(output, { original, mode: "aggressive" })).resolves.toBeUndefined();
+  });
 });
+
+async function createGradientPng(width: number, height: number): Promise<Buffer> {
+  const channels = 3;
+  const raw = Buffer.alloc(width * height * channels);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * channels;
+      const intensity = Math.round(((x + y) / (width + height - 2)) * 255);
+      raw[offset] = intensity;
+      raw[offset + 1] = intensity;
+      raw[offset + 2] = intensity;
+    }
+  }
+  return sharp(raw, { raw: { width, height, channels } }).png().toBuffer();
+}
+
+async function createInvertedGradientPng(width: number, height: number): Promise<Buffer> {
+  const channels = 3;
+  const raw = Buffer.alloc(width * height * channels);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * channels;
+      const intensity = 255 - Math.round(((x + y) / (width + height - 2)) * 255);
+      raw[offset] = intensity;
+      raw[offset + 1] = intensity;
+      raw[offset + 2] = intensity;
+    }
+  }
+  return sharp(raw, { raw: { width, height, channels } }).png().toBuffer();
+}
 
 async function createReferencedImageFixture(path: string, image: Buffer): Promise<Buffer> {
   return createHwpxFixture({

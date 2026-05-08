@@ -15,6 +15,10 @@ import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
 
 export async function runCli(argv: string[]): Promise<number> {
   const [command, inputPath, ...rest] = argv;
+  if (command === "list-actions") {
+    printActionList();
+    return 0;
+  }
   if (!command || !inputPath) {
     printUsage();
     return 1;
@@ -156,7 +160,89 @@ function printUsage(): void {
   console.error("  hwpx-opt report <file.hwpx> [--out report.txt]");
   console.error("  hwpx-opt verify <file.hwpx>");
   console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json]");
-  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive --out output-directory");
+  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory]");
+  console.error("  hwpx-opt list-actions");
+}
+
+const ACTION_CATALOG: Array<{
+  action: string;
+  description: string;
+  modes: string;
+  risk: string;
+  visualImpact: string;
+}> = [
+  {
+    action: "strip-metadata",
+    description: "Remove JPEG EXIF/IPTC/comment segments without recompressing the image",
+    modes: "safe, balanced, aggressive",
+    risk: "safe",
+    visualImpact: "none"
+  },
+  {
+    action: "optimize-png",
+    description: "Re-encode PNG losslessly with maximum DEFLATE",
+    modes: "safe, balanced, aggressive",
+    risk: "safe",
+    visualImpact: "none"
+  },
+  {
+    action: "minify-xml",
+    description: "Re-serialize XML entries without insignificant whitespace",
+    modes: "safe",
+    risk: "safe",
+    visualImpact: "none"
+  },
+  {
+    action: "remove-unused",
+    description: "Drop BinData entries not referenced by any XML",
+    modes: "safe",
+    risk: "safe",
+    visualImpact: "none"
+  },
+  {
+    action: "convert-bmp-to-png",
+    description: "Decode BMP and re-encode as PNG (with optional resize)",
+    modes: "balanced, aggressive",
+    risk: "medium",
+    visualImpact: "low~medium"
+  },
+  {
+    action: "resize-jpeg",
+    description: "Resize and re-encode oversized JPEGs to display-size budget with MozJPEG",
+    modes: "balanced, aggressive",
+    risk: "medium",
+    visualImpact: "medium"
+  },
+  {
+    action: "clean-shape-comment",
+    description: "Strip private filename / dimension lines inside <hp:shapeComment> blocks",
+    modes: "balanced, aggressive",
+    risk: "safe",
+    visualImpact: "none"
+  },
+  {
+    action: "consolidate-duplicate-images",
+    description: "Redirect duplicate image references to a canonical resource and drop the duplicate file",
+    modes: "balanced, aggressive",
+    risk: "medium",
+    visualImpact: "none"
+  },
+  {
+    action: "repack-zip",
+    description: "Always-on final ZIP repack with DEFLATE level 9",
+    modes: "safe, balanced, aggressive",
+    risk: "safe",
+    visualImpact: "none"
+  }
+];
+
+function printActionList(): void {
+  console.log("Available --actions keys:");
+  for (const item of ACTION_CATALOG) {
+    console.log(`- ${item.action}`);
+    console.log(`    ${item.description}`);
+    console.log(`    modes: ${item.modes} | risk: ${item.risk} | visual impact: ${item.visualImpact}`);
+  }
 }
 
 function printAnalysisSummary(inputPath: string, report: OptimizationReport): void {
@@ -221,23 +307,31 @@ async function runBatch(
     .sort();
   const results: BatchFileResult[] = [];
 
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
     const sourcePath = join(inputDir, file);
+    const progressPrefix = `[${index + 1}/${files.length}] ${file}`;
+    let stage: BatchFailureStage = "read-input";
     try {
-      const result = await optimizeByMode(await readFile(sourcePath), mode, options);
+      const buffer = await readFile(sourcePath);
+      stage = "optimize";
+      const result = await optimizeByMode(buffer, mode, options);
+      stage = "resolve-output-path";
       const requestedOutputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
       const outputPath = overwrite ? requestedOutputPath : await nextAvailablePath(requestedOutputPath);
       const requestedReportPath = `${outputPath}.report.json`;
       const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
+      stage = "write-output";
       await writeFile(outputPath, result.output);
+      stage = "write-report";
       await writeFile(reportPath, JSON.stringify(result.report, null, 2));
       results.push({ input: file, status: "optimized", output: outputPath, report: reportPath });
+      const savedBytes = result.report.savedBytes ?? 0;
+      const savedPercent = result.report.savedPercent ?? 0;
+      console.log(`${progressPrefix} optimized -${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
     } catch (error) {
-      results.push({
-        input: file,
-        status: "failed",
-        error: error instanceof Error ? error.message : String(error)
-      });
+      const message = error instanceof Error ? error.message : String(error);
+      results.push({ input: file, status: "failed", stage, error: message });
+      console.error(`${progressPrefix} failed at ${stage}: ${message}`);
     }
   }
 
@@ -322,9 +416,11 @@ function parseActionList(value?: string): string[] | undefined {
 
 type OptimizationMode = "safe" | "balanced" | "aggressive";
 
+type BatchFailureStage = "read-input" | "optimize" | "resolve-output-path" | "write-output" | "write-report";
+
 type BatchFileResult =
   | { input: string; status: "optimized"; output: string; report: string }
-  | { input: string; status: "failed"; error: string };
+  | { input: string; status: "failed"; stage: BatchFailureStage; error: string };
 
 function isOptimizationMode(value: string): value is OptimizationMode {
   return value === "safe" || value === "balanced" || value === "aggressive";

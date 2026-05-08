@@ -306,6 +306,363 @@ select {
   display: block;
 }
 
+.category-chart {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.category-chart .bar {
+  display: grid;
+  grid-template-columns: 96px 1fr 110px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.category-chart .bar .track {
+  height: 12px;
+  background: var(--surface-2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.category-chart .bar .fill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.category-chart .bar.kind-image .fill {
+  background: linear-gradient(90deg, #2670e3, #14877e);
+}
+
+.category-chart .bar.kind-font .fill,
+.category-chart .bar.kind-ole .fill {
+  background: linear-gradient(90deg, #c87214, #b72a3a);
+}
+
+.category-chart .bar .value {
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.action-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.action-list li {
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.action-list label {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.action-list input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.action-list .action-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.action-list .action-text strong {
+  font-weight: 700;
+}
+
+.action-list .action-text em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+
+.action-list .action-badges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.badge.risk-safe {
+  background: rgba(20, 135, 126, 0.16);
+  color: var(--accent-2);
+}
+
+.badge.risk-medium {
+  background: rgba(200, 114, 20, 0.18);
+  color: #a55a0a;
+}
+
+.badge.risk-high {
+  background: rgba(183, 42, 58, 0.18);
+  color: var(--danger);
+}
+
+.badge.impact-none {
+  background: rgba(20, 95, 215, 0.12);
+  color: var(--accent);
+}
+
+.badge.impact-low {
+  background: rgba(20, 95, 215, 0.18);
+  color: var(--accent);
+}
+
+.badge.impact-medium,
+.badge.impact-high {
+  background: rgba(200, 114, 20, 0.18);
+  color: #a55a0a;
+}
+
+.batch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.batch-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.batch-list .name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.batch-list .name strong {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.batch-list .name em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.batch-list .status {
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+}
+
+.batch-list .status.pending {
+  background: rgba(20, 95, 215, 0.12);
+  color: var(--accent);
+}
+
+.batch-list .status.running {
+  background: rgba(20, 135, 126, 0.18);
+  color: var(--accent-2);
+}
+
+.batch-list .status.done {
+  background: rgba(20, 135, 126, 0.24);
+  color: var(--accent-2);
+}
+
+.batch-list .status.failed,
+.batch-list .status.cancelled {
+  background: rgba(183, 42, 58, 0.18);
+  color: var(--danger);
+}
+
+.batch-list .row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.batch-list button {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(24, 33, 47, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  z-index: 50;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-card {
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  width: min(960px, 100%);
+  max-height: 86vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+}
+
+.modal-header h2 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+}
+
+.modal-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.compare-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 18px 22px;
+  overflow-y: auto;
+}
+
+.compare-list .pair {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.compare-list .pair header {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.compare-list .pair header strong {
+  font-weight: 700;
+}
+
+.compare-list .pair header .meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compare-list .pair header .saving {
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+.badge.psnr-identical,
+.badge.psnr-excellent {
+  background: rgba(20, 135, 126, 0.18);
+  color: var(--accent-2);
+}
+
+.badge.psnr-good {
+  background: rgba(20, 95, 215, 0.16);
+  color: var(--accent);
+}
+
+.badge.psnr-fair {
+  background: rgba(200, 114, 20, 0.18);
+  color: #a55a0a;
+}
+
+.badge.psnr-poor {
+  background: rgba(183, 42, 58, 0.18);
+  color: var(--danger);
+}
+
+.badge.psnr-unknown {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.compare-list .pair figure {
+  margin: 0;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.compare-list .pair figure img {
+  max-width: 100%;
+  max-height: 220px;
+  background: #1f2735;
+  border-radius: 6px;
+}
+
+.compare-list .pair figcaption {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.compare-list .empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px;
+}
+
 @media (max-width: 980px) {
   body {
     min-width: 0;

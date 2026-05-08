@@ -1,7 +1,7 @@
-import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import type { OptimizationReport } from "@hwpx-optimizer/core";
+import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
 
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
 
@@ -32,6 +32,7 @@ export type DesktopOptimizeInput = {
   mode: OptimizationMode;
   settings: DesktopSettings;
   outputDirectory?: string;
+  actions?: string[];
 };
 
 export type DesktopOptimizeResult = {
@@ -71,10 +72,10 @@ export async function optimizeDesktopFile(
   const source = await readFile(input.filePath);
 
   onProgress?.({ percent: 35, item: `Optimizing document in ${input.mode} mode` });
-  const result = await optimizeByMode(source, input.mode);
+  const result = await optimizeByMode(source, input.mode, input.actions);
 
   onProgress?.({ percent: 70, item: "Writing optimized document" });
-  const outputPath = nextOutputPath(input.filePath, input.outputDirectory ?? input.settings.outputDirectory, input.settings);
+  const outputPath = await nextOutputPath(input.filePath, input.outputDirectory ?? input.settings.outputDirectory, input.settings);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, result.output);
 
@@ -95,26 +96,51 @@ export async function verifyDesktopFile(filePath: string): Promise<{ ok: true }>
   return { ok: true };
 }
 
+export async function previewImageDiffs(
+  originalPath: string,
+  optimizedPath: string,
+  options: { maxItems?: number } = {}
+): Promise<ImagePreviewPair[]> {
+  const { extractImageDiffPreviews } = await loadCoreModule();
+  const [original, optimized] = await Promise.all([readFile(originalPath), readFile(optimizedPath)]);
+  return extractImageDiffPreviews(original, optimized, options);
+}
+
 export async function optimizeByMode(
   input: Buffer,
-  mode: OptimizationMode
+  mode: OptimizationMode,
+  actions?: string[]
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
   const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
   if (mode === "safe") return optimizeHwpxBufferSafe(input);
-  if (mode === "aggressive") return optimizeHwpxBufferAggressive(input);
-  return optimizeHwpxBufferBalanced(input);
+  const advanced = actions && actions.length > 0 ? { actions } : {};
+  if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advanced);
+  return optimizeHwpxBufferBalanced(input, advanced);
 }
 
-export function nextOutputPath(filePath: string, outputDirectory: string | undefined, settings: DesktopSettings): string {
+export async function nextOutputPath(
+  filePath: string,
+  outputDirectory: string | undefined,
+  settings: DesktopSettings
+): Promise<string> {
   const parsedExt = extname(filePath);
   const base = basename(filePath, parsedExt);
   const dir = settings.saveNextToOriginal || !outputDirectory ? dirname(filePath) : outputDirectory;
   const first = join(dir, `${base}.optimized.hwpx`);
-  if (!settings.preventOverwrite || !existsSync(first)) return first;
+  if (!settings.preventOverwrite || !(await pathExists(first))) return first;
 
   for (let index = 2; index < 1000; index += 1) {
     const candidate = join(dir, `${base}.optimized-${index}.hwpx`);
-    if (!existsSync(candidate)) return candidate;
+    if (!(await pathExists(candidate))) return candidate;
   }
   throw new Error("Could not create a non-overwriting output path.");
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }

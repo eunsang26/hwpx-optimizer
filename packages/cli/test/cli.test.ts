@@ -7,6 +7,25 @@ import { createHwpxFixture } from "../../core/test/fixtures.js";
 import { isCliEntrypoint, runCli } from "../src/index.js";
 
 describe("runCli", () => {
+  it("prints the action catalog with list-actions", async () => {
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      logs.push(String(message));
+    });
+
+    const code = await runCli(["list-actions"]);
+    logSpy.mockRestore();
+
+    expect(code).toBe(0);
+    const text = logs.join("\n");
+    expect(text).toContain("Available --actions keys");
+    expect(text).toContain("strip-metadata");
+    expect(text).toContain("convert-bmp-to-png");
+    expect(text).toContain("clean-shape-comment");
+    expect(text).toContain("consolidate-duplicate-images");
+    expect(text).toContain("repack-zip");
+  });
+
   it("recognizes workspace bin symlinks as CLI entrypoints", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-bin-"));
     const target = join(dir, "index.js");
@@ -272,8 +291,55 @@ describe("runCli", () => {
     expect(summary.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ input: "good.hwpx", status: "optimized" }),
-        expect.objectContaining({ input: "bad.hwpx", status: "failed", error: expect.any(String) })
+        expect.objectContaining({
+          input: "bad.hwpx",
+          status: "failed",
+          stage: "optimize",
+          error: expect.any(String)
+        })
       ])
+    );
+  });
+
+  it("propagates --allow-larger through batch into each file's report", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    const outDir = join(dir, "optimized");
+    await mkdir(inputDir);
+    await writeFile(
+      join(inputDir, "shape.hwpx"),
+      await createHwpxFixture({
+        entries: {
+          "Contents/section0.xml": `<root><hp:shapeComment>그림입니다.
+원본 그림의 이름: IMG_5555.JPG
+원본 그림의 크기: 가로 5712pixel, 세로 4284pixel</hp:shapeComment></root>`
+        }
+      })
+    );
+
+    const code = await runCli([
+      "batch",
+      inputDir,
+      "--mode",
+      "balanced",
+      "--actions",
+      "clean-shape-comment",
+      "--allow-larger",
+      "--out",
+      outDir
+    ]);
+
+    expect(code).toBe(0);
+    const reportPath = join(outDir, "shape.optimized.hwpx.report.json");
+    const report = JSON.parse(await readFile(reportPath, "utf8")) as {
+      actions: { applied: Array<{ type: string }> };
+      warnings: string[];
+    };
+    expect(report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "clean-shape-comment" })
+    );
+    expect(report.warnings).not.toContain(
+      "Balanced mode did not produce a smaller file; original package bytes returned."
     );
   });
 

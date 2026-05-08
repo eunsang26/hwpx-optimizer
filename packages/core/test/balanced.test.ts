@@ -232,6 +232,25 @@ describe("balanced optimization", () => {
     );
   });
 
+  it("does not record clean-shape-comment as applied when manifest changes alone touched the XML", async () => {
+    const bmp = createBmp24(120, 80, [0xaa, 0xbb, 0xcc]);
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.bmp" media-type="image/bmp" isEmbeded="1"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hp:pic><hc:img binaryItemIDRef="image1" /></hp:pic><hp:shapeComment>그림입니다.</hp:shapeComment></root>`,
+        "BinData/image1.bmp": bmp
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const cleanShapeApplied = result.report.actions.applied.filter((action) => action.type === "clean-shape-comment");
+
+    expect(cleanShapeApplied).toEqual([]);
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "convert-bmp-to-png", target: "BinData/image1.bmp" })
+    );
+  });
+
   it("can apply explicit privacy actions even when the package becomes larger", async () => {
     const fixture = await createStoredFixture({
       "Contents/section0.xml": `<root><hp:shapeComment>그림입니다.

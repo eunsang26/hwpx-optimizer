@@ -86,6 +86,33 @@ describe("desktop service", () => {
     expect(result.outputPath).toBe(join(outputDirectory, "input.optimized.hwpx"));
   });
 
+  it("forwards actions through balanced optimization", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "shape.hwpx");
+    await writeFile(
+      inputPath,
+      await createHwpxFixture({
+        entries: {
+          "Contents/section0.xml": `<root><hp:shapeComment>그림입니다.
+원본 그림의 이름: IMG_4242.JPG
+원본 그림의 크기: 가로 5712pixel, 세로 4284pixel</hp:shapeComment></root>`
+        }
+      })
+    );
+
+    const result = await optimizeDesktopFile({
+      filePath: inputPath,
+      mode: "balanced",
+      settings: defaultDesktopSettings,
+      actions: ["clean-shape-comment"]
+    });
+
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "clean-shape-comment" })
+    );
+    expect(result.report.actions.applied.some((action) => action.type === "resize-jpeg")).toBe(false);
+  });
+
   it("surfaces invalid HWPX failures", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "broken.hwpx");

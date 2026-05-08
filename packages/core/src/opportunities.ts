@@ -33,82 +33,27 @@ export const aggressiveImageProfile: ImageOptimizationProfile = {
   opportunityLabel: "Resize JPEG to aggressive document display budget"
 };
 
+export type OpportunityConfidence = "exact" | "estimated";
+
 export async function detectOptimizationOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<OptimizationOpportunity[]> {
-  const opportunities: OptimizationOpportunity[] = [];
-  const resizeBudgets = getRecommendedImagePixelBudgets(pkg, profile.displayScale);
-  addDuplicateImageOpportunities(pkg, opportunities);
-
-  for (const entry of pkg.entries) {
-    if (entry.kind !== "image") continue;
-
-    const metadata = await readMetadata(entry.data);
-    const resizeBudget = normalizeResizeBudget(resizeBudgets.get(entry.path), profile);
-    if (isJpeg(entry.path) && shouldResize(metadata.width, metadata.height, resizeBudget, profile)) {
-      const candidate = await tryTransform(() => resizeJpeg(entry.data, resizeBudget, profile));
-      if (!candidate) continue;
-      addOpportunityIfSmaller(opportunities, {
-        id: `resize-jpeg:${entry.path}`,
-        label: resizeBudget ? profile.opportunityLabel : "Resize oversized JPEG and recompress with MozJPEG",
-        action: "resize-jpeg",
-        target: entry.path,
-        beforeSize: entry.size,
-        afterSize: candidate.byteLength,
-        confidence: "exact",
-        risk: "medium",
-        visualImpact: "medium",
-        defaultEnabledIn: ["balanced", "aggressive"]
-      });
-      continue;
-    }
-
-    if (isBmp(entry.path)) {
-      const candidate = await tryTransform(() => convertBmpToPng(entry.data, metadata.width, metadata.height, resizeBudget, profile));
-      if (!candidate) continue;
-      addOpportunityIfSmaller(opportunities, {
-        id: `convert-bmp-to-png:${entry.path}`,
-        label: "Convert BMP to PNG",
-        action: "convert-bmp-to-png",
-        target: entry.path,
-        beforeSize: entry.size,
-        afterSize: candidate.byteLength,
-        confidence: "exact",
-        risk: "medium",
-        visualImpact: metadata.width && metadata.height && Math.max(metadata.width, metadata.height) > profile.maxEdge ? "medium" : "low",
-        defaultEnabledIn: ["balanced", "aggressive"]
-      });
-      continue;
-    }
-
-    if (isPng(entry.path)) {
-      const candidate = await tryTransform(() => optimizePng(entry.data, profile));
-      if (!candidate) continue;
-      addOpportunityIfSmaller(opportunities, {
-        id: `optimize-png:${entry.path}`,
-        label: "Optimize PNG losslessly",
-        action: "optimize-png",
-        target: entry.path,
-        beforeSize: entry.size,
-        afterSize: candidate.byteLength,
-        confidence: "exact",
-        risk: "safe",
-        visualImpact: "none",
-        defaultEnabledIn: ["safe", "balanced", "aggressive"]
-      });
-    }
-  }
-
-  addShapeCommentOpportunities(pkg, opportunities);
-
-  return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
+  return collectOpportunities(pkg, profile, "exact");
 }
 
 export async function detectEstimatedOptimizationOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<OptimizationOpportunity[]> {
+  return collectOpportunities(pkg, profile, "estimated");
+}
+
+async function collectOpportunities(
+  pkg: HwpxPackage,
+  profile: ImageOptimizationProfile,
+  confidence: OpportunityConfidence
+): Promise<OptimizationOpportunity[]> {
   const opportunities: OptimizationOpportunity[] = [];
   const resizeBudgets = getRecommendedImagePixelBudgets(pkg, profile.displayScale);
   addDuplicateImageOpportunities(pkg, opportunities);
@@ -119,14 +64,21 @@ export async function detectEstimatedOptimizationOpportunities(
     const metadata = await readMetadata(entry.data);
     const resizeBudget = normalizeResizeBudget(resizeBudgets.get(entry.path), profile);
     if (isJpeg(entry.path) && shouldResize(metadata.width, metadata.height, resizeBudget, profile)) {
+      const afterSize = await measureOrEstimateImageSize({
+        confidence,
+        size: entry.size,
+        transform: () => resizeJpeg(entry.data, resizeBudget, profile),
+        estimate: () => estimateJpegResizeSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
+      });
+      if (afterSize === null) continue;
       addOpportunityIfSmaller(opportunities, {
         id: `resize-jpeg:${entry.path}`,
         label: resizeBudget ? profile.opportunityLabel : "Resize oversized JPEG and recompress with MozJPEG",
         action: "resize-jpeg",
         target: entry.path,
         beforeSize: entry.size,
-        afterSize: estimateJpegResizeSize(entry.size, metadata.width, metadata.height, resizeBudget, profile),
-        confidence: "estimated",
+        afterSize,
+        confidence,
         risk: "medium",
         visualImpact: "medium",
         defaultEnabledIn: ["balanced", "aggressive"]
@@ -135,30 +87,47 @@ export async function detectEstimatedOptimizationOpportunities(
     }
 
     if (isBmp(entry.path)) {
+      const afterSize = await measureOrEstimateImageSize({
+        confidence,
+        size: entry.size,
+        transform: () => convertBmpToPng(entry.data, metadata.width, metadata.height, resizeBudget, profile),
+        estimate: () => estimateBmpPngSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
+      });
+      if (afterSize === null) continue;
       addOpportunityIfSmaller(opportunities, {
         id: `convert-bmp-to-png:${entry.path}`,
         label: "Convert BMP to PNG",
         action: "convert-bmp-to-png",
         target: entry.path,
         beforeSize: entry.size,
-        afterSize: estimateBmpPngSize(entry.size, metadata.width, metadata.height, resizeBudget, profile),
-        confidence: "estimated",
+        afterSize,
+        confidence,
         risk: "medium",
-        visualImpact: metadata.width && metadata.height && Math.max(metadata.width, metadata.height) > profile.maxEdge ? "medium" : "low",
+        visualImpact:
+          metadata.width && metadata.height && Math.max(metadata.width, metadata.height) > profile.maxEdge
+            ? "medium"
+            : "low",
         defaultEnabledIn: ["balanced", "aggressive"]
       });
       continue;
     }
 
-    if (isPng(entry.path) && entry.size > 4096) {
+    if (isPng(entry.path) && (confidence === "exact" || entry.size > 4096)) {
+      const afterSize = await measureOrEstimateImageSize({
+        confidence,
+        size: entry.size,
+        transform: () => optimizePng(entry.data, profile),
+        estimate: () => Math.round(entry.size * (profile.pngPalette ? 0.8 : 0.95))
+      });
+      if (afterSize === null) continue;
       addOpportunityIfSmaller(opportunities, {
         id: `optimize-png:${entry.path}`,
         label: "Optimize PNG losslessly",
         action: "optimize-png",
         target: entry.path,
         beforeSize: entry.size,
-        afterSize: Math.round(entry.size * (profile.pngPalette ? 0.8 : 0.95)),
-        confidence: "estimated",
+        afterSize,
+        confidence,
         risk: "safe",
         visualImpact: "none",
         defaultEnabledIn: ["safe", "balanced", "aggressive"]
@@ -168,6 +137,17 @@ export async function detectEstimatedOptimizationOpportunities(
 
   addShapeCommentOpportunities(pkg, opportunities);
   return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
+}
+
+async function measureOrEstimateImageSize(input: {
+  confidence: OpportunityConfidence;
+  size: number;
+  transform: () => Promise<Buffer>;
+  estimate: () => number;
+}): Promise<number | null> {
+  if (input.confidence === "estimated") return input.estimate();
+  const candidate = await tryTransform(input.transform);
+  return candidate ? candidate.byteLength : null;
 }
 
 function addDuplicateImageOpportunities(pkg: HwpxPackage, opportunities: OptimizationOpportunity[]): void {

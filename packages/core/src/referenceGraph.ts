@@ -1,3 +1,4 @@
+import { buildManifestPathById } from "./manifest.js";
 import type { HwpxPackage, ReferenceGraph, ResourceReference } from "./types.js";
 
 export function buildReferenceGraph(pkg: HwpxPackage): ReferenceGraph {
@@ -5,7 +6,6 @@ export function buildReferenceGraph(pkg: HwpxPackage): ReferenceGraph {
   const xmlText = pkg.entries
     .filter((entry) => entry.kind === "xml")
     .map((entry) => ({ path: entry.path, text: entry.data.toString("utf8") }));
-  const manifestPathById = new Map<string, string>();
 
   for (const entry of pkg.entries) {
     if (entry.kind === "image" || entry.kind === "bindata" || entry.kind === "font" || entry.kind === "ole") {
@@ -13,11 +13,7 @@ export function buildReferenceGraph(pkg: HwpxPackage): ReferenceGraph {
     }
   }
 
-  for (const xml of xmlText) {
-    for (const item of extractManifestItems(xml.text)) {
-      manifestPathById.set(item.id, item.path);
-    }
-  }
+  const manifestPathById = buildManifestPathById(pkg, normalizePackagePath);
 
   const missingReferences: string[] = [];
   for (const xml of xmlText) {
@@ -58,25 +54,6 @@ function extractBinaryItemIdRefs(xml: string): string[] {
   return [...xml.matchAll(/binaryItemIDRef=["']([^"']+)["']/gi)].map((match) => match[1]);
 }
 
-function extractManifestItems(xml: string): Array<{ id: string; path: string }> {
-  const items: Array<{ id: string; path: string }> = [];
-  for (const match of xml.matchAll(/<(?:\w+:)?item\b([^>]*)>/gi)) {
-    const attrs = parseAttributes(match[1]);
-    if (!attrs.id || !attrs.href) continue;
-    const path = normalizePackagePath(attrs.href);
-    if (path) items.push({ id: attrs.id, path });
-  }
-  return items;
-}
-
-function parseAttributes(input: string): Record<string, string> {
-  const attrs: Record<string, string> = {};
-  for (const match of input.matchAll(/([\w:-]+)=["']([^"']*)["']/g)) {
-    attrs[match[1]] = match[2];
-  }
-  return attrs;
-}
-
 function markReference(input: {
   resources: Map<string, ResourceReference>;
   missingReferences: string[];
@@ -97,10 +74,9 @@ function isPackageManifest(path: string): boolean {
 }
 
 function normalizePackagePath(value: string): string | null {
-  const cleaned = value.replace(/^#/, "").replace(/^\.?\//, "");
+  const cleaned = value.replace(/^#/, "").replace(/^\.?\//, "").replace(/\\/g, "/");
+  if (cleaned.split("/").some((segment) => segment === ".." || segment === ".")) return null;
   const binDataIndex = cleaned.toLowerCase().indexOf("bindata/");
-  if (binDataIndex >= 0) {
-    return cleaned.slice(binDataIndex).replace(/\\/g, "/");
-  }
+  if (binDataIndex >= 0) return cleaned.slice(binDataIndex);
   return null;
 }

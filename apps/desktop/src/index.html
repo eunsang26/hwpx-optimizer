@@ -19,10 +19,12 @@
       <section id="drop-zone" class="drop-zone">
         <div>
           <h2 id="file-name">HWPX 파일을 여기에 끌어다 놓으세요</h2>
-          <p id="file-meta">서버 업로드 없이 이 컴퓨터에서만 처리합니다.</p>
+          <p id="file-meta">서버 업로드 없이 이 컴퓨터에서만 처리합니다. 여러 파일이나 폴더도 끌어다 놓을 수 있습니다.</p>
         </div>
         <div class="actions">
           <button id="choose-button">파일 선택</button>
+          <button id="choose-many-button" class="ghost">여러 파일</button>
+          <button id="choose-folder-button" class="ghost">폴더 선택</button>
           <button id="analyze-button" disabled>다시 분석</button>
         </div>
       </section>
@@ -36,6 +38,7 @@
           <button id="output-button" class="ghost">저장 위치</button>
         </div>
         <div id="analysis-grid" class="metric-grid"></div>
+        <div id="category-chart" class="category-chart" hidden></div>
       </section>
 
       <section class="panel modes">
@@ -92,6 +95,35 @@
         </div>
       </section>
 
+      <section id="action-panel" class="panel" hidden>
+        <div class="panel-header">
+          <div>
+            <h2>최적화 작업 선택</h2>
+            <p id="action-panel-hint">균형/최대 압축 모드에서 개별 작업을 켜고 끌 수 있습니다.</p>
+          </div>
+          <div class="actions">
+            <button id="action-select-all" class="ghost" type="button">전체 선택</button>
+            <button id="action-select-none" class="ghost" type="button">전체 해제</button>
+            <button id="action-reset" class="ghost" type="button">기본값으로</button>
+          </div>
+        </div>
+        <ul id="action-checkboxes" class="action-list"></ul>
+      </section>
+
+      <section id="batch-panel" class="panel batch" hidden>
+        <div class="panel-header">
+          <div>
+            <h2>여러 파일 일괄 처리</h2>
+            <p id="batch-summary">파일을 추가하면 진행 상태가 여기에 표시됩니다.</p>
+          </div>
+          <div class="actions">
+            <button id="batch-clear" class="ghost" type="button">목록 비우기</button>
+            <button id="batch-run" type="button" disabled>일괄 최적화</button>
+          </div>
+        </div>
+        <ul id="batch-list" class="batch-list"></ul>
+      </section>
+
       <section id="result-panel" class="panel result" hidden>
         <div class="panel-header">
           <div>
@@ -102,12 +134,27 @@
             <button id="open-file-button" class="ghost">파일 열기</button>
             <button id="open-report-button" class="ghost" disabled>리포트 열기</button>
             <button id="open-folder-button" class="ghost">폴더 보기</button>
+            <button id="reverify-button" class="ghost" disabled>다시 검증</button>
+            <button id="compare-button" class="ghost" disabled>이미지 비교</button>
           </div>
         </div>
         <div id="result-summary" class="metric-grid"></div>
         <p id="output-path"></p>
         <p id="report-path"></p>
       </section>
+
+      <div id="compare-modal" class="modal" hidden>
+        <div class="modal-card">
+          <div class="modal-header">
+            <div>
+              <h2>이미지 비교</h2>
+              <p id="compare-summary">변경된 이미지를 원본과 결과 썸네일로 비교합니다.</p>
+            </div>
+            <button id="compare-close" class="ghost" type="button">닫기</button>
+          </div>
+          <div id="compare-list" class="compare-list"></div>
+        </div>
+      </div>
 
       <aside id="settings-panel" class="settings">
         <h2>설정</h2>

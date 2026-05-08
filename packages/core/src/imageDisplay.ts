@@ -1,3 +1,4 @@
+import { buildManifestPathById, parseTagAttributes } from "./manifest.js";
 import type { HwpxPackage, ImageDisplayReference } from "./types.js";
 
 const HWP_UNITS_PER_96_DPI_PIXEL = 75;
@@ -53,19 +54,7 @@ export function getRecommendedImagePixelBudgets(pkg: HwpxPackage, scale = 2): Ma
 }
 
 function extractManifestImagePaths(pkg: HwpxPackage): Map<string, string> {
-  const manifest = new Map<string, string>();
-  for (const entry of pkg.entries) {
-    if (entry.kind !== "xml") continue;
-    const xml = entry.data.toString("utf8");
-    for (const match of xml.matchAll(/<(?:\w+:)?item\b([^>]*)>/gi)) {
-      const attrs = parseAttributes(match[1] ?? "");
-      if (!attrs.id || !attrs.href) continue;
-      const normalizedPath = normalizeImagePath(attrs.href);
-      if (!normalizedPath) continue;
-      manifest.set(attrs.id, normalizedPath);
-    }
-  }
-  return manifest;
+  return buildManifestPathById(pkg, normalizeImagePath);
 }
 
 function extractPicBlocks(xml: string): string[] {
@@ -89,13 +78,7 @@ function findTagAttrs(xml: string, localName: string): string | null {
   return pattern.exec(xml)?.[1] ?? null;
 }
 
-function parseAttributes(input: string): Record<string, string> {
-  const attrs: Record<string, string> = {};
-  for (const match of input.matchAll(/([\w:-]+)=["']([^"']*)["']/g)) {
-    attrs[match[1] ?? ""] = match[2] ?? "";
-  }
-  return attrs;
-}
+const parseAttributes = parseTagAttributes;
 
 function parsePositiveInteger(value?: string): number | null {
   if (!value) return null;

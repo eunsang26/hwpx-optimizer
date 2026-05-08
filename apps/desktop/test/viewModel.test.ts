@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAnalysisViewModel } from "../src/shared/viewModel.js";
+import { createActionToggles, createAnalysisViewModel } from "../src/shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 
 describe("desktop view model", () => {
@@ -19,8 +19,27 @@ describe("desktop view model", () => {
         { action: "resize-jpeg", count: 2, savingLabel: "2.00 MiB", risk: "medium" },
         { action: "optimize-png", count: 1, savingLabel: "1.00 MiB", risk: "safe" }
       ],
+      categoryBreakdown: [
+        { kind: "image", bytes: 200, ratio: 200 / 300, label: "이미지" },
+        { kind: "xml", bytes: 100, ratio: 100 / 300, label: "문서 XML" }
+      ],
       warnings: ["OLE objects can be user-visible."]
     });
+  });
+
+  it("creates action toggles with defaults driven by the selected mode", () => {
+    const safeToggles = createActionToggles(reportFixture, "safe");
+    const balancedToggles = createActionToggles(reportFixture, "balanced");
+    const aggressiveToggles = createActionToggles(reportFixture, "aggressive");
+
+    expect(safeToggles.map((toggle) => toggle.action)).toEqual(["resize-jpeg", "optimize-png"]);
+    expect(safeToggles.find((toggle) => toggle.action === "resize-jpeg")?.defaultEnabledForMode).toBe(false);
+    expect(safeToggles.find((toggle) => toggle.action === "optimize-png")?.defaultEnabledForMode).toBe(false);
+
+    expect(balancedToggles.every((toggle) => toggle.defaultEnabledForMode)).toBe(true);
+    expect(aggressiveToggles.every((toggle) => toggle.defaultEnabledForMode)).toBe(true);
+    expect(balancedToggles[0]?.label).toBe("큰 JPEG 리사이즈");
+    expect(balancedToggles[1]?.label).toBe("PNG 무손실 최적화");
   });
 });
 

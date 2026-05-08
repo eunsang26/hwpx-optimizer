@@ -3,6 +3,8 @@ export * from "./balancedOptimizer.js";
 export * from "./bmp.js";
 export * from "./concurrency.js";
 export * from "./imageDisplay.js";
+export * from "./imagePreview.js";
+export * from "./manifest.js";
 export * from "./optimize.js";
 export * from "./optimizer.js";
 export * from "./opportunities.js";
@@ -13,5 +15,6 @@ export * from "./report.js";
 export * from "./types.js";
 export * from "./verifier.js";
 export * from "./writer.js";
+export * from "./xmlNode.js";
 
 export const version = "0.1.0";

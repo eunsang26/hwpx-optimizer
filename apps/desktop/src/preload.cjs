@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const api = {
   selectHwpx: () => ipcRenderer.invoke("dialog:select-hwpx"),
+  selectHwpxMany: () => ipcRenderer.invoke("dialog:select-hwpx-many"),
+  selectHwpxFolder: () => ipcRenderer.invoke("dialog:select-hwpx-folder"),
   selectDirectory: () => ipcRenderer.invoke("dialog:select-directory"),
   getPathForFile: (file) => {
     if (!file || typeof webUtils?.getPathForFile !== "function") return "";
@@ -22,6 +24,7 @@ const api = {
     return () => ipcRenderer.off("hwpx:optimize-progress", listener);
   },
   verify: (filePath) => ipcRenderer.invoke("hwpx:verify", filePath),
+  previewImageDiffs: (input) => ipcRenderer.invoke("hwpx:image-preview", input),
   showItem: (filePath) => ipcRenderer.invoke("shell:show-item", filePath),
   openPath: (filePath) => ipcRenderer.invoke("shell:open-path", filePath)
 };
