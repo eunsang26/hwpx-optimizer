@@ -41,7 +41,7 @@ describe("balanced optimization", () => {
       "image1": { path: "BinData/image1.bmp", mediaType: "image/bmp", data: bmp }
     });
 
-    const result = await optimizeHwpxBufferBalanced(fixture);
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
     const output = await readHwpxPackage(result.output);
     const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
 
@@ -53,6 +53,66 @@ describe("balanced optimization", () => {
     expect(result.report.actions.applied).toContainEqual(
       expect.objectContaining({ type: "convert-bmp-to-png", target: "BinData/image1.bmp" })
     );
+  });
+
+  it("resizes JPEGs to the document display size budget", async () => {
+    const jpg = await sharp({
+      create: {
+        width: 2400,
+        height: 1800,
+        channels: 3,
+        background: "#88aacc"
+      }
+    })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+    const fixture = await createReferencedImageFixtureWithDisplay({
+      id: "image1",
+      path: "BinData/image1.JPG",
+      mediaType: "image/jpg",
+      data: jpg,
+      widthHwpUnit: 7200,
+      heightHwpUnit: 5400
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const image = output.entries.find((entry) => entry.path === "BinData/image1.jpg");
+    const metadata = await sharp(image?.data).metadata();
+
+    expect(metadata.width).toBe(192);
+    expect(metadata.height).toBe(144);
+    expect(result.report.images).toEqual([
+      expect.objectContaining({
+        path: "BinData/image1.JPG",
+        largestDisplay: expect.objectContaining({
+          widthPx96: 96,
+          heightPx96: 72,
+          recommendedWidthPx: 192,
+          recommendedHeightPx: 144
+        })
+      })
+    ]);
+  });
+
+  it("resizes BMPs to the document display size budget while converting to PNG", async () => {
+    const bmp = createBmp24(400, 200, [0xcc, 0xcc, 0xcc]);
+    const fixture = await createReferencedImageFixtureWithDisplay({
+      id: "image1",
+      path: "BinData/image1.bmp",
+      mediaType: "image/bmp",
+      data: bmp,
+      widthHwpUnit: 7500,
+      heightHwpUnit: 3750
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture);
+    const output = await readHwpxPackage(result.output);
+    const image = output.entries.find((entry) => entry.path === "BinData/image1.png");
+    const metadata = await sharp(image?.data).metadata();
+
+    expect(metadata.width).toBe(200);
+    expect(metadata.height).toBe(100);
   });
 
   it("reports PNG optimization and shapeComment cleanup as advanced opportunities", async () => {
@@ -157,6 +217,23 @@ async function createReferencedImageFixture(
     entries[image.path] = image.data;
   }
   return createHwpxFixture({ entries });
+}
+
+async function createReferencedImageFixtureWithDisplay(input: {
+  id: string;
+  path: string;
+  mediaType: string;
+  data: Buffer;
+  widthHwpUnit: number;
+  heightHwpUnit: number;
+}): Promise<Buffer> {
+  return createHwpxFixture({
+    entries: {
+      "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="${input.id}" href="${input.path}" media-type="${input.mediaType}" isEmbeded="1"/></opf:manifest></opf:package>`,
+      "Contents/section0.xml": `<root><hp:pic><hc:img binaryItemIDRef="${input.id}" /><hp:sz width="${input.widthHwpUnit}" widthRelTo="ABSOLUTE" height="${input.heightHwpUnit}" heightRelTo="ABSOLUTE"/></hp:pic></root>`,
+      [input.path]: input.data
+    }
+  });
 }
 
 async function createStoredFixture(entries: Record<string, string | Buffer>): Promise<Buffer> {

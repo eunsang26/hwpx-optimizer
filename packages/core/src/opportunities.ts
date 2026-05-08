@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
+import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import type { HwpxPackage, OptimizationOpportunity } from "./types.js";
 
 const BALANCED_MAX_EDGE = 1920;
@@ -7,17 +8,19 @@ const BALANCED_JPEG_QUALITY = 88;
 
 export async function detectOptimizationOpportunities(pkg: HwpxPackage): Promise<OptimizationOpportunity[]> {
   const opportunities: OptimizationOpportunity[] = [];
+  const resizeBudgets = getRecommendedImagePixelBudgets(pkg);
 
   for (const entry of pkg.entries) {
     if (entry.kind !== "image") continue;
 
     const metadata = await readMetadata(entry.data);
-    if (isJpeg(entry.path) && metadata.width && metadata.height && Math.max(metadata.width, metadata.height) > BALANCED_MAX_EDGE) {
-      const candidate = await tryTransform(() => resizeJpegBalanced(entry.data));
+    const resizeBudget = normalizeResizeBudget(resizeBudgets.get(entry.path));
+    if (isJpeg(entry.path) && shouldResize(metadata.width, metadata.height, resizeBudget)) {
+      const candidate = await tryTransform(() => resizeJpegBalanced(entry.data, resizeBudget));
       if (!candidate) continue;
       addOpportunityIfSmaller(opportunities, {
         id: `resize-jpeg:${entry.path}`,
-        label: "Resize oversized JPEG and recompress with MozJPEG",
+        label: resizeBudget ? "Resize JPEG to document display budget" : "Resize oversized JPEG and recompress with MozJPEG",
         action: "resize-jpeg",
         target: entry.path,
         beforeSize: entry.size,
@@ -31,7 +34,7 @@ export async function detectOptimizationOpportunities(pkg: HwpxPackage): Promise
     }
 
     if (isBmp(entry.path)) {
-      const candidate = await tryTransform(() => convertBmpToPngBalanced(entry.data, metadata.width, metadata.height));
+      const candidate = await tryTransform(() => convertBmpToPngBalanced(entry.data, metadata.width, metadata.height, resizeBudget));
       if (!candidate) continue;
       addOpportunityIfSmaller(opportunities, {
         id: `convert-bmp-to-png:${entry.path}`,
@@ -96,17 +99,26 @@ async function tryTransform(operation: () => Promise<Buffer>): Promise<Buffer | 
 }
 
 export async function transformImageBalanced(path: string, data: Buffer): Promise<{ outputPath: string; data: Buffer }> {
+  return transformImageBalancedWithBudget(path, data);
+}
+
+export async function transformImageBalancedWithBudget(
+  path: string,
+  data: Buffer,
+  budget?: { width: number; height: number }
+): Promise<{ outputPath: string; data: Buffer }> {
   const metadata = await readMetadata(data);
+  const resizeBudget = normalizeResizeBudget(budget);
   if (isBmp(path)) {
     return {
       outputPath: replaceExtension(path, ".png"),
-      data: await convertBmpToPngBalanced(data, metadata.width, metadata.height)
+      data: await convertBmpToPngBalanced(data, metadata.width, metadata.height, resizeBudget)
     };
   }
-  if (isJpeg(path) && metadata.width && metadata.height && Math.max(metadata.width, metadata.height) > BALANCED_MAX_EDGE) {
+  if (isJpeg(path) && shouldResize(metadata.width, metadata.height, resizeBudget)) {
     return {
       outputPath: replaceExtension(path, ".jpg"),
-      data: await resizeJpegBalanced(data)
+      data: await resizeJpegBalanced(data, resizeBudget)
     };
   }
   if (isPng(path)) {
@@ -129,16 +141,22 @@ export function outputMediaType(path: string): string {
   return "application/octet-stream";
 }
 
-async function convertBmpToPngBalanced(data: Buffer, width?: number, height?: number): Promise<Buffer> {
+async function convertBmpToPngBalanced(
+  data: Buffer,
+  width?: number,
+  height?: number,
+  budget?: { width: number; height: number }
+): Promise<Buffer> {
   const bmp = decodeBmp(data);
   const image = bmp ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } }) : sharp(data);
   const sourceWidth = bmp?.width ?? width;
   const sourceHeight = bmp?.height ?? height;
+  const target = budget ?? { width: BALANCED_MAX_EDGE, height: BALANCED_MAX_EDGE };
   const resized =
-    sourceWidth && sourceHeight && Math.max(sourceWidth, sourceHeight) > BALANCED_MAX_EDGE
+    sourceWidth && sourceHeight && shouldResize(sourceWidth, sourceHeight, budget)
       ? image.resize({
-          width: BALANCED_MAX_EDGE,
-          height: BALANCED_MAX_EDGE,
+          width: target.width,
+          height: target.height,
           fit: "inside",
           withoutEnlargement: true,
           kernel: "lanczos3"
@@ -147,12 +165,13 @@ async function convertBmpToPngBalanced(data: Buffer, width?: number, height?: nu
   return resized.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
 }
 
-async function resizeJpegBalanced(data: Buffer): Promise<Buffer> {
+async function resizeJpegBalanced(data: Buffer, budget?: { width: number; height: number }): Promise<Buffer> {
+  const target = budget ?? { width: BALANCED_MAX_EDGE, height: BALANCED_MAX_EDGE };
   return sharp(data)
     .rotate()
     .resize({
-      width: BALANCED_MAX_EDGE,
-      height: BALANCED_MAX_EDGE,
+      width: target.width,
+      height: target.height,
       fit: "inside",
       withoutEnlargement: true,
       kernel: "lanczos3"
@@ -184,6 +203,20 @@ function addOpportunityIfSmaller(
   const estimatedSavingBytes = input.beforeSize - input.afterSize;
   if (estimatedSavingBytes <= 0) return;
   opportunities.push({ ...input, estimatedSavingBytes });
+}
+
+function shouldResize(width?: number, height?: number, budget?: { width: number; height: number }): boolean {
+  if (!width || !height) return false;
+  const target = budget ?? { width: BALANCED_MAX_EDGE, height: BALANCED_MAX_EDGE };
+  return width > target.width || height > target.height;
+}
+
+function normalizeResizeBudget(budget?: { width: number; height: number }): { width: number; height: number } | undefined {
+  if (!budget || budget.width <= 0 || budget.height <= 0) return undefined;
+  return {
+    width: Math.min(BALANCED_MAX_EDGE, Math.ceil(budget.width)),
+    height: Math.min(BALANCED_MAX_EDGE, Math.ceil(budget.height))
+  };
 }
 
 function isBmp(path: string): boolean {

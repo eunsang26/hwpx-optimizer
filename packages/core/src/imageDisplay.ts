@@ -37,6 +37,21 @@ export function extractImageDisplayReferences(pkg: HwpxPackage): Map<string, Ima
   return refsByPath;
 }
 
+export function getRecommendedImagePixelBudgets(pkg: HwpxPackage): Map<string, { width: number; height: number }> {
+  const budgets = new Map<string, { width: number; height: number }>();
+  for (const [path, refs] of extractImageDisplayReferences(pkg)) {
+    const largest = [...refs].sort(
+      (left, right) => right.widthHwpUnit * right.heightHwpUnit - left.widthHwpUnit * left.heightHwpUnit
+    )[0];
+    if (!largest) continue;
+    budgets.set(path, {
+      width: largest.widthPx96 * 2,
+      height: largest.heightPx96 * 2
+    });
+  }
+  return budgets;
+}
+
 function extractManifestImagePaths(pkg: HwpxPackage): Map<string, string> {
   const manifest = new Map<string, string>();
   for (const entry of pkg.entries) {
