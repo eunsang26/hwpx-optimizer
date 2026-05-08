@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
-import { mkdir, readFile as readFileFs, writeFile } from "node:fs/promises";
+import JSZip from "jszip";
+import { mkdir, readFile as readFileFs, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import {
@@ -56,8 +57,7 @@ app.whenReady()
   })
   .catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-    app.quit();
+    app.exit(1);
   });
 
 app.on("window-all-closed", () => {
@@ -139,6 +139,12 @@ function settingsPath(): string {
 }
 
 async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
+  const smokeDir = join(app.getPath("userData"), "smoke-workspace");
+  await rm(smokeDir, { recursive: true, force: true });
+  await mkdir(smokeDir, { recursive: true });
+  const smokeInputPath = join(smokeDir, "smoke.hwpx");
+  await writeFile(smokeInputPath, await createSmokeHwpxFixture());
+
   const result = (await window.webContents.executeJavaScript(`
     new Promise((resolve) => {
       let attempts = 0;
@@ -173,6 +179,58 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (result.appReady !== "true" || result.preloadApi !== "ready") {
     throw new Error(`Desktop smoke failed: renderer/preload init did not complete`);
   }
+
+  const workflow = (await window.webContents.executeJavaScript(`
+    (async () => {
+      const progress = [];
+      const unsubscribe = window.hwpxOptimizer.onOptimizeProgress((item) => progress.push(item));
+      const analysis = await window.hwpxOptimizer.analyze(${JSON.stringify(smokeInputPath)});
+      const result = await window.hwpxOptimizer.optimize({
+        filePath: ${JSON.stringify(smokeInputPath)},
+        mode: "safe",
+        outputDirectory: ${JSON.stringify(smokeDir)}
+      });
+      const verification = await window.hwpxOptimizer.verify(result.outputPath);
+      unsubscribe();
+      return {
+        originalSize: analysis.report.originalSize,
+        outputPath: result.outputPath,
+        reportPath: result.reportPath,
+        verified: verification.ok,
+        progressCount: progress.length
+      };
+    })()
+  `)) as {
+    originalSize?: number;
+    outputPath?: string;
+    reportPath?: string;
+    verified?: boolean;
+    progressCount?: number;
+  };
+
+  if (!workflow.originalSize || workflow.originalSize <= 0) {
+    throw new Error("Desktop smoke failed: analysis did not return a document size");
+  }
+  if (!workflow.outputPath?.endsWith(".optimized.hwpx")) {
+    throw new Error(`Desktop smoke failed: unexpected output path ${String(workflow.outputPath)}`);
+  }
+  if (!workflow.reportPath?.endsWith(".report.json")) {
+    throw new Error(`Desktop smoke failed: report path was not returned`);
+  }
+  if (workflow.verified !== true) {
+    throw new Error("Desktop smoke failed: optimized output did not verify");
+  }
+  if (!workflow.progressCount || workflow.progressCount < 1) {
+    throw new Error("Desktop smoke failed: no optimization progress was emitted");
+  }
+}
+
+async function createSmokeHwpxFixture(): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file("Contents/section0.xml", '<root><img href="BinData/used.bin" /></root>');
+  zip.file("BinData/used.bin", "used");
+  zip.file("BinData/unused.bin", "unused");
+  return Buffer.from(await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }));
 }
 
 function runOptimizeWorker(

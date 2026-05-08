@@ -42,6 +42,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | CLI commands | `packages/cli/src/index.ts` | Implemented: analyze, report, verify, optimize, batch |
 | Desktop app | `apps/desktop/src/*` | Implemented |
 | Desktop preload bridge | `apps/desktop/src/preload.cjs`, `apps/desktop/src/preload.ts`, `xvfb-run -a npm run desktop:smoke` | Verified |
+| Desktop renderer IPC E2E | `xvfb-run -a npm run desktop:smoke` creates a synthetic HWPX, analyzes, optimizes through worker, and verifies output | Verified |
 | Desktop file select and drag/drop | `apps/desktop/src/renderer.ts`, `index.html` | Implemented |
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
 | Desktop mode selection | renderer radio controls | Implemented |
@@ -89,6 +90,12 @@ Sample2 evidence from the latest local run:
 - Output verifier: passed
 - Built CLI E2E path: passed with the same balanced optimization result
 - Sample inputs and generated outputs remain ignored by git.
+
+Desktop smoke evidence:
+
+- Synthetic local HWPX is generated under `.tmp/electron-smoke`.
+- Renderer preload API runs analyze, safe optimize, and verify.
+- Worker progress event is observed.
 
 Expected environment failure:
 

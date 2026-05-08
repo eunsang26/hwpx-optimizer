@@ -85,8 +85,11 @@ Desktop smoke tests cover:
 - Renderer asset loading.
 - Renderer initialization through the preload bridge.
 - Required desktop APIs including optimize progress and cancel.
+- Synthetic HWPX analysis through renderer-to-main IPC.
+- Safe optimization through the desktop worker thread.
+- Verification of the optimized output through the renderer API.
 
-The optimization worker is covered by TypeScript build checks and desktop packaging checks. A richer end-to-end GUI test that starts an optimization from the renderer is still a release-hardening task.
+The smoke test uses a synthetic local HWPX under `.tmp/electron-smoke`; it does not upload data or use user samples.
 
 ## Fixture Strategy
 
