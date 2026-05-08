@@ -1,6 +1,6 @@
 # HWPX Optimizer
 
-HWPX Optimizer is a free local utility for analyzing and reducing HWPX document size while preserving the original file. It provides a shared TypeScript core engine, a CLI, and an Electron desktop app scaffold.
+HWPX Optimizer is a free local utility for analyzing and reducing HWPX document size while preserving the original file. It provides a shared TypeScript core engine, a CLI, and an Electron desktop app.
 
 The project is intentionally local-only:
 
@@ -20,14 +20,14 @@ Implemented:
 - Conservative reference graph for internal package resources.
 - Safe, balanced, and aggressive optimization modes.
 - CLI commands for analyze, report, verify, optimize, and batch.
-- Electron desktop app scaffold with file selection, drag/drop, analysis, mode selection, optimize, result links, and local settings.
+- Electron desktop app with file selection, drag/drop, analysis, mode selection, optimize, result links, and local settings.
 - Desktop optimization runs in a worker thread with progress updates and cancellation.
+- Linux unpacked, Windows unpacked, and Windows portable desktop builds.
 - Vitest coverage for core, CLI, and desktop service/view-model behavior.
 
 Not complete yet:
 
-- Desktop packaging for Windows installers.
-- GUI smoke tests on a real display session.
+- NSIS Windows installer generation in this WSL/Linux environment, because Wine is not available.
 - Full mode-aware verifier comparison between original and optimized packages.
 - Broader HWPX reference graph coverage for uncommon XML reference forms.
 - Full manual desktop workflow testing on Windows.
@@ -128,6 +128,12 @@ Start the Electron desktop app:
 
 ```bash
 npm run desktop:start
+```
+
+Create a Windows portable executable:
+
+```bash
+npm run desktop:portable:win
 ```
 
 Desktop flow:

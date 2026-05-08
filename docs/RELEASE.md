@@ -55,13 +55,19 @@ Create an unpacked Windows x64 folder from Linux/WSL without executable resource
 npm run desktop:pack:win
 ```
 
+Create a Windows x64 portable executable from Linux/WSL without NSIS:
+
+```bash
+npm run desktop:portable:win
+```
+
 Create a Windows x64 installer build:
 
 ```bash
 npm run desktop:dist:win
 ```
 
-On Linux/WSL, the installer build requires `wine`. If `wine` is unavailable, use `desktop:pack:win` for a Windows unpacked folder build and create the installer on a Windows release machine or a Linux environment with Wine configured.
+On Linux/WSL, the NSIS installer build requires `wine`. If `wine` is unavailable, use `desktop:portable:win` for a Windows portable `.exe` artifact or `desktop:pack:win` for a Windows unpacked folder build, then create the NSIS installer on a Windows release machine or a Linux environment with Wine configured.
 
 ## Verification Before Release
 
@@ -90,6 +96,14 @@ npm run release:check:win
 
 This gate builds the Windows NSIS installer through `desktop:dist:win`.
 
+On Linux/WSL without Wine, run the portable Windows release gate:
+
+```bash
+npm run release:check:win-portable
+```
+
+This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact. It does not replace a clean Windows runtime test.
+
 The repository also includes `.github/workflows/windows-release.yml`, which runs the Windows release gate on `workflow_dispatch` and `v*` tags, then uploads the generated installer artifact.
 
 Then verify at least one HWPX end-to-end:
@@ -112,8 +126,9 @@ Before treating a build as releasable:
 2. Launch the unpacked app on the target platform.
 3. Verify the app can analyze and optimize a local HWPX file.
 4. Run `npm run desktop:pack:win` to confirm a Windows unpacked folder can be generated.
-5. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment.
-6. Install the generated artifact on a clean Windows machine.
+5. Run `npm run desktop:portable:win` if a portable Windows artifact is acceptable for the release candidate.
+6. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
+7. Install or launch the generated artifact on a clean Windows machine.
 
 Suggested future scripts:
 

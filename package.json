@@ -18,11 +18,13 @@
     "desktop:smoke": "npm run build && electron apps/desktop/dist/main.js --smoke-test",
     "desktop:pack": "npm run build && node scripts/run-electron-builder.mjs --dir",
     "desktop:pack:win": "npm run build && node scripts/run-electron-builder.mjs --win --x64 --dir -c.win.signAndEditExecutable=false",
+    "desktop:portable:win": "npm run build && node scripts/run-electron-builder.mjs --win portable --x64 -c.win.signAndEditExecutable=false",
     "desktop:dist:win": "npm run build && node scripts/run-electron-builder.mjs --win --x64",
     "test": "vitest run",
     "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
     "release:hygiene": "node scripts/check-release-hygiene.mjs",
     "release:check": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win",
+    "release:check:win-portable": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:portable:win",
     "release:check:win": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:dist:win",
     "cli": "tsx --conditions=development packages/cli/src/index.ts"
   },

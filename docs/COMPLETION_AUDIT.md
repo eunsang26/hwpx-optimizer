@@ -56,6 +56,8 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop packaging config | `package.json` electron-builder config | Implemented |
 | Linux unpacked build | `npm run desktop:pack` passed on 2026-05-08 | Verified |
 | Windows unpacked build | `npm run desktop:pack:win` passed on 2026-05-08 | Verified as build artifact only |
+| Windows portable artifact | `npm run desktop:portable:win`, `release/HWPX Optimizer-0.1.0-x64.exe` | Verified build artifact |
+| Windows portable release gate | `npm run release:check:win-portable` | Prepared |
 | Windows installer CI path | `.github/workflows/windows-release.yml`, `npm run release:check:win` | Prepared, not executed in this environment |
 | Windows installer | `npm run desktop:dist:win` reaches packaging but fails without Wine in WSL/Linux | Blocked in this environment |
 | Clean Windows machine test | no clean Windows runtime available in this environment | Not verified |
@@ -74,6 +76,8 @@ npm run release:check
 xvfb-run -a npm run desktop:smoke
 npm run desktop:pack
 npm run desktop:pack:win
+npm run desktop:portable:win
+npm run release:check:win-portable
 npm audit --json
 HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run desktop:smoke
 HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=balanced npm run desktop:smoke
@@ -104,6 +108,11 @@ Desktop smoke evidence:
 - Renderer preload API runs analyze, safe optimize, and verify.
 - Worker progress event is observed.
 
+Windows artifact evidence:
+
+- Portable Windows artifact: `release/HWPX Optimizer-0.1.0-x64.exe`, 94 MiB.
+- Windows unpacked directory: `release/win-unpacked`.
+
 Expected environment failure:
 
 ```bash
@@ -118,7 +127,7 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 
 ## Blockers To Completion
 
-- Windows installer artifact has not been generated in this environment because Wine is unavailable.
+- Windows NSIS installer artifact has not been generated in this environment because Wine is unavailable.
 - The app has not been installed and run on a clean Windows machine.
 - Manual installed desktop workflow QA with real HWPX files on a clean Windows machine is not complete.
 

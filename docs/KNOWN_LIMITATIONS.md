@@ -4,7 +4,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop app can produce Linux and Windows unpacked builds in this environment, but a Windows installer artifact still requires a Windows or Wine-enabled release machine.
+- Desktop app can produce Linux unpacked, Windows unpacked, and Windows portable builds in this environment, but a Windows NSIS installer artifact still requires a Windows or Wine-enabled release machine.
 - Desktop app has an automated launch smoke test, but full manual GUI workflow testing is still required.
 - Verifier checks mode-specific image format and dimension invariants, but it does not yet measure visual similarity or JPEG quality drift.
 - Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
