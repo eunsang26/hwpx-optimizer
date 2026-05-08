@@ -193,6 +193,7 @@ async function runBatch(
     throw new Error("Only --mode safe, --mode balanced, and --mode aggressive are supported");
   }
   const outputDir = options.out ?? join(inputDir, "optimized");
+  const overwrite = options.overwrite === "true";
   await mkdir(outputDir, { recursive: true });
 
   const files = (await readdir(inputDir, { withFileTypes: true }))
@@ -205,8 +206,10 @@ async function runBatch(
     const sourcePath = join(inputDir, file);
     try {
       const result = await optimizeByMode(await readFile(sourcePath), mode, options);
-      const outputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
-      const reportPath = `${outputPath}.report.json`;
+      const requestedOutputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
+      const outputPath = overwrite ? requestedOutputPath : await nextAvailablePath(requestedOutputPath);
+      const requestedReportPath = `${outputPath}.report.json`;
+      const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       await writeFile(outputPath, result.output);
       await writeFile(reportPath, JSON.stringify(result.report, null, 2));
       results.push({ input: file, status: "optimized", output: outputPath, report: reportPath });
@@ -219,7 +222,8 @@ async function runBatch(
     }
   }
 
-  const reportPath = join(outputDir, "batch-report.json");
+  const requestedBatchReportPath = join(outputDir, "batch-report.json");
+  const reportPath = overwrite ? requestedBatchReportPath : await nextAvailablePath(requestedBatchReportPath);
   await writeFile(
     reportPath,
     JSON.stringify(

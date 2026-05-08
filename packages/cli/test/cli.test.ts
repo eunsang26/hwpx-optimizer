@@ -217,4 +217,23 @@ describe("runCli", () => {
       ])
     );
   });
+
+  it("does not overwrite existing batch outputs by default", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    const outDir = join(dir, "optimized");
+    await mkdir(inputDir);
+    await mkdir(outDir);
+    await writeFile(join(inputDir, "good.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(join(outDir, "good.optimized.hwpx"), "existing");
+    await writeFile(join(outDir, "batch-report.json"), "existing batch");
+
+    const code = await runCli(["batch", inputDir, "--mode", "safe", "--out", outDir]);
+
+    expect(code).toBe(0);
+    expect(await readFile(join(outDir, "good.optimized.hwpx"), "utf8")).toBe("existing");
+    expect(await readFile(join(outDir, "batch-report.json"), "utf8")).toBe("existing batch");
+    expect((await readFile(join(outDir, "good.optimized-2.hwpx"))).byteLength).toBeGreaterThan(0);
+    expect((await readFile(join(outDir, "batch-report-2.json"))).byteLength).toBeGreaterThan(0);
+  });
 });
