@@ -1,13 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import {
-  analyzeHwpxBuffer,
-  optimizeHwpxBufferAggressive,
-  optimizeHwpxBufferBalanced,
-  optimizeHwpxBufferSafe,
-  verifyHwpxOutput
-} from "@hwpx-optimizer/core";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
@@ -52,7 +45,20 @@ export type DesktopProgress = {
   item: string;
 };
 
+type CoreModule = typeof import("@hwpx-optimizer/core");
+
+let coreModulePromise: Promise<CoreModule> | undefined;
+
+async function loadCoreModule(): Promise<CoreModule> {
+  coreModulePromise ??= import("@hwpx-optimizer/core").catch((error: unknown) => {
+    coreModulePromise = undefined;
+    throw error;
+  });
+  return coreModulePromise;
+}
+
 export async function analyzeDesktopFile(filePath: string): Promise<DesktopAnalysisResult> {
+  const { analyzeHwpxBuffer } = await loadCoreModule();
   const report = await analyzeHwpxBuffer(await readFile(filePath));
   return { filePath, report };
 }
@@ -80,11 +86,13 @@ export async function optimizeDesktopFile(
   }
 
   onProgress?.({ percent: 92, item: "Verifying optimized document" });
+  const { verifyHwpxOutput } = await loadCoreModule();
   await verifyHwpxOutput(result.output);
   return { outputPath, reportPath, report: result.report };
 }
 
 export async function verifyDesktopFile(filePath: string): Promise<{ ok: true }> {
+  const { verifyHwpxOutput } = await loadCoreModule();
   await verifyHwpxOutput(await readFile(filePath));
   return { ok: true };
 }
@@ -93,6 +101,7 @@ export async function optimizeByMode(
   input: Buffer,
   mode: OptimizationMode
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
+  const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
   if (mode === "safe") return optimizeHwpxBufferSafe(input);
   if (mode === "aggressive") return optimizeHwpxBufferAggressive(input);
   return optimizeHwpxBufferBalanced(input);
