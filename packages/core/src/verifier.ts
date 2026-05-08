@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { XMLParser } from "fast-xml-parser";
 import { analyzeHwpxPackage } from "./analyzer.js";
+import { computePsnr } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
 import type { HwpxEntry, HwpxPackage, ImageInventoryItem } from "./types.js";
-import { computePerceptualHash, hammingDistance, PERCEPTUAL_HASH_BIT_COUNT } from "./visualSimilarity.js";
 
 export type VerifyMode = "safe" | "balanced" | "aggressive";
 
@@ -13,9 +13,9 @@ export type VerifyHwpxOutputOptions = {
   mode?: VerifyMode;
 };
 
-const VISUAL_SIMILARITY_LIMITS: Record<Exclude<VerifyMode, "safe">, number> = {
-  balanced: 16,
-  aggressive: 22
+const PSNR_MINIMUM_DB: Record<Exclude<VerifyMode, "safe">, number> = {
+  balanced: 18,
+  aggressive: 14
 };
 
 export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutputOptions = {}): Promise<void> {
@@ -97,7 +97,7 @@ async function verifyVisualSimilarityPairs(
   mode: Exclude<VerifyMode, "safe">
 ): Promise<void> {
   if (pairs.length === 0) return;
-  const limit = VISUAL_SIMILARITY_LIMITS[mode];
+  const minimum = PSNR_MINIMUM_DB[mode];
   const seenOutputPaths = new Set<string>();
   const uniquePairs = pairs.filter((pair) => {
     if (seenOutputPaths.has(pair.output.path)) return false;
@@ -106,15 +106,11 @@ async function verifyVisualSimilarityPairs(
   });
 
   for (const pair of uniquePairs) {
-    const [originalHash, outputHash] = await Promise.all([
-      computePerceptualHash(pair.original.data),
-      computePerceptualHash(pair.output.data)
-    ]);
-    if (!originalHash || !outputHash) continue;
-    const distance = hammingDistance(originalHash, outputHash);
-    if (distance > limit) {
+    const psnr = await computePsnr(pair.original.data, pair.output.data);
+    if (psnr === null) continue;
+    if (psnr < minimum) {
       throw new Error(
-        `Verification failed: ${mode} mode visual difference too large (${distance}/${PERCEPTUAL_HASH_BIT_COUNT} bits) for ${pair.original.path}`
+        `Verification failed: ${mode} mode image quality too low (PSNR ${psnr.toFixed(2)} dB, minimum ${minimum} dB) for ${pair.original.path}`
       );
     }
   }

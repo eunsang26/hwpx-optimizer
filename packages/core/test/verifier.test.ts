@@ -73,16 +73,16 @@ describe("verifyHwpxOutput", () => {
     await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).resolves.toBeUndefined();
   });
 
-  it("rejects balanced-mode outputs whose perceptual hash drifted past the threshold", async () => {
+  it("rejects balanced-mode outputs whose PSNR collapses below the minimum", async () => {
     const original = await createReferencedImageFixture("BinData/image1.png", await createGradientPng(96, 64));
     const output = await createReferencedImageFixture("BinData/image1.png", await createInvertedGradientPng(96, 64));
 
     await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(
-      /visual difference too large/
+      /image quality too low/
     );
   });
 
-  it("allows aggressive-mode outputs that stay within the perceptual hash threshold", async () => {
+  it("allows aggressive-mode outputs that stay above the PSNR minimum", async () => {
     const gradient = await createGradientPng(192, 128);
     const originalJpeg = await sharp(gradient).jpeg({ quality: 95 }).toBuffer();
     const recompressed = await sharp(gradient).jpeg({ quality: 60 }).toBuffer();
