@@ -25,14 +25,17 @@ export async function applySafeOptimizationPlan(input: {
     if (strip) {
       try {
         const optimized = stripImageMetadataLossless(entry.path, entry.data);
-        entries.push({ ...entry, data: optimized, size: optimized.byteLength });
-        applied.push({
-          type: "strip-metadata",
-          target: entry.path,
-          beforeSize: entry.size,
-          afterSize: optimized.byteLength
-        });
-        continue;
+        if (optimized.byteLength < entry.data.byteLength) {
+          entries.push({ ...entry, data: optimized, size: optimized.byteLength });
+          applied.push({
+            type: "strip-metadata",
+            target: entry.path,
+            beforeSize: entry.size,
+            afterSize: optimized.byteLength
+          });
+          continue;
+        }
+        skipped.push({ type: "strip-metadata", target: entry.path, beforeSize: entry.size });
       } catch {
         skipped.push({ type: "strip-metadata", target: entry.path, beforeSize: entry.size });
       }

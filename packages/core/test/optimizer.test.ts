@@ -28,6 +28,29 @@ describe("applySafeOptimizationPlan", () => {
     expect(optimized.subarray(-2)).toEqual(Buffer.from([0xff, 0xd9]));
   });
 
+  it("skips JPEG metadata stripping when no removable segment is present", async () => {
+    const jpeg = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      segment(0xe0, Buffer.from("JFIF\0keep")),
+      Buffer.from([0xff, 0xda, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04, 0xff, 0xd9])
+    ]);
+    const pkg: HwpxPackage = {
+      entries: [{ path: "BinData/photo.jpg", data: jpeg, size: jpeg.byteLength, kind: "image" }]
+    };
+    const plan: OptimizationPlan = {
+      mode: "safe",
+      actions: [{ type: "strip-metadata", target: "BinData/photo.jpg", risk: "safe" }]
+    };
+
+    const result = await applySafeOptimizationPlan({ pkg, plan });
+
+    expect(result.pkg.entries[0].data).toEqual(jpeg);
+    expect(result.applied).not.toContainEqual(expect.objectContaining({ type: "strip-metadata" }));
+    expect(result.skipped).toContainEqual(
+      expect.objectContaining({ type: "strip-metadata", target: "BinData/photo.jpg" })
+    );
+  });
+
   it("optimizes PNG images losslessly when the result is smaller", async () => {
     const png = await sharp({
       create: {
