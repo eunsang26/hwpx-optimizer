@@ -4,10 +4,9 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop app has an automated launch smoke test, but full manual GUI workflow testing is still required.
+- Desktop app has automated launch smoke coverage and a user-confirmed basic Windows portable GUI run, but full all-mode Windows QA checklist coverage is still required.
 - Verifier checks mode-specific image format and dimension invariants, but it does not yet measure visual similarity or JPEG quality drift.
 - Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
-- No Windows build has been tested on a clean Windows machine.
 
 ## Verified Release Infrastructure
 

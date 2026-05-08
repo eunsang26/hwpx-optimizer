@@ -68,7 +68,8 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Release checksum manifest | `npm run release:manifest`, `npm run release:verify-manifest`, `release/release-manifest.json`, `release/SHA256SUMS.txt` | Verified generated artifacts and checksums |
 | Windows installer CI path | `.github/workflows/windows-release.yml`, GitHub Actions run `25554203465` | `npm run release:check:win` passed on Windows runner with artifact upload disabled |
 | Windows installer | Windows runner built the Windows installer through `release:check:win`; upload is optional for manual runs and enabled for tag builds | Verified in CI |
-| Clean Windows machine test | no clean Windows runtime available in this environment | Not verified |
+| Windows portable GUI smoke | User copied `release/HWPX Optimizer-0.1.0-x64.exe` to a Windows desktop, launched it, optimized a sample HWPX, and confirmed the generated result opens | Verified basic runtime path |
+| Clean Windows full QA | no full all-mode clean-machine checklist result available in this environment | Partially verified |
 | Sample files excluded | `.gitignore` sample rules; `git ls-files 'sample*'` returned empty | Verified |
 
 ## Latest Verification Commands
@@ -242,6 +243,14 @@ Latest Windows CI release gate after commit `4c6a99c`:
 - `npm run release:check:win` passed on `windows-latest`.
 - Manual artifact upload was disabled, avoiding Actions storage quota failures.
 
+Latest user Windows portable GUI smoke:
+
+- User copied `release/HWPX Optimizer-0.1.0-x64.exe` to the Windows desktop and launched it.
+- App appeared to run normally.
+- User optimized a sample HWPX and placed the result in the output folder.
+- User confirmed the generated HWPX result opens.
+- This closes the previous Windows startup blocker involving Electron main-process `sharp` loading.
+
 Latest real sample E2E after reference graph update:
 
 - `npm run cli -- analyze sample2.hwpx --report .tmp/real-sample-after-refgraph/sample2.analysis.json`: passed.
@@ -313,8 +322,7 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 
 ## Blockers To Completion
 
-- The portable or installed app has not been run on a clean Windows machine.
-- Manual installed desktop workflow QA with real HWPX files on a clean Windows machine is not complete.
+- Full Windows QA checklist across safe, balanced, aggressive, settings persistence, drag/drop, and repeated samples is not complete.
 - Visual similarity comparison is not implemented; current verifier checks package integrity, references, image dimensions, and image formats.
 - Reference graph detection is conservative and needs broader real-world HWPX coverage before product release.
 
