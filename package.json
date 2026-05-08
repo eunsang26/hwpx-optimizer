@@ -26,15 +26,19 @@
     "release:hygiene": "node scripts/check-release-hygiene.mjs",
     "release:manifest": "node scripts/write-release-manifest.mjs",
     "release:verify-manifest": "node scripts/verify-release-manifest.mjs",
-    "release:check": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win",
-    "release:check:win-portable": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:portable:win && npm run release:manifest && npm run release:verify-manifest",
-    "release:check:win": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:dist:win",
+    "release:verify-win-native": "node scripts/verify-win-native-runtime.mjs",
+    "release:check": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win && npm run release:verify-win-native",
+    "release:check:win-portable": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:portable:win && npm run release:verify-win-native && npm run release:manifest && npm run release:verify-manifest",
+    "release:check:win": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:dist:win && npm run release:verify-win-native",
     "cli": "tsx --conditions=development packages/cli/src/index.ts"
   },
   "build": {
     "appId": "local.hwpxoptimizer.app",
     "productName": "HWPX Optimizer",
     "asar": true,
+    "asarUnpack": [
+      "node_modules/@img/sharp-win32-x64/**/*"
+    ],
     "directories": {
       "output": "release"
     },
@@ -51,13 +55,6 @@
         "filter": [
           "package.json",
           "dist/**/*"
-        ]
-      },
-      {
-        "from": ".tmp/win-sharp-runtime/node_modules/@img/sharp-win32-x64",
-        "to": "node_modules/@img/sharp-win32-x64",
-        "filter": [
-          "**/*"
         ]
       },
       "node_modules/**/*"
