@@ -219,6 +219,9 @@ Additional local sample validation:
 - `npm run cli -- optimize sample3.hwpx --mode balanced --out .tmp/real-sample-matrix/sample3.balanced.hwpx --report .tmp/real-sample-matrix/sample3.balanced.report.json`: passed.
 - `npm run cli -- verify .tmp/real-sample-matrix/sample3.balanced.hwpx`: passed.
 - `sample3.hwpx` observed saving: 4.73 MiB / 21.50%; applied `optimize-png` 8, `resize-jpeg` 6, `clean-shape-comment` 1.
+- `npm run cli -- optimize sample3.hwpx --mode aggressive --out .tmp/real-sample-matrix/sample3.aggressive.hwpx --report .tmp/real-sample-matrix/sample3.aggressive.report.json`: passed.
+- `npm run cli -- verify .tmp/real-sample-matrix/sample3.aggressive.hwpx`: passed.
+- `sample3.hwpx` aggressive-mode observed saving: 14.73 MiB / 66.98%; applied `optimize-png` 22, `resize-jpeg` 7, `clean-shape-comment` 1.
 - `npm run cli -- analyze sample.hwp --report .tmp/real-sample-matrix/sample-hwp.analysis.json`: failed as expected with `Unsupported HWP binary file: save or export the document as .hwpx before optimizing`.
 
 Sample2 evidence from the latest local run:
