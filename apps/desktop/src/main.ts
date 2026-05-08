@@ -26,7 +26,7 @@ async function createWindow(): Promise<BrowserWindow> {
     minWidth: 920,
     minHeight: 640,
     show: !isSmokeTest,
-    title: "HWPX Optimizer",
+    title: "HWPX 문서 최적화",
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,
@@ -68,7 +68,7 @@ function registerIpc(): void {
   ipcMain.handle("dialog:select-hwpx", async () => {
     const options: OpenDialogOptions = {
       properties: ["openFile"],
-      filters: [{ name: "HWPX documents", extensions: ["hwpx"] }]
+      filters: [{ name: "HWPX 문서", extensions: ["hwpx"] }]
     };
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? null : result.filePaths[0] ?? null;
@@ -182,10 +182,10 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     settingsOutputResetButton?: string;
   };
 
-  if (result.title !== "HWPX Optimizer") {
+  if (result.title !== "HWPX 문서 최적화") {
     throw new Error(`Desktop smoke failed: unexpected title ${String(result.title)}`);
   }
-  if (result.fileName !== "Drop an HWPX file") {
+  if (result.fileName !== "HWPX 파일을 여기에 끌어다 놓으세요") {
     throw new Error(`Desktop smoke failed: renderer did not load expected start view`);
   }
   if (result.appReady !== "true" || result.preloadApi !== "ready") {
@@ -193,8 +193,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   }
   if (
     result.settingsOpen !== true ||
-    result.settingsOutputButton !== "Choose Output Folder" ||
-    result.settingsOutputResetButton !== "Use Original Folder"
+    result.settingsOutputButton !== "폴더 선택" ||
+    result.settingsOutputResetButton !== "원본 폴더 사용"
   ) {
     throw new Error("Desktop smoke failed: settings output folder controls did not render");
   }

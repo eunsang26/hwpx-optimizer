@@ -45,6 +45,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop renderer IPC E2E | `npm run desktop:smoke` creates a synthetic HWPX, analyzes, optimizes through worker, and verifies output; `HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=balanced/aggressive npm run desktop:smoke` verifies the same IPC path with a local real sample and non-safe modes | Verified |
 | Desktop file select and drag/drop | `apps/desktop/src/renderer.ts`, `index.html` | Implemented |
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
+| Korean desktop UX | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts`; `npm run desktop:smoke` | Implemented and verified with Korean title/start/settings smoke assertions |
 | Desktop mode selection | renderer radio controls | Implemented |
 | Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with stage-based progress |
 | Desktop result details | `apps/desktop/src/index.html`, `apps/desktop/src/renderer.ts` | Implemented with output file, output folder, and JSON report open actions |
@@ -63,8 +64,8 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Windows portable smoke script | `scripts/windows-portable-smoke.ps1` | Prepared, not executed in this Linux/WSL environment |
 | Windows clean-machine QA checklist | `docs/WINDOWS_QA_CHECKLIST.md` | Prepared, not executed |
 | Release checksum manifest | `npm run release:manifest`, `npm run release:verify-manifest`, `release/release-manifest.json`, `release/SHA256SUMS.txt` | Verified generated artifacts and checksums |
-| Windows installer CI path | `.github/workflows/windows-release.yml`, `npm run release:check:win` | Prepared, not executed in this environment |
-| Windows installer | `npm run desktop:dist:win` reaches packaging but fails without Wine in WSL/Linux | Blocked in this environment |
+| Windows installer CI path | `.github/workflows/windows-release.yml`, `gh run 25545373705` on `codex/korean-ux` | `npm run release:check:win` passed on Windows runner |
+| Windows installer | Windows runner built `release/HWPX Optimizer-0.1.0-x64.exe`; upload step saw 1 file but failed on GitHub Actions storage quota | Generated in CI, artifact upload blocked externally |
 | Clean Windows machine test | no clean Windows runtime available in this environment | Not verified |
 | Sample files excluded | `.gitignore` sample rules; `git ls-files 'sample*'` returned empty | Verified |
 
@@ -100,6 +101,18 @@ node packages/cli/dist/index.js verify sample2.dist-balanced.hwpx
 node_modules/.bin/hwpx-opt analyze sample2.hwpx --report .tmp/cli-bin-smoke/sample2.analysis.json
 git ls-files 'sample*'
 ```
+
+Latest Korean UX and Windows CI verification after PR `#2` branch `codex/korean-ux`:
+
+- `git diff --check`: passed.
+- `npm run release:hygiene`: passed.
+- `npm test`: passed, 13 files / 58 tests.
+- `npm run typecheck`: passed.
+- `npm run build`: passed.
+- `npm run desktop:smoke`: passed with Korean title, start view, and settings control assertions.
+- `npm run desktop:pack:win`: passed locally after electron-builder wrapper changes.
+- GitHub Actions run `25545149153`: Windows runner passed tests/typecheck/build/smoke and generated NSIS installer, but failed because electron-builder attempted implicit GitHub publish without `GH_TOKEN`.
+- GitHub Actions run `25545373705`: Windows runner passed `npm run release:check:win`; upload step found 1 `release/*.exe` file but failed because GitHub Actions artifact storage quota was exceeded.
 
 Latest local safety verification after commit `9afe912`:
 
@@ -274,12 +287,11 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 
 ## Blockers To Completion
 
-- Windows NSIS installer artifact has not been generated in this environment because Wine is unavailable.
+- Windows NSIS installer generation now passes on GitHub Actions Windows runner, but installer artifact upload is blocked by GitHub Actions storage quota.
 - The portable or installed app has not been run on a clean Windows machine.
 - Manual installed desktop workflow QA with real HWPX files on a clean Windows machine is not complete.
 - Visual similarity comparison is not implemented; current verifier checks package integrity, references, image dimensions, and image formats.
 - Reference graph detection is conservative and needs broader real-world HWPX coverage before product release.
-- No git remote is configured, so commits could not be pushed and remote Windows CI could not be triggered.
 
 ## Non-Blocking Follow-Ups
 
