@@ -1,0 +1,158 @@
+export type HwpxEntryKind = "xml" | "image" | "font" | "ole" | "bindata" | "other";
+
+export type HwpxEntry = {
+  path: string;
+  data: Buffer;
+  size: number;
+  kind: HwpxEntryKind;
+};
+
+export type HwpxPackage = {
+  entries: HwpxEntry[];
+};
+
+export type ImageInventoryItem = {
+  path: string;
+  size: number;
+  format: string;
+  width?: number;
+  height?: number;
+  hasMetadata: boolean;
+  isBmpCandidate: boolean;
+  displayRefs: ImageDisplayReference[];
+  largestDisplay?: ImageDisplaySummary;
+  oversizeRatio?: number;
+};
+
+export type ImageDisplayReference = {
+  sourceXml: string;
+  binaryItemIDRef: string;
+  widthHwpUnit: number;
+  heightHwpUnit: number;
+  widthPx96: number;
+  heightPx96: number;
+};
+
+export type ImageDisplaySummary = ImageDisplayReference & {
+  recommendedWidthPx: number;
+  recommendedHeightPx: number;
+};
+
+export type PackageAnalysis = {
+  totalSize: number;
+  entriesByKind: Record<HwpxEntryKind, number>;
+  categorySizes: Record<HwpxEntryKind, number>;
+  images: ImageInventoryItem[];
+  duplicateImages: DuplicateImageGroup[];
+  unusedBinData: UnusedResource[];
+  riskyResources: RiskyResource[];
+};
+
+export type DuplicateImageGroup = {
+  hash: string;
+  paths: string[];
+  count: number;
+  totalBytes: number;
+  wastedBytes: number;
+};
+
+export type UnusedResource = {
+  path: string;
+  kind: HwpxEntryKind;
+  size: number;
+};
+
+export type RiskyResource = {
+  path: string;
+  kind: "font" | "ole";
+  size: number;
+  reason: string;
+};
+
+export type ResourceReference = {
+  path: string;
+  referenced: boolean;
+  refs: string[];
+};
+
+export type ReferenceGraph = {
+  resources: Map<string, ResourceReference>;
+  missingReferences: string[];
+};
+
+export type OptimizationAction =
+  | { type: "minify-xml"; target: string; risk: "safe" }
+  | { type: "strip-metadata"; target: string; risk: "safe" }
+  | { type: "convert-bmp-to-png"; target: string; risk: "medium"; outputPath: string }
+  | { type: "resize-jpeg"; target: string; risk: "medium" }
+  | { type: "optimize-png"; target: string; risk: "safe" }
+  | { type: "clean-shape-comment"; target: string; risk: "safe" }
+  | { type: "consolidate-duplicate-images"; target: string; risk: "medium" }
+  | { type: "remove-unused"; target: string; risk: "safe" }
+  | { type: "repack-zip"; target: "*"; risk: "safe" };
+
+export type OptimizationPlan = {
+  mode: "safe" | "balanced" | "aggressive";
+  actions: OptimizationAction[];
+};
+
+export type OptimizationOpportunity = {
+  id: string;
+  label: string;
+  action:
+    | "strip-metadata"
+    | "convert-bmp-to-png"
+    | "resize-jpeg"
+    | "optimize-png"
+    | "clean-shape-comment"
+    | "consolidate-duplicate-images";
+  target: string;
+  estimatedSavingBytes: number;
+  beforeSize: number;
+  afterSize: number;
+  confidence: "exact" | "estimated";
+  risk: "safe" | "medium" | "high";
+  visualImpact: "none" | "low" | "medium" | "high";
+  defaultEnabledIn: Array<"safe" | "balanced" | "aggressive">;
+};
+
+export type OptimizationOpportunityGroup = {
+  action: OptimizationOpportunity["action"];
+  label: string;
+  count: number;
+  estimatedSavingBytes: number;
+  beforeSize: number;
+  afterSize: number;
+  confidence: OptimizationOpportunity["confidence"];
+  risk: OptimizationOpportunity["risk"];
+  visualImpact: OptimizationOpportunity["visualImpact"];
+  defaultEnabledIn: Array<"safe" | "balanced" | "aggressive">;
+  targets: string[];
+};
+
+export type AppliedAction = {
+  type: OptimizationAction["type"];
+  target: string;
+  beforeSize?: number;
+  afterSize?: number;
+};
+
+export type OptimizationReport = {
+  originalSize: number;
+  optimizedSize?: number;
+  savedBytes?: number;
+  savedPercent?: number;
+  categorySizes: Record<HwpxEntryKind, number>;
+  images: ImageInventoryItem[];
+  duplicateImages: DuplicateImageGroup[];
+  unusedBinData: UnusedResource[];
+  riskyResources: RiskyResource[];
+  actions: {
+    planned: OptimizationAction[];
+    applied: AppliedAction[];
+    skipped: AppliedAction[];
+  };
+  opportunities: OptimizationOpportunity[];
+  opportunityGroups: OptimizationOpportunityGroup[];
+  warnings: string[];
+};
