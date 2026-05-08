@@ -176,6 +176,12 @@ Latest PNG opportunity mode metadata verification after commit `cb6e2c8`:
 - `npm run build`: passed.
 - `npm run release:hygiene`: passed.
 
+Latest portable release gate after commit `c5780fb`:
+
+- `npm run release:check:win-portable`: passed.
+- Included release hygiene, 13 test files / 57 tests, typecheck, build, `npm audit`, desktop smoke, Windows portable packaging, manifest generation, and manifest verification.
+- `release:verify-manifest`: verified 1 release artifact.
+
 Sample2 evidence from the latest local run:
 
 - Original: 89.72 MiB
