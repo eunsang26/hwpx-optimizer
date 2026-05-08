@@ -19,6 +19,23 @@ export type ImageInventoryItem = {
   height?: number;
   hasMetadata: boolean;
   isBmpCandidate: boolean;
+  displayRefs: ImageDisplayReference[];
+  largestDisplay?: ImageDisplaySummary;
+  oversizeRatio?: number;
+};
+
+export type ImageDisplayReference = {
+  sourceXml: string;
+  binaryItemIDRef: string;
+  widthHwpUnit: number;
+  heightHwpUnit: number;
+  widthPx96: number;
+  heightPx96: number;
+};
+
+export type ImageDisplaySummary = ImageDisplayReference & {
+  recommendedWidthPx: number;
+  recommendedHeightPx: number;
 };
 
 export type PackageAnalysis = {

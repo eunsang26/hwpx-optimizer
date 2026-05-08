@@ -48,6 +48,57 @@ describe("analyzeHwpxPackage", () => {
 
     expect(analysis.images).toMatchObject([{ path: "BinData/image1.bmp", format: "bmp", width: 7, height: 5 }]);
   });
+
+  it("links images to their document display size", async () => {
+    const png = await sharp({
+      create: {
+        width: 1200,
+        height: 900,
+        channels: 3,
+        background: "#ffffff"
+      }
+    })
+      .png()
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.png" media-type="image/png" isEmbeded="1"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hp:pic><hp:curSz width="8000" height="4000"/><hc:img binaryItemIDRef="image1"/><hp:sz width="7200" height="3600" widthRelTo="ABSOLUTE" heightRelTo="ABSOLUTE"/></hp:pic></root>`,
+        "BinData/image1.png": png
+      }
+    });
+
+    const pkg = await readHwpxPackage(fixture);
+    const analysis = await analyzeHwpxPackage(pkg);
+
+    expect(analysis.images).toMatchObject([
+      {
+        path: "BinData/image1.png",
+        width: 1200,
+        height: 900,
+        displayRefs: [
+          {
+            sourceXml: "Contents/section0.xml",
+            binaryItemIDRef: "image1",
+            widthHwpUnit: 7200,
+            heightHwpUnit: 3600,
+            widthPx96: 96,
+            heightPx96: 48
+          }
+        ],
+        largestDisplay: {
+          widthHwpUnit: 7200,
+          heightHwpUnit: 3600,
+          widthPx96: 96,
+          heightPx96: 48,
+          recommendedWidthPx: 192,
+          recommendedHeightPx: 96,
+          sourceXml: "Contents/section0.xml"
+        }
+      }
+    ]);
+    expect(analysis.images[0]?.oversizeRatio).toBeCloseTo(9.375, 3);
+  });
 });
 
 function createBmp24(width: number, height: number): Buffer {

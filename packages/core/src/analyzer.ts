@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
-import type { HwpxEntryKind, HwpxPackage, ImageInventoryItem, PackageAnalysis } from "./types.js";
+import { extractImageDisplayReferences } from "./imageDisplay.js";
+import type { HwpxEntryKind, HwpxPackage, ImageDisplayReference, ImageInventoryItem, PackageAnalysis } from "./types.js";
 
 export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnalysis> {
   const entriesByKind: Record<HwpxEntryKind, number> = {
@@ -14,19 +15,25 @@ export async function analyzeHwpxPackage(pkg: HwpxPackage): Promise<PackageAnaly
 
   const images: ImageInventoryItem[] = [];
   let totalSize = 0;
+  const displaysByPath = extractImageDisplayReferences(pkg);
 
   for (const entry of pkg.entries) {
     totalSize += entry.size;
     entriesByKind[entry.kind] += 1;
     if (entry.kind === "image") {
-      images.push(await inspectImage(entry.path, entry.data, entry.size));
+      images.push(await inspectImage(entry.path, entry.data, entry.size, displaysByPath.get(entry.path) ?? []));
     }
   }
 
   return { totalSize, entriesByKind, images };
 }
 
-async function inspectImage(path: string, data: Buffer, size: number): Promise<ImageInventoryItem> {
+async function inspectImage(
+  path: string,
+  data: Buffer,
+  size: number,
+  displayRefs: ImageDisplayReference[]
+): Promise<ImageInventoryItem> {
   const extension = extensionFormat(path);
   const bmp = decodeBmp(data);
   if (bmp) {
@@ -37,7 +44,8 @@ async function inspectImage(path: string, data: Buffer, size: number): Promise<I
       width: bmp.width,
       height: bmp.height,
       hasMetadata: false,
-      isBmpCandidate: true
+      isBmpCandidate: true,
+      ...createDisplayFields(displayRefs, bmp.width, bmp.height)
     };
   }
 
@@ -51,7 +59,8 @@ async function inspectImage(path: string, data: Buffer, size: number): Promise<I
       width: metadata.width,
       height: metadata.height,
       hasMetadata: Boolean(metadata.exif || metadata.icc || metadata.iptc || metadata.xmp),
-      isBmpCandidate: extension === "bmp" || metadataFormat === "bmp"
+      isBmpCandidate: extension === "bmp" || metadataFormat === "bmp",
+      ...createDisplayFields(displayRefs, metadata.width, metadata.height)
     };
   } catch {
     return {
@@ -59,7 +68,8 @@ async function inspectImage(path: string, data: Buffer, size: number): Promise<I
       size,
       format: extension,
       hasMetadata: false,
-      isBmpCandidate: extension === "bmp"
+      isBmpCandidate: extension === "bmp",
+      ...createDisplayFields(displayRefs)
     };
   }
 }
@@ -67,4 +77,33 @@ async function inspectImage(path: string, data: Buffer, size: number): Promise<I
 function extensionFormat(path: string): string {
   const match = /\.([^.\/]+)$/.exec(path);
   return match ? match[1].toLowerCase() : "unknown";
+}
+
+function createDisplayFields(
+  displayRefs: ImageDisplayReference[],
+  width?: number,
+  height?: number
+): Pick<ImageInventoryItem, "displayRefs" | "largestDisplay" | "oversizeRatio"> {
+  const largest = [...displayRefs].sort(
+    (left, right) => right.widthHwpUnit * right.heightHwpUnit - left.widthHwpUnit * left.heightHwpUnit
+  )[0];
+  if (!largest) {
+    return { displayRefs };
+  }
+
+  const largestDisplay = {
+    ...largest,
+    recommendedWidthPx: largest.widthPx96 * 2,
+    recommendedHeightPx: largest.heightPx96 * 2
+  };
+  const oversizeRatio =
+    width && height
+      ? Math.max(width / largestDisplay.recommendedWidthPx, height / largestDisplay.recommendedHeightPx)
+      : undefined;
+
+  return {
+    displayRefs,
+    largestDisplay,
+    ...(oversizeRatio && oversizeRatio > 1 ? { oversizeRatio } : {})
+  };
 }
