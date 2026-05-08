@@ -55,6 +55,24 @@ describe("balanced optimization", () => {
     );
   });
 
+  it("updates manifest media types structurally regardless of attribute order", async () => {
+    const bmp = createBmp24(320, 180, [0xaa, 0xbb, 0xcc]);
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item media-type="image/bmp" href="BinData/image1.bmp" id="image1" isEmbeded="1"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hc:img binaryItemIDRef="image1" /></root>`,
+        "BinData/image1.bmp": bmp
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
+
+    expect(content).toContain('href="BinData/image1.png"');
+    expect(content).toContain('media-type="image/png"');
+  });
+
   it("resizes JPEGs to the document display size budget", async () => {
     const jpg = await sharp({
       create: {

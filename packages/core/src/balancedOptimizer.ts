@@ -1,3 +1,4 @@
+import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageBalancedWithBudget } from "./opportunities.js";
 import type { ImageOptimizationProfile } from "./opportunities.js";
@@ -85,26 +86,59 @@ function updateManifestReferences(
   pathUpdates: Map<string, string>,
   mediaTypeUpdates: Map<string, string>
 ): string {
-  let updated = xml;
-  for (const [from, to] of pathUpdates) {
-    updated = updated.split(`href="${from}"`).join(`href="${to}"`);
-    updated = updated.split(`href='${from}'`).join(`href='${to}'`);
-    const mediaType = mediaTypeUpdates.get(to);
-    if (mediaType) {
-      updated = replaceItemMediaTypeForHref(updated, to, mediaType);
+  if (pathUpdates.size === 0) return xml;
+
+  try {
+    const parser = new XMLParser({ ignoreAttributes: false, preserveOrder: true, attributeNamePrefix: "" });
+    const document = parser.parse(xml) as XmlNode[];
+    const changed = updateHrefAttributes(document, pathUpdates, mediaTypeUpdates);
+    if (!changed) return xml;
+    const builder = new XMLBuilder({
+      ignoreAttributes: false,
+      preserveOrder: true,
+      attributeNamePrefix: "",
+      suppressEmptyNode: true
+    });
+    return builder.build(document);
+  } catch {
+    return xml;
+  }
+}
+
+type XmlNode = Record<string, unknown>;
+
+function updateHrefAttributes(
+  nodes: unknown,
+  pathUpdates: Map<string, string>,
+  mediaTypeUpdates: Map<string, string>
+): boolean {
+  if (!Array.isArray(nodes)) return false;
+
+  let changed = false;
+  for (const node of nodes) {
+    if (!node || typeof node !== "object") continue;
+    const item = node as XmlNode;
+    const attributes = item[":@"];
+    if (attributes && typeof attributes === "object") {
+      const attrs = attributes as Record<string, unknown>;
+      const href = attrs.href;
+      if (typeof href === "string") {
+        const updatedPath = pathUpdates.get(href);
+        if (updatedPath) {
+          attrs.href = updatedPath;
+          const updatedMediaType = mediaTypeUpdates.get(updatedPath);
+          if (updatedMediaType) attrs["media-type"] = updatedMediaType;
+          changed = true;
+        }
+      }
+    }
+
+    for (const value of Object.values(item)) {
+      if (Array.isArray(value) && updateHrefAttributes(value, pathUpdates, mediaTypeUpdates)) {
+        changed = true;
+      }
     }
   }
-  return updated;
-}
 
-function replaceItemMediaTypeForHref(xml: string, href: string, mediaType: string): string {
-  const escapedHref = escapeRegExp(href);
-  return xml.replace(
-    new RegExp(`(<[^>]+href=["']${escapedHref}["'][^>]*\\smedia-type=["'])[^"']+(["'][^>]*>)`, "g"),
-    `$1${mediaType}$2`
-  );
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return changed;
 }

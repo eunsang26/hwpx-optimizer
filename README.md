@@ -28,7 +28,7 @@ Not complete yet:
 - Desktop packaging for Windows installers.
 - GUI smoke tests on a real display session.
 - Full mode-aware verifier comparison between original and optimized packages.
-- Structural XML rewrite for every reference update path.
+- Broader HWPX reference graph coverage for uncommon XML reference forms.
 - Duplicate image reference consolidation.
 - Worker/process separation for long-running desktop optimization.
 

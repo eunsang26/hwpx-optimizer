@@ -77,7 +77,7 @@ input.hwpx
 - Marks referenced and unreferenced resources.
 - Reports missing references.
 
-Current limitation: graph detection is conservative and partially pattern-based. Full structural XML reference rewriting is still tracked as a product gap.
+Current limitation: graph detection is conservative and partially pattern-based. It should be expanded as more real-world HWPX reference forms are collected.
 
 ### Planner
 
@@ -107,6 +107,7 @@ Current limitation: graph detection is conservative and partially pattern-based.
 - Optimize PNG resources.
 - Clean shape-comment metadata.
 - Record applied and skipped actions.
+- Update manifest `href` and `media-type` attributes through a parsed XML tree.
 
 Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a stronger profile and marks higher visual-difference risk in reports.
 
