@@ -1,78 +1,107 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HWPX Optimizer</title>
+    <title>HWPX 문서 최적화</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
         <div>
-          <h1>HWPX Optimizer</h1>
-          <p id="status-text">Ready.</p>
+          <h1>HWPX 문서 최적화</h1>
+          <p id="status-text">파일을 선택하면 문서 구조와 이미지 용량 원인을 먼저 분석합니다.</p>
         </div>
-        <button id="settings-button" class="ghost">Settings</button>
+        <button id="settings-button" class="ghost">설정</button>
       </header>
 
       <section id="drop-zone" class="drop-zone">
         <div>
-          <h2 id="file-name">Drop an HWPX file</h2>
-          <p id="file-meta">No file selected.</p>
+          <h2 id="file-name">HWPX 파일을 여기에 끌어다 놓으세요</h2>
+          <p id="file-meta">서버 업로드 없이 이 컴퓨터에서만 처리합니다.</p>
         </div>
         <div class="actions">
-          <button id="choose-button">Choose File</button>
-          <button id="analyze-button" disabled>Analyze</button>
+          <button id="choose-button">파일 선택</button>
+          <button id="analyze-button" disabled>다시 분석</button>
         </div>
       </section>
 
       <section class="panel">
         <div class="panel-header">
-          <h2>Analysis</h2>
-          <button id="output-button" class="ghost">Output Folder</button>
+          <div>
+            <h2>문서 분석</h2>
+            <p>용량을 키우는 이미지, 메타데이터, 미사용 리소스를 요약합니다.</p>
+          </div>
+          <button id="output-button" class="ghost">저장 위치</button>
         </div>
         <div id="analysis-grid" class="metric-grid"></div>
       </section>
 
       <section class="panel modes">
         <div class="panel-header">
-          <h2>Mode</h2>
+          <div>
+            <h2>최적화 방식</h2>
+            <p>문서 외형 보존 우선이면 안전 모드를 선택하세요.</p>
+          </div>
           <p id="mode-warning"></p>
         </div>
-        <label><input type="radio" name="mode" value="safe" checked /> Safe</label>
-        <label><input type="radio" name="mode" value="balanced" /> Balanced</label>
-        <label><input type="radio" name="mode" value="aggressive" /> Aggressive</label>
-        <button id="optimize-button" disabled>Optimize</button>
+        <div class="mode-options">
+          <label>
+            <input type="radio" name="mode" value="safe" checked />
+            <span>
+              <strong>안전</strong>
+              <em>외형 변경 가능성이 낮은 정리만 수행</em>
+            </span>
+          </label>
+          <label>
+            <input type="radio" name="mode" value="balanced" />
+            <span>
+              <strong>균형</strong>
+              <em>큰 이미지와 BMP까지 현실적으로 압축</em>
+            </span>
+          </label>
+          <label>
+            <input type="radio" name="mode" value="aggressive" />
+            <span>
+              <strong>최대 압축</strong>
+              <em>용량 우선, 이미지 품질 차이 가능</em>
+            </span>
+          </label>
+        </div>
+        <button id="optimize-button" disabled>최적화 실행</button>
       </section>
 
       <section id="progress-panel" class="panel progress-panel" hidden>
         <div class="panel-header">
-          <h2>Progress</h2>
-          <button id="cancel-button" class="ghost">Cancel</button>
+          <h2>진행 상황</h2>
+          <button id="cancel-button" class="ghost">취소</button>
         </div>
         <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
-        <p id="progress-item">Waiting.</p>
+        <p id="progress-item">대기 중입니다.</p>
       </section>
 
       <section class="panel two-column">
         <div>
-          <h2>Opportunities</h2>
+          <h2>줄일 수 있는 항목</h2>
           <ul id="opportunity-list" class="list"></ul>
         </div>
         <div>
-          <h2>Warnings</h2>
+          <h2>주의할 점</h2>
           <ul id="warning-list" class="list"></ul>
         </div>
       </section>
 
       <section id="result-panel" class="panel result" hidden>
         <div class="panel-header">
-          <h2>Result</h2>
+          <div>
+            <h2>최적화 결과</h2>
+            <p>원본은 그대로 보존됩니다.</p>
+          </div>
           <div class="actions">
-            <button id="open-file-button" class="ghost">Open File</button>
-            <button id="open-report-button" class="ghost" disabled>Open Report</button>
-            <button id="open-folder-button" class="ghost">Show Folder</button>
+            <button id="open-file-button" class="ghost">파일 열기</button>
+            <button id="open-report-button" class="ghost" disabled>리포트 열기</button>
+            <button id="open-folder-button" class="ghost">폴더 보기</button>
           </div>
         </div>
         <div id="result-summary" class="metric-grid"></div>
@@ -81,25 +110,25 @@
       </section>
 
       <aside id="settings-panel" class="settings">
-        <h2>Settings</h2>
+        <h2>설정</h2>
         <label>
-          Default mode
+          기본 모드
           <select id="setting-default-mode">
-            <option value="safe">Safe</option>
-            <option value="balanced">Balanced</option>
-            <option value="aggressive">Aggressive</option>
+            <option value="safe">안전</option>
+            <option value="balanced">균형</option>
+            <option value="aggressive">최대 압축</option>
           </select>
         </label>
-        <label><input id="setting-save-next" type="checkbox" /> Save next to original</label>
-        <label><input id="setting-save-report" type="checkbox" /> Save JSON report</label>
-        <label><input id="setting-prevent-overwrite" type="checkbox" /> Prevent overwrite</label>
-        <label><input id="setting-aggressive-warning" type="checkbox" /> Show aggressive warning</label>
-        <p id="setting-output-directory">Output folder: original document folder</p>
+        <label><input id="setting-save-next" type="checkbox" /> 원본 파일 옆에 저장</label>
+        <label><input id="setting-save-report" type="checkbox" /> JSON 리포트 저장</label>
+        <label><input id="setting-prevent-overwrite" type="checkbox" /> 같은 이름 덮어쓰기 방지</label>
+        <label><input id="setting-aggressive-warning" type="checkbox" /> 최대 압축 경고 표시</label>
+        <p id="setting-output-directory">저장 위치: 원본 문서 폴더</p>
         <div class="settings-actions">
-          <button id="setting-output-button" class="ghost">Choose Output Folder</button>
-          <button id="setting-output-reset-button" class="ghost">Use Original Folder</button>
+          <button id="setting-output-button" class="ghost">폴더 선택</button>
+          <button id="setting-output-reset-button" class="ghost">원본 폴더 사용</button>
         </div>
-        <p>Settings are stored locally on this computer.</p>
+        <p>설정은 이 컴퓨터에만 저장됩니다.</p>
       </aside>
     </main>
     <script type="module" src="./renderer.js"></script>
