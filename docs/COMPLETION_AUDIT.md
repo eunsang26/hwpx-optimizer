@@ -67,6 +67,7 @@ Passed:
 
 ```bash
 npm test
+npm run release:hygiene
 npm run typecheck
 npm run build
 npm run release:check

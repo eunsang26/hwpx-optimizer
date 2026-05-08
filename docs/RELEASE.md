@@ -80,7 +80,7 @@ Or run the consolidated local release gate:
 npm run release:check
 ```
 
-This gate runs tests, typecheck, build, audit, desktop smoke, current-platform unpacked packaging, and Windows unpacked packaging. It does not replace the final Windows installer build or clean Windows install test.
+This gate checks release hygiene, tests, typecheck, build, audit, desktop smoke, current-platform unpacked packaging, and Windows unpacked packaging. It does not replace the final Windows installer build or clean Windows install test.
 
 On a Windows release machine or Windows CI runner, run:
 
