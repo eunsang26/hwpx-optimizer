@@ -57,6 +57,8 @@ const settingSaveReport = requireInput("setting-save-report");
 const settingPreventOverwrite = requireInput("setting-prevent-overwrite");
 const settingAggressiveWarning = requireInput("setting-aggressive-warning");
 const settingOutputDirectory = requireElement("setting-output-directory");
+const settingOutputButton = requireButton("setting-output-button");
+const settingOutputResetButton = requireButton("setting-output-reset-button");
 
 void init();
 
@@ -124,6 +126,19 @@ async function init(): Promise<void> {
     "change",
     () => void saveSettings({ showAggressiveWarning: settingAggressiveWarning.checked })
   );
+  settingOutputButton.addEventListener("click", async () => {
+    const selected = await window.hwpxOptimizer.selectDirectory();
+    if (selected) {
+      state.outputDirectory = selected;
+      await saveSettings({ outputDirectory: selected, saveNextToOriginal: false });
+      setStatus(`Output folder: ${selected}`);
+    }
+  });
+  settingOutputResetButton.addEventListener("click", async () => {
+    state.outputDirectory = undefined;
+    await saveSettings({ outputDirectory: undefined, saveNextToOriginal: true });
+    setStatus("Output folder: original document folder.");
+  });
 
   dropZone.addEventListener("dragover", (event) => {
     event.preventDefault();

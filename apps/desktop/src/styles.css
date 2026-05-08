@@ -241,6 +241,18 @@ select {
   margin-right: 8px;
 }
 
+.settings-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-actions button {
+  width: 100%;
+  min-height: 38px;
+}
+
 .settings.is-open {
   display: block;
 }
