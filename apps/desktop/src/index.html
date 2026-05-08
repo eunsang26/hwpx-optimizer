@@ -72,6 +72,19 @@
 
       <aside id="settings-panel" class="settings">
         <h2>Settings</h2>
+        <label>
+          Default mode
+          <select id="setting-default-mode">
+            <option value="safe">Safe</option>
+            <option value="balanced">Balanced</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+        </label>
+        <label><input id="setting-save-next" type="checkbox" /> Save next to original</label>
+        <label><input id="setting-save-report" type="checkbox" /> Save JSON report</label>
+        <label><input id="setting-prevent-overwrite" type="checkbox" /> Prevent overwrite</label>
+        <label><input id="setting-aggressive-warning" type="checkbox" /> Show aggressive warning</label>
+        <p id="setting-output-directory">Output folder: original document folder</p>
         <p>Settings are stored locally on this computer.</p>
       </aside>
     </main>

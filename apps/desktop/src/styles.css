@@ -86,6 +86,17 @@ label {
   line-height: 1.5;
 }
 
+select {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
 .drop-zone,
 .panel,
 .settings {
@@ -196,6 +207,18 @@ label {
   right: 24px;
   width: 320px;
   padding: 18px;
+  z-index: 10;
+}
+
+.settings label {
+  display: block;
+  margin-top: 14px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.settings input[type="checkbox"] {
+  margin-right: 8px;
 }
 
 .settings.is-open {

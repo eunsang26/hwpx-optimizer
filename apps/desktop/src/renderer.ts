@@ -14,9 +14,19 @@ type AppState = {
   result?: { outputPath: string; reportPath?: string; report: OptimizationReport };
   mode: "safe" | "balanced" | "aggressive";
   outputDirectory?: string;
+  settings?: DesktopSettings;
 };
 
 const state: AppState = { mode: "safe" };
+
+type DesktopSettings = {
+  defaultMode: AppState["mode"];
+  saveNextToOriginal: boolean;
+  saveReport: boolean;
+  preventOverwrite: boolean;
+  showAggressiveWarning: boolean;
+  outputDirectory?: string;
+};
 
 const dropZone = requireElement("drop-zone");
 const fileName = requireElement("file-name");
@@ -36,12 +46,21 @@ const statusText = requireElement("status-text");
 const modeInputs = Array.from(document.querySelectorAll<HTMLInputElement>("input[name='mode']"));
 const openFileButton = requireButton("open-file-button");
 const openFolderButton = requireButton("open-folder-button");
+const settingDefaultMode = requireSelect("setting-default-mode");
+const settingSaveNext = requireInput("setting-save-next");
+const settingSaveReport = requireInput("setting-save-report");
+const settingPreventOverwrite = requireInput("setting-prevent-overwrite");
+const settingAggressiveWarning = requireInput("setting-aggressive-warning");
+const settingOutputDirectory = requireElement("setting-output-directory");
 
 void init();
 
 async function init(): Promise<void> {
-  const settings = await window.hwpxOptimizer.loadSettings();
+  const settings = (await window.hwpxOptimizer.loadSettings()) as DesktopSettings;
+  state.settings = settings;
   state.mode = settings.defaultMode ?? "safe";
+  state.outputDirectory = settings.outputDirectory;
+  renderSettings(settings);
   modeInputs.find((input) => input.value === state.mode)?.click();
 
   chooseButton.addEventListener("click", async () => {
@@ -57,6 +76,7 @@ async function init(): Promise<void> {
     const selected = await window.hwpxOptimizer.selectDirectory();
     if (selected) {
       state.outputDirectory = selected;
+      await saveSettings({ outputDirectory: selected, saveNextToOriginal: false });
       setStatus(`Output folder: ${selected}`);
     }
   });
@@ -69,10 +89,27 @@ async function init(): Promise<void> {
   for (const input of modeInputs) {
     input.addEventListener("change", () => {
       state.mode = input.value as AppState["mode"];
-      void window.hwpxOptimizer.saveSettings({ defaultMode: state.mode });
+      void saveSettings({ defaultMode: state.mode });
       renderModeWarning();
     });
   }
+
+  settingDefaultMode.addEventListener("change", () => {
+    const nextMode = settingDefaultMode.value as AppState["mode"];
+    state.mode = nextMode;
+    modeInputs.find((input) => input.value === nextMode)?.click();
+    void saveSettings({ defaultMode: nextMode });
+  });
+  settingSaveNext.addEventListener("change", () => void saveSettings({ saveNextToOriginal: settingSaveNext.checked }));
+  settingSaveReport.addEventListener("change", () => void saveSettings({ saveReport: settingSaveReport.checked }));
+  settingPreventOverwrite.addEventListener(
+    "change",
+    () => void saveSettings({ preventOverwrite: settingPreventOverwrite.checked })
+  );
+  settingAggressiveWarning.addEventListener(
+    "change",
+    () => void saveSettings({ showAggressiveWarning: settingAggressiveWarning.checked })
+  );
 
   dropZone.addEventListener("dragover", (event) => {
     event.preventDefault();
@@ -92,6 +129,24 @@ async function init(): Promise<void> {
   });
 
   renderModeWarning();
+}
+
+async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
+  const settings = (await window.hwpxOptimizer.saveSettings(patch)) as DesktopSettings;
+  state.settings = settings;
+  state.outputDirectory = settings.outputDirectory;
+  renderSettings(settings);
+}
+
+function renderSettings(settings: DesktopSettings): void {
+  settingDefaultMode.value = settings.defaultMode;
+  settingSaveNext.checked = settings.saveNextToOriginal;
+  settingSaveReport.checked = settings.saveReport;
+  settingPreventOverwrite.checked = settings.preventOverwrite;
+  settingAggressiveWarning.checked = settings.showAggressiveWarning;
+  settingOutputDirectory.textContent = settings.outputDirectory
+    ? `Output folder: ${settings.outputDirectory}`
+    : "Output folder: original document folder";
 }
 
 async function loadFile(path: string): Promise<void> {
@@ -181,7 +236,7 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
 function renderModeWarning(): void {
   const warning = requireElement("mode-warning");
   warning.textContent =
-    state.mode === "aggressive"
+    state.mode === "aggressive" && state.settings?.showAggressiveWarning !== false
       ? "Aggressive mode may introduce visible image quality differences."
       : state.mode === "balanced"
         ? "Balanced mode can convert or resize images when the document display size allows it."
@@ -226,4 +281,12 @@ function requireElement(id: string): HTMLElement {
 
 function requireButton(id: string): HTMLButtonElement {
   return requireElement(id) as HTMLButtonElement;
+}
+
+function requireInput(id: string): HTMLInputElement {
+  return requireElement(id) as HTMLInputElement;
+}
+
+function requireSelect(id: string): HTMLSelectElement {
+  return requireElement(id) as HTMLSelectElement;
 }
