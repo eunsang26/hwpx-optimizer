@@ -3,6 +3,8 @@ node_modules/
 dist/
 packages/*/dist/
 packages/*/tsconfig.tsbuildinfo
+apps/*/dist/
+apps/*/tsconfig.tsbuildinfo
 *.log
 .tmp/
 /sample*.hwp

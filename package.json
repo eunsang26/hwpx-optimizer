@@ -4,13 +4,16 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "apps/desktop",
     "packages/core",
     "packages/cli"
   ],
   "scripts": {
-    "build": "tsc -b packages/core packages/cli",
+    "build": "tsc -b packages/core packages/cli apps/desktop && npm run desktop:assets",
+    "desktop:assets": "node apps/desktop/scripts/copy-assets.mjs",
+    "desktop:start": "npm run build && electron apps/desktop/dist/main.js",
     "test": "vitest run",
-    "typecheck": "tsc -b packages/core packages/cli --pretty false",
+    "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
     "cli": "tsx packages/cli/src/index.ts"
   },
   "dependencies": {
@@ -20,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
+    "electron": "^42.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4"
