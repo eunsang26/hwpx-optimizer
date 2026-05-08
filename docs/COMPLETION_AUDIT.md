@@ -246,6 +246,7 @@ Desktop smoke evidence:
 - Desktop worker paths for `balanced` and `aggressive` were verified by adding `HWPX_OPT_SMOKE_MODE`.
 - `HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=safe npm run desktop:smoke`: passed.
 - `HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=balanced npm run desktop:smoke`: passed.
+- `HWPX_OPT_SMOKE_INPUT=sample2.hwpx HWPX_OPT_SMOKE_MODE=aggressive npm run desktop:smoke`: passed.
 - `HWPX_OPT_SMOKE_INPUT=sample3.hwpx HWPX_OPT_SMOKE_MODE=aggressive npm run desktop:smoke`: passed.
 - Renderer preload API runs analyze, optimize, progress events, and verify.
 - Smoke also opens the Settings panel and checks the output folder controls render.
