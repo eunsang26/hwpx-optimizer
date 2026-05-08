@@ -31,7 +31,10 @@ export async function runCli(argv: string[]): Promise<number> {
       const input = await readFile(inputPath);
       const result =
         mode === "balanced"
-          ? await optimizeHwpxBufferBalanced(input, { actions: parseActionList(options.actions) })
+          ? await optimizeHwpxBufferBalanced(input, {
+              actions: parseActionList(options.actions),
+              allowLarger: options["allow-larger"] === "true"
+            })
           : await optimizeHwpxBufferSafe(input);
       const outputPath = options.out ?? defaultOutputPath(inputPath);
       const reportPath = options.report ?? `${outputPath}.report.json`;
@@ -76,7 +79,7 @@ function defaultOutputPath(inputPath: string): string {
 function printUsage(): void {
   console.error("Usage:");
   console.error("  hwpx-opt analyze <file.hwpx> [--report report.json]");
-  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced [--actions action1,action2] [--out output.hwpx] [--report report.json]");
+  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced [--actions action1,action2] [--allow-larger] [--out output.hwpx] [--report report.json]");
 }
 
 function parseActionList(value?: string): string[] | undefined {

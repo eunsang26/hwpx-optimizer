@@ -1,4 +1,4 @@
-import { outputMediaType, transformImageBalanced } from "./opportunities.js";
+import { cleanShapeComments, outputMediaType, transformImageBalanced } from "./opportunities.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 
 export async function applyBalancedOptimizationPlan(input: {
@@ -9,7 +9,7 @@ export async function applyBalancedOptimizationPlan(input: {
   const skipped: AppliedAction[] = [];
   const transformTargets = new Set(
     input.plan.actions
-      .filter((action) => action.type === "convert-bmp-to-png" || action.type === "resize-jpeg")
+      .filter((action) => action.type === "convert-bmp-to-png" || action.type === "resize-jpeg" || action.type === "optimize-png")
       .map((action) => action.target)
   );
   const pathUpdates = new Map<string, string>();
@@ -23,7 +23,7 @@ export async function applyBalancedOptimizationPlan(input: {
     }
 
     const action = input.plan.actions.find((item) => item.target === entry.path);
-    if (!action || (action.type !== "convert-bmp-to-png" && action.type !== "resize-jpeg")) {
+    if (!action || (action.type !== "convert-bmp-to-png" && action.type !== "resize-jpeg" && action.type !== "optimize-png")) {
       transformedEntries.push(entry);
       continue;
     }
@@ -54,9 +54,21 @@ export async function applyBalancedOptimizationPlan(input: {
   const entries = transformedEntries.map((entry) => {
     if (entry.kind !== "xml") return entry;
     const text = entry.data.toString("utf8");
-    const updated = updateManifestReferences(text, pathUpdates, mediaTypeUpdates);
+    const updatedManifest = updateManifestReferences(text, pathUpdates, mediaTypeUpdates);
+    const shouldCleanShapeComment = input.plan.actions.some(
+      (action) => action.type === "clean-shape-comment" && action.target === entry.path
+    );
+    const updated = shouldCleanShapeComment ? cleanShapeComments(updatedManifest) : updatedManifest;
     if (updated === text) return entry;
     const data = Buffer.from(updated);
+    if (shouldCleanShapeComment && updated !== updatedManifest) {
+      applied.push({
+        type: "clean-shape-comment",
+        target: entry.path,
+        beforeSize: entry.size,
+        afterSize: data.byteLength
+      });
+    }
     return { ...entry, data, size: data.byteLength };
   });
 

@@ -13,7 +13,8 @@ export async function detectOptimizationOpportunities(pkg: HwpxPackage): Promise
 
     const metadata = await readMetadata(entry.data);
     if (isJpeg(entry.path) && metadata.width && metadata.height && Math.max(metadata.width, metadata.height) > BALANCED_MAX_EDGE) {
-      const candidate = await resizeJpegBalanced(entry.data);
+      const candidate = await tryTransform(() => resizeJpegBalanced(entry.data));
+      if (!candidate) continue;
       addOpportunityIfSmaller(opportunities, {
         id: `resize-jpeg:${entry.path}`,
         label: "Resize oversized JPEG and recompress with MozJPEG",
@@ -30,7 +31,8 @@ export async function detectOptimizationOpportunities(pkg: HwpxPackage): Promise
     }
 
     if (isBmp(entry.path)) {
-      const candidate = await convertBmpToPngBalanced(entry.data, metadata.width, metadata.height);
+      const candidate = await tryTransform(() => convertBmpToPngBalanced(entry.data, metadata.width, metadata.height));
+      if (!candidate) continue;
       addOpportunityIfSmaller(opportunities, {
         id: `convert-bmp-to-png:${entry.path}`,
         label: "Convert BMP to PNG",
@@ -43,10 +45,54 @@ export async function detectOptimizationOpportunities(pkg: HwpxPackage): Promise
         visualImpact: metadata.width && metadata.height && Math.max(metadata.width, metadata.height) > BALANCED_MAX_EDGE ? "medium" : "low",
         defaultEnabledIn: ["balanced", "aggressive"]
       });
+      continue;
+    }
+
+    if (isPng(entry.path)) {
+      const candidate = await tryTransform(() => optimizePng(entry.data));
+      if (!candidate) continue;
+      addOpportunityIfSmaller(opportunities, {
+        id: `optimize-png:${entry.path}`,
+        label: "Optimize PNG losslessly",
+        action: "optimize-png",
+        target: entry.path,
+        beforeSize: entry.size,
+        afterSize: candidate.byteLength,
+        confidence: "exact",
+        risk: "safe",
+        visualImpact: "none",
+        defaultEnabledIn: ["balanced", "aggressive"]
+      });
     }
   }
 
+  for (const entry of pkg.entries) {
+    if (entry.kind !== "xml") continue;
+    const cleaned = cleanShapeComments(entry.data.toString("utf8"));
+    if (cleaned === entry.data.toString("utf8")) continue;
+    addOpportunityIfSmaller(opportunities, {
+      id: `clean-shape-comment:${entry.path}`,
+      label: "Clean image shape comments",
+      action: "clean-shape-comment",
+      target: entry.path,
+      beforeSize: entry.size,
+      afterSize: Buffer.byteLength(cleaned),
+      confidence: "exact",
+      risk: "safe",
+      visualImpact: "none",
+      defaultEnabledIn: ["balanced", "aggressive"]
+    });
+  }
+
   return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
+}
+
+async function tryTransform(operation: () => Promise<Buffer>): Promise<Buffer | null> {
+  try {
+    return await operation();
+  } catch {
+    return null;
+  }
 }
 
 export async function transformImageBalanced(path: string, data: Buffer): Promise<{ outputPath: string; data: Buffer }> {
@@ -63,7 +109,17 @@ export async function transformImageBalanced(path: string, data: Buffer): Promis
       data: await resizeJpegBalanced(data)
     };
   }
+  if (isPng(path)) {
+    return {
+      outputPath: path,
+      data: await optimizePng(data)
+    };
+  }
   return { outputPath: path, data };
+}
+
+export function cleanShapeComments(xml: string): string {
+  return xml.replace(/<hp:shapeComment>[\s\S]*?<\/hp:shapeComment>/g, "<hp:shapeComment>그림입니다.</hp:shapeComment>");
 }
 
 export function outputMediaType(path: string): string {
@@ -105,6 +161,10 @@ async function resizeJpegBalanced(data: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
+async function optimizePng(data: Buffer): Promise<Buffer> {
+  return sharp(data).png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
+}
+
 async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number }> {
   const bmp = decodeBmp(data);
   if (bmp) return { width: bmp.width, height: bmp.height };
@@ -132,6 +192,10 @@ function isBmp(path: string): boolean {
 
 function isJpeg(path: string): boolean {
   return /\.jpe?g$/i.test(path);
+}
+
+function isPng(path: string): boolean {
+  return /\.png$/i.test(path);
 }
 
 function replaceExtension(path: string, extension: string): string {

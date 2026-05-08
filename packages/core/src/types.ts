@@ -43,6 +43,8 @@ export type OptimizationAction =
   | { type: "strip-metadata"; target: string; risk: "safe" }
   | { type: "convert-bmp-to-png"; target: string; risk: "medium"; outputPath: string }
   | { type: "resize-jpeg"; target: string; risk: "medium" }
+  | { type: "optimize-png"; target: string; risk: "safe" }
+  | { type: "clean-shape-comment"; target: string; risk: "safe" }
   | { type: "remove-unused"; target: string; risk: "safe" }
   | { type: "repack-zip"; target: "*"; risk: "safe" };
 

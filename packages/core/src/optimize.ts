@@ -56,7 +56,10 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
   return { output, report };
 }
 
-export async function optimizeHwpxBufferBalanced(input: Buffer, options: { actions?: string[] } = {}): Promise<{
+export async function optimizeHwpxBufferBalanced(
+  input: Buffer,
+  options: { actions?: string[]; allowLarger?: boolean } = {}
+): Promise<{
   output: Buffer;
   report: OptimizationReport;
 }> {
@@ -67,16 +70,20 @@ export async function optimizeHwpxBufferBalanced(input: Buffer, options: { actio
     options.actions && options.actions.length > 0
       ? opportunities.filter((opportunity) => options.actions?.includes(opportunity.action))
       : opportunities;
-  const actions = selectedOpportunities.map((opportunity) =>
-    opportunity.action === "convert-bmp-to-png"
-      ? ({
-          type: "convert-bmp-to-png" as const,
-          target: opportunity.target,
-          outputPath: opportunity.target.replace(/\.[^.\/]+$/, ".png"),
-          risk: "medium" as const
-        })
-      : ({ type: "resize-jpeg" as const, target: opportunity.target, risk: "medium" as const })
-  );
+  const actions = selectedOpportunities.map((opportunity) => {
+    if (opportunity.action === "convert-bmp-to-png") {
+      return {
+        type: "convert-bmp-to-png" as const,
+        target: opportunity.target,
+        outputPath: opportunity.target.replace(/\.[^.\/]+$/, ".png"),
+        risk: "medium" as const
+      };
+    }
+    if (opportunity.action === "resize-jpeg") {
+      return { type: "resize-jpeg" as const, target: opportunity.target, risk: "medium" as const };
+    }
+    return { type: opportunity.action, target: opportunity.target, risk: "safe" as const };
+  });
   const plan = {
     mode: "balanced" as const,
     actions: [...actions, { type: "repack-zip" as const, target: "*" as const, risk: "safe" as const }]
@@ -85,7 +92,7 @@ export async function optimizeHwpxBufferBalanced(input: Buffer, options: { actio
   const output = await writeHwpxPackage(optimized.pkg);
   await verifyHwpxOutput(output);
 
-  if (output.byteLength >= input.byteLength) {
+  if (!options.allowLarger && output.byteLength >= input.byteLength) {
     const report = createOptimizationReport({
       analysis,
       originalSize: input.byteLength,
