@@ -193,7 +193,11 @@ describe("balanced optimization", () => {
 
     expect(report.opportunities).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ action: "optimize-png", target: "BinData/image1.png" }),
+        expect.objectContaining({
+          action: "optimize-png",
+          target: "BinData/image1.png",
+          defaultEnabledIn: ["safe", "balanced", "aggressive"]
+        }),
         expect.objectContaining({ action: "clean-shape-comment", target: "Contents/section0.xml" })
       ])
     );

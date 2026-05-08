@@ -95,7 +95,7 @@ export async function detectOptimizationOpportunities(
         confidence: "exact",
         risk: "safe",
         visualImpact: "none",
-        defaultEnabledIn: ["balanced", "aggressive"]
+        defaultEnabledIn: ["safe", "balanced", "aggressive"]
       });
     }
   }
