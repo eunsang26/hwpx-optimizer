@@ -14,7 +14,7 @@
     "desktop:start": "npm run build && electron apps/desktop/dist/main.js",
     "test": "vitest run",
     "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
-    "cli": "tsx packages/cli/src/index.ts"
+    "cli": "tsx --conditions=development packages/cli/src/index.ts"
   },
   "dependencies": {
     "fast-xml-parser": "^4.5.0",
