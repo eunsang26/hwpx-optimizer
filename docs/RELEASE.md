@@ -29,6 +29,12 @@ Build all TypeScript projects and copy desktop renderer assets:
 npm run build
 ```
 
+Generate desktop icon resources:
+
+```bash
+npm run desktop:icons
+```
+
 Run the CLI from source:
 
 ```bash
@@ -47,7 +53,7 @@ Create an unpacked desktop build for the current platform:
 npm run desktop:pack
 ```
 
-The packaging script stores Electron downloads under the project-local `.npm-cache/electron` directory. This avoids relying on a writable home-directory cache in locked-down environments.
+The packaging scripts generate desktop icon resources under `build/` before invoking electron-builder. They also store Electron downloads under the project-local `.npm-cache/electron` directory. This avoids relying on a writable home-directory cache in locked-down environments.
 
 Create an unpacked Windows x64 folder from Linux/WSL without executable resource editing:
 

@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 const forbiddenPatterns = [
   /^sample.*\.(hwp|hwpx|json|txt)$/i,
   /^release\//,
+  /^build\//,
   /^\.tmp\//,
   /^\.npm-cache\//,
   /^node_modules\//

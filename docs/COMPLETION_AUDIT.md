@@ -54,6 +54,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | JSON reports | CLI and desktop service report write paths | Implemented |
 | Docs | `README.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/RELEASE.md`, `docs/KNOWN_LIMITATIONS.md` | Implemented |
 | Desktop packaging config | `package.json` electron-builder config | Implemented |
+| Desktop icon resources | `scripts/generate-desktop-icons.mjs`, `npm run desktop:icons`, generated `build/icon.png` and `build/icon.ico` | Implemented |
 | Linux unpacked build | `npm run desktop:pack` passed on 2026-05-08 | Verified |
 | Windows unpacked build | `npm run desktop:pack:win` passed on 2026-05-08 | Verified as build artifact only |
 | Windows portable artifact | `npm run desktop:portable:win`, `release/HWPX Optimizer-0.1.0-x64.exe` | Verified build artifact |
@@ -78,6 +79,7 @@ xvfb-run -a npm run desktop:smoke
 npm run desktop:pack
 npm run desktop:pack:win
 npm run desktop:portable:win
+npm run desktop:icons
 npm run release:manifest
 npm run release:verify-manifest
 npm run release:check:win-portable
@@ -116,6 +118,7 @@ Windows artifact evidence:
 - Portable Windows artifact: `release/HWPX Optimizer-0.1.0-x64.exe`, 94 MiB.
 - Windows unpacked directory: `release/win-unpacked`.
 - Checksum files: `release/release-manifest.json`, `release/SHA256SUMS.txt`; verified by `npm run release:verify-manifest`.
+- Desktop icon resources are generated under ignored `build/`.
 
 Expected environment failure:
 
@@ -140,5 +143,5 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 - Progress updates are stage-based. Per-image/action progress would improve UX.
 - Reference graph coverage is conservative and should be expanded with more real-world HWPX samples.
 - Visual similarity comparison is not implemented.
-- Desktop UI is functional but still needs final product polish and icon branding.
+- Desktop UI is functional but still needs final product polish.
 - Continue routine dependency monitoring before each release.

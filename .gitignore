@@ -6,6 +6,7 @@ packages/*/tsconfig.tsbuildinfo
 apps/*/dist/
 apps/*/tsconfig.tsbuildinfo
 release/
+build/
 *.log
 .tmp/
 /sample*.hwp
