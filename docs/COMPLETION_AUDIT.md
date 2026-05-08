@@ -50,7 +50,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `main.ts` local settings | Implemented |
 | Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
 | Local-only operation | no network/server code in app path; filesystem-only APIs | Implemented |
-| Original file preservation and overwrite prevention | output path generation in `desktopService.ts`; CLI non-overwrite suffixing with explicit `--overwrite` opt-in | Implemented |
+| Original file preservation and overwrite prevention | output path generation in `desktopService.ts`; CLI non-overwrite suffixing; CLI rejects `optimize --out`, `optimize --report`, `analyze --report`, and `report --out` when the final target is the original input path | Implemented and regression-tested |
 | JSON reports | CLI and desktop service report write paths | Implemented |
 | Docs | `README.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/RELEASE.md`, `docs/KNOWN_LIMITATIONS.md` | Implemented |
 | Desktop packaging config | `package.json` electron-builder config | Implemented |
@@ -72,6 +72,7 @@ Passed:
 
 ```bash
 npm test
+npm test -- packages/cli/test/cli.test.ts
 npm run release:hygiene
 npm run typecheck
 npm run build
@@ -97,6 +98,16 @@ node packages/cli/dist/index.js verify sample2.dist-balanced.hwpx
 node_modules/.bin/hwpx-opt analyze sample2.hwpx --report .tmp/cli-bin-smoke/sample2.analysis.json
 git ls-files 'sample*'
 ```
+
+Latest local safety verification after commit `9afe912`:
+
+- `npm test -- packages/cli/test/cli.test.ts`: passed, 17 tests.
+- `npm test`: passed, 13 files / 54 tests.
+- `npm run typecheck`: passed.
+- `npm run build`: passed.
+- `npm run release:hygiene`: passed.
+- `git ls-files 'sample*'`: empty.
+- `git remote -v`: empty, so push is blocked until a remote is configured.
 
 Sample2 evidence from the latest local run:
 
