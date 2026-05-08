@@ -2,7 +2,9 @@ param(
   [string]$Artifact = "release\HWPX Optimizer-0.1.0-x64.exe",
   [string]$Sample = "",
   [ValidateSet("safe", "balanced", "aggressive")]
-  [string]$Mode = "safe"
+  [string]$Mode = "safe",
+  [switch]$AllModes,
+  [string]$Sha256Sums = "release\SHA256SUMS.txt"
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,8 +14,29 @@ if (-not (Test-Path -LiteralPath $Artifact)) {
 }
 
 $artifactPath = (Resolve-Path -LiteralPath $Artifact).Path
+$artifactName = Split-Path -Path $artifactPath -Leaf
+$artifactHash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
+Write-Host "Artifact: $artifactPath"
+Write-Host "SHA256:   $artifactHash"
+
+if (Test-Path -LiteralPath $Sha256Sums) {
+  $expectedLine = Get-Content -LiteralPath $Sha256Sums | Where-Object { $_ -match "\s+$([regex]::Escape($artifactName))$" } | Select-Object -First 1
+  if ($expectedLine) {
+    $expectedHash = ($expectedLine -split "\s+")[0].ToLowerInvariant()
+    if ($expectedHash -ne $artifactHash) {
+      throw "Artifact hash mismatch. Expected $expectedHash but got $artifactHash."
+    }
+    Write-Host "Checksum: matched $Sha256Sums"
+  } else {
+    Write-Warning "No checksum entry found for $artifactName in $Sha256Sums"
+  }
+} else {
+  Write-Warning "Checksum file not found: $Sha256Sums"
+}
+
 $previousInput = $env:HWPX_OPT_SMOKE_INPUT
 $previousMode = $env:HWPX_OPT_SMOKE_MODE
+$modes = if ($AllModes) { @("safe", "balanced", "aggressive") } else { @($Mode) }
 
 try {
   if ($Sample -ne "") {
@@ -25,13 +48,15 @@ try {
     Remove-Item Env:\HWPX_OPT_SMOKE_INPUT -ErrorAction SilentlyContinue
   }
 
-  $env:HWPX_OPT_SMOKE_MODE = $Mode
-  & $artifactPath --smoke-test
-  if ($LASTEXITCODE -ne 0) {
-    throw "Desktop smoke failed with exit code $LASTEXITCODE"
+  foreach ($currentMode in $modes) {
+    $env:HWPX_OPT_SMOKE_MODE = $currentMode
+    Write-Host "Running desktop smoke: mode=$currentMode"
+    & $artifactPath --smoke-test
+    if ($LASTEXITCODE -ne 0) {
+      throw "Desktop smoke failed with exit code $LASTEXITCODE for mode $currentMode"
+    }
+    Write-Host "Desktop smoke passed: $artifactPath ($currentMode)"
   }
-
-  Write-Host "Desktop smoke passed: $artifactPath ($Mode)"
 } finally {
   if ($null -eq $previousInput) {
     Remove-Item Env:\HWPX_OPT_SMOKE_INPUT -ErrorAction SilentlyContinue

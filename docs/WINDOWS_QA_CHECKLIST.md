@@ -52,8 +52,15 @@ powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sam
 powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sample .\sample2.hwpx -Mode aggressive
 ```
 
+Run all modes with one command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sample .\sample2.hwpx -AllModes
+```
+
 Expected result:
 
+- The printed SHA256 matches `release\SHA256SUMS.txt`.
 - The app launches.
 - The smoke script exits with code 0.
 - The optimized output passes verifier.

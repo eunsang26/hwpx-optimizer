@@ -127,6 +127,7 @@ On a Windows machine, smoke-test the portable artifact:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1
 powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sample sample2.hwpx -Mode balanced
+powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sample sample2.hwpx -AllModes
 ```
 
 Use [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) for the full clean-machine manual and CLI verification pass before treating a Windows artifact as product-ready.
