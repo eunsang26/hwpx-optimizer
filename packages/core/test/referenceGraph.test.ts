@@ -36,4 +36,49 @@ describe("buildReferenceGraph", () => {
     expect(graph.resources.get("BinData/image1.png")?.referenced).toBe(true);
     expect(graph.resources.get("BinData/image2.png")?.referenced).toBe(false);
   });
+
+  it("resolves relative and percent-encoded manifest hrefs", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="../BinData/image%201.png" media-type="image/png"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hc:img binaryItemIDRef="image1" /></root>`,
+        "BinData/image 1.png": Buffer.from("used")
+      }
+    });
+
+    const pkg = await readHwpxPackage(fixture);
+    const graph = buildReferenceGraph(pkg);
+
+    expect(graph.resources.get("BinData/image 1.png")?.referenced).toBe(true);
+    expect(graph.missingReferences).toEqual([]);
+  });
+
+  it("marks manifest resources referenced by less common id-valued attributes", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.png" media-type="image/png"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hp:customPicture targetRef="image1" /></root>`,
+        "BinData/image1.png": Buffer.from("used")
+      }
+    });
+
+    const pkg = await readHwpxPackage(fixture);
+    const graph = buildReferenceGraph(pkg);
+
+    expect(graph.resources.get("BinData/image1.png")?.referenced).toBe(true);
+  });
+
+  it("resolves direct relative BinData paths in XML attributes", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": `<root><draw:image xlink:href="../BinData/image1.png" /></root>`,
+        "BinData/image1.png": Buffer.from("used")
+      }
+    });
+
+    const pkg = await readHwpxPackage(fixture);
+    const graph = buildReferenceGraph(pkg);
+
+    expect(graph.resources.get("BinData/image1.png")?.referenced).toBe(true);
+  });
 });

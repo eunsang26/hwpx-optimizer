@@ -1,11 +1,10 @@
-import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
 import { mapLimit } from "./concurrency.js";
+import { findByteIdenticalImageGroups, findSameVisualImageGroups } from "./imageDuplicates.js";
 import { extractImageDisplayReferences } from "./imageDisplay.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import type {
-  DuplicateImageGroup,
   HwpxEntryKind,
   HwpxPackage,
   ImageDisplayReference,
@@ -61,7 +60,8 @@ export async function analyzeHwpxPackage(pkg: HwpxPackage, options: { graph?: Re
     entriesByKind,
     categorySizes,
     images,
-    duplicateImages: findDuplicateImages(pkg),
+    duplicateImages: findByteIdenticalImageGroups(pkg),
+    sameVisualDuplicateImages: await findSameVisualImageGroups(pkg),
     unusedBinData: findUnusedBinData(pkg, graph),
     riskyResources: findRiskyResources(pkg),
     referenceGraph: graph
@@ -146,31 +146,6 @@ function createDisplayFields(
     largestDisplay,
     ...(oversizeRatio && oversizeRatio > 1 ? { oversizeRatio } : {})
   };
-}
-
-function findDuplicateImages(pkg: HwpxPackage): DuplicateImageGroup[] {
-  const byHash = new Map<string, Array<{ path: string; size: number }>>();
-  for (const entry of pkg.entries) {
-    if (entry.kind !== "image") continue;
-    const hash = createHash("sha256").update(entry.data).digest("hex");
-    const group = byHash.get(hash) ?? [];
-    group.push({ path: entry.path, size: entry.size });
-    byHash.set(hash, group);
-  }
-
-  return [...byHash.entries()]
-    .filter(([, entries]) => entries.length > 1)
-    .map(([hash, entries]) => {
-      const sorted = entries.sort((left, right) => left.path.localeCompare(right.path));
-      return {
-        hash,
-        paths: sorted.map((entry) => entry.path),
-        count: sorted.length,
-        totalBytes: sorted.reduce((sum, entry) => sum + entry.size, 0),
-        wastedBytes: sorted.slice(1).reduce((sum, entry) => sum + entry.size, 0)
-      };
-    })
-    .sort((left, right) => right.wastedBytes - left.wastedBytes);
 }
 
 function findUnusedBinData(pkg: HwpxPackage, graph: ReferenceGraph): UnusedResource[] {

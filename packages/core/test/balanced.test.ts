@@ -254,6 +254,220 @@ describe("balanced optimization", () => {
     );
   });
 
+  it("consolidates same-visual image references when decoded pixels match across formats", async () => {
+    const png = await sharp({
+      create: {
+        width: 32,
+        height: 24,
+        channels: 3,
+        background: "#44aa88"
+      }
+    })
+      .png()
+      .toBuffer();
+    const bmp = createBmp24(32, 24, [0x44, 0xaa, 0x88]);
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.png" media-type="image/png"/><opf:item id="image2" href="BinData/image2.bmp" media-type="image/bmp"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hp:pic><hc:img binaryItemIDRef="image1"/></hp:pic><hp:pic><hc:img binaryItemIDRef="image2"/></hp:pic></root>`,
+        "BinData/image1.png": png,
+        "BinData/image2.bmp": bmp
+      }
+    });
+
+    const report = await analyzeHwpxBuffer(fixture);
+    expect(report.sameVisualDuplicateImages).toEqual([
+      expect.objectContaining({
+        paths: ["BinData/image1.png", "BinData/image2.bmp"],
+        wastedBytes: bmp.byteLength
+      })
+    ]);
+    expect(report.opportunities).toContainEqual(
+      expect.objectContaining({
+        action: "consolidate-duplicate-images",
+        target: "BinData/image2.bmp",
+        visualImpact: "none"
+      })
+    );
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
+    const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+
+    expect(output.entries.some((entry) => entry.path === "BinData/image1.png")).toBe(true);
+    expect(output.entries.some((entry) => entry.path === "BinData/image2.bmp")).toBe(false);
+    expect(content).toContain('id="image1"');
+    expect(content).not.toContain('id="image2"');
+    expect(section).toContain('binaryItemIDRef="image1"');
+    expect(section).not.toContain('binaryItemIDRef="image2"');
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "consolidate-duplicate-images", target: "BinData/image2.bmp" })
+    );
+  });
+
+  it("keeps same-visual consolidation canonical when byte-identical groups overlap", async () => {
+    const png = await sharp({
+      create: {
+        width: 32,
+        height: 24,
+        channels: 3,
+        background: "#44aa88"
+      }
+    })
+      .png()
+      .toBuffer();
+    const bmp = createBmp24(32, 24, [0x44, 0xaa, 0x88]);
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.png" media-type="image/png"/><opf:item id="image2" href="BinData/image2.bmp" media-type="image/bmp"/><opf:item id="image3" href="BinData/image3.bmp" media-type="image/bmp"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hc:img binaryItemIDRef="image2"/><hc:img binaryItemIDRef="image3"/></root>`,
+        "BinData/image1.png": png,
+        "BinData/image2.bmp": bmp,
+        "BinData/image3.bmp": bmp
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
+    const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+
+    expect(output.entries.some((entry) => entry.path === "BinData/image1.png")).toBe(true);
+    expect(output.entries.some((entry) => entry.path === "BinData/image2.bmp")).toBe(false);
+    expect(output.entries.some((entry) => entry.path === "BinData/image3.bmp")).toBe(false);
+    expect(content).toContain('id="image1"');
+    expect(content).not.toContain('id="image2"');
+    expect(content).not.toContain('id="image3"');
+    expect(section).toContain('binaryItemIDRef="image1"');
+    expect(section).not.toContain('binaryItemIDRef="image2"');
+    expect(section).not.toContain('binaryItemIDRef="image3"');
+  });
+
+  it("updates generic manifest id references when consolidating duplicates", async () => {
+    const png = await sharp({
+      create: {
+        width: 32,
+        height: 24,
+        channels: 3,
+        background: "#44aa88"
+      }
+    })
+      .png()
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.png" media-type="image/png"/><opf:item id="image2" href="BinData/image2.png" media-type="image/png"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hp:customPicture targetRef="image2"/><hp:ctrl id="image2">not a manifest item</hp:ctrl></root>`,
+        "BinData/image1.png": png,
+        "BinData/image2.png": png
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+
+    expect(section).toContain('targetRef="image1"');
+    expect(section).not.toContain('targetRef="image2"');
+    expect(section).toContain('<hp:ctrl id="image2">not a manifest item</hp:ctrl>');
+  });
+
+  it("consolidates duplicates declared with relative percent-encoded manifest hrefs", async () => {
+    const png = await sharp({
+      create: {
+        width: 32,
+        height: 24,
+        channels: 3,
+        background: "#44aa88"
+      }
+    })
+      .png()
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="../BinData/image%201.png" media-type="image/png"/><opf:item id="image2" href="../BinData/image%202.png" media-type="image/png"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hp:pic><hc:img binaryItemIDRef="image2"/></hp:pic></root>`,
+        "BinData/image 1.png": png,
+        "BinData/image 2.png": png
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const content = output.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
+    const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+
+    expect(output.entries.some((entry) => entry.path === "BinData/image 1.png")).toBe(true);
+    expect(output.entries.some((entry) => entry.path === "BinData/image 2.png")).toBe(false);
+    expect(content).toContain('id="image1"');
+    expect(content).not.toContain('id="image2"');
+    expect(section).toContain('binaryItemIDRef="image1"');
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "consolidate-duplicate-images", target: "BinData/image 2.png" })
+    );
+  });
+
+  it("rewrites direct duplicate image hrefs instead of removing visible XML nodes", async () => {
+    const png = await sharp({
+      create: {
+        width: 32,
+        height: 24,
+        channels: 3,
+        background: "#44aa88"
+      }
+    })
+      .png()
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.png" media-type="image/png"/><opf:item id="image2" href="BinData/image2.png" media-type="image/png"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><draw:image xlink:href="BinData/image2.png"/></root>`,
+        "BinData/image1.png": png,
+        "BinData/image2.png": png
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+
+    expect(output.entries.some((entry) => entry.path === "BinData/image2.png")).toBe(false);
+    expect(section).toContain("<draw:image");
+    expect(section).toContain('xlink:href="BinData/image1.png"');
+    expect(section).not.toContain('xlink:href="BinData/image2.png"');
+  });
+
+  it("rewrites non-href direct duplicate image path attributes", async () => {
+    const png = await sharp({
+      create: {
+        width: 32,
+        height: 24,
+        channels: 3,
+        background: "#44aa88"
+      }
+    })
+      .png()
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.png" media-type="image/png"/><opf:item id="image2" href="BinData/image2.png" media-type="image/png"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><custom:image src="BinData/image2.png"/></root>`,
+        "BinData/image1.png": png,
+        "BinData/image2.png": png
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+
+    expect(output.entries.some((entry) => entry.path === "BinData/image2.png")).toBe(false);
+    expect(section).toContain("<custom:image");
+    expect(section).toContain('src="BinData/image1.png"');
+    expect(section).not.toContain('src="BinData/image2.png"');
+  });
+
   it("resizes BMPs to the document display size budget while converting to PNG", async () => {
     const bmp = createBmp24(400, 200, [0xcc, 0xcc, 0xcc]);
     const fixture = await createReferencedImageFixtureWithDisplay({

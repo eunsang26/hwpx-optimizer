@@ -380,6 +380,7 @@ function renderHumanReport(inputPath: string, report: OptimizationReport): strin
     `BMP candidates: ${report.images.filter((image) => image.isBmpCandidate).length}`,
     `Images with metadata: ${report.images.filter((image) => image.hasMetadata).length}`,
     `Duplicate image groups: ${report.duplicateImages.length}`,
+    `Same-visual duplicate image groups: ${report.sameVisualDuplicateImages.length}`,
     `Unused BinData candidates: ${report.unusedBinData.length}`,
     `Risky resources: ${report.riskyResources.length}`
   ];

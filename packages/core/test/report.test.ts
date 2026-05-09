@@ -67,6 +67,7 @@ describe("optimization reports", () => {
     ]);
     expect(report.categorySizes).toEqual(analysisFixture.categorySizes);
     expect(report.duplicateImages).toEqual(analysisFixture.duplicateImages);
+    expect(report.sameVisualDuplicateImages).toEqual(analysisFixture.sameVisualDuplicateImages);
     expect(report.unusedBinData).toEqual(analysisFixture.unusedBinData);
     expect(report.riskyResources).toEqual(analysisFixture.riskyResources);
   });
@@ -100,6 +101,7 @@ const analysisFixture: PackageAnalysis = {
       wastedBytes: 100
     }
   ],
+  sameVisualDuplicateImages: [],
   unusedBinData: [{ path: "BinData/unused.bin", kind: "bindata", size: 50 }],
   riskyResources: [{ path: "Object/embedded.ole", kind: "ole", size: 10, reason: "OLE object" }]
 };

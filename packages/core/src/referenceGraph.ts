@@ -39,8 +39,7 @@ export function buildReferenceGraph(pkg: HwpxPackage): ReferenceGraph {
 function extractInternalRefs(xml: string, options: { includeDirectPackagePaths: boolean }): string[] {
   const refs = new Set<string>();
   if (options.includeDirectPackagePaths) {
-    const pattern = /(?:href|src|binItem|file|filename)=["']([^"']+)["']/gi;
-    for (const match of xml.matchAll(pattern)) {
+    for (const match of xml.matchAll(/[\w:-]+\s*=\s*["']([^"']+)["']/g)) {
       refs.add(match[1]);
     }
     for (const match of xml.matchAll(/BinData\/[^"'()<>\s]+/gi)) {
@@ -51,7 +50,18 @@ function extractInternalRefs(xml: string, options: { includeDirectPackagePaths: 
 }
 
 function extractBinaryItemIdRefs(xml: string): string[] {
-  return [...xml.matchAll(/binaryItemIDRef=["']([^"']+)["']/gi)].map((match) => match[1]);
+  const refs: string[] = [];
+  for (const match of xml.matchAll(/([\w:-]+)\s*=\s*["']([^"']+)["']/g)) {
+    const name = match[1] ?? "";
+    const value = match[2] ?? "";
+    if (isIdReferenceAttribute(name)) refs.push(value);
+  }
+  return refs;
+}
+
+function isIdReferenceAttribute(name: string): boolean {
+  const normalized = name.toLowerCase();
+  return normalized === "binaryitemidref" || normalized.endsWith("ref") || normalized.endsWith("idref");
 }
 
 function markReference(input: {
@@ -74,9 +84,20 @@ function isPackageManifest(path: string): boolean {
 }
 
 function normalizePackagePath(value: string): string | null {
-  const cleaned = value.replace(/^#/, "").replace(/^\.?\//, "").replace(/\\/g, "/");
-  if (cleaned.split("/").some((segment) => segment === ".." || segment === ".")) return null;
+  const cleaned = decodePath(value.trim()).replace(/^#/, "").replace(/^\.?\//, "").replace(/\\/g, "/");
   const binDataIndex = cleaned.toLowerCase().indexOf("bindata/");
-  if (binDataIndex >= 0) return cleaned.slice(binDataIndex);
+  if (binDataIndex >= 0) {
+    const resourcePath = cleaned.slice(binDataIndex);
+    if (resourcePath.split("/").some((segment) => segment === ".." || segment === "." || segment === "")) return null;
+    return resourcePath;
+  }
   return null;
+}
+
+function decodePath(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

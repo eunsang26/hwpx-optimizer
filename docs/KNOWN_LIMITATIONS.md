@@ -4,9 +4,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop drag/drop now uses Electron `webUtils.getPathForFile`, but final hands-on QA on Windows for repeated files, very large packages, and settings persistence remains pending.
-- Reference graph detection is still conservative and should be expanded with more real-world HWPX reference forms.
-- SSIM-based image quality scoring is not yet implemented. Balanced and aggressive mode quality gating currently uses PSNR plus image format/dimension invariants.
+- Desktop drag/drop now uses Electron `webUtils.getPathForFile`, but final hands-on QA on a clean Windows machine for drag/drop, settings persistence, repeated files, very large packages, and representative real-world documents remains pending.
 
 ## Verified Release Infrastructure
 
@@ -16,12 +14,15 @@ This file separates release blockers from non-blockers so the project does not o
 - Artifact upload is optional for manual workflow runs to avoid Actions storage quota failures. Tag builds still upload release artifacts.
 - Local Windows portable packaging verifies that the `sharp` Windows native runtime is unpacked outside `app.asar`.
 - Verifier checks mode-specific image format and dimension invariants and rejects balanced/aggressive outputs whose per-image PSNR drops below the per-mode minimum (balanced 18 dB, aggressive 14 dB). The reject error includes the original/output dimensions, format, and EXIF orientation to make catastrophic regressions (rotation bake, dimension swap) self-explanatory. PSNR computation lives in `packages/core/src/imagePreview.ts`. The 8x8 average hash in `packages/core/src/visualSimilarity.ts` is retained as a building block for future near-duplicate candidate listing but is NOT used as a release gate.
+- Reference graph detection resolves manifest `id -> href` links, generic id-valued XML attributes, relative or percent-encoded BinData paths, and direct BinData path attributes. This keeps unused-resource deletion conservative when unfamiliar XML reference forms appear.
+- Duplicate image consolidation handles byte-identical image files and exact decoded-pixel same-visual duplicates across lossless encodings, such as BMP and PNG resources that decode to identical pixels. Near-duplicate visual matching remains out of scope.
 - HWPX zip-slip defense: reader rejects entries whose path contains `..`, `.`, drive letters, leading slash, or empty segments.
 
 ## Non-Blockers For Continued Development
 
-- Some reference graph detection is conservative and may miss uncommon HWPX reference forms.
-- Duplicate image consolidation currently handles byte-identical image files with manifest IDs. Near-duplicate visual matching is not implemented.
+- Future reference graph additions should be driven by real HWPX samples that expose new reference forms.
+- Duplicate image consolidation does not merge near-duplicates or lossy re-encodes whose decoded pixels differ.
+- SSIM-based image quality scoring is not yet implemented. Balanced and aggressive mode quality gating currently uses PSNR plus image format/dimension invariants.
 - Embedded fonts and OLE objects are reported as risky resources but not optimized.
 - Display-size based image budgets depend on detectable HWPX picture size fields. If those fields are missing, fallback mode profile limits are used.
 - EXIF removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size.

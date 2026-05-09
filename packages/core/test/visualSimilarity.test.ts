@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
   computeAverageHash,
+  computeDecodedPixelHash,
   hammingDistance,
   AVERAGE_HASH_BIT_COUNT
 } from "../src/visualSimilarity.js";
@@ -45,6 +46,29 @@ describe("computeAverageHash", () => {
   });
 });
 
+describe("computeDecodedPixelHash", () => {
+  it("matches images with identical decoded pixels across lossless formats", async () => {
+    const png = await solidImage(32, 24, "#44aa88");
+    const bmp = createBmp24(32, 24, [0x44, 0xaa, 0x88]);
+
+    const left = await computeDecodedPixelHash(png);
+    const right = await computeDecodedPixelHash(bmp);
+
+    expect(left).not.toBeNull();
+    expect(right).not.toBeNull();
+    expect(right).toEqual(left);
+  });
+
+  it("separates images with different decoded pixels", async () => {
+    const left = await computeDecodedPixelHash(await solidImage(32, 24, "#44aa88"));
+    const right = await computeDecodedPixelHash(await solidImage(32, 24, "#8844aa"));
+
+    expect(left).not.toBeNull();
+    expect(right).not.toBeNull();
+    expect(right).not.toEqual(left);
+  });
+});
+
 async function gradientImage(width: number, height: number): Promise<Buffer> {
   const channels = 3;
   const raw = Buffer.alloc(width * height * channels);
@@ -74,4 +98,43 @@ async function invertedGradientImage(width: number, height: number): Promise<Buf
     }
   }
   return sharp(raw, { raw: { width, height, channels } }).png().toBuffer();
+}
+
+async function solidImage(width: number, height: number, background: string): Promise<Buffer> {
+  return sharp({
+    create: {
+      width,
+      height,
+      channels: 3,
+      background
+    }
+  })
+    .png()
+    .toBuffer();
+}
+
+function createBmp24(width: number, height: number, rgb: [number, number, number]): Buffer {
+  const rowSize = Math.ceil((width * 3) / 4) * 4;
+  const pixelDataSize = rowSize * height;
+  const fileSize = 54 + pixelDataSize;
+  const buffer = Buffer.alloc(fileSize);
+  buffer.write("BM", 0, "ascii");
+  buffer.writeUInt32LE(fileSize, 2);
+  buffer.writeUInt32LE(54, 10);
+  buffer.writeUInt32LE(40, 14);
+  buffer.writeInt32LE(width, 18);
+  buffer.writeInt32LE(height, 22);
+  buffer.writeUInt16LE(1, 26);
+  buffer.writeUInt16LE(24, 28);
+  buffer.writeUInt32LE(pixelDataSize, 34);
+  for (let y = 0; y < height; y += 1) {
+    const row = 54 + y * rowSize;
+    for (let x = 0; x < width; x += 1) {
+      const offset = row + x * 3;
+      buffer[offset] = rgb[2];
+      buffer[offset + 1] = rgb[1];
+      buffer[offset + 2] = rgb[0];
+    }
+  }
+  return buffer;
 }

@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
+import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { stripJpegMetadataSegments } from "./optimizer.js";
 import type { HwpxPackage, OptimizationOpportunity } from "./types.js";
@@ -66,7 +66,7 @@ async function collectOpportunities(
 ): Promise<OptimizationOpportunity[]> {
   const opportunities: OptimizationOpportunity[] = [];
   const resizeBudgets = getRecommendedImagePixelBudgets(pkg, profile.displayScale);
-  addDuplicateImageOpportunities(pkg, opportunities);
+  await addDuplicateImageOpportunities(pkg, opportunities);
 
   for (const entry of pkg.entries) {
     if (entry.kind !== "image") continue;
@@ -221,28 +221,23 @@ async function measureOrEstimateImageSize(input: {
   return candidate ? candidate.byteLength : null;
 }
 
-function addDuplicateImageOpportunities(pkg: HwpxPackage, opportunities: OptimizationOpportunity[]): void {
-  const groups = new Map<string, Array<{ path: string; size: number }>>();
-  for (const entry of pkg.entries) {
-    if (entry.kind !== "image") continue;
-    const hash = createHash("sha256").update(entry.data).digest("hex");
-    const group = groups.get(hash) ?? [];
-    group.push({ path: entry.path, size: entry.size });
-    groups.set(hash, group);
-  }
-
-  for (const group of groups.values()) {
-    if (group.length < 2) continue;
-    const sorted = group.sort((left, right) => left.path.localeCompare(right.path));
-    for (const duplicate of sorted.slice(1)) {
+async function addDuplicateImageOpportunities(pkg: HwpxPackage, opportunities: OptimizationOpportunity[]): Promise<void> {
+  const seenTargets = new Set<string>();
+  const sizesByPath = new Map(pkg.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry.size]));
+  for (const group of await findImageConsolidationGroups(pkg)) {
+    for (const duplicatePath of group.paths) {
+      if (duplicatePath === group.canonicalPath || seenTargets.has(duplicatePath)) continue;
+      const size = sizesByPath.get(duplicatePath);
+      if (size === undefined) continue;
+      seenTargets.add(duplicatePath);
       opportunities.push({
-        id: `consolidate-duplicate-images:${duplicate.path}`,
+        id: `consolidate-duplicate-images:${duplicatePath}`,
         label: "Consolidate duplicate image references",
         action: "consolidate-duplicate-images",
-        target: duplicate.path,
-        beforeSize: duplicate.size,
+        target: duplicatePath,
+        beforeSize: size,
         afterSize: 0,
-        estimatedSavingBytes: duplicate.size,
+        estimatedSavingBytes: size,
         confidence: "exact",
         risk: "medium",
         visualImpact: "none",

@@ -28,14 +28,14 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Core engine exists | `packages/core/src/*` | Implemented |
 | HWPX ZIP reader | `packages/core/src/reader.ts`, `packages/core/test/reader.test.ts` | Implemented with required package file validation |
 | Package analyzer | `packages/core/src/analyzer.ts`, `packages/core/test/analyzer.test.ts` | Implemented |
-| Reference graph | `packages/core/src/referenceGraph.ts`, `packages/core/test/referenceGraph.test.ts` | Implemented with manifest `id -> href` resolution, `binaryItemIDRef` usage tracking, and conservative fallback direct path detection |
+| Reference graph | `packages/core/src/referenceGraph.ts`, `packages/core/test/referenceGraph.test.ts` | Implemented with manifest `id -> href` resolution, generic id-valued XML attribute tracking, relative/percent-encoded BinData path normalization, and conservative fallback direct path detection |
 | Optimization planner | `packages/core/src/planner.ts`, `packages/core/test/planner.test.ts` | Implemented |
 | Safe optimizer | `packages/core/src/optimizer.ts`, `packages/core/src/optimize.ts`, `packages/core/test/optimizer.test.ts` | Implemented with XML minify, JPEG metadata segment stripping, lossless PNG optimization when smaller, unused BinData removal, ZIP repack, and rollback if output is not smaller |
 | Balanced optimizer | `packages/core/src/balancedOptimizer.ts`, `packages/core/test/balanced.test.ts` | Implemented |
 | Aggressive optimizer | `packages/core/src/opportunities.ts`, `packages/core/test/aggressive.test.ts` | Implemented |
 | BMP to PNG | `convert-bmp-to-png` action in balanced/aggressive paths | Implemented |
 | Oversized image resizing | display-budget resizing in `packages/core/src/imageDisplay.ts` and `opportunities.ts` | Implemented |
-| Duplicate image consolidation | `consolidate-duplicate-images` action and balanced test | Implemented for byte-identical manifest images |
+| Duplicate image consolidation | `consolidate-duplicate-images` action and balanced test | Implemented for byte-identical manifest images and decoded pixel hash same-visual duplicates across lossless encodings |
 | XML manifest updates use parser | `packages/core/src/balancedOptimizer.ts` uses `fast-xml-parser` preserve-order AST | Implemented |
 | Verifier | `packages/core/src/verifier.ts`, `packages/core/test/verifier.test.ts` | Implemented with required package checks and mode image invariants |
 | Report generator | `packages/core/src/report.ts`, `packages/core/test/report.test.ts` | Implemented |
@@ -361,12 +361,12 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 
 ## Blockers To Completion
 
-- Windows portable smoke across safe, balanced, and aggressive is complete; broader manual QA for settings persistence, drag/drop, and repeated samples is not complete.
-- Visual similarity comparison is not implemented; current verifier checks package integrity, references, image dimensions, and image formats.
-- Reference graph detection is conservative and needs broader real-world HWPX coverage before product release.
+- Windows portable smoke across safe, balanced, and aggressive is complete; broader clean-Windows manual QA for drag/drop, settings persistence, repeated files, very large packages, and representative real-world documents is not complete.
 
 ## Non-Blocking Follow-Ups
 
 - Progress updates are stage-based. Per-image/action progress would improve UX.
 - Desktop UI is functional, but final visual QA should happen on the target Windows desktop environment.
+- Future reference graph additions should be driven by real HWPX samples that expose new forms beyond relative, percent-encoded, direct, and id-valued XML references.
+- Balanced and aggressive mode verification now includes PSNR quality gating plus package integrity, references, image dimensions, and image format invariants. Decoded pixel hash based same-visual duplicate detection is implemented for exact decoded-pixel matches across lossless encodings. SSIM scoring remains a future enhancement, not a current release blocker.
 - Continue routine dependency monitoring before each release.

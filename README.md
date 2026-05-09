@@ -112,7 +112,7 @@ Windows에서 실행 시작이 빠른 배포 방식은 ZIP입니다. `release/HW
 - JPEG 품질 약 88
 - PNG 최적화
 - 이미지 설명 메타데이터 정리
-- byte-identical 중복 이미지 참조 통합
+- byte-identical 및 decoded-pixel 동일 중복 이미지 참조 통합
 
 ### 최대 압축 모드
 

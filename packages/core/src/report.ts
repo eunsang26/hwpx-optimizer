@@ -17,6 +17,7 @@ export function createAnalysisReport(
     categorySizes: analysis.categorySizes,
     images: analysis.images,
     duplicateImages: analysis.duplicateImages,
+    sameVisualDuplicateImages: analysis.sameVisualDuplicateImages,
     unusedBinData: analysis.unusedBinData,
     riskyResources: analysis.riskyResources,
     actions: { planned: [], applied: [], skipped: [] },
@@ -45,6 +46,7 @@ export function createOptimizationReport(input: {
     categorySizes: input.analysis.categorySizes,
     images: input.analysis.images,
     duplicateImages: input.analysis.duplicateImages,
+    sameVisualDuplicateImages: input.analysis.sameVisualDuplicateImages,
     unusedBinData: input.analysis.unusedBinData,
     riskyResources: input.analysis.riskyResources,
     actions: {

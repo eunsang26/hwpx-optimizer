@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
 import { XMLParser } from "fast-xml-parser";
 import sharp from "sharp";
 import { analyzeHwpxPackage } from "./analyzer.js";
+import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { computePsnr } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
@@ -57,7 +57,7 @@ async function verifyAgainstOriginal(input: { original: HwpxPackage; output: Hwp
   const outputImages = new Map(
     (await analyzeHwpxPackage(input.output, { graph: outputGraph })).images.map((image) => [image.path, image])
   );
-  const originalDuplicatePathsByPath = duplicateImagePathsByPath(input.original);
+  const originalDuplicatePathsByPath = await duplicateImagePathsByPath(input.original);
   const visualPairs: Array<{ original: HwpxEntry; output: HwpxEntry }> = [];
   const originalImageEntries = new Map(input.original.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
   const outputImageEntries = new Map(input.output.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
@@ -176,7 +176,8 @@ function verifyAdvancedImage(input: {
     throw new Error(`Verification failed: referenced image removed ${input.originalImage.path}`);
   }
 
-  if (!isAllowedAdvancedFormat(input.originalImage, outputImage)) {
+  const duplicateOutput = input.originalDuplicatePaths.includes(outputImage.path) && outputImage.path !== input.originalImage.path;
+  if (!duplicateOutput && !isAllowedAdvancedFormat(input.originalImage, outputImage)) {
     throw new Error(`Verification failed: ${input.mode} mode image conversion is not allowed ${input.originalImage.path}`);
   }
 
@@ -258,23 +259,11 @@ function replaceExtension(path: string, extension: string): string {
   return path.replace(/\.[^.\/]+$/, extension);
 }
 
-function duplicateImagePathsByPath(pkg: HwpxPackage): Map<string, string[]> {
-  const byHash = new Map<string, string[]>();
-
-  for (const entry of pkg.entries) {
-    if (entry.kind !== "image") continue;
-    const hash = createHash("sha256").update(entry.data).digest("hex");
-    const paths = byHash.get(hash) ?? [];
-    paths.push(entry.path);
-    byHash.set(hash, paths);
-  }
-
+async function duplicateImagePathsByPath(pkg: HwpxPackage): Promise<Map<string, string[]>> {
   const duplicatePathsByPath = new Map<string, string[]>();
-  for (const paths of byHash.values()) {
-    if (paths.length < 2) continue;
-    const sorted = paths.sort((left, right) => left.localeCompare(right));
-    for (const path of sorted) {
-      duplicatePathsByPath.set(path, sorted);
+  for (const group of await findImageConsolidationGroups(pkg)) {
+    for (const path of group.paths) {
+      duplicatePathsByPath.set(path, group.paths);
     }
   }
   return duplicatePathsByPath;

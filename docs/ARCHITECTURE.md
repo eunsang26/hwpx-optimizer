@@ -56,7 +56,8 @@ input.hwpx
 - Calculates total size and category sizes.
 - Builds image inventory.
 - Extracts image format, dimensions, metadata flags, and BMP candidates.
-- Detects duplicate images by hash.
+- Detects byte-identical duplicate images by SHA-256.
+- Detects same-visual duplicate images by exact decoded pixel hash across lossless encodings.
 - Detects unreferenced BinData candidates.
 - Reports font and OLE resources as risky resources.
 
@@ -75,10 +76,9 @@ input.hwpx
 `packages/core/src/referenceGraph.ts`
 
 - Tracks internal package paths referenced by XML files.
+- Resolves manifest ids, generic id-valued XML attributes, direct BinData paths, and relative or percent-encoded BinData paths.
 - Marks referenced and unreferenced resources.
 - Reports missing references.
-
-Current limitation: graph detection is conservative and partially pattern-based. It should be expanded as more real-world HWPX reference forms are collected.
 
 ### Planner
 
@@ -107,7 +107,7 @@ Current limitation: graph detection is conservative and partially pattern-based.
 - Resize oversized JPEGs according to mode profile and display budgets.
 - Optimize PNG resources.
 - Clean shape-comment metadata.
-- Consolidate duplicate image resources by redirecting XML image IDs to a canonical resource.
+- Consolidate byte-identical or exact same-visual duplicate image resources by redirecting XML image IDs to a canonical resource.
 - Record applied and skipped actions.
 - Update manifest `href` and `media-type` attributes through a parsed XML tree.
 

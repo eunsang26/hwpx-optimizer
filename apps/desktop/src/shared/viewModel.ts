@@ -63,7 +63,7 @@ export function createAnalysisViewModel(report: OptimizationReport): AnalysisVie
     bmpCount: report.images.filter((image) => image.isBmpCandidate).length,
     metadataImageCount: report.images.filter((image) => image.hasMetadata).length,
     unusedResourceCount: report.unusedBinData.length,
-    duplicateGroupCount: report.duplicateImages.length,
+    duplicateGroupCount: report.duplicateImages.length + report.sameVisualDuplicateImages.length,
     riskyResourceCount: report.riskyResources.length,
     estimatedSavingLabel: wasCapped ? `최대 ${formatBytes(cappedSaving)}` : formatBytes(cappedSaving),
     topOpportunities: report.opportunityGroups.slice(0, 5).map((group) => ({

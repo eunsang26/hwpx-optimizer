@@ -1,10 +1,19 @@
+import { createHash } from "node:crypto";
 import sharp from "sharp";
+import { decodeBmp } from "./bmp.js";
 
 const HASH_SIZE = 8;
 const HASH_PIXELS = HASH_SIZE * HASH_SIZE;
 
 export type AverageHash = {
   bits: Uint8Array;
+};
+
+export type DecodedPixelHash = {
+  width: number;
+  height: number;
+  channels: number;
+  hash: string;
 };
 
 /**
@@ -54,6 +63,41 @@ export function hammingDistance(left: AverageHash, right: AverageHash): number {
     if (left.bits[index] !== right.bits[index]) distance += 1;
   }
   return distance;
+}
+
+export async function computeDecodedPixelHash(data: Buffer): Promise<DecodedPixelHash | null> {
+  const bmp = decodeBmp(data);
+  if (bmp) {
+    return hashDecodedPixels({ data: bmp.data, width: bmp.width, height: bmp.height, channels: 3 });
+  }
+
+  try {
+    const decoded = await sharp(data)
+      .rotate()
+      .toColourspace("srgb")
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    return hashDecodedPixels({
+      data: decoded.data,
+      width: decoded.info.width,
+      height: decoded.info.height,
+      channels: decoded.info.channels
+    });
+  } catch {
+    return null;
+  }
+}
+
+function hashDecodedPixels(input: { data: Buffer; width: number; height: number; channels: number }): DecodedPixelHash {
+  const descriptor = `${input.width}x${input.height}x${input.channels}`;
+  const hash = createHash("sha256").update(descriptor).update("\0").update(input.data).digest("hex");
+  return {
+    width: input.width,
+    height: input.height,
+    channels: input.channels,
+    hash
+  };
 }
 
 export const AVERAGE_HASH_BIT_COUNT = HASH_PIXELS;

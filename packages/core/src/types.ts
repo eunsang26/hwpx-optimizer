@@ -44,6 +44,7 @@ export type PackageAnalysis = {
   categorySizes: Record<HwpxEntryKind, number>;
   images: ImageInventoryItem[];
   duplicateImages: DuplicateImageGroup[];
+  sameVisualDuplicateImages: DuplicateImageGroup[];
   unusedBinData: UnusedResource[];
   riskyResources: RiskyResource[];
   referenceGraph?: ReferenceGraph;
@@ -150,6 +151,7 @@ export type OptimizationReport = {
   categorySizes: Record<HwpxEntryKind, number>;
   images: ImageInventoryItem[];
   duplicateImages: DuplicateImageGroup[];
+  sameVisualDuplicateImages: DuplicateImageGroup[];
   unusedBinData: UnusedResource[];
   riskyResources: RiskyResource[];
   actions: {

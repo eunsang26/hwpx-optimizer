@@ -145,6 +145,40 @@ describe("analyzeHwpxPackage", () => {
       ])
     );
   });
+
+  it("reports same-visual duplicate images across lossless encodings", async () => {
+    const png = await sharp({
+      create: {
+        width: 16,
+        height: 10,
+        channels: 3,
+        background: "#000000"
+      }
+    })
+      .png()
+      .toBuffer();
+    const bmp = createBmp24(16, 10);
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": '<root><img href="BinData/image1.png" /><img href="BinData/image2.bmp" /></root>',
+        "BinData/image1.png": png,
+        "BinData/image2.bmp": bmp
+      }
+    });
+
+    const pkg = await readHwpxPackage(fixture);
+    const analysis = await analyzeHwpxPackage(pkg);
+
+    expect(analysis.duplicateImages).toEqual([]);
+    expect(analysis.sameVisualDuplicateImages).toEqual([
+      expect.objectContaining({
+        paths: ["BinData/image1.png", "BinData/image2.bmp"],
+        count: 2,
+        totalBytes: png.byteLength + bmp.byteLength,
+        wastedBytes: bmp.byteLength
+      })
+    ]);
+  });
 });
 
 function createBmp24(width: number, height: number): Buffer {

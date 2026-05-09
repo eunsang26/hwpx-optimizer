@@ -97,11 +97,17 @@ Expected result:
 9. Confirm the original file timestamp and size did not change.
 10. Repeat with `Balanced` mode.
 11. Repeat with `Aggressive` mode only after acknowledging the quality warning.
+12. Repeat the same file at least three times and confirm each output path is unique unless overwrite is explicitly enabled.
+13. Repeat the workflow with at least one very large HWPX package.
+14. Repeat the workflow with representative real-world documents that include mixed image formats and embedded resources.
 
 Expected result:
 
 - Original files are never modified in place.
 - Each output file opens.
+- Repeated optimizations do not overwrite prior outputs by default.
+- Very large packages complete or fail with a clear non-crashing error.
+- Representative real-world documents do not expose missing-reference verifier failures.
 - Safe mode preserves image formats and dimensions.
 - Balanced and aggressive modes report visible-risk actions clearly.
 - Failed individual actions appear as skipped or failed without crashing the app.

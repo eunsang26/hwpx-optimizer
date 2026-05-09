@@ -80,6 +80,7 @@ const reportFixture: OptimizationReport = {
     }
   ],
   duplicateImages: [{ hash: "abc", paths: ["a", "b"], count: 2, totalBytes: 200, wastedBytes: 100 }],
+  sameVisualDuplicateImages: [],
   unusedBinData: [
     { path: "BinData/unused1.bin", kind: "bindata", size: 1 },
     { path: "BinData/unused2.bin", kind: "bindata", size: 1 }

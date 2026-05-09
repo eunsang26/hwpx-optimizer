@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import { mapLimit } from "./concurrency.js";
+import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageActionWithBudget } from "./opportunities.js";
 import type { ImageOptimizationProfile, TransformImageAction } from "./opportunities.js";
@@ -19,7 +19,7 @@ export async function applyBalancedOptimizationPlan(input: {
   const duplicateTargets = new Set(
     input.plan.actions.filter((action) => action.type === "consolidate-duplicate-images").map((action) => action.target)
   );
-  const consolidated = consolidateDuplicateImages(input.pkg, duplicateTargets);
+  const consolidated = await consolidateDuplicateImages(input.pkg, duplicateTargets);
   const applied: AppliedAction[] = [...consolidated.applied];
   const skipped: AppliedAction[] = [...consolidated.skipped];
   const transformTargets = new Set(
@@ -139,37 +139,26 @@ export async function applyBalancedOptimizationPlan(input: {
   return { pkg: { entries }, applied, skipped };
 }
 
-function consolidateDuplicateImages(
+async function consolidateDuplicateImages(
   pkg: HwpxPackage,
   targets: Set<string>
-): { pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[] } {
+): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[] }> {
   if (targets.size === 0) return { pkg, applied: [], skipped: [] };
-
-  const imagesByHash = new Map<string, Array<{ path: string; size: number }>>();
-  for (const entry of pkg.entries) {
-    if (entry.kind !== "image") continue;
-    const hash = createHash("sha256").update(entry.data).digest("hex");
-    const group = imagesByHash.get(hash) ?? [];
-    group.push({ path: entry.path, size: entry.size });
-    imagesByHash.set(hash, group);
-  }
 
   const canonicalByDuplicatePath = new Map<string, string>();
   const duplicateSizes = new Map<string, number>();
-  for (const group of imagesByHash.values()) {
-    if (group.length < 2) continue;
-    const sorted = group.sort((left, right) => left.path.localeCompare(right.path));
-    const canonical = sorted[0]?.path;
-    if (!canonical) continue;
-    for (const duplicate of sorted.slice(1)) {
-      if (!targets.has(duplicate.path)) continue;
-      canonicalByDuplicatePath.set(duplicate.path, canonical);
-      duplicateSizes.set(duplicate.path, duplicate.size);
+  const imageSizes = new Map(pkg.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry.size]));
+  for (const group of await findImageConsolidationGroups(pkg)) {
+    for (const duplicatePath of group.paths) {
+      if (duplicatePath === group.canonicalPath || !targets.has(duplicatePath)) continue;
+      canonicalByDuplicatePath.set(duplicatePath, group.canonicalPath);
+      duplicateSizes.set(duplicatePath, imageSizes.get(duplicatePath) ?? 0);
     }
   }
 
   const manifest = extractManifestItems(pkg);
   const idUpdates = new Map<string, string>();
+  const duplicatePathUpdates = new Map<string, string>();
   const removeIds = new Set<string>();
   const removePaths = new Set<string>();
   const applied: AppliedAction[] = [];
@@ -184,6 +173,7 @@ function consolidateDuplicateImages(
       continue;
     }
     idUpdates.set(duplicateId, canonicalId);
+    duplicatePathUpdates.set(target, canonicalPath);
     removeIds.add(duplicateId);
     removePaths.add(target);
     applied.push({
@@ -200,7 +190,7 @@ function consolidateDuplicateImages(
     .filter((entry) => !removePaths.has(entry.path))
     .map((entry) => {
       if (entry.kind !== "xml") return entry;
-      const updated = updateDuplicateImageXml(entry.data.toString("utf8"), idUpdates, removeIds, removePaths);
+      const updated = updateDuplicateImageXml(entry.data.toString("utf8"), idUpdates, duplicatePathUpdates, removeIds, removePaths);
       if (updated === entry.data.toString("utf8")) return entry;
       const data = Buffer.from(updated);
       return { ...entry, data, size: data.byteLength };
@@ -289,10 +279,16 @@ function updateHrefAttributes(
   return changed;
 }
 
-function updateDuplicateImageXml(xml: string, idUpdates: Map<string, string>, removeIds: Set<string>, removePaths: Set<string>): string {
+function updateDuplicateImageXml(
+  xml: string,
+  idUpdates: Map<string, string>,
+  duplicatePathUpdates: Map<string, string>,
+  removeIds: Set<string>,
+  removePaths: Set<string>
+): string {
   try {
     const document = parseXml(xml);
-    const changed = updateDuplicateImageNodes(document, idUpdates, removeIds, removePaths);
+    const changed = updateDuplicateImageNodes(document, idUpdates, duplicatePathUpdates, removeIds, removePaths);
     return changed ? buildXml(document) : xml;
   } catch {
     return xml;
@@ -302,6 +298,7 @@ function updateDuplicateImageXml(xml: string, idUpdates: Map<string, string>, re
 function updateDuplicateImageNodes(
   nodes: unknown,
   idUpdates: Map<string, string>,
+  duplicatePathUpdates: Map<string, string>,
   removeIds: Set<string>,
   removePaths: Set<string>
 ): boolean {
@@ -313,25 +310,37 @@ function updateDuplicateImageNodes(
     if (!isXmlNode(node)) continue;
     const attrs = getXmlAttributes(node);
     if (attrs) {
-      const href = getStringAttribute(attrs, "href");
+      const hrefKey = findHrefAttributeKey(attrs);
+      const href = hrefKey ? getStringAttribute(attrs, hrefKey) : undefined;
       const id = getStringAttribute(attrs, "id");
-      if ((href && removePaths.has(href)) || (id && removeIds.has(id))) {
+      if (id && removeIds.has(id) && href && isRemovedPackagePath(href, removePaths)) {
         nodes.splice(index, 1);
         changed = true;
         continue;
       }
-      const binaryItemIDRef = getStringAttribute(attrs, "binaryItemIDRef");
-      if (binaryItemIDRef) {
-        const updatedId = idUpdates.get(binaryItemIDRef);
+      for (const key of findPackagePathAttributeKeys(attrs)) {
+        const value = attrs[key];
+        if (typeof value !== "string") continue;
+        const updatedPath = findUpdatedPackagePath(value, duplicatePathUpdates);
+        if (updatedPath) {
+          setAttribute(attrs, key, updatedPath);
+          changed = true;
+        }
+      }
+      for (const key of Object.keys(attrs)) {
+        if (!isIdReferenceAttribute(key)) continue;
+        const value = attrs[key];
+        if (typeof value !== "string") continue;
+        const updatedId = idUpdates.get(value);
         if (updatedId) {
-          setAttribute(attrs, "binaryItemIDRef", updatedId);
+          setAttribute(attrs, key, updatedId);
           changed = true;
         }
       }
     }
 
     for (const value of Object.values(node)) {
-      if (Array.isArray(value) && updateDuplicateImageNodes(value, idUpdates, removeIds, removePaths)) {
+      if (Array.isArray(value) && updateDuplicateImageNodes(value, idUpdates, duplicatePathUpdates, removeIds, removePaths)) {
         changed = true;
       }
     }
@@ -348,10 +357,51 @@ function collectManifestItems(nodes: unknown, idByPath: Map<string, string>): vo
     if (attrs) {
       const id = getStringAttribute(attrs, "id");
       const href = getStringAttribute(attrs, "href");
-      if (id && href) idByPath.set(href, id);
+      const normalizedHref = href ? normalizePackagePath(href) : null;
+      if (id && normalizedHref) idByPath.set(normalizedHref, id);
     }
     for (const value of Object.values(node)) {
       if (Array.isArray(value)) collectManifestItems(value, idByPath);
     }
+  }
+}
+
+function isIdReferenceAttribute(name: string): boolean {
+  const normalized = name.toLowerCase();
+  return normalized === "binaryitemidref" || normalized.endsWith("ref") || normalized.endsWith("idref");
+}
+
+function findHrefAttributeKey(attrs: Record<string, unknown>): string | null {
+  return Object.keys(attrs).find((key) => key.toLowerCase() === "href" || key.toLowerCase().endsWith(":href")) ?? null;
+}
+
+function findPackagePathAttributeKeys(attrs: Record<string, unknown>): string[] {
+  return Object.keys(attrs).filter((key) => typeof attrs[key] === "string" && normalizePackagePath(attrs[key]) !== null);
+}
+
+function isRemovedPackagePath(value: string, removePaths: Set<string>): boolean {
+  const normalized = normalizePackagePath(value);
+  return Boolean(normalized && removePaths.has(normalized));
+}
+
+function findUpdatedPackagePath(value: string, pathUpdates: Map<string, string>): string | null {
+  const normalized = normalizePackagePath(value);
+  return normalized ? pathUpdates.get(normalized) ?? null : null;
+}
+
+function normalizePackagePath(value: string): string | null {
+  const cleaned = decodePath(value.trim()).replace(/^#/, "").replace(/^\.?\//, "").replace(/\\/g, "/");
+  const binDataIndex = cleaned.toLowerCase().indexOf("bindata/");
+  if (binDataIndex < 0) return null;
+  const resourcePath = cleaned.slice(binDataIndex);
+  if (resourcePath.split("/").some((segment) => segment === ".." || segment === "." || segment === "")) return null;
+  return resourcePath;
+}
+
+function decodePath(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
   }
 }
