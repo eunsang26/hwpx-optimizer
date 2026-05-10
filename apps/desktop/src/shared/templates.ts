@@ -12,6 +12,7 @@ import type { BatchItemStatus, RiskLevel, VisualImpactLevel } from "./labels.js"
 import type { ActionToggleViewModel, CategorySlice } from "./viewModel.js";
 import { batchItemMetaText } from "./batchView.js";
 import type { BatchItemLike } from "./batchView.js";
+import type { SubmissionActionRow } from "./submissionPlan.js";
 import { formatBytes } from "./viewModel.js";
 
 export function metricHtml(label: string, value: string): string {
@@ -34,6 +35,14 @@ export function visualImpactBadgeHtml(impact: VisualImpactLevel): string {
 export function actionToggleHtml(toggle: ActionToggleViewModel, checked: boolean): string {
   const checkedAttr = checked ? " checked" : "";
   return `<li><label><input type="checkbox" value="${escapeHtml(toggle.action)}"${checkedAttr} /><span class="action-text"><strong>${escapeHtml(toggle.label)}</strong><em>${toggle.count}개 · 예상 절감 ${escapeHtml(toggle.savingLabel)}</em></span><span class="action-badges">${riskBadgeHtml(toggle.risk)}${visualImpactBadgeHtml(toggle.visualImpact)}</span></label></li>`;
+}
+
+export function submissionActionRowHtml(row: SubmissionActionRow): string {
+  const checkedAttr = row.checked ? " checked" : "";
+  const partialClass = row.partiallyChecked ? " is-partial" : "";
+  const partialAttr = row.partiallyChecked ? " data-indeterminate=\"true\"" : "";
+  const actionsAttr = escapeHtml(row.actions.join(","));
+  return `<li class="plan-action-row${partialClass}"><label><input type="checkbox" value="${escapeHtml(row.action)}" data-actions="${actionsAttr}"${checkedAttr}${partialAttr} /><span class="action-text"><strong>${escapeHtml(row.label)}</strong><em>${row.count}개 작업</em></span><strong class="saving">${escapeHtml(row.savingLabel)}</strong></label></li>`;
 }
 
 export function batchItemRowHtml(item: BatchItemLike, index: number, options: { running: boolean }): string {
