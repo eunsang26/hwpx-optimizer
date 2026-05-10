@@ -101,7 +101,7 @@ async function optimizeHwpxBufferAdvanced(
   const analysis = await analyzeHwpxPackage(pkg);
   const opportunities = await detectEstimatedOptimizationOpportunities(pkg, settings.profile);
   const selectedOpportunities =
-    settings.options.actions && settings.options.actions.length > 0
+    settings.options.actions !== undefined
       ? opportunities.filter((opportunity) => settings.options.actions?.includes(opportunity.action))
       : opportunities;
   const actions = selectedOpportunities.map((opportunity) => {

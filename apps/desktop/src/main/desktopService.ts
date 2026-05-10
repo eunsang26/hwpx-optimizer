@@ -118,7 +118,7 @@ export async function optimizeByMode(
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
   const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
   if (mode === "safe") return optimizeHwpxBufferSafe(input);
-  const advanced = actions && actions.length > 0 ? { actions } : {};
+  const advanced = actions ? { actions } : {};
   if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advanced);
   return optimizeHwpxBufferBalanced(input, advanced);
 }
