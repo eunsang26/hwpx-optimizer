@@ -1,15 +1,15 @@
 :root {
   color-scheme: light;
-  --bg: #f4f6f8;
+  --bg: #f6f8fb;
   --surface: #ffffff;
-  --surface-2: #eef3f7;
-  --text: #18212f;
-  --muted: #687385;
-  --border: #d8e1ea;
-  --accent: #145fd7;
-  --accent-2: #14877e;
+  --surface-2: #f1f5f9;
+  --text: #151b28;
+  --muted: #687487;
+  --border: #d5dee9;
+  --accent: #1266e3;
+  --accent-2: #0f8a78;
   --danger: #b72a3a;
-  --shadow: 0 14px 36px rgba(24, 33, 47, 0.08);
+  --shadow: 0 10px 28px rgba(24, 33, 47, 0.06);
 }
 
 * {
@@ -50,9 +50,9 @@ button.ghost {
 
 .shell {
   display: grid;
-  gap: 16px;
-  padding: 24px;
-  max-width: 1180px;
+  gap: 12px;
+  padding: 16px 24px 20px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
@@ -63,13 +63,39 @@ button.ghost {
   align-items: start;
 }
 
+.workspace-grid[hidden] {
+  display: none;
+}
+
 .batch-workspace {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.batch-workspace .workspace-main {
+  padding: 0;
+  overflow: hidden;
+}
+
+.batch-workspace .panel-header {
+  min-height: 92px;
+  padding: 20px 12px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  background: #ffffff;
+}
+
+.batch-workspace .panel-header h2 {
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.batch-workspace .panel-header p {
+  margin-top: 8px;
+  font-size: 16px;
+}
+
 .workspace-main {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .file-summary,
@@ -82,12 +108,12 @@ button.ghost {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+  box-shadow: 0 1px 2px rgba(24, 33, 47, 0.03);
 }
 
 .file-summary {
-  padding: 20px;
-  border-style: dashed;
-  border-width: 2px;
+  padding: 18px 24px;
+  border-style: solid;
 }
 
 .file-summary.is-over {
@@ -102,6 +128,30 @@ button.ghost {
   align-items: center;
 }
 
+.file-heading::before {
+  content: "HWPX";
+  display: grid;
+  place-items: end center;
+  flex: 0 0 70px;
+  width: 70px;
+  height: 72px;
+  padding-bottom: 10px;
+  border: 1px solid #cfd9e5;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, transparent 0 73%, #dbeafe 73% 100%) top right / 28px 28px no-repeat,
+    linear-gradient(#ffffff, #f8fbff);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.file-heading h2 {
+  font-size: 27px;
+  line-height: 1.2;
+}
+
 .file-actions,
 .primary-run-panel {
   display: flex;
@@ -112,13 +162,34 @@ button.ghost {
 
 .prediction-summary {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 18px;
   align-items: center;
-  margin-top: 16px;
-  padding: 12px;
-  border-radius: 6px;
-  background: #f5f9ff;
+  min-height: 94px;
+  padding: 18px 28px;
+  border: 1px solid #9ed7f3;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(18, 102, 227, 0.02);
+}
+
+.prediction-summary::before {
+  content: "✓";
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 4px solid var(--accent-2);
+  border-radius: 50%;
+  color: var(--accent-2);
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.prediction-summary span:first-child {
+  font-size: 25px;
+  font-weight: 800;
+  color: var(--text);
 }
 
 .prediction-summary[hidden],
@@ -128,47 +199,79 @@ button.ghost {
 
 .prediction-summary strong {
   color: var(--accent-2);
+  border: 1px solid rgba(15, 138, 120, 0.22);
+  border-radius: 6px;
+  padding: 8px 14px;
+  background: rgba(15, 138, 120, 0.08);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.prediction-summary span:last-child {
+  color: var(--accent-2);
+  font-weight: 800;
 }
 
 .submission-controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .submission-controls label {
+  display: block;
+  min-height: 96px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
   color: var(--text);
   font-weight: 700;
 }
 
+.submission-controls label[hidden] {
+  display: none;
+}
+
 .primary-run-panel {
-  padding: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .primary-run-panel #optimize-button {
-  min-width: 190px;
-  min-height: 48px;
-  font-size: 15px;
+  flex: 1 1 100%;
+  min-width: 100%;
+  min-height: 56px;
+  font-size: 22px;
+  box-shadow: 0 6px 16px rgba(18, 102, 227, 0.22);
 }
 
 .primary-run-panel p {
   flex-basis: 100%;
+  order: 4;
+  text-align: center;
 }
 
 .plan-sidebar {
   position: sticky;
   top: 18px;
-  padding: 18px;
+  padding: 20px 18px;
 }
 
 .plan-total {
-  margin-top: 14px;
-  padding: 12px;
+  margin-top: 18px;
+  padding: 16px;
   border-radius: 6px;
   background: #eef8f6;
   color: var(--accent-2);
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 900;
 }
 
 .action-list.plan-actions {
@@ -176,16 +279,18 @@ button.ghost {
 }
 
 .action-list .plan-action-row label {
-  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  padding: 14px 4px;
 }
 
 .plan-action-row .saving {
   color: var(--accent-2);
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 .analysis-details {
-  padding: 14px;
+  padding: 13px 14px;
 }
 
 .analysis-details summary {
@@ -197,8 +302,8 @@ button.ghost {
 .verification-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 24px;
+  padding: 15px 20px;
   align-items: center;
 }
 
@@ -233,7 +338,7 @@ p {
 }
 
 h1 {
-  font-size: 28px;
+  font-size: 27px;
   letter-spacing: 0;
 }
 
@@ -253,13 +358,13 @@ label {
 select,
 input[type="number"] {
   width: 100%;
-  margin-top: 6px;
+  margin-top: 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 9px 10px;
+  padding: 12px 13px;
   background: var(--surface);
   color: var(--text);
-  font-size: 13px;
+  font-size: 18px;
 }
 
 .drop-zone,
@@ -617,9 +722,11 @@ input[type="number"] {
   grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 12px;
-  background: var(--surface-2);
-  border-radius: 8px;
-  padding: 10px 14px;
+  min-height: 64px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 12px 16px;
   font-size: 13px;
 }
 
@@ -630,7 +737,9 @@ input[type="number"] {
 }
 
 .batch-list .name strong {
-  font-weight: 700;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -639,8 +748,8 @@ input[type="number"] {
 .batch-list .name em {
   color: var(--muted);
   font-style: normal;
-  font-size: 12px;
-  margin-top: 2px;
+  font-size: 13px;
+  margin-top: 4px;
 }
 
 .batch-list .status {
