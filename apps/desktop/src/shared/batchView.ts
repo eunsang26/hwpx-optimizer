@@ -6,8 +6,14 @@ export type BatchItemLike = {
   path: string;
   fileName: string;
   status: BatchItemStatus;
+  report?: OptimizationReport;
   outputPath?: string;
   reportPath?: string;
+  originalSizeBytes?: number;
+  expectedSizeBytes?: number;
+  originalSizeLabel?: string;
+  expectedSizeLabel?: string;
+  targetStatusLabel?: string;
   savedBytes?: number;
   savedPercent?: number;
   error?: string;
@@ -35,6 +41,22 @@ export function summarizeBatchItems(items: BatchItemLike[], options: { running: 
     counts[item.status] += 1;
     totalSavedBytes += item.savedBytes ?? 0;
   }
+  const analyzedPending = items.filter(
+    (item) =>
+      item.status === "pending" &&
+      item.originalSizeBytes !== undefined &&
+      item.expectedSizeBytes !== undefined
+  );
+  if (analyzedPending.length > 0 && counts.done === 0 && counts.failed === 0 && counts.cancelled === 0) {
+    const originalTotal = analyzedPending.reduce((sum, item) => sum + (item.originalSizeBytes ?? 0), 0);
+    const expectedTotal = analyzedPending.reduce((sum, item) => sum + (item.expectedSizeBytes ?? 0), 0);
+    return {
+      totalCount: items.length,
+      counts,
+      totalSavedBytes: Math.max(0, originalTotal - expectedTotal),
+      text: `${items.length}개 파일 · 총 ${formatBytes(originalTotal)} → 예상 ${formatBytes(expectedTotal)}`
+    };
+  }
   const segments: string[] = [`${items.length}개 파일`];
   if (counts.done > 0) segments.push(`완료 ${counts.done}`);
   if (counts.failed > 0) segments.push(`실패 ${counts.failed}`);
@@ -53,6 +75,9 @@ export function batchItemMetaText(item: BatchItemLike): string {
   }
   if (item.status === "failed") return item.error ?? "실패";
   if (item.status === "cancelled") return "취소됨";
+  if (item.originalSizeLabel && item.expectedSizeLabel && item.targetStatusLabel) {
+    return `${item.originalSizeLabel} → ${item.expectedSizeLabel} · ${item.targetStatusLabel}`;
+  }
   return item.path;
 }
 

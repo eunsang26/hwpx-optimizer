@@ -48,7 +48,8 @@ export function submissionActionRowHtml(row: SubmissionActionRow): string {
 export function batchItemRowHtml(item: BatchItemLike, index: number, options: { running: boolean }): string {
   const meta = batchItemMetaText(item);
   const actions = batchItemRowActionsHtml(item, index, options);
-  return `<li><span class="name"><strong>${escapeHtml(item.fileName)}</strong><em>${escapeHtml(meta)}</em></span><span class="status ${item.status}">${escapeHtml(batchStatusLabel(item.status))}</span><span class="row-actions">${actions}</span></li>`;
+  const attentionClass = item.targetStatusLabel === "목표 미달 가능" ? " class=\"needs-attention\"" : "";
+  return `<li${attentionClass}><span class="name"><strong>${escapeHtml(item.fileName)}</strong><em>${escapeHtml(meta)}</em></span><span class="status ${item.status}">${escapeHtml(batchStatusLabel(item.status))}</span><span class="row-actions">${actions}</span></li>`;
 }
 
 export function batchItemRowActionsHtml(

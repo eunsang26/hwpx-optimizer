@@ -11,7 +11,7 @@ import {
 import { createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
-import { createSubmissionPlan } from "./shared/submissionPlan.js";
+import { createSubmissionPlan, modeForPreservation } from "./shared/submissionPlan.js";
 import type {
   PreservationPreference,
   SubmissionActionId,
@@ -29,8 +29,14 @@ type BatchItem = {
   path: string;
   fileName: string;
   status: "pending" | "running" | "done" | "failed" | "cancelled";
+  report?: OptimizationReport;
   outputPath?: string;
   reportPath?: string;
+  originalSizeBytes?: number;
+  expectedSizeBytes?: number;
+  originalSizeLabel?: string;
+  expectedSizeLabel?: string;
+  targetStatusLabel?: string;
   savedBytes?: number;
   savedPercent?: number;
   error?: string;
@@ -258,6 +264,7 @@ async function init(): Promise<void> {
     };
     renderSubmissionControls();
     refreshSubmissionPlan();
+    refreshBatchPlans();
     void saveSettings({ submissionLimit: state.submissionLimit });
   });
   customLimitInput.addEventListener("change", () => {
@@ -268,6 +275,7 @@ async function init(): Promise<void> {
     };
     renderSubmissionControls();
     refreshSubmissionPlan();
+    refreshBatchPlans();
     void saveSettings({ submissionLimit: state.submissionLimit });
   });
   preservationSelect.addEventListener("change", () => {
@@ -275,6 +283,7 @@ async function init(): Promise<void> {
     state.actionSelections.clear();
     renderSubmissionControls();
     refreshSubmissionPlan();
+    refreshBatchPlans();
     void saveSettings({ preservationPreference: state.preservationPreference });
   });
 
@@ -690,6 +699,7 @@ function enterBatchMode(paths: string[]): void {
   }
   batchPanel.hidden = false;
   renderBatchList();
+  void analyzeBatchItems();
   setStatus(`${state.batchItems.length}개 파일이 일괄 처리 대기 중입니다.`);
 }
 
@@ -704,6 +714,46 @@ function renderBatchList(): void {
   batchList.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach((button) => {
     button.addEventListener("click", () => handleBatchRowAction(button));
   });
+}
+
+async function analyzeBatchItems(): Promise<void> {
+  for (const item of state.batchItems) {
+    if (item.report || item.status !== "pending") continue;
+    try {
+      const response = await window.hwpxOptimizer.analyze(item.path);
+      const plan = createSubmissionPlan(response.report, {
+        submissionLimit: state.submissionLimit,
+        preservationPreference: state.preservationPreference,
+        actionOverrides: state.actionSelections
+      });
+      item.report = response.report;
+      item.originalSizeBytes = response.report.originalSize;
+      item.expectedSizeBytes = plan.expectedSizeBytes;
+      item.originalSizeLabel = plan.originalSizeLabel;
+      item.expectedSizeLabel = plan.expectedSizeLabel;
+      item.targetStatusLabel = plan.targetStatusLabel;
+      renderBatchList();
+    } catch (error) {
+      item.status = "failed";
+      item.error = errorMessage(error);
+      renderBatchList();
+    }
+  }
+}
+
+function refreshBatchPlans(): void {
+  for (const item of state.batchItems) {
+    if (!item.report) continue;
+    const plan = createSubmissionPlan(item.report, {
+      submissionLimit: state.submissionLimit,
+      preservationPreference: state.preservationPreference,
+      actionOverrides: state.actionSelections
+    });
+    item.expectedSizeBytes = plan.expectedSizeBytes;
+    item.expectedSizeLabel = plan.expectedSizeLabel;
+    item.targetStatusLabel = plan.targetStatusLabel;
+  }
+  renderBatchList();
 }
 
 function handleBatchRowAction(button: HTMLButtonElement): void {
@@ -751,10 +801,18 @@ async function runBatch(): Promise<void> {
     renderBatchList();
     renderProgress(5, `${item.fileName} 처리 시작`);
     try {
+      const plan = item.report
+        ? createSubmissionPlan(item.report, {
+            submissionLimit: state.submissionLimit,
+            preservationPreference: state.preservationPreference,
+            actionOverrides: state.actionSelections
+          })
+        : undefined;
       const response = await window.hwpxOptimizer.optimize({
         filePath: item.path,
-        mode: state.mode,
-        outputDirectory: state.outputDirectory
+        mode: plan?.mode ?? modeForPreservation(state.preservationPreference),
+        outputDirectory: state.outputDirectory,
+        actions: selectedActionsForPlan(plan)
       });
       Object.assign(item, applyOptimizationResultToBatchItem(item, response));
     } catch (error) {
@@ -775,6 +833,11 @@ async function runBatch(): Promise<void> {
   const completed = state.batchItems.filter((item) => item.status === "done").length;
   const failed = state.batchItems.filter((item) => item.status === "failed").length;
   setStatus(`일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}.`);
+}
+
+function selectedActionsForPlan(plan: SubmissionPlan | undefined): string[] | undefined {
+  if (!plan || plan.mode === "safe" || plan.kind === "automatic") return undefined;
+  return plan.selectedActions;
 }
 
 function resolveDroppedFilePath(file: File): string {

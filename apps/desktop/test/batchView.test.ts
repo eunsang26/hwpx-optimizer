@@ -8,6 +8,44 @@ import type { BatchItemLike } from "../src/shared/batchView.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 
 describe("batchView helpers", () => {
+  it("summarizes analyzed pending files with expected output", () => {
+    const summary = summarizeBatchItems([
+      {
+        path: "/a.hwpx",
+        fileName: "a.hwpx",
+        status: "pending",
+        originalSizeBytes: 28 * 1024 * 1024,
+        expectedSizeBytes: 16 * 1024 * 1024,
+        originalSizeLabel: "28.00 MiB",
+        expectedSizeLabel: "16.00 MiB"
+      },
+      {
+        path: "/b.hwpx",
+        fileName: "b.hwpx",
+        status: "pending",
+        originalSizeBytes: 54 * 1024 * 1024,
+        expectedSizeBytes: 19 * 1024 * 1024,
+        originalSizeLabel: "54.00 MiB",
+        expectedSizeLabel: "19.00 MiB"
+      }
+    ]);
+
+    expect(summary.text).toBe("2개 파일 · 총 82.00 MiB → 예상 35.00 MiB");
+  });
+
+  it("renders target status in pending row meta", () => {
+    expect(
+      batchItemMetaText({
+        path: "/report.hwpx",
+        fileName: "report.hwpx",
+        status: "pending",
+        originalSizeLabel: "61.80 MiB",
+        expectedSizeLabel: "27.40 MiB",
+        targetStatusLabel: "목표 미달 가능"
+      })
+    ).toBe("61.80 MiB → 27.40 MiB · 목표 미달 가능");
+  });
+
   it("returns a placeholder summary when the queue is empty", () => {
     const summary = summarizeBatchItems([]);
     expect(summary.totalCount).toBe(0);
