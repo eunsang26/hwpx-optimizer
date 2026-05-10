@@ -77,6 +77,140 @@ describe("submission optimization plan", () => {
     expect(plan.targetStatus).toBe("already-under-target");
     expect(plan.targetStatusLabel).toBe("이미 목표 이하");
   });
+
+  it("does not mark the target met when the displayed expected size misses it", () => {
+    const plan = createSubmissionPlan({
+      report: {
+        ...reportFixture,
+        originalSize: 20.1 * MIB,
+        opportunityGroups: [
+          {
+            action: "strip-metadata",
+            label: "Strip metadata",
+            count: 1,
+            estimatedSavingBytes: 100 * KIB,
+            beforeSize: MIB,
+            afterSize: MIB - 100 * KIB,
+            confidence: "estimated",
+            risk: "safe",
+            visualImpact: "none",
+            defaultEnabledIn: ["balanced", "aggressive"],
+            targets: ["BinData/a.jpg"]
+          }
+        ]
+      },
+      limit: { id: "mb20" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+
+    expect(plan.expectedSavingLabel).toBe("0 B");
+    expect(plan.expectedSizeLabel).toBe("20.10 MiB");
+    expect(plan.targetStatus).toBe("target-missed");
+    expect(plan.targetStatusLabel).toBe("목표 미달 가능");
+  });
+
+  it("aggregates action rows by non-technical display label", () => {
+    const plan = createSubmissionPlan({
+      report: {
+        ...reportFixture,
+        opportunityGroups: [
+          {
+            action: "resize-jpeg",
+            label: "Resize JPEG",
+            count: 2,
+            estimatedSavingBytes: 2 * MIB,
+            beforeSize: 4 * MIB,
+            afterSize: 2 * MIB,
+            confidence: "estimated",
+            risk: "medium",
+            visualImpact: "medium",
+            defaultEnabledIn: ["balanced", "aggressive"],
+            targets: ["BinData/a.jpg", "BinData/b.jpg"]
+          },
+          {
+            action: "resize-png",
+            label: "Resize PNG",
+            count: 1,
+            estimatedSavingBytes: MIB,
+            beforeSize: 2 * MIB,
+            afterSize: MIB,
+            confidence: "estimated",
+            risk: "medium",
+            visualImpact: "medium",
+            defaultEnabledIn: ["aggressive"],
+            targets: ["BinData/c.png"]
+          }
+        ]
+      },
+      limit: { id: "mb20" },
+      preservation: "recommended",
+      actionOverrides: { "resize-png": true }
+    });
+
+    expect(plan.actionRows).toHaveLength(1);
+    expect(plan.actionRows[0]).toEqual(
+      expect.objectContaining({
+        label: "큰 이미지 적정 크기로 줄이기",
+        count: 3,
+        checked: true,
+        savingBytes: 3 * MIB,
+        savingLabel: "3.00 MiB"
+      })
+    );
+    expect(plan.selectedActions).toEqual(["resize-jpeg", "resize-png"]);
+  });
+
+  it("shows selected savings for aggregated rows with mixed default actions", () => {
+    const plan = createSubmissionPlan({
+      report: {
+        ...reportFixture,
+        opportunityGroups: [
+          {
+            action: "resize-jpeg",
+            label: "Resize JPEG",
+            count: 2,
+            estimatedSavingBytes: 2 * MIB,
+            beforeSize: 4 * MIB,
+            afterSize: 2 * MIB,
+            confidence: "estimated",
+            risk: "medium",
+            visualImpact: "medium",
+            defaultEnabledIn: ["balanced", "aggressive"],
+            targets: ["BinData/a.jpg", "BinData/b.jpg"]
+          },
+          {
+            action: "resize-png",
+            label: "Resize PNG",
+            count: 1,
+            estimatedSavingBytes: MIB,
+            beforeSize: 2 * MIB,
+            afterSize: MIB,
+            confidence: "estimated",
+            risk: "medium",
+            visualImpact: "medium",
+            defaultEnabledIn: ["aggressive"],
+            targets: ["BinData/c.png"]
+          }
+        ]
+      },
+      limit: { id: "mb20" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+
+    expect(plan.actionRows).toHaveLength(1);
+    expect(plan.actionRows[0]).toEqual(
+      expect.objectContaining({
+        label: "큰 이미지 적정 크기로 줄이기",
+        checked: true,
+        savingBytes: 2 * MIB,
+        savingLabel: "2.00 MiB"
+      })
+    );
+    expect(plan.expectedSavingBytes).toBe(2 * MIB);
+    expect(plan.selectedActions).toEqual(["resize-jpeg"]);
+  });
 });
 
 const reportFixture: OptimizationReport = {

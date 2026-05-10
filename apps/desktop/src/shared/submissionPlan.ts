@@ -5,6 +5,7 @@ export type SubmissionLimitId = "none" | "mb10" | "mb20" | "mb50" | "custom";
 export type PreservationPreference = "preserve" | "recommended" | "size";
 export type PlanStatus = "target-met" | "target-missed" | "already-under-target" | "no-target";
 export type PlanKind = "automatic" | "custom";
+export type SubmissionActionId = OptimizationOpportunityGroup["action"];
 
 export type SubmissionLimit = {
   id: SubmissionLimitId;
@@ -14,11 +15,12 @@ export type SubmissionLimit = {
 export type SubmissionPlanInput = {
   submissionLimit: SubmissionLimit;
   preservationPreference: PreservationPreference;
-  actionOverrides: Map<string, boolean>;
+  actionOverrides: Map<SubmissionActionId, boolean>;
 };
 
 export type SubmissionActionRow = {
-  action: OptimizationOpportunityGroup["action"];
+  action: SubmissionActionId;
+  actions: SubmissionActionId[];
   label: string;
   count: number;
   checked: boolean;
@@ -41,11 +43,11 @@ export type SubmissionPlan = {
   targetLabel: string;
   targetStatus: PlanStatus;
   targetStatusLabel: string;
-  selectedActions: string[];
+  selectedActions: SubmissionActionId[];
   actionRows: SubmissionActionRow[];
 };
 
-type ActionOverrideRecord = Partial<Record<OptimizationOpportunityGroup["action"], boolean>>;
+type ActionOverrideRecord = Partial<Record<SubmissionActionId, boolean>>;
 
 type CompactSubmissionPlanInput = {
   report: OptimizationReport;
@@ -106,12 +108,13 @@ export function createSubmissionPlan(
   const mode = modeForPreservation(input.preservationPreference);
   const toggles = createActionToggles(report, mode);
   const savingByAction = new Map(report.opportunityGroups.map((group) => [group.action, group.estimatedSavingBytes]));
-  const actionRows = toggles.map((toggle) => {
+  const rawActionRows = toggles.map((toggle) => {
     const override = input.actionOverrides.get(toggle.action);
     const checked = override ?? toggle.defaultEnabledForMode;
     const savingBytes = savingByAction.get(toggle.action) ?? 0;
     return {
       action: toggle.action,
+      actions: [toggle.action],
       label: ACTION_DISPLAY_LABELS[toggle.action] ?? toggle.label,
       count: toggle.count,
       checked,
@@ -121,14 +124,16 @@ export function createSubmissionPlan(
       visualImpact: toggle.visualImpact
     };
   });
-  const changed = actionRows.some((row) => input.actionOverrides.has(row.action));
-  const expectedSavingBytes = actionRows.reduce((sum, row) => (row.checked ? sum + row.savingBytes : sum), 0);
+  const actionRows = aggregateActionRows(rawActionRows);
+  const changed = rawActionRows.some((row) => input.actionOverrides.has(row.action));
+  const selectedActions = rawActionRows.filter((row) => row.checked).map((row) => row.action);
+  const expectedSavingBytes = rawActionRows.reduce((sum, row) => (row.checked ? sum + row.savingBytes : sum), 0);
   const expectedSizeBytes = Math.max(0, report.originalSize - expectedSavingBytes);
   const summarySavingBytes = floorToGranularity(expectedSavingBytes, SUMMARY_SAVING_GRANULARITY_BYTES);
   const summarySizeBytes = Math.max(0, report.originalSize - summarySavingBytes);
   const targetBytes = resolveSubmissionLimitBytes(input.submissionLimit);
   const savedPercent = report.originalSize > 0 ? (summarySavingBytes / report.originalSize) * 100 : 0;
-  const targetStatus = targetStatusFor(report.originalSize, expectedSizeBytes, targetBytes);
+  const targetStatus = targetStatusFor(report.originalSize, summarySizeBytes, targetBytes);
   return {
     kind: changed ? "custom" : "automatic",
     mode,
@@ -142,9 +147,61 @@ export function createSubmissionPlan(
     targetLabel: targetBytes ? `${formatBytes(targetBytes)} 이하` : "제한 없음",
     targetStatus,
     targetStatusLabel: targetStatusLabel(targetStatus),
-    selectedActions: actionRows.filter((row) => row.checked).map((row) => row.action),
+    selectedActions,
     actionRows
   };
+}
+
+function aggregateActionRows(actionRows: SubmissionActionRow[]): SubmissionActionRow[] {
+  const rowsByLabel = new Map<string, SubmissionActionRow>();
+  const selectedSavingByLabel = new Map<string, number>();
+  for (const row of actionRows) {
+    if (row.checked) {
+      selectedSavingByLabel.set(row.label, (selectedSavingByLabel.get(row.label) ?? 0) + row.savingBytes);
+    }
+    const existing = rowsByLabel.get(row.label);
+    if (!existing) {
+      rowsByLabel.set(row.label, { ...row, actions: [...row.actions] });
+      continue;
+    }
+    existing.actions.push(...row.actions);
+    existing.count += row.count;
+    existing.checked = existing.checked || row.checked;
+    existing.savingBytes += row.savingBytes;
+    existing.savingLabel = formatBytes(existing.savingBytes);
+    existing.risk = highestRisk(existing.risk, row.risk);
+    existing.visualImpact = highestVisualImpact(existing.visualImpact, row.visualImpact);
+  }
+  return [...rowsByLabel.values()].map((row) => {
+    if (!row.checked) return row;
+    const selectedSavingBytes = selectedSavingByLabel.get(row.label) ?? row.savingBytes;
+    return {
+      ...row,
+      savingBytes: selectedSavingBytes,
+      savingLabel: formatBytes(selectedSavingBytes)
+    };
+  });
+}
+
+function highestRisk(
+  left: OptimizationOpportunityGroup["risk"],
+  right: OptimizationOpportunityGroup["risk"]
+): OptimizationOpportunityGroup["risk"] {
+  const order: Record<OptimizationOpportunityGroup["risk"], number> = { safe: 0, medium: 1, high: 2 };
+  return order[left] >= order[right] ? left : right;
+}
+
+function highestVisualImpact(
+  left: OptimizationOpportunityGroup["visualImpact"],
+  right: OptimizationOpportunityGroup["visualImpact"]
+): OptimizationOpportunityGroup["visualImpact"] {
+  const order: Record<OptimizationOpportunityGroup["visualImpact"], number> = {
+    none: 0,
+    low: 1,
+    medium: 2,
+    high: 3
+  };
+  return order[left] >= order[right] ? left : right;
 }
 
 function floorToGranularity(value: number, granularity: number): number {
@@ -163,7 +220,7 @@ function normalizeInput(
   return {
     submissionLimit: reportOrInput.limit,
     preservationPreference: reportOrInput.preservation,
-    actionOverrides: new Map(Object.entries(reportOrInput.actionOverrides))
+    actionOverrides: new Map(Object.entries(reportOrInput.actionOverrides) as Array<[SubmissionActionId, boolean]>)
   };
 }
 
