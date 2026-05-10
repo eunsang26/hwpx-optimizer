@@ -63,6 +63,10 @@ button.ghost {
   align-items: start;
 }
 
+.batch-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .workspace-main {
   display: grid;
   gap: 14px;
@@ -115,6 +119,11 @@ button.ghost {
   padding: 12px;
   border-radius: 6px;
   background: #f5f9ff;
+}
+
+.prediction-summary[hidden],
+.category-chart[hidden] {
+  display: none;
 }
 
 .prediction-summary strong {
