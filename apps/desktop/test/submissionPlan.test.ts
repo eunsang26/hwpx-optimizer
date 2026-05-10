@@ -66,6 +66,18 @@ describe("submission optimization plan", () => {
     expect(plan.targetStatusLabel).toBe("목표 미달 가능");
   });
 
+  it("keeps automatic plan kind when action overrides match defaults", () => {
+    const plan = createSubmissionPlan({
+      report: reportFixture,
+      limit: { id: "mb20" },
+      preservation: "recommended",
+      actionOverrides: { "resize-jpeg": true }
+    });
+
+    expect(plan.kind).toBe("automatic");
+    expect(plan.selectedActions).toContain("resize-jpeg");
+  });
+
   it("marks plans that are already under the target", () => {
     const plan = createSubmissionPlan({
       report: { ...reportFixture, originalSize: 8 * MIB },
@@ -203,12 +215,65 @@ describe("submission optimization plan", () => {
     expect(plan.actionRows[0]).toEqual(
       expect.objectContaining({
         label: "큰 이미지 적정 크기로 줄이기",
-        checked: true,
+        action: "resize-jpeg",
+        checked: false,
+        partiallyChecked: true,
+        selectedActions: ["resize-jpeg"],
         savingBytes: 2 * MIB,
         savingLabel: "2.00 MiB"
       })
     );
     expect(plan.expectedSavingBytes).toBe(2 * MIB);
+    expect(plan.selectedActions).toEqual(["resize-jpeg"]);
+  });
+
+  it("uses a selected primary action for partial aggregated rows", () => {
+    const plan = createSubmissionPlan({
+      report: {
+        ...reportFixture,
+        opportunityGroups: [
+          {
+            action: "resize-png",
+            label: "Resize PNG",
+            count: 1,
+            estimatedSavingBytes: MIB,
+            beforeSize: 2 * MIB,
+            afterSize: MIB,
+            confidence: "estimated",
+            risk: "medium",
+            visualImpact: "medium",
+            defaultEnabledIn: ["aggressive"],
+            targets: ["BinData/c.png"]
+          },
+          {
+            action: "resize-jpeg",
+            label: "Resize JPEG",
+            count: 2,
+            estimatedSavingBytes: 2 * MIB,
+            beforeSize: 4 * MIB,
+            afterSize: 2 * MIB,
+            confidence: "estimated",
+            risk: "medium",
+            visualImpact: "medium",
+            defaultEnabledIn: ["balanced", "aggressive"],
+            targets: ["BinData/a.jpg", "BinData/b.jpg"]
+          }
+        ]
+      },
+      limit: { id: "mb20" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+
+    expect(plan.actionRows[0]).toEqual(
+      expect.objectContaining({
+        action: "resize-jpeg",
+        actions: ["resize-png", "resize-jpeg"],
+        selectedActions: ["resize-jpeg"],
+        checked: false,
+        partiallyChecked: true
+      })
+    );
     expect(plan.selectedActions).toEqual(["resize-jpeg"]);
   });
 });

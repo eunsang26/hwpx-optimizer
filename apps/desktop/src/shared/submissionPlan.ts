@@ -21,9 +21,11 @@ export type SubmissionPlanInput = {
 export type SubmissionActionRow = {
   action: SubmissionActionId;
   actions: SubmissionActionId[];
+  selectedActions: SubmissionActionId[];
   label: string;
   count: number;
   checked: boolean;
+  partiallyChecked: boolean;
   savingBytes: number;
   savingLabel: string;
   risk: OptimizationOpportunityGroup["risk"];
@@ -115,9 +117,11 @@ export function createSubmissionPlan(
     return {
       action: toggle.action,
       actions: [toggle.action],
+      selectedActions: checked ? [toggle.action] : [],
       label: ACTION_DISPLAY_LABELS[toggle.action] ?? toggle.label,
       count: toggle.count,
       checked,
+      partiallyChecked: false,
       savingBytes,
       savingLabel: formatBytes(savingBytes),
       risk: toggle.risk,
@@ -125,7 +129,10 @@ export function createSubmissionPlan(
     };
   });
   const actionRows = aggregateActionRows(rawActionRows);
-  const changed = rawActionRows.some((row) => input.actionOverrides.has(row.action));
+  const changed = toggles.some((toggle) => {
+    const override = input.actionOverrides.get(toggle.action);
+    return override !== undefined && override !== toggle.defaultEnabledForMode;
+  });
   const selectedActions = rawActionRows.filter((row) => row.checked).map((row) => row.action);
   const expectedSavingBytes = rawActionRows.reduce((sum, row) => (row.checked ? sum + row.savingBytes : sum), 0);
   const expectedSizeBytes = Math.max(0, report.originalSize - expectedSavingBytes);
@@ -165,18 +172,22 @@ function aggregateActionRows(actionRows: SubmissionActionRow[]): SubmissionActio
       continue;
     }
     existing.actions.push(...row.actions);
+    existing.selectedActions.push(...row.selectedActions);
     existing.count += row.count;
-    existing.checked = existing.checked || row.checked;
+    existing.checked = existing.checked && row.checked;
     existing.savingBytes += row.savingBytes;
     existing.savingLabel = formatBytes(existing.savingBytes);
     existing.risk = highestRisk(existing.risk, row.risk);
     existing.visualImpact = highestVisualImpact(existing.visualImpact, row.visualImpact);
   }
   return [...rowsByLabel.values()].map((row) => {
-    if (!row.checked) return row;
     const selectedSavingBytes = selectedSavingByLabel.get(row.label) ?? row.savingBytes;
+    const partiallyChecked = row.selectedActions.length > 0 && row.selectedActions.length < row.actions.length;
+    if (row.selectedActions.length === 0) return { ...row, partiallyChecked };
     return {
       ...row,
+      action: row.selectedActions[0],
+      partiallyChecked,
       savingBytes: selectedSavingBytes,
       savingLabel: formatBytes(selectedSavingBytes)
     };
