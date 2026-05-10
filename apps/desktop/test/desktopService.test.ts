@@ -5,8 +5,16 @@ import { mkdtemp } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { createHwpxFixture } from "../../../packages/core/test/fixtures.js";
 import { analyzeDesktopFile, defaultDesktopSettings, optimizeDesktopFile, verifyDesktopFile } from "../src/main/desktopService.js";
+import type { DesktopSettings } from "../src/main/desktopService.js";
 
 describe("desktop service", () => {
+  it("defines submission UI defaults in desktop settings", () => {
+    const settings: DesktopSettings = defaultDesktopSettings;
+
+    expect(settings.submissionLimit).toEqual({ id: "mb20" });
+    expect(settings.preservationPreference).toBe("recommended");
+  });
+
   it("analyzes, optimizes, writes a report, and preserves the source file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");

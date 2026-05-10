@@ -12,6 +12,7 @@ import { createActionToggles, createAnalysisViewModel, formatBytes } from "./sha
 import type { ActionToggleViewModel } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
+import type { PreservationPreference, SubmissionLimit } from "./shared/submissionPlan.js";
 
 declare global {
   interface Window {
@@ -57,6 +58,8 @@ type DesktopSettings = {
   saveReport: boolean;
   preventOverwrite: boolean;
   showAggressiveWarning: boolean;
+  submissionLimit: SubmissionLimit;
+  preservationPreference: PreservationPreference;
   outputDirectory?: string;
 };
 
