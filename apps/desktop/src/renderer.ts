@@ -646,8 +646,7 @@ function currentPlanActions(): SubmissionActionId[] {
 function selectedActionsForOptimize(): string[] | undefined {
   if (!state.currentPlan || state.currentPlan.mode === "safe") return undefined;
   const selected = state.currentPlan.selectedActions;
-  const allActions = currentPlanActions();
-  if (selected.length === allActions.length) return undefined;
+  if (state.currentPlan.kind === "automatic") return undefined;
   return selected;
 }
 
