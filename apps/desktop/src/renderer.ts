@@ -68,6 +68,8 @@ const state: AppState = {
   batchCancelled: false
 };
 
+let settingsSaveSequence = 0;
+
 type DesktopSettings = {
   defaultMode: AppState["mode"];
   saveNextToOriginal: boolean;
@@ -372,7 +374,9 @@ async function init(): Promise<void> {
 }
 
 async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
+  const sequence = ++settingsSaveSequence;
   const settings = (await window.hwpxOptimizer.saveSettings(patch)) as DesktopSettings;
+  if (sequence !== settingsSaveSequence) return;
   state.settings = settings;
   state.outputDirectory = settings.outputDirectory;
   state.submissionLimit = settings.submissionLimit ?? state.submissionLimit;
