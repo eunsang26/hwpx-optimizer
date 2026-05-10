@@ -56,6 +56,157 @@ button.ghost {
   margin: 0 auto;
 }
 
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+}
+
+.workspace-main {
+  display: grid;
+  gap: 14px;
+}
+
+.file-summary,
+.submission-controls,
+.primary-run-panel,
+.analysis-details,
+.verification-strip,
+.plan-sidebar,
+.batch-workspace .workspace-main {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.file-summary {
+  padding: 20px;
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.file-summary.is-over {
+  border-color: var(--accent);
+  background: #edf5ff;
+}
+
+.file-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.file-actions,
+.primary-run-panel {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.prediction-summary {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 6px;
+  background: #f5f9ff;
+}
+
+.prediction-summary strong {
+  color: var(--accent-2);
+}
+
+.submission-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.submission-controls label {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.primary-run-panel {
+  padding: 14px;
+}
+
+.primary-run-panel #optimize-button {
+  min-width: 190px;
+  min-height: 48px;
+  font-size: 15px;
+}
+
+.primary-run-panel p {
+  flex-basis: 100%;
+}
+
+.plan-sidebar {
+  position: sticky;
+  top: 18px;
+  padding: 18px;
+}
+
+.plan-total {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 6px;
+  background: #eef8f6;
+  color: var(--accent-2);
+  font-weight: 800;
+}
+
+.action-list.plan-actions {
+  margin-top: 12px;
+}
+
+.action-list .plan-action-row label {
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+}
+
+.plan-action-row .saving {
+  color: var(--accent-2);
+  font-size: 13px;
+}
+
+.analysis-details {
+  padding: 14px;
+}
+
+.analysis-details summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.verification-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  align-items: center;
+}
+
+.verification-strip span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.batch-workspace[hidden] {
+  display: none;
+}
+
+.batch-list li.needs-attention {
+  background: rgba(200, 114, 20, 0.12);
+  border: 1px solid rgba(200, 114, 20, 0.25);
+}
+
 .topbar,
 .panel-header,
 .drop-zone,
@@ -90,7 +241,8 @@ label {
   line-height: 1.5;
 }
 
-select {
+select,
+input[type="number"] {
   width: 100%;
   margin-top: 6px;
   border: 1px solid var(--border);
@@ -672,8 +824,22 @@ select {
     padding: 16px;
   }
 
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-sidebar {
+    position: static;
+  }
+
+  .submission-controls,
+  .prediction-summary {
+    grid-template-columns: 1fr;
+  }
+
   .topbar,
   .drop-zone,
+  .file-heading,
   .panel-header {
     align-items: flex-start;
     flex-direction: column;
