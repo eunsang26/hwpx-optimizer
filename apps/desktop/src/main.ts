@@ -21,7 +21,7 @@ async function createWindow(): Promise<BrowserWindow> {
     minWidth: 920,
     minHeight: 640,
     show: !isSmokeTest,
-    title: "HWPX 문서 최적화",
+    title: "HWPX 보고서 최적화",
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,
@@ -208,10 +208,10 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     settingsOutputResetButton?: string;
   };
 
-  if (result.title !== "HWPX 문서 최적화") {
+  if (result.title !== "HWPX 보고서 최적화") {
     throw new Error(`Desktop smoke failed: unexpected title ${String(result.title)}`);
   }
-  if (result.fileName !== "HWPX 파일을 여기에 끌어다 놓으세요") {
+  if (result.fileName !== "HWPX 보고서를 선택하세요") {
     throw new Error(`Desktop smoke failed: renderer did not load expected start view`);
   }
   if (result.appReady !== "true" || result.preloadApi !== "ready") {
