@@ -505,7 +505,7 @@ async function optimizeCurrentFile(): Promise<void> {
     });
     state.result = response;
     renderResult(response.report, response.outputPath, response.reportPath);
-    setStatus("최적화가 완료되었습니다. 결과 파일을 확인하세요.");
+    setStatus("최적화가 완료되었습니다. 파일을 열어 제출 전 상태를 확인하세요.");
     succeeded = true;
   } catch (error) {
     setStatus(errorMessage(error));
@@ -563,10 +563,10 @@ function renderAnalysis(report: OptimizationReport): void {
 function renderResult(report: OptimizationReport, outputPath: string, reportPath?: string): void {
   resultPanel.hidden = false;
   resultSummary.innerHTML = [
+    metricHtml("원본 용량", formatBytes(report.originalSize)),
     metricHtml("결과 용량", formatBytes(report.optimizedSize ?? report.originalSize)),
-    metricHtml("절감 용량", formatBytes(report.savedBytes ?? 0)),
-    metricHtml("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`),
-    metricHtml("수행 작업", `${report.actions.applied.length}개`)
+    metricHtml("실제 절감", formatBytes(report.savedBytes ?? 0)),
+    metricHtml("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`)
   ].join("");
   requireElement("output-path").textContent = outputPath;
   requireElement("report-path").textContent = reportPath ?? "리포트 저장이 꺼져 있습니다.";
