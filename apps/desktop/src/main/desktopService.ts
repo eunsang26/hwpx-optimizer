@@ -157,7 +157,7 @@ export async function nextOutputPath(
 export function persistentDesktopSettingsPatch(patch: DesktopSettingsPatch): Partial<DesktopSettings> {
   const sanitized: Partial<DesktopSettings> = {};
   if (isOptimizationMode(patch.defaultMode)) sanitized.defaultMode = patch.defaultMode;
-  if (typeof patch.saveNextToOriginal === "boolean") sanitized.saveNextToOriginal = patch.saveNextToOriginal;
+  if (patch.saveNextToOriginal === true) sanitized.saveNextToOriginal = true;
   if (typeof patch.saveReport === "boolean") sanitized.saveReport = patch.saveReport;
   if (typeof patch.preventOverwrite === "boolean") sanitized.preventOverwrite = patch.preventOverwrite;
   if (typeof patch.showAggressiveWarning === "boolean") sanitized.showAggressiveWarning = patch.showAggressiveWarning;

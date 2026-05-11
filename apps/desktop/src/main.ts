@@ -166,7 +166,8 @@ function registerIpc(): void {
         ? await requireAllowedOutputDirectory(input.outputDirectory)
         : undefined;
       const settings = await loadSettings();
-      const result = await runOptimizeWorker({ ...input, filePath, outputDirectory, settings }, (progress) => {
+      const effectiveSettings = outputDirectory ? { ...settings, saveNextToOriginal: false } : settings;
+      const result = await runOptimizeWorker({ ...input, filePath, outputDirectory, settings: effectiveSettings }, (progress) => {
         mainWindow?.webContents.send("hwpx:optimize-progress", progress);
       });
       await registerGeneratedPath(result.outputPath);

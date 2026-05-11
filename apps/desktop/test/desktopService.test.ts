@@ -93,8 +93,7 @@ describe("desktop service", () => {
         reportPath: "/private/input.report.json"
       })
     ).toEqual({
-      saveReport: true,
-      saveNextToOriginal: false
+      saveReport: true
     });
   });
 

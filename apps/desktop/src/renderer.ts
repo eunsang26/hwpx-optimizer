@@ -225,8 +225,7 @@ async function init(): Promise<void> {
   outputButton.addEventListener("click", async () => {
     const selected = await window.hwpxOptimizer.selectDirectory();
     if (selected) {
-      state.outputDirectory = selected;
-      await saveSettings({ saveNextToOriginal: false });
+      applySessionOutputDirectory(selected);
       setStatus("이번 실행의 저장 위치를 변경했습니다.");
     }
   });
@@ -333,7 +332,20 @@ async function init(): Promise<void> {
     modeInputs.find((input) => input.value === nextMode)?.click();
     void saveSettings({ defaultMode: nextMode });
   });
-  settingSaveNext.addEventListener("change", () => void saveSettings({ saveNextToOriginal: settingSaveNext.checked }));
+  settingSaveNext.addEventListener("change", async () => {
+    if (settingSaveNext.checked) {
+      state.outputDirectory = undefined;
+      void saveSettings({ saveNextToOriginal: true });
+      return;
+    }
+    const selected = await window.hwpxOptimizer.selectDirectory();
+    if (selected) {
+      applySessionOutputDirectory(selected);
+      setStatus("이번 실행의 저장 위치를 변경했습니다.");
+      return;
+    }
+    applySessionSaveNextToOriginal(true);
+  });
   settingSaveReport.addEventListener("change", () => void saveSettings({ saveReport: settingSaveReport.checked }));
   settingPreventOverwrite.addEventListener(
     "change",
@@ -346,8 +358,7 @@ async function init(): Promise<void> {
   settingOutputButton.addEventListener("click", async () => {
     const selected = await window.hwpxOptimizer.selectDirectory();
     if (selected) {
-      state.outputDirectory = selected;
-      await saveSettings({ saveNextToOriginal: false });
+      applySessionOutputDirectory(selected);
       setStatus("이번 실행의 저장 위치를 변경했습니다.");
     }
   });
@@ -436,6 +447,18 @@ function renderSettings(settings: DesktopSettings): void {
     : `이번 실행 저장 위치: ${state.outputDirectory}`;
   settingOutputButton.disabled = settings.saveNextToOriginal;
   settingOutputResetButton.disabled = settings.saveNextToOriginal && !state.outputDirectory;
+}
+
+function applySessionOutputDirectory(outputDirectory: string): void {
+  state.outputDirectory = outputDirectory;
+  applySessionSaveNextToOriginal(false);
+}
+
+function applySessionSaveNextToOriginal(saveNextToOriginal: boolean): void {
+  if (!state.settings) return;
+  const settings = { ...state.settings, saveNextToOriginal };
+  state.settings = settings;
+  renderSettings(settings);
 }
 
 function renderSubmissionControls(): void {
