@@ -32,6 +32,11 @@ async function createWindow(): Promise<BrowserWindow> {
     }
   });
 
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.on("will-navigate", (event) => {
+    event.preventDefault();
+  });
+
   await mainWindow.loadFile(join(import.meta.dirname, "index.html"));
   return mainWindow;
 }

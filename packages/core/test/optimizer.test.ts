@@ -107,6 +107,24 @@ describe("applySafeOptimizationPlan", () => {
       expect.objectContaining({ type: "minify-xml", target: "Contents/section0.xml" })
     );
   });
+
+  it("surfaces optimizer failures as user-visible warnings", async () => {
+    const corruptPng = Buffer.from("not a real png");
+    const pkg: HwpxPackage = {
+      entries: [{ path: "BinData/broken.png", data: corruptPng, size: corruptPng.byteLength, kind: "image" }]
+    };
+    const plan: OptimizationPlan = {
+      mode: "safe",
+      actions: [{ type: "optimize-png", target: "BinData/broken.png", risk: "safe" }]
+    };
+
+    const result = await applySafeOptimizationPlan({ pkg, plan });
+
+    expect(result.skipped).toContainEqual(
+      expect.objectContaining({ type: "optimize-png", target: "BinData/broken.png" })
+    );
+    expect(result.warnings.some((warning) => warning.includes("BinData/broken.png"))).toBe(true);
+  });
 });
 
 function segment(marker: number, payload: Buffer): Buffer {

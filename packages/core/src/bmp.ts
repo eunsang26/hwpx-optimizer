@@ -26,6 +26,9 @@ export function decodeBmp(data: Buffer): DecodedBmp | null {
   const expectedEnd = pixelOffset + rowSize * height;
   if (expectedEnd > data.length) return null;
 
+  // 32-bit BMPs carry a BGRA byte order; we intentionally drop the alpha byte
+  // and emit a 24-bit RGB raw buffer so downstream PNG encoding goes through
+  // a single shared path. HWP/HWPX BMPs in our corpus do not rely on alpha.
   const output = Buffer.alloc(width * height * 3);
   for (let y = 0; y < height; y += 1) {
     const sourceY = topDown ? y : height - 1 - y;

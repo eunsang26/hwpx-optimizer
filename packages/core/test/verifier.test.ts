@@ -100,6 +100,16 @@ describe("verifyHwpxOutput", () => {
 
     await expect(verifyHwpxOutput(output, { original, mode: "aggressive" })).resolves.toBeUndefined();
   });
+
+  it("throws when only one of `original` and `mode` is provided", async () => {
+    const output = await createReferencedImageFixture("BinData/image1.jpg", await createJpeg(80, 60));
+    await expect(verifyHwpxOutput(output, { original: output })).rejects.toThrow(
+      /requires both .*original.* and .*mode/i
+    );
+    await expect(verifyHwpxOutput(output, { mode: "safe" })).rejects.toThrow(
+      /requires both .*original.* and .*mode/i
+    );
+  });
 });
 
 async function createGradientPng(width: number, height: number): Promise<Buffer> {

@@ -5,10 +5,19 @@ import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { stripJpegMetadataSegments } from "./optimizer.js";
 import type { HwpxPackage, OptimizationOpportunity } from "./types.js";
 
+// Balanced caps target Full-HD print/document rendering so resized images
+// still look sharp at 100% zoom on a typical 96 DPI monitor; quality 88 is
+// near the bottom of the "visually transparent" range for MozJPEG.
 const BALANCED_MAX_EDGE = 1920;
 const BALANCED_JPEG_QUALITY = 88;
+// Aggressive caps trade some visible quality for size — 1280 covers most
+// reading-screen widths and quality 80 is the lowest setting where text in
+// scanned pages stays legible without obvious ringing in our test corpus.
 const AGGRESSIVE_MAX_EDGE = 1280;
 const AGGRESSIVE_JPEG_QUALITY = 80;
+// Skip JPEG metadata stripping when the projected saving is below this floor:
+// the operation has measurable cost (re-walk + repack) and saving fewer than
+// 256 bytes or 0.5% of the file is not worth surfacing as an opportunity.
 const JPEG_METADATA_MIN_SAVING_BYTES = 256;
 const JPEG_METADATA_MIN_SAVING_RATIO = 0.005;
 
