@@ -4,13 +4,14 @@ This checklist verifies the release candidate on a clean Windows machine. It is 
 
 ## Scope
 
-Verify that the Windows build runs locally, does not upload files, preserves the original HWPX file, and can analyze, optimize, save, and verify optimized HWPX outputs.
+Verify that the Windows build runs locally, does not upload files, preserves the original HWPX file, rejects protected documents without bypass, and can analyze, optimize, save, and verify optimized HWPX outputs.
 
 ## Prerequisites
 
 - Clean Windows 10 or Windows 11 machine.
 - Node.js 20 or newer, if running source-based checks.
 - A local HWPX sample file. Do not commit sample files.
+- A protected or signed HWPX-like test package, if available, for rejection-path confirmation. Do not use real confidential documents as test fixtures.
 - A release artifact from `release/`, either:
   - `HWPX Optimizer-0.1.0-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
   - `HWPX Optimizer-0.1.0-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
@@ -73,8 +74,9 @@ Expected result:
 
 1. Launch the portable executable or installed app.
 2. Confirm the app opens without a terminal dependency.
-3. Drag and drop a local `.hwpx` file.
-4. Confirm the analysis screen shows:
+3. Confirm the start screen says processing is local, the original is preserved, and protected documents are not bypassed.
+4. Drag and drop a local `.hwpx` file.
+5. Confirm the analysis screen shows:
    - original file name,
    - original size,
    - image count,
@@ -83,9 +85,9 @@ Expected result:
    - unused resource candidates,
    - expected savings,
    - warnings.
-5. Select `Safe` mode and run optimization.
-6. Confirm the progress screen updates and does not freeze.
-7. Confirm the result screen shows:
+6. Select `Safe` mode and run optimization.
+7. Confirm the progress screen updates and does not freeze.
+8. Confirm the result screen shows:
    - original size,
    - optimized size,
    - saving percentage,
@@ -93,17 +95,19 @@ Expected result:
    - output file action,
    - output folder action,
    - report action.
-8. Open the optimized file in Hancom Office or another HWPX-compatible viewer.
-9. Confirm the original file timestamp and size did not change.
-10. Repeat with `Balanced` mode.
-11. Repeat with `Aggressive` mode only after acknowledging the quality warning.
-12. Repeat the same file at least three times and confirm each output path is unique unless overwrite is explicitly enabled.
-13. Repeat the workflow with at least one very large HWPX package.
-14. Repeat the workflow with representative real-world documents that include mixed image formats and embedded resources.
+9. Open the optimized file in Hancom Office or another HWPX-compatible viewer.
+10. Confirm the original file timestamp and size did not change.
+11. Repeat with `Balanced` mode.
+12. Repeat with `Aggressive` mode only after acknowledging the quality warning.
+13. Repeat the same file at least three times and confirm each output path is unique unless overwrite is explicitly enabled.
+14. Repeat the workflow with at least one very large HWPX package.
+15. Repeat the workflow with representative real-world documents that include mixed image formats and embedded resources.
+16. Try a protected, signed, or encrypted test package and confirm the app rejects it with a message that it does not decrypt, bypass, or optimize protected documents.
 
 Expected result:
 
 - Original files are never modified in place.
+- Protected documents are rejected without decryption, DRM bypass, or signature-preservation promises.
 - Each output file opens.
 - Repeated optimizations do not overwrite prior outputs by default.
 - Very large packages complete or fail with a clear non-crashing error.
@@ -179,5 +183,6 @@ Windows QA passes only when:
 - Original file preservation is confirmed.
 - Generated output opens in an HWPX-compatible viewer.
 - Any blocker is documented in `docs/KNOWN_LIMITATIONS.md`.
+- Internal distribution evidence references `docs/INTERNAL_DISTRIBUTION.md` and `docs/SECURITY_REVIEW.md`.
 
 Do not mark the product release complete if any item above is unverified.

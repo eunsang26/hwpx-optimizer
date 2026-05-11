@@ -12,6 +12,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 - Free local utility.
 - No server upload, login, account, billing, cloud storage, or telemetry.
 - Original files are never modified in place.
+- Protected documents are rejected without decryption, DRM bypass, or electronic-signature preservation promises.
 - Shared core engine for CLI and desktop.
 - CLI and Electron desktop app both work.
 - HWPX analysis, optimization, verification, and reports work.
@@ -26,7 +27,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Requirement | Evidence | Status |
 | --- | --- | --- |
 | Core engine exists | `packages/core/src/*` | Implemented |
-| HWPX ZIP reader | `packages/core/src/reader.ts`, `packages/core/test/reader.test.ts` | Implemented with required package file validation |
+| HWPX ZIP reader | `packages/core/src/reader.ts`, `packages/core/test/reader.test.ts` | Implemented with required package file validation and protected document rejection |
 | Package analyzer | `packages/core/src/analyzer.ts`, `packages/core/test/analyzer.test.ts` | Implemented |
 | Reference graph | `packages/core/src/referenceGraph.ts`, `packages/core/test/referenceGraph.test.ts` | Implemented with manifest `id -> href` resolution, generic id-valued XML attribute tracking, relative/percent-encoded BinData path normalization, and conservative fallback direct path detection |
 | Optimization planner | `packages/core/src/planner.ts`, `packages/core/test/planner.test.ts` | Implemented |
@@ -52,9 +53,10 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts` local settings | Implemented with default mode, output folder controls, report saving, overwrite prevention, and aggressive warning preferences |
 | Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
 | Local-only operation | no network/server code in app path; filesystem-only APIs | Implemented |
+| Protected document policy | `packages/core/src/reader.ts`, `packages/core/test/reader.test.ts`, `packages/cli/test/cli.test.ts`, `apps/desktop/src/index.html`, `apps/desktop/src/main.ts` | Implemented: encrypted ZIP flags, signature/security paths, and protection metadata are rejected with a no-bypass message |
 | Original file preservation and overwrite prevention | output path generation in `desktopService.ts`; CLI non-overwrite suffixing; CLI rejects `optimize --out`, `optimize --report`, `analyze --report`, and `report --out` when the final target is the original input path | Implemented and regression-tested |
 | JSON reports | CLI and desktop service report write paths | Implemented |
-| Docs | `README.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/RELEASE.md`, `docs/KNOWN_LIMITATIONS.md` | Implemented |
+| Docs | `README.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/RELEASE.md`, `docs/KNOWN_LIMITATIONS.md`, `docs/INTERNAL_DISTRIBUTION.md`, `docs/SECURITY_REVIEW.md` | Implemented |
 | Desktop packaging config | `package.json` electron-builder config | Implemented |
 | Desktop icon resources | `scripts/generate-desktop-icons.mjs`, `npm run desktop:icons`, generated `build/icon.png` and `build/icon.ico` | Implemented |
 | Linux unpacked build | `npm run desktop:pack` passed on 2026-05-08 | Verified |

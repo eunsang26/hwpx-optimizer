@@ -11,9 +11,14 @@ Release requirements:
 - No server upload.
 - No login, account, billing, cloud storage, or telemetry.
 - Original files are preserved.
+- Protected documents are not decrypted, bypassed, or optimized.
 - Optimized outputs pass verifier.
 - README commands work on a clean checkout.
 - Known blockers and non-blockers are documented.
+- Internal distribution review documents are maintained.
+
+For company distribution, include [Internal Distribution Guide](INTERNAL_DISTRIBUTION.md) and
+[Security Review Checklist](SECURITY_REVIEW.md) in the release evidence package.
 
 ## Build Commands
 
@@ -148,6 +153,8 @@ For the ZIP artifact, extract `HWPX Optimizer-0.1.0-x64.zip`, open PowerShell in
 
 Use [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) for the full clean-machine manual and CLI verification pass before treating a Windows artifact as product-ready.
 
+For internal release approval, also confirm that protected HWPX files are rejected without decryption or bypass and that the app start screen states the local-only/original-preserving/security-document policy.
+
 If the portable artifact already exists and only the checksum files need to be refreshed:
 
 ```bash
@@ -185,8 +192,10 @@ Before treating a build as releasable:
 5. Run `npm run desktop:local:win` to create both the portable EXE and the faster-starting ZIP artifact.
 6. Run `scripts/windows-portable-smoke.ps1` on a clean Windows machine.
 7. Complete [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) on a clean Windows machine.
-8. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
-9. Install or launch the generated artifact on a clean Windows machine.
+8. Attach [Internal Distribution Guide](INTERNAL_DISTRIBUTION.md), [Security Review Checklist](SECURITY_REVIEW.md), SHA256 checksums, and test evidence to the internal approval record.
+9. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
+10. Code-sign the Windows artifact when an approved certificate is available; otherwise document the unsigned status in the approval record.
+11. Install or launch the generated artifact on a clean Windows machine.
 
 Suggested future scripts:
 
