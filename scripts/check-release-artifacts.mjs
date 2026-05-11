@@ -1,26 +1,24 @@
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import asar from "@electron/asar";
+import JSZip from "jszip";
 
 const releaseDir = "release";
 const artifactLists = [];
 
-const asarPath = join(releaseDir, "win-unpacked", "resources", "app.asar");
-if (existsSync(asarPath)) {
+for (const asarPath of await findReleaseFiles(releaseDir, (name) => name === "app.asar")) {
   artifactLists.push({
     label: asarPath,
     entries: asar.listPackage(asarPath).map((entry) => entry.replace(/^\/+/, ""))
   });
 }
 
-const zipPath = join(releaseDir, "HWPX Optimizer-0.1.0-x64.zip");
-if (existsSync(zipPath)) {
+for (const zipPath of await findReleaseFiles(releaseDir, (name) => name.toLowerCase().endsWith(".zip"))) {
+  const zip = await JSZip.loadAsync(await readFile(zipPath));
   artifactLists.push({
     label: zipPath,
-    entries: execFileSync("unzip", ["-Z1", zipPath], { encoding: "utf8" })
-      .split(/\r?\n/)
-      .filter(Boolean)
+    entries: Object.keys(zip.files)
   });
 }
 
@@ -64,3 +62,18 @@ if (violations.length > 0) {
 }
 
 console.log("Release artifact check passed.");
+
+async function findReleaseFiles(directory, matches) {
+  if (!existsSync(directory)) return [];
+  const results = [];
+  const entries = await readdir(directory, { withFileTypes: true });
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...(await findReleaseFiles(path, matches)));
+      continue;
+    }
+    if (entry.isFile() && matches(basename(path))) results.push(path);
+  }
+  return results;
+}
