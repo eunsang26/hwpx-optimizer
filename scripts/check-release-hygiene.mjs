@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
 
 const forbiddenPatterns = [
   /^sample.*\.(hwp|hwpx|json|txt)$/i,
@@ -20,7 +19,7 @@ const tracked = execFileSync("git", ["ls-files"], { encoding: "utf8" })
   .filter(Boolean);
 
 const violations = tracked.filter((path) => forbiddenPatterns.some((pattern) => pattern.test(path)));
-const missingDocuments = requiredDocuments.filter((path) => !existsSync(path));
+const missingDocuments = requiredDocuments.filter((path) => !tracked.includes(path));
 
 if (violations.length > 0) {
   console.error("Release hygiene check failed. Forbidden files are tracked:");
