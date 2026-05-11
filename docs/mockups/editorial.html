@@ -1,0 +1,1249 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HWPX 보고서 최적화 — Mockup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700;800;900&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #14110f;
+        --ink-2: #2a2622;
+        --ink-3: #4a4540;
+        --paper: #faf7f1;
+        --paper-2: #f1ede4;
+        --paper-3: #e7e1d4;
+        --rule: #14110f;
+        --hairline: rgba(20, 17, 15, 0.12);
+        --hairline-2: rgba(20, 17, 15, 0.06);
+        --muted: #6f655a;
+        --accent: #1a5b4a;
+        --accent-soft: #d8e2dc;
+        --accent-bg: #eef3ef;
+        --warn: #a04a1f;
+        --warn-bg: #f7ede4;
+        --danger: #8b2a2a;
+        --shadow-app: 0 24px 60px rgba(20, 17, 15, 0.18), 0 4px 14px rgba(20, 17, 15, 0.08);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 30% 0%, #ece6d9 0%, transparent 40%),
+          radial-gradient(circle at 80% 100%, #e3dccc 0%, transparent 50%),
+          #d9d2c3;
+        min-height: 100vh;
+        color: var(--ink);
+        font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .num, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+      .serif { font-family: "Noto Serif KR", serif; }
+
+      /* === Window chrome === */
+      .stage {
+        padding: 32px 40px 80px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+      }
+
+      .stage-label {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: rgba(20, 17, 15, 0.55);
+      }
+
+      .app-window {
+        width: 100%;
+        max-width: 1280px;
+        background: var(--paper);
+        border-radius: 10px;
+        box-shadow: var(--shadow-app);
+        overflow: hidden;
+        border: 1px solid rgba(20, 17, 15, 0.12);
+      }
+
+      .titlebar {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 12px;
+        padding: 9px 14px;
+        background: var(--paper-2);
+        border-bottom: 1px solid var(--hairline);
+        height: 38px;
+      }
+
+      .traffic { display: flex; gap: 7px; }
+      .traffic span {
+        width: 12px; height: 12px; border-radius: 50%;
+        background: #d2cabb; border: 1px solid rgba(0,0,0,0.06);
+      }
+      .traffic span:nth-child(1) { background: #ed6a5e; }
+      .traffic span:nth-child(2) { background: #f4bf4f; }
+      .traffic span:nth-child(3) { background: #61c554; }
+
+      .titlebar-title {
+        text-align: center;
+        font-family: "IBM Plex Sans KR", sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink-2);
+        letter-spacing: 0;
+      }
+
+      .titlebar-meta {
+        display: flex; align-items: center; gap: 10px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+
+      /* === Toolbar (state tabs + brand + LOCAL seal) === */
+      .toolbar {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 18px;
+        padding: 14px 22px;
+        background: var(--paper);
+        border-bottom: 1.5px solid var(--rule);
+      }
+
+      .brand {
+        display: flex; align-items: baseline; gap: 12px;
+      }
+      .brand .logo {
+        font-family: "Noto Serif KR", serif;
+        font-weight: 900; font-size: 22px;
+        letter-spacing: -0.01em; line-height: 1;
+      }
+      .brand .logo em { font-style: italic; font-weight: 600; color: var(--muted); margin: 0 4px; }
+      .brand .ver {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px; letter-spacing: 0.12em;
+        color: var(--muted); padding: 2px 6px;
+        border: 1px solid var(--hairline); border-radius: 3px;
+      }
+
+      .state-tabs {
+        display: flex; gap: 0; justify-self: center;
+        background: var(--paper-2);
+        border: 1px solid var(--hairline);
+        border-radius: 6px;
+        padding: 3px;
+      }
+      .state-tabs button {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px; font-weight: 600;
+        letter-spacing: 0.14em; text-transform: uppercase;
+        padding: 6px 14px;
+        border: 0; background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background 100ms ease, color 100ms ease;
+      }
+      .state-tabs button:hover { color: var(--ink); }
+      .state-tabs button.active {
+        background: var(--ink);
+        color: var(--paper);
+      }
+
+      .seal {
+        display: inline-grid;
+        grid-template-columns: auto auto;
+        gap: 7px;
+        align-items: center;
+        padding: 5px 10px 4px;
+        border: 1.5px solid var(--accent);
+        color: var(--accent);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        background: var(--paper);
+        position: relative;
+        border-radius: 3px;
+      }
+      .seal::before {
+        content: "";
+        position: absolute;
+        inset: 2px;
+        border: 1px dashed var(--accent);
+        opacity: 0.5;
+        pointer-events: none;
+        border-radius: 2px;
+      }
+      .seal-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(26,91,74,0.5); }
+        50% { box-shadow: 0 0 0 6px rgba(26,91,74,0); }
+      }
+
+      /* === Workspace === */
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        min-height: 640px;
+      }
+      .main {
+        padding: 24px 28px 28px;
+        border-right: 1px solid var(--hairline);
+        background: var(--paper);
+      }
+      .side {
+        padding: 24px 24px 28px;
+        background: linear-gradient(180deg, var(--paper-2) 0%, var(--paper) 100%);
+      }
+
+      /* === Status line (replaces subtitle) === */
+      .statusline {
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--hairline);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+      .statusline .status-icon {
+        width: 10px; height: 10px; border-radius: 50%;
+        background: var(--muted); flex-shrink: 0;
+      }
+      .statusline.is-ready .status-icon { background: var(--accent); }
+      .statusline.is-busy .status-icon { background: var(--warn); animation: pulse 1.2s infinite; }
+      .statusline strong {
+        color: var(--ink);
+        font-family: "IBM Plex Sans KR", sans-serif;
+        font-weight: 600;
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+
+      /* === Drop zone === */
+      .drop-zone {
+        position: relative;
+        border: 1.5px dashed var(--ink-3);
+        border-radius: 6px;
+        padding: 28px 26px;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            transparent 0 12px,
+            rgba(20,17,15,0.015) 12px 24px
+          );
+        display: grid;
+        grid-template-columns: 78px 1fr auto;
+        gap: 22px;
+        align-items: center;
+        transition: border-color 120ms ease, background-color 120ms ease;
+      }
+      .drop-zone:hover { border-color: var(--accent); background-color: var(--accent-bg); }
+
+      .file-glyph {
+        width: 78px; height: 92px;
+        position: relative;
+        background: var(--paper);
+        border: 1.5px solid var(--ink);
+        clip-path: polygon(0 0, 70% 0, 100% 22%, 100% 100%, 0 100%);
+      }
+      .file-glyph::before {
+        content: "";
+        position: absolute; top: 0; right: 0;
+        width: 30%; height: 22%;
+        background: var(--ink);
+        clip-path: polygon(0 0, 100% 100%, 0 100%);
+      }
+      .file-glyph::after {
+        content: "HWPX";
+        position: absolute; bottom: 12px; left: 0; right: 0;
+        text-align: center;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        color: var(--ink);
+      }
+
+      .file-info .filename {
+        font-family: "Noto Serif KR", serif;
+        font-weight: 700;
+        font-size: 22px;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+      }
+      .file-info .filename.placeholder {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .file-info .filepath {
+        margin-top: 6px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        color: var(--muted);
+        word-break: break-all;
+        max-width: 460px;
+      }
+      .file-info .placeholder-help {
+        margin-top: 6px;
+        font-size: 12px; color: var(--muted);
+      }
+
+      .file-actions {
+        display: flex; flex-direction: column; gap: 6px;
+        min-width: 124px;
+      }
+
+      /* === Buttons === */
+      .btn {
+        font-family: "IBM Plex Sans KR", sans-serif;
+        font-size: 12.5px; font-weight: 600;
+        padding: 8px 14px;
+        border: 1.5px solid var(--ink);
+        background: var(--paper);
+        color: var(--ink);
+        cursor: pointer;
+        letter-spacing: 0;
+        border-radius: 4px;
+        transition: background 120ms ease, color 120ms ease, transform 80ms ease;
+        text-align: center;
+        white-space: nowrap;
+      }
+      .btn:hover { background: var(--ink); color: var(--paper); }
+      .btn:active { transform: translateY(1px); }
+      .btn.primary {
+        background: var(--ink); color: var(--paper);
+        border-color: var(--ink);
+      }
+      .btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+      .btn.text {
+        border: 0; background: transparent; padding: 6px 8px;
+        text-decoration: underline; text-underline-offset: 4px;
+        text-decoration-thickness: 1px; text-decoration-color: var(--hairline);
+      }
+      .btn.text:hover { background: transparent; color: var(--accent); text-decoration-color: var(--accent); }
+      .btn:disabled, .btn.is-disabled {
+        border: 1px dashed var(--hairline);
+        color: var(--muted); background: transparent;
+        cursor: not-allowed;
+      }
+      .btn:disabled:hover, .btn.is-disabled:hover {
+        background: transparent; color: var(--muted);
+      }
+      .btn.small { font-size: 11.5px; padding: 6px 10px; }
+
+      /* === Controls (limit + preservation) === */
+      .controls {
+        margin-top: 18px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+        padding: 14px 0 4px;
+      }
+      .control-group { display: flex; flex-direction: column; gap: 6px; }
+      .control-group .label {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px; letter-spacing: 0.18em;
+        text-transform: uppercase; color: var(--muted);
+        font-weight: 500;
+      }
+      .control-group select, .control-group input {
+        font-family: "IBM Plex Sans KR", sans-serif;
+        font-size: 16px; font-weight: 500;
+        padding: 8px 28px 8px 12px;
+        border: 0;
+        border-bottom: 1.5px solid var(--ink);
+        background: transparent;
+        color: var(--ink);
+        appearance: none;
+        cursor: pointer;
+        background-image:
+          linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+          linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+        background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+        background-size: 5px 5px;
+        background-repeat: no-repeat;
+      }
+      .control-group select:focus, .control-group input:focus {
+        outline: none; border-bottom-color: var(--accent);
+      }
+
+      /* === Hero (result number) === */
+      .hero {
+        margin: 24px 0 0;
+        padding: 24px 26px;
+        background: var(--paper-2);
+        border: 1px solid var(--hairline);
+        border-radius: 6px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 22px;
+      }
+      .hero.is-success { border-color: var(--accent); background: var(--accent-bg); }
+
+      .hero-num {
+        font-family: "IBM Plex Mono", monospace;
+        font-variant-numeric: tabular-nums;
+        line-height: 1; letter-spacing: -0.03em;
+      }
+      .hero-num .from { font-size: 38px; font-weight: 300; color: var(--ink-3); }
+      .hero-num .arrow { color: var(--muted); margin: 0 10px; font-weight: 200; }
+      .hero-num .to { font-size: 56px; font-weight: 600; color: var(--accent); }
+      .hero-num .unit { font-size: 18px; color: var(--muted); margin-left: 4px; font-weight: 400; }
+
+      .hero-deck { text-align: right; }
+      .hero-deck .pct {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 32px; font-weight: 600;
+        color: var(--accent);
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+      .hero-deck .pct-label {
+        margin-top: 4px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px; letter-spacing: 0.16em;
+        text-transform: uppercase; color: var(--muted);
+        font-weight: 600;
+      }
+
+      .hero.is-empty .hero-num .to { color: var(--muted); font-weight: 300; }
+      .hero.is-empty .hero-deck .pct { color: var(--muted); }
+
+      /* === Plan section === */
+      .section-head {
+        margin-top: 24px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: baseline;
+        gap: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1.5px solid var(--rule);
+      }
+      .section-head h2 {
+        margin: 0;
+        font-family: "Noto Serif KR", serif;
+        font-weight: 800;
+        font-size: 17px;
+        letter-spacing: -0.01em;
+      }
+      .section-head .meta {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+      }
+      .section-head .meta strong { color: var(--accent); font-weight: 600; }
+
+      /* === Plan list === */
+      .plan-list {
+        list-style: none; margin: 12px 0 0; padding: 0;
+      }
+      .plan-list li {
+        display: grid;
+        grid-template-columns: 22px 1fr auto auto;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 4px;
+        border-bottom: 1px solid var(--hairline);
+        cursor: pointer;
+        transition: background 100ms ease;
+      }
+      .plan-list li:hover { background: var(--paper-2); }
+      .plan-list .check {
+        display: inline-grid;
+        place-items: center;
+        width: 18px; height: 18px;
+        border: 1.5px solid var(--ink);
+        background: var(--paper);
+        border-radius: 3px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        line-height: 1;
+        color: transparent;
+      }
+      .plan-list .check.on {
+        background: var(--ink); color: var(--paper);
+      }
+      .plan-list .check.on::after { content: "✓"; }
+      .plan-list .name {
+        font-family: "IBM Plex Sans KR", sans-serif;
+        font-size: 14.5px; font-weight: 600;
+        color: var(--ink);
+      }
+      .plan-list .name em {
+        display: block;
+        margin-top: 2px;
+        font-style: normal;
+        font-size: 11.5px;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .plan-list .count {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        color: var(--muted);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .plan-list .saving {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 14.5px;
+        font-weight: 600;
+        color: var(--accent);
+        text-align: right;
+        min-width: 92px;
+      }
+
+      /* === CTA row === */
+      .cta-row {
+        margin-top: 24px;
+        padding: 18px 0 0;
+        border-top: 1.5px solid var(--rule);
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 16px;
+        align-items: end;
+      }
+      .cta-row .save-info {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+      .cta-row .save-info strong {
+        display: block;
+        font-family: "IBM Plex Sans KR", sans-serif;
+        font-weight: 600;
+        color: var(--ink);
+        font-size: 12px;
+        margin-bottom: 3px;
+        letter-spacing: 0;
+      }
+      .cta-actions { display: flex; gap: 10px; align-items: center; }
+      .cta-actions .btn.primary {
+        font-size: 14px;
+        padding: 12px 22px;
+        min-width: 200px;
+      }
+      .cta-actions .btn.primary::after {
+        content: " →";
+      }
+
+      /* === Verify strip === */
+      .verify {
+        margin-top: 16px;
+        padding: 12px 14px;
+        background: var(--paper-2);
+        border: 1px solid var(--hairline);
+        border-radius: 4px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        align-items: center;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        color: var(--muted);
+        letter-spacing: 0.06em;
+      }
+      .verify strong {
+        font-family: "IBM Plex Sans KR", sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--ink);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-right: 4px;
+      }
+      .verify .v-item {
+        display: inline-flex; align-items: center; gap: 5px;
+      }
+      .verify .v-item::before {
+        content: ""; width: 14px; height: 14px;
+        background: var(--accent); border-radius: 50%;
+        display: inline-block;
+        position: relative;
+      }
+      .verify .v-item::after {
+        content: "✓"; color: var(--paper);
+        position: absolute; margin-left: -11px; margin-top: 0;
+        font-size: 9px; font-weight: 800;
+      }
+
+      /* === SIDE PANEL === */
+      .side h3 {
+        margin: 0 0 12px;
+        font-family: "Noto Serif KR", serif;
+        font-weight: 800;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .side h3::after {
+        content: "";
+        display: block;
+        margin-top: 6px;
+        width: 26px;
+        height: 2px;
+        background: var(--ink);
+      }
+
+      .target-card {
+        background: var(--paper);
+        border: 1.5px solid var(--ink);
+        border-radius: 5px;
+        padding: 16px 18px;
+      }
+      .target-card .target-label {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .target-card .target-num {
+        margin-top: 8px;
+        font-family: "IBM Plex Mono", monospace;
+        font-variant-numeric: tabular-nums;
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+      .target-card .target-num em {
+        font-style: normal; font-size: 13px; color: var(--muted); margin-left: 6px;
+      }
+      .target-card .target-status {
+        margin-top: 12px;
+        padding: 6px 8px;
+        background: var(--accent-bg);
+        color: var(--accent);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        border-radius: 3px;
+        display: inline-block;
+      }
+      .target-card .target-status.is-warn {
+        background: var(--warn-bg); color: var(--warn);
+      }
+      .target-card.is-empty .target-num { color: var(--muted); font-weight: 400; }
+
+      .side-block + .side-block {
+        margin-top: 26px;
+        padding-top: 22px;
+        border-top: 1px solid var(--hairline);
+      }
+
+      .breakdown {
+        display: grid;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .breakdown-row {
+        display: grid;
+        grid-template-columns: 80px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .breakdown-row .bar {
+        height: 6px; background: var(--paper-3); border-radius: 2px; overflow: hidden;
+      }
+      .breakdown-row .bar > span {
+        display: block; height: 100%; background: var(--ink);
+      }
+      .breakdown-row .bar > span.acc { background: var(--accent); }
+      .breakdown-row .val { color: var(--ink); font-weight: 600; }
+      .breakdown-row .key { color: var(--ink); }
+
+      .warn-list {
+        list-style: none; margin: 0; padding: 0;
+        display: flex; flex-direction: column; gap: 0;
+      }
+      .warn-list > li {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--hairline);
+        display: grid;
+        grid-template-columns: 50px 1fr;
+        gap: 10px;
+        align-items: start;
+      }
+      .warn-list > li:last-child { border-bottom: 0; }
+      .warn-tag {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 9.5px; letter-spacing: 0.14em;
+        color: var(--warn); font-weight: 700;
+        padding: 3px 5px;
+        background: var(--warn-bg);
+        border-radius: 2px;
+        display: inline-block;
+        text-align: center;
+        align-self: start;
+      }
+      .warn-text {
+        font-size: 12.5px; line-height: 1.5; color: var(--ink);
+      }
+      .warn-text strong { font-weight: 700; }
+      .warn-text details { margin-top: 6px; }
+      .warn-text details summary {
+        cursor: pointer; list-style: none;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px; color: var(--muted);
+        letter-spacing: 0.04em;
+      }
+      .warn-text details summary::-webkit-details-marker { display: none; }
+      .warn-text details summary::before { content: "▸ "; }
+      .warn-text details[open] summary::before { content: "▾ "; }
+      .warn-text details ul {
+        list-style: none; margin: 6px 0 0; padding: 0 0 0 12px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px; color: var(--muted); line-height: 1.7;
+      }
+
+      .empty-side {
+        padding: 18px 16px; background: var(--paper);
+        border: 1px dashed var(--hairline); border-radius: 4px;
+        text-align: center; color: var(--muted); font-size: 12px;
+      }
+
+      /* === Result panel (state: done) === */
+      .result-grid {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1px;
+        background: var(--hairline);
+        border: 1px solid var(--hairline);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .result-grid .cell {
+        padding: 14px 16px;
+        background: var(--paper);
+      }
+      .result-grid .cell .label {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .result-grid .cell .val {
+        margin-top: 6px;
+        font-family: "IBM Plex Mono", monospace;
+        font-variant-numeric: tabular-nums;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      .result-grid .cell.accent .val { color: var(--accent); }
+
+      .result-actions {
+        margin-top: 14px;
+        display: flex; gap: 8px; flex-wrap: wrap;
+      }
+      .result-paths {
+        margin-top: 14px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px; color: var(--muted);
+        line-height: 1.7;
+        word-break: break-all;
+      }
+      .result-paths div {
+        padding: 4px 0;
+        border-bottom: 1px dotted var(--hairline);
+      }
+
+      /* === Progress panel === */
+      .progress-card {
+        margin: 18px 0;
+        padding: 16px 18px;
+        background: var(--paper);
+        border: 1.5px solid var(--ink);
+        border-radius: 5px;
+        display: grid;
+        gap: 12px;
+      }
+      .progress-card header {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-family: "IBM Plex Mono", monospace;
+      }
+      .progress-card header .step {
+        font-size: 11px; letter-spacing: 0.12em;
+        text-transform: uppercase; color: var(--muted);
+      }
+      .progress-card header .pct {
+        font-size: 18px; font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .progress-track {
+        height: 6px; background: var(--paper-3); border-radius: 3px; overflow: hidden;
+      }
+      .progress-track .bar {
+        height: 100%; background: var(--accent); border-radius: 3px;
+        transition: width 240ms ease;
+      }
+      .progress-card .item {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11.5px; color: var(--ink);
+      }
+
+      /* === States visibility === */
+      [data-show] { display: none !important; }
+      [data-state="empty"] [data-show~="empty"],
+      [data-state="ready"] [data-show~="ready"],
+      [data-state="result"] [data-show~="result"] {
+        display: revert !important;
+      }
+      .show-grid[data-show] { display: none !important; }
+      [data-state="empty"] .show-grid[data-show~="empty"],
+      [data-state="ready"] .show-grid[data-show~="ready"],
+      [data-state="result"] .show-grid[data-show~="result"] { display: grid !important; }
+      .show-flex[data-show] { display: none !important; }
+      [data-state="empty"] .show-flex[data-show~="empty"],
+      [data-state="ready"] .show-flex[data-show~="ready"],
+      [data-state="result"] .show-flex[data-show~="result"] { display: flex !important; }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="stage-label">HWPX Optimizer · Editorial Mockup · Click tabs to switch states</div>
+
+      <div class="app-window" id="app" data-state="ready">
+        <!-- Window chrome -->
+        <div class="titlebar">
+          <div class="traffic"><span></span><span></span><span></span></div>
+          <div class="titlebar-title">HWPX 보고서 최적화</div>
+          <div class="titlebar-meta">
+            <span>v0.1.0</span>
+            <span>·</span>
+            <span>localhost</span>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <div class="brand">
+            <span class="logo">HWPX <em>·</em> Optimizer</span>
+            <span class="ver">VOL. 0.1.0</span>
+          </div>
+          <div class="state-tabs" role="tablist">
+            <button data-tab="empty">Empty</button>
+            <button data-tab="ready" class="active">Ready</button>
+            <button data-tab="result">Result</button>
+          </div>
+          <div class="seal">
+            <span class="seal-dot"></span>LOCAL · NO UPLOAD
+          </div>
+        </div>
+
+        <!-- Workspace -->
+        <div class="workspace">
+          <!-- MAIN -->
+          <main class="main">
+            <div class="statusline" id="statusline">
+              <span class="status-icon"></span>
+              <strong data-show="empty">파일을 선택하거나 끌어다 놓으세요</strong>
+              <strong data-show="ready">분석이 완료되었습니다.</strong>
+              <strong data-show="result">최적화가 완료되었습니다.</strong>
+              <span data-show="empty">· READY · WAITING FOR FILE</span>
+              <span data-show="ready">· ANALYZED · 26 OPS PLANNED</span>
+              <span data-show="result">· DONE · OUTPUT WRITTEN</span>
+            </div>
+
+            <!-- Drop zone / file card -->
+            <section class="drop-zone">
+              <div class="file-glyph"></div>
+              <div class="file-info">
+                <div class="filename placeholder" data-show="empty">HWPX 보고서를 선택하세요</div>
+                <div class="filename" data-show="ready result">sample2.hwpx</div>
+                <div class="placeholder-help" data-show="empty">파일을 끌어다 놓거나 우측 버튼을 누르세요. 처리는 모두 이 컴퓨터에서 일어납니다.</div>
+                <div class="filepath" data-show="ready result">C:\projects\hwpx-optimizer-windows-portable-0.1.0\sample2.hwpx</div>
+              </div>
+              <div class="file-actions">
+                <button class="btn primary">파일 선택</button>
+                <button class="btn small">여러 파일</button>
+                <button class="btn small">폴더</button>
+              </div>
+            </section>
+
+            <!-- Controls -->
+            <div class="controls">
+              <div class="control-group">
+                <span class="label">제출 제한</span>
+                <select>
+                  <option>20 MB 이하</option>
+                  <option>10 MB 이하</option>
+                  <option>50 MB 이하</option>
+                  <option>제한 없음</option>
+                  <option>직접 입력</option>
+                </select>
+              </div>
+              <div class="control-group">
+                <span class="label">보존 기준</span>
+                <select>
+                  <option>권장 · BALANCED</option>
+                  <option>외형 보존 우선 · SAFE</option>
+                  <option>용량 우선 · AGGRESSIVE</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Hero number (changes by state) -->
+            <div class="hero" data-show="empty" style="display:grid">
+              <div class="hero-num">
+                <span class="from">—</span>
+                <span class="arrow">→</span>
+                <span class="to">—</span>
+                <span class="unit">MiB</span>
+              </div>
+              <div class="hero-deck">
+                <div class="pct">—%</div>
+                <div class="pct-label">파일 대기 중</div>
+              </div>
+            </div>
+            <div class="hero is-success show-grid" data-show="ready">
+              <div class="hero-num">
+                <span class="from">89.72</span>
+                <span class="arrow">→</span>
+                <span class="to">최대 6.89</span>
+                <span class="unit">MiB</span>
+              </div>
+              <div class="hero-deck">
+                <div class="pct">≈ 92%</div>
+                <div class="pct-label">예상 절감 · 분석 추정치</div>
+              </div>
+            </div>
+            <div class="hero is-success show-grid" data-show="result">
+              <div class="hero-num">
+                <span class="from">89.72</span>
+                <span class="arrow">→</span>
+                <span class="to">6.89</span>
+                <span class="unit">MiB</span>
+              </div>
+              <div class="hero-deck">
+                <div class="pct">92.32%</div>
+                <div class="pct-label">실제 절감 · 검증 완료</div>
+              </div>
+            </div>
+
+            <!-- READY state: Plan -->
+            <div data-show="ready">
+              <div class="section-head">
+                <h2>최적화 계획</h2>
+                <span class="meta">예상 절감 <strong>최대 85.23 MiB</strong> · 26개 작업 · BALANCED</span>
+              </div>
+              <ul class="plan-list">
+                <li>
+                  <span class="check on"></span>
+                  <span class="name">큰 이미지 적정 크기로 줄이기
+                    <em>BMP→PNG 변환과 큰 JPEG/PNG 리사이즈를 함께 적용합니다.</em>
+                  </span>
+                  <span class="count">26 OPS</span>
+                  <span class="saving">−85.23 MiB</span>
+                </li>
+                <li>
+                  <span class="check on"></span>
+                  <span class="name">이미지 불필요 정보 제거
+                    <em>JPEG 메타데이터 스트립과 PNG 무손실 최적화.</em>
+                  </span>
+                  <span class="count">2 OPS</span>
+                  <span class="saving">−107.2 KiB</span>
+                </li>
+                <li>
+                  <span class="check on"></span>
+                  <span class="name">개인정보 흔적 정리
+                    <em>도형 코멘트의 작성자 이름을 제거합니다.</em>
+                  </span>
+                  <span class="count">1 OP</span>
+                  <span class="saving">−6.1 KiB</span>
+                </li>
+              </ul>
+
+              <div class="cta-row">
+                <div class="save-info">
+                  <strong>저장 위치 · 원본 문서 폴더</strong>
+                  sample2.optimized.hwpx · 원본은 변경되지 않습니다.
+                </div>
+                <div class="cta-actions">
+                  <button class="btn text">다시 분석</button>
+                  <button class="btn small">저장 위치 변경</button>
+                  <button class="btn primary">목표에 맞게 줄이기</button>
+                </div>
+              </div>
+
+              <div class="verify">
+                <strong>최적화 후 자동 확인</strong>
+                <span class="v-item">문서 구조</span>
+                <span class="v-item">누락 리소스</span>
+                <span class="v-item">이미지 품질 (PSNR)</span>
+              </div>
+            </div>
+
+            <!-- EMPTY state: hint -->
+            <div data-show="empty">
+              <div class="section-head">
+                <h2>분석 대기</h2>
+                <span class="meta">파일을 선택하면 계획이 표시됩니다</span>
+              </div>
+              <div class="empty-side" style="margin-top:14px">
+                위 영역에 .hwpx 파일을 끌어다 놓거나, <strong>파일 선택</strong>을 누르세요. 모든 처리는 이 컴퓨터에서만 진행됩니다.
+              </div>
+              <div class="cta-row">
+                <div class="save-info">
+                  <strong>저장 위치 · 원본 문서 폴더</strong>
+                  결과 파일은 새 이름으로 저장됩니다.
+                </div>
+                <div class="cta-actions">
+                  <button class="btn text is-disabled" disabled>다시 분석</button>
+                  <button class="btn small">저장 위치</button>
+                  <button class="btn primary is-disabled" disabled>목표에 맞게 줄이기</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- RESULT state -->
+            <div data-show="result">
+              <div class="section-head">
+                <h2>처리 결과</h2>
+                <span class="meta">검증 통과 · <strong>BALANCED</strong> · sample2.optimized-2.hwpx</span>
+              </div>
+              <div class="result-grid">
+                <div class="cell">
+                  <div class="label">원본 용량</div>
+                  <div class="val">89.72 <span style="font-size:13px;color:var(--muted);">MiB</span></div>
+                </div>
+                <div class="cell">
+                  <div class="label">결과 용량</div>
+                  <div class="val">6.89 <span style="font-size:13px;color:var(--muted);">MiB</span></div>
+                </div>
+                <div class="cell accent">
+                  <div class="label">실제 절감</div>
+                  <div class="val">−82.83 <span style="font-size:13px;color:var(--muted);">MiB</span></div>
+                </div>
+                <div class="cell accent">
+                  <div class="label">절감률</div>
+                  <div class="val">92.32%</div>
+                </div>
+              </div>
+              <div class="result-actions">
+                <button class="btn primary">파일 열기</button>
+                <button class="btn small">폴더 보기</button>
+                <button class="btn small">결과 비교</button>
+                <button class="btn small">다시 검증</button>
+                <button class="btn text">처리 내역 (JSON)</button>
+              </div>
+              <div class="result-paths">
+                <div>OUT  → C:\projects\hwpx-optimizer-windows-portable-0.1.0\sample2.optimized-2.hwpx</div>
+                <div>RPT  → C:\projects\hwpx-optimizer-windows-portable-0.1.0\sample2.optimized-2.hwpx.report.json</div>
+              </div>
+
+              <div class="verify">
+                <strong>검증 통과</strong>
+                <span class="v-item">문서 구조 OK</span>
+                <span class="v-item">참조 무결 OK</span>
+                <span class="v-item">PSNR 49.51 dB · 매우 좋음</span>
+              </div>
+            </div>
+          </main>
+
+          <!-- SIDE -->
+          <aside class="side">
+            <!-- READY -->
+            <div data-show="ready">
+              <div class="side-block">
+                <h3>목표</h3>
+                <div class="target-card">
+                  <div class="target-label"><span>제출 제한</span><span>20 MB</span></div>
+                  <div class="target-num">≈ 6.89<em>MiB</em></div>
+                  <span class="target-status">목표 달성 가능</span>
+                </div>
+              </div>
+
+              <div class="side-block">
+                <h3>구성 비율</h3>
+                <div class="breakdown">
+                  <div class="breakdown-row">
+                    <span class="key">이미지</span>
+                    <span class="bar"><span class="acc" style="width:99%"></span></span>
+                    <span class="val">99.2%</span>
+                  </div>
+                  <div class="breakdown-row">
+                    <span class="key">문서 XML</span>
+                    <span class="bar"><span style="width:0.8%"></span></span>
+                    <span class="val">0.8%</span>
+                  </div>
+                  <div class="breakdown-row">
+                    <span class="key">기타</span>
+                    <span class="bar"><span style="width:0.05%"></span></span>
+                    <span class="val">0.0%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="side-block">
+                <h3>주의할 점</h3>
+                <ul class="warn-list">
+                  <li>
+                    <span class="warn-tag">BMP×18</span>
+                    <div class="warn-text">
+                      <strong>BMP 이미지 18개 발견</strong> — 균형/최대 압축 모드에서 PNG로 변환하면 크기를 줄일 수 있습니다.
+                      <details>
+                        <summary>18개 항목 보기</summary>
+                        <ul>
+                          <li>BinData/image1.bmp</li>
+                          <li>BinData/image2.bmp</li>
+                          <li>BinData/image3.bmp</li>
+                          <li>BinData/image6.bmp</li>
+                          <li>BinData/image7.bmp</li>
+                          <li>BinData/image8.bmp</li>
+                          <li>… 그 외 12개</li>
+                        </ul>
+                      </details>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- EMPTY -->
+            <div data-show="empty">
+              <div class="side-block">
+                <h3>목표</h3>
+                <div class="target-card is-empty">
+                  <div class="target-label"><span>제출 제한</span><span>20 MB</span></div>
+                  <div class="target-num">—<em>MiB</em></div>
+                  <span class="target-status" style="background: var(--paper-2); color: var(--muted);">파일 대기 중</span>
+                </div>
+              </div>
+
+              <div class="side-block">
+                <h3>이 도구가 하는 일</h3>
+                <div class="warn-list" style="border:0">
+                  <div style="padding:10px 0;border-bottom:1px solid var(--hairline);font-size:12.5px;line-height:1.55">
+                    ① BMP/큰 이미지를 안전 범위 안에서 PNG/리사이즈로 줄입니다.<br/>
+                    ② JPEG 메타데이터(촬영 시간·위치)를 제거합니다.<br/>
+                    ③ 도형 코멘트 작성자명을 정리합니다.<br/>
+                    ④ 결과는 PSNR로 검증해 품질이 떨어지면 출력하지 않습니다.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RESULT -->
+            <div data-show="result">
+              <div class="side-block">
+                <h3>목표</h3>
+                <div class="target-card">
+                  <div class="target-label"><span>제출 제한</span><span>20 MB</span></div>
+                  <div class="target-num" style="color:var(--accent)">6.89<em>MiB</em></div>
+                  <span class="target-status">목표 달성 · 13.11 MiB 여유</span>
+                </div>
+              </div>
+
+              <div class="side-block">
+                <h3>적용된 작업</h3>
+                <ul class="warn-list">
+                  <li style="grid-template-columns: 1fr auto; padding: 10px 0;">
+                    <span style="font-size:12.5px">큰 이미지 리사이즈 + BMP→PNG</span>
+                    <span class="num" style="color:var(--accent);font-weight:600">−82.7 MiB</span>
+                  </li>
+                  <li style="grid-template-columns: 1fr auto; padding: 10px 0;">
+                    <span style="font-size:12.5px">JPEG 메타데이터 제거</span>
+                    <span class="num" style="color:var(--accent);font-weight:600">−107 KiB</span>
+                  </li>
+                  <li style="grid-template-columns: 1fr auto; padding: 10px 0;">
+                    <span style="font-size:12.5px">도형 코멘트 정리</span>
+                    <span class="num" style="color:var(--accent);font-weight:600">−6.1 KiB</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="side-block">
+                <h3>이미지 품질</h3>
+                <div class="breakdown">
+                  <div class="breakdown-row">
+                    <span class="key">image3</span>
+                    <span class="bar"><span class="acc" style="width:99%"></span></span>
+                    <span class="val">49.5 dB</span>
+                  </div>
+                  <div class="breakdown-row">
+                    <span class="key">image2</span>
+                    <span class="bar"><span class="acc" style="width:88%"></span></span>
+                    <span class="val">44.7 dB</span>
+                  </div>
+                  <div class="breakdown-row">
+                    <span class="key">image23</span>
+                    <span class="bar"><span class="acc" style="width:84%"></span></span>
+                    <span class="val">42.4 dB</span>
+                  </div>
+                </div>
+                <div style="margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);letter-spacing:0.04em">
+                  기준선: 균형 18 dB · 최대 14 dB
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div class="stage-label" style="opacity:.7">
+        ↑ 상태를 바꿔보세요: <strong style="color:var(--ink)">Empty</strong> · <strong style="color:var(--ink)">Ready</strong> · <strong style="color:var(--ink)">Result</strong>
+      </div>
+    </div>
+
+    <script>
+      const app = document.getElementById("app");
+      const statusline = document.getElementById("statusline");
+      document.querySelectorAll(".state-tabs button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".state-tabs button").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const next = btn.dataset.tab;
+          app.dataset.state = next;
+          statusline.classList.toggle("is-ready", next === "ready" || next === "result");
+          statusline.classList.toggle("is-busy", false);
+        });
+      });
+      // Plan list interactivity
+      document.querySelectorAll(".plan-list li").forEach((li) => {
+        li.addEventListener("click", () => {
+          li.querySelector(".check")?.classList.toggle("on");
+        });
+      });
+      // Initialize
+      statusline.classList.add("is-ready");
+    </script>
+  </body>
+</html>

@@ -30,7 +30,7 @@ describe("batchView helpers", () => {
       }
     ]);
 
-    expect(summary.text).toBe("2개 파일 · 총 82.00 MiB → 예상 35.00 MiB");
+    expect(summary.text).toBe("선택: 2개 파일 · 총 원본 용량: 82.00 MiB");
   });
 
   it("renders target status in pending row meta", () => {

@@ -1,12 +1,13 @@
-// Electron's ESM main entry only exposes a single default export (it is a
-// CommonJS module wrapped for interop); named ESM imports throw at runtime on
-// Electron 28+. Always destructure values from the default export here and
-// import the matching types separately.
-import electron from "electron";
 import type { BrowserWindow as BrowserWindowInstance, OpenDialogOptions } from "electron";
-
-const { app, BrowserWindow, dialog, ipcMain, shell } = electron;
 type BrowserWindow = BrowserWindowInstance;
+type ElectronApi = typeof import("electron");
+
+const electronApi = (globalThis as { __hwpxOptimizerElectron?: ElectronApi }).__hwpxOptimizerElectron;
+if (!electronApi) {
+  throw new Error("Electron API bridge was not initialized.");
+}
+
+const { app, BrowserWindow: BrowserWindowClass, dialog, ipcMain, shell } = electronApi;
 import { mkdir, readFile as readFileFs, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -22,13 +23,13 @@ if (isSmokeTest) {
 }
 
 async function createWindow(): Promise<BrowserWindow> {
-  mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindowClass({
     width: 1180,
     height: 780,
     minWidth: 920,
     minHeight: 640,
     show: !isSmokeTest,
-    title: "HWPX 보고서 최적화",
+    title: "HWPX 보고서 용량 최적화",
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,
@@ -60,7 +61,7 @@ app.whenReady()
     }
 
     app.on("activate", async () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+      if (BrowserWindowClass.getAllWindows().length === 0) {
         await createWindow();
       }
     });
@@ -123,7 +124,13 @@ function registerIpc(): void {
     "hwpx:optimize",
     async (
       _event,
-      input: { filePath: string; mode: OptimizationMode; outputDirectory?: string; actions?: string[] }
+      input: {
+        filePath: string;
+        mode: OptimizationMode;
+        outputDirectory?: string;
+        outputMode?: "single" | "batch";
+        actions?: string[];
+      }
     ) => {
       if (activeOptimizeWorker) {
         throw new Error("Another optimization is already running.");
@@ -223,10 +230,10 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     settingsOutputResetButton?: string;
   };
 
-  if (result.title !== "HWPX 보고서 최적화") {
+  if (result.title !== "HWPX 보고서 용량 최적화") {
     throw new Error(`Desktop smoke failed: unexpected title ${String(result.title)}`);
   }
-  if (result.fileName !== "HWPX 보고서를 선택하세요") {
+  if (result.fileName !== "HWPX 파일을 끌어오거나 선택하세요") {
     throw new Error(`Desktop smoke failed: renderer did not load expected start view`);
   }
   if (result.appReady !== "true" || result.preloadApi !== "ready") {
@@ -271,7 +278,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (!workflow.originalSize || workflow.originalSize <= 0) {
     throw new Error("Desktop smoke failed: analysis did not return a document size");
   }
-  if (!workflow.outputPath?.endsWith(".optimized.hwpx")) {
+  if (!workflow.outputPath?.endsWith("_optimized.hwpx")) {
     throw new Error(`Desktop smoke failed: unexpected output path ${String(workflow.outputPath)}`);
   }
   if (!workflow.reportPath?.endsWith(".report.json")) {

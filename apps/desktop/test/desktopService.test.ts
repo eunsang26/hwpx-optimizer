@@ -30,7 +30,7 @@ describe("desktop service", () => {
 
     expect(analysis.report.originalSize).toBe(original.byteLength);
     expect(await readFile(inputPath)).toEqual(original);
-    expect(result.outputPath).toBe(join(dir, "input.optimized.hwpx"));
+    expect(result.outputPath).toBe(join(dir, "input_optimized.hwpx"));
     expect(result.reportPath).toBe(`${result.outputPath}.report.json`);
     expect((await readFile(result.outputPath)).byteLength).toBeGreaterThan(0);
     expect(JSON.parse(await readFile(result.reportPath!, "utf8")).originalSize).toBe(original.byteLength);
@@ -66,7 +66,7 @@ describe("desktop service", () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
     await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
-    await writeFile(join(dir, "input.optimized.hwpx"), Buffer.from("existing"));
+    await writeFile(join(dir, "input_optimized.hwpx"), Buffer.from("existing"));
 
     const result = await optimizeDesktopFile({
       filePath: inputPath,
@@ -74,7 +74,7 @@ describe("desktop service", () => {
       settings: defaultDesktopSettings
     });
 
-    expect(result.outputPath).toBe(join(dir, "input.optimized-2.hwpx"));
+    expect(result.outputPath).toBe(join(dir, "input_optimized-2.hwpx"));
   });
 
   it("writes to a configured output directory", async () => {
@@ -91,7 +91,22 @@ describe("desktop service", () => {
       settings: { ...defaultDesktopSettings, saveNextToOriginal: false }
     });
 
-    expect(result.outputPath).toBe(join(outputDirectory, "input.optimized.hwpx"));
+    expect(result.outputPath).toBe(join(outputDirectory, "input_optimized.hwpx"));
+  });
+
+  it("writes batch output to a dedicated output folder by default", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "input.hwpx");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const result = await optimizeDesktopFile({
+      filePath: inputPath,
+      mode: "safe",
+      outputMode: "batch",
+      settings: defaultDesktopSettings
+    });
+
+    expect(result.outputPath).toBe(join(dir, "output", "input_optimized.hwpx"));
   });
 
   it("forwards actions through balanced optimization", async () => {

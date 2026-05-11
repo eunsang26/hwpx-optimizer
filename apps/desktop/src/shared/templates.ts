@@ -49,7 +49,31 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
   const meta = batchItemMetaText(item);
   const actions = batchItemRowActionsHtml(item, index, options);
   const attentionClass = item.targetStatusLabel === "목표 미달 가능" ? " class=\"needs-attention\"" : "";
-  return `<li${attentionClass}><span class="name"><strong>${escapeHtml(item.fileName)}</strong><em>${escapeHtml(meta)}</em></span><span class="status ${item.status}">${escapeHtml(batchStatusLabel(item.status))}</span><span class="row-actions">${actions}</span></li>`;
+  const statusLabel = batchTableStatusLabel(item);
+  const statusClass = batchTableStatusClass(item);
+  return `<tr${attentionClass}><td><input type="checkbox" checked aria-label="${escapeHtml(
+    item.fileName
+  )} 선택" /></td><td class="name"><strong>${escapeHtml(item.fileName)}</strong></td><td>${escapeHtml(
+    item.originalSizeLabel ?? "-"
+  )}</td><td>${escapeHtml(item.expectedSizeLabel ?? "-")}</td><td>${escapeHtml(
+    item.targetLabel ?? "20MB 이하"
+  )}</td><td><span class="status ${statusClass}">${escapeHtml(
+    statusLabel
+  )}</span><span class="row-meta">${escapeHtml(meta)}</span><span class="row-actions">${actions}</span></td></tr>`;
+}
+
+function batchTableStatusLabel(item: BatchItemLike): string {
+  if (item.status === "pending" && item.targetStatusLabel) {
+    return item.targetStatusLabel === "목표 미달 가능" ? "주의" : "통과";
+  }
+  return batchStatusLabel(item.status);
+}
+
+function batchTableStatusClass(item: BatchItemLike): string {
+  if (item.status === "pending" && item.targetStatusLabel) {
+    return item.targetStatusLabel === "목표 미달 가능" ? "warning" : "pass";
+  }
+  return item.status;
 }
 
 export function batchItemRowActionsHtml(

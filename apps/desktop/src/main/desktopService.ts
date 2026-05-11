@@ -37,6 +37,7 @@ export type DesktopOptimizeInput = {
   mode: OptimizationMode;
   settings: DesktopSettings;
   outputDirectory?: string;
+  outputMode?: "single" | "batch";
   actions?: string[];
 };
 
@@ -80,7 +81,12 @@ export async function optimizeDesktopFile(
   const result = await optimizeByMode(source, input.mode, input.actions);
 
   onProgress?.({ percent: 70, item: "Writing optimized document" });
-  const outputPath = await nextOutputPath(input.filePath, input.outputDirectory ?? input.settings.outputDirectory, input.settings);
+  const outputPath = await nextOutputPath(
+    input.filePath,
+    input.outputDirectory ?? input.settings.outputDirectory,
+    input.settings,
+    input.outputMode
+  );
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, result.output);
 
@@ -126,16 +132,22 @@ export async function optimizeByMode(
 export async function nextOutputPath(
   filePath: string,
   outputDirectory: string | undefined,
-  settings: DesktopSettings
+  settings: DesktopSettings,
+  outputMode: "single" | "batch" = "single"
 ): Promise<string> {
   const parsedExt = extname(filePath);
   const base = basename(filePath, parsedExt);
-  const dir = settings.saveNextToOriginal || !outputDirectory ? dirname(filePath) : outputDirectory;
-  const first = join(dir, `${base}.optimized.hwpx`);
+  const dir =
+    outputMode === "batch"
+      ? outputDirectory ?? join(dirname(filePath), "output")
+      : settings.saveNextToOriginal || !outputDirectory
+        ? dirname(filePath)
+        : outputDirectory;
+  const first = join(dir, `${base}_optimized.hwpx`);
   if (!settings.preventOverwrite || !(await pathExists(first))) return first;
 
   for (let index = 2; index < 1000; index += 1) {
-    const candidate = join(dir, `${base}.optimized-${index}.hwpx`);
+    const candidate = join(dir, `${base}_optimized-${index}.hwpx`);
     if (!(await pathExists(candidate))) return candidate;
   }
   throw new Error("Could not create a non-overwriting output path.");

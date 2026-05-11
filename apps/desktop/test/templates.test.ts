@@ -87,6 +87,26 @@ describe("template HTML builders", () => {
     expect(busyHtml).toBe("");
   });
 
+  it("renders pending batch rows with target criteria and pass or warning badges", () => {
+    const passing: BatchItemLike = {
+      path: "/x/report.hwpx",
+      fileName: "report.hwpx",
+      status: "pending",
+      originalSizeLabel: "89.72 MiB",
+      expectedSizeLabel: "6.89 MiB",
+      targetLabel: "20MB",
+      targetStatusLabel: "목표 달성 가능"
+    };
+    const warning: BatchItemLike = {
+      ...passing,
+      targetStatusLabel: "목표 미달 가능"
+    };
+
+    expect(batchItemRowHtml(passing, 0, { running: false })).toContain('<span class="status pass">통과</span>');
+    expect(batchItemRowHtml(passing, 0, { running: false })).toContain("<td>20MB</td>");
+    expect(batchItemRowHtml(warning, 0, { running: false })).toContain('<span class="status warning">주의</span>');
+  });
+
   it("renders an image compare pair with PSNR badge and saving info", () => {
     const pair: ImagePreviewPair = {
       originalPath: "BinData/image1.jpg",

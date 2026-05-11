@@ -21,6 +21,7 @@ const api = {
     filePath: string;
     mode: "safe" | "balanced" | "aggressive";
     outputDirectory?: string;
+    outputMode?: "single" | "batch";
     actions?: string[];
   }) => ipcRenderer.invoke("hwpx:optimize", input),
   cancelOptimize: () => ipcRenderer.invoke("hwpx:cancel-optimize"),

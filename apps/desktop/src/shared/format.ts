@@ -11,7 +11,7 @@ export function escapeHtml(value: string): string {
 }
 
 export function looksLikeOptimizedFileName(name: string): boolean {
-  return /\.optimized(?:-\d+)?\.hwpx$/i.test(name);
+  return /(?:\.optimized|_optimized)(?:-\d+)?\.hwpx$/i.test(name);
 }
 
 export function fileNameFromPath(path: string): string {

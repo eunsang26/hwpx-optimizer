@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = resolve(root, "..", "..");
-const assets = ["index.html", "styles.css", "preload.cjs"];
+const assets = ["index.html", "styles.css", "preload.cjs", "main.cjs"];
 
 await mkdir(join(root, "dist"), { recursive: true });
 for (const asset of assets) {

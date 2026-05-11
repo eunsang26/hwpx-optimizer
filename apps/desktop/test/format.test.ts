@@ -12,6 +12,8 @@ describe("shared format helpers", () => {
     expect(looksLikeOptimizedFileName("doc.optimized.hwpx")).toBe(true);
     expect(looksLikeOptimizedFileName("doc.optimized-2.hwpx")).toBe(true);
     expect(looksLikeOptimizedFileName("doc.optimized-12.HWPX")).toBe(true);
+    expect(looksLikeOptimizedFileName("doc_optimized.hwpx")).toBe(true);
+    expect(looksLikeOptimizedFileName("doc_optimized-2.hwpx")).toBe(true);
     expect(looksLikeOptimizedFileName("doc.hwpx")).toBe(false);
     expect(looksLikeOptimizedFileName("doc.optimized.txt")).toBe(false);
   });

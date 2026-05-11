@@ -84,6 +84,7 @@ const ACTION_DISPLAY_LABELS: Partial<Record<OptimizationOpportunityGroup["action
 };
 
 const SUMMARY_SAVING_GRANULARITY_BYTES = 1024 * 1024;
+const ESTIMATED_SAVING_DISPLAY_RATIO = 0.95;
 
 export function modeForPreservation(preference: PreservationPreference): OptimizationMode {
   if (preference === "preserve") return "safe";
@@ -134,22 +135,32 @@ export function createSubmissionPlan(
     return override !== undefined && override !== toggle.defaultEnabledForMode;
   });
   const selectedActions = rawActionRows.filter((row) => row.checked).map((row) => row.action);
-  const expectedSavingBytes = rawActionRows.reduce((sum, row) => (row.checked ? sum + row.savingBytes : sum), 0);
+  const rawExpectedSavingBytes = rawActionRows.reduce(
+    (sum, row) => (row.checked ? sum + row.savingBytes : sum),
+    0
+  );
+  const savingCapBytes =
+    report.originalSize > 0
+      ? Math.max(0, Math.floor(report.originalSize * ESTIMATED_SAVING_DISPLAY_RATIO))
+      : rawExpectedSavingBytes;
+  const expectedSavingBytes = Math.min(rawExpectedSavingBytes, savingCapBytes);
+  const wasCapped = rawExpectedSavingBytes > expectedSavingBytes;
   const expectedSizeBytes = Math.max(0, report.originalSize - expectedSavingBytes);
   const summarySavingBytes = floorToGranularity(expectedSavingBytes, SUMMARY_SAVING_GRANULARITY_BYTES);
   const summarySizeBytes = Math.max(0, report.originalSize - summarySavingBytes);
   const targetBytes = resolveSubmissionLimitBytes(input.submissionLimit);
   const savedPercent = report.originalSize > 0 ? (summarySavingBytes / report.originalSize) * 100 : 0;
   const targetStatus = targetStatusFor(report.originalSize, summarySizeBytes, targetBytes);
+  const expectedSavingFormatted = formatBytes(summarySavingBytes);
   return {
     kind: changed ? "custom" : "automatic",
     mode,
     originalSizeLabel: formatBytes(report.originalSize),
     expectedSavingBytes,
-    expectedSavingLabel: formatBytes(summarySavingBytes),
+    expectedSavingLabel: wasCapped ? `최대 ${expectedSavingFormatted}` : expectedSavingFormatted,
     expectedSizeBytes,
-    expectedSizeLabel: formatBytes(summarySizeBytes),
-    savedPercentLabel: `약 ${Math.round(savedPercent)}% 감소`,
+    expectedSizeLabel: wasCapped ? `약 ${formatBytes(summarySizeBytes)}` : formatBytes(summarySizeBytes),
+    savedPercentLabel: `약 ${Math.min(99, Math.round(savedPercent))}% 감소`,
     targetBytes,
     targetLabel: targetBytes ? `${formatBytes(targetBytes)} 이하` : "제한 없음",
     targetStatus,

@@ -13,6 +13,7 @@ export type BatchItemLike = {
   expectedSizeBytes?: number;
   originalSizeLabel?: string;
   expectedSizeLabel?: string;
+  targetLabel?: string;
   targetStatusLabel?: string;
   savedBytes?: number;
   savedPercent?: number;
@@ -54,7 +55,7 @@ export function summarizeBatchItems(items: BatchItemLike[], options: { running: 
       totalCount: items.length,
       counts,
       totalSavedBytes: Math.max(0, originalTotal - expectedTotal),
-      text: `${items.length}개 파일 · 총 ${formatBytes(originalTotal)} → 예상 ${formatBytes(expectedTotal)}`
+      text: `선택: ${items.length}개 파일 · 총 원본 용량: ${formatBytes(originalTotal)}`
     };
   }
   const segments: string[] = [`${items.length}개 파일`];
