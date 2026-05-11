@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { createHwpxFixture } from "../../../packages/core/test/fixtures.js";
-import { analyzeDesktopFile, defaultDesktopSettings, optimizeDesktopFile, verifyDesktopFile } from "../src/main/desktopService.js";
+import {
+  analyzeDesktopFile,
+  defaultDesktopSettings,
+  optimizeDesktopFile,
+  persistentDesktopSettingsPatch,
+  verifyDesktopFile
+} from "../src/main/desktopService.js";
 import type { DesktopSettings } from "../src/main/desktopService.js";
 
 describe("desktop service", () => {
@@ -13,9 +19,10 @@ describe("desktop service", () => {
 
     expect(settings.submissionLimit).toEqual({ id: "mb20" });
     expect(settings.preservationPreference).toBe("recommended");
+    expect(settings.saveReport).toBe(false);
   });
 
-  it("analyzes, optimizes, writes a report, and preserves the source file", async () => {
+  it("analyzes, optimizes, skips report by default, and preserves the source file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
     const original = await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } });
@@ -31,10 +38,25 @@ describe("desktop service", () => {
     expect(analysis.report.originalSize).toBe(original.byteLength);
     expect(await readFile(inputPath)).toEqual(original);
     expect(result.outputPath).toBe(join(dir, "input_optimized.hwpx"));
-    expect(result.reportPath).toBe(`${result.outputPath}.report.json`);
+    expect(result.reportPath).toBeUndefined();
     expect((await readFile(result.outputPath)).byteLength).toBeGreaterThan(0);
-    expect(JSON.parse(await readFile(result.reportPath!, "utf8")).originalSize).toBe(original.byteLength);
     await expect(verifyDesktopFile(result.outputPath)).resolves.toEqual({ ok: true });
+  });
+
+  it("writes a report only when explicitly enabled", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "input.hwpx");
+    const original = await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } });
+    await writeFile(inputPath, original);
+
+    const result = await optimizeDesktopFile({
+      filePath: inputPath,
+      mode: "safe",
+      settings: { ...defaultDesktopSettings, saveReport: true }
+    });
+
+    expect(result.reportPath).toBe(`${result.outputPath}.report.json`);
+    expect(JSON.parse(await readFile(result.reportPath!, "utf8")).originalSize).toBe(original.byteLength);
   });
 
   it("reports staged optimization progress", async () => {
@@ -56,10 +78,24 @@ describe("desktop service", () => {
       "Reading HWPX package",
       "Optimizing document in safe mode",
       "Writing optimized document",
-      "Writing JSON report",
       "Finalizing optimized document"
     ]);
-    expect(progress.map((item) => item.percent)).toEqual([10, 35, 70, 82, 92]);
+    expect(progress.map((item) => item.percent)).toEqual([10, 35, 70, 92]);
+  });
+
+  it("redacts persisted settings that would store local paths or unknown keys", () => {
+    expect(
+      persistentDesktopSettingsPatch({
+        saveReport: true,
+        saveNextToOriginal: false,
+        outputDirectory: "/private/reports",
+        recentFiles: ["/private/input.hwpx"],
+        reportPath: "/private/input.report.json"
+      })
+    ).toEqual({
+      saveReport: true,
+      saveNextToOriginal: false
+    });
   });
 
   it("prevents overwriting existing optimized files", async () => {

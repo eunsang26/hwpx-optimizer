@@ -58,30 +58,35 @@ function isHwpBinary(input: Buffer): boolean {
 }
 
 function hasEncryptedZipFlag(input: Buffer): boolean {
-  let offset = 0;
-  while (offset + 8 <= input.length) {
-    const signature = input.readUInt32LE(offset);
-    if (signature === 0x04034b50) {
-      if ((input.readUInt16LE(offset + 6) & 1) === 1) return true;
-      if (offset + 30 > input.length) return false;
-      const fileNameLength = input.readUInt16LE(offset + 26);
-      const extraLength = input.readUInt16LE(offset + 28);
-      const compressedSize = input.readUInt32LE(offset + 18);
-      offset += 30 + fileNameLength + extraLength + compressedSize;
-      continue;
-    }
-    if (signature === 0x02014b50) {
-      if ((input.readUInt16LE(offset + 8) & 1) === 1) return true;
-      if (offset + 46 > input.length) return false;
-      const fileNameLength = input.readUInt16LE(offset + 28);
-      const extraLength = input.readUInt16LE(offset + 30);
-      const commentLength = input.readUInt16LE(offset + 32);
-      offset += 46 + fileNameLength + extraLength + commentLength;
-      continue;
-    }
-    offset += 1;
+  const centralDirectory = findCentralDirectory(input);
+  if (!centralDirectory) return false;
+  let offset = centralDirectory.offset;
+  const end = Math.min(input.length, centralDirectory.offset + centralDirectory.size);
+  while (offset + 46 <= end) {
+    if (input.readUInt32LE(offset) !== 0x02014b50) return false;
+    if ((input.readUInt16LE(offset + 8) & 1) === 1) return true;
+    const fileNameLength = input.readUInt16LE(offset + 28);
+    const extraLength = input.readUInt16LE(offset + 30);
+    const commentLength = input.readUInt16LE(offset + 32);
+    offset += 46 + fileNameLength + extraLength + commentLength;
   }
   return false;
+}
+
+function findCentralDirectory(input: Buffer): { offset: number; size: number } | undefined {
+  const minimumEndRecordSize = 22;
+  const maxCommentSize = 0xffff;
+  const start = Math.max(0, input.length - minimumEndRecordSize - maxCommentSize);
+  for (let offset = input.length - minimumEndRecordSize; offset >= start; offset -= 1) {
+    if (input.readUInt32LE(offset) !== 0x06054b50) continue;
+    const commentLength = input.readUInt16LE(offset + 20);
+    if (offset + minimumEndRecordSize + commentLength !== input.length) continue;
+    return {
+      size: input.readUInt32LE(offset + 12),
+      offset: input.readUInt32LE(offset + 16)
+    };
+  }
+  return undefined;
 }
 
 export function classifyEntry(path: string): HwpxEntryKind {
@@ -137,7 +142,7 @@ function hasProtectedMetadata(entry: HwpxEntry): boolean {
   const normalized = entry.path.replace(/\\/g, "/");
   if (/^Contents\/section\d+\.xml$/i.test(normalized)) return false;
   const text = entry.data.toString("utf8");
-  return /\b(documentProtection|readOnlyRecommended|modifyPassword|writeProtection|permission|rightsManagement|drm|encrypted|digitalSignature)\b/i.test(
+  return /\b(documentProtection|readOnlyRecommended|modifyPassword|writeProtection|editProtection|rightsManagement|drm|encrypted|digitalSignature|signatureInfo|certificate)\b/i.test(
     text
   );
 }

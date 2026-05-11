@@ -31,6 +31,20 @@ describe("readHwpxPackage", () => {
     await expect(readHwpxPackage(createEncryptedZipHeaderFixture())).rejects.toThrow(protectedDocumentMessage);
   });
 
+  it("does not reject ordinary data that only contains an encrypted local-header byte pattern", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "BinData/pattern.bin": createEncryptedLocalHeaderPattern()
+      }
+    });
+
+    await expect(readHwpxPackage(fixture)).resolves.toEqual(
+      expect.objectContaining({
+        entries: expect.arrayContaining([expect.objectContaining({ path: "BinData/pattern.bin" })])
+      })
+    );
+  });
+
   it("fails clearly when protected HWPX signature entries are present", async () => {
     const fixture = await createHwpxFixture({
       entries: {
@@ -111,4 +125,11 @@ function createEncryptedZipHeaderFixture(): Buffer {
   end.writeUInt32LE(localHeader.length + fileName.length, 16);
 
   return Buffer.concat([localHeader, fileName, centralHeader, fileName, end]);
+}
+
+function createEncryptedLocalHeaderPattern(): Buffer {
+  const header = Buffer.alloc(30);
+  header.writeUInt32LE(0x04034b50, 0);
+  header.writeUInt16LE(1, 6);
+  return header;
 }

@@ -80,7 +80,6 @@ type DesktopSettings = {
   showAggressiveWarning: boolean;
   submissionLimit: SubmissionLimit;
   preservationPreference: PreservationPreference;
-  outputDirectory?: string;
 };
 
 const dropZone = requireElement("drop-zone");
@@ -170,7 +169,6 @@ async function init(): Promise<void> {
   const settings = (await window.hwpxOptimizer.loadSettings()) as DesktopSettings;
   state.settings = settings;
   state.mode = settings.defaultMode ?? "safe";
-  state.outputDirectory = settings.outputDirectory;
   state.submissionLimit = settings.submissionLimit ?? { id: "mb20" };
   state.preservationPreference = settings.preservationPreference ?? "recommended";
   renderSettings(settings);
@@ -228,8 +226,8 @@ async function init(): Promise<void> {
     const selected = await window.hwpxOptimizer.selectDirectory();
     if (selected) {
       state.outputDirectory = selected;
-      await saveSettings({ outputDirectory: selected, saveNextToOriginal: false });
-      setStatus(`저장 위치를 변경했습니다: ${selected}`);
+      await saveSettings({ saveNextToOriginal: false });
+      setStatus("이번 실행의 저장 위치를 변경했습니다.");
     }
   });
 
@@ -349,13 +347,13 @@ async function init(): Promise<void> {
     const selected = await window.hwpxOptimizer.selectDirectory();
     if (selected) {
       state.outputDirectory = selected;
-      await saveSettings({ outputDirectory: selected, saveNextToOriginal: false });
-      setStatus(`저장 위치를 변경했습니다: ${selected}`);
+      await saveSettings({ saveNextToOriginal: false });
+      setStatus("이번 실행의 저장 위치를 변경했습니다.");
     }
   });
   settingOutputResetButton.addEventListener("click", async () => {
     state.outputDirectory = undefined;
-    await saveSettings({ outputDirectory: undefined, saveNextToOriginal: true });
+    await saveSettings({ saveNextToOriginal: true });
     setStatus("원본 문서 폴더에 저장하도록 변경했습니다.");
   });
 
@@ -420,7 +418,6 @@ async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
   const settings = (await window.hwpxOptimizer.saveSettings(patch)) as DesktopSettings;
   if (sequence !== settingsSaveSequence) return;
   state.settings = settings;
-  state.outputDirectory = settings.outputDirectory;
   state.submissionLimit = settings.submissionLimit ?? state.submissionLimit;
   state.preservationPreference = settings.preservationPreference ?? state.preservationPreference;
   renderSettings(settings);
@@ -433,12 +430,12 @@ function renderSettings(settings: DesktopSettings): void {
   settingSaveReport.checked = settings.saveReport;
   settingPreventOverwrite.checked = settings.preventOverwrite;
   settingAggressiveWarning.checked = settings.showAggressiveWarning;
-  const usingOriginal = settings.saveNextToOriginal || !settings.outputDirectory;
+  const usingOriginal = settings.saveNextToOriginal || !state.outputDirectory;
   settingOutputDirectory.textContent = usingOriginal
-    ? "저장 위치: 원본 문서 폴더"
-    : `저장 위치: ${settings.outputDirectory}`;
+    ? "이번 실행 저장 위치: 원본 문서 폴더"
+    : `이번 실행 저장 위치: ${state.outputDirectory}`;
   settingOutputButton.disabled = settings.saveNextToOriginal;
-  settingOutputResetButton.disabled = settings.saveNextToOriginal && !settings.outputDirectory;
+  settingOutputResetButton.disabled = settings.saveNextToOriginal && !state.outputDirectory;
 }
 
 function renderSubmissionControls(): void {
@@ -675,9 +672,9 @@ async function loadFile(path: string): Promise<void> {
   closeImageCompareModal();
   const baseName = path.split(/[\\/]/).pop() ?? path;
   fileName.textContent = baseName;
-  fileMeta.textContent = path;
+  fileMeta.textContent = "선택한 경로는 현재 실행에서만 사용하며 저장하지 않습니다.";
   selectedFileName.textContent = baseName;
-  selectedFilePath.textContent = path;
+  selectedFilePath.textContent = "파일 경로는 앱 기록으로 저장하지 않습니다.";
   selectedOriginalMeta.textContent = "원본 크기: 분석 중";
   selectedModifiedMeta.textContent = "수정일: 분석 중";
   selectedFileCard.hidden = false;
@@ -813,8 +810,10 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
     metricHtml("실제 절감", formatBytes(report.savedBytes ?? 0)),
     metricHtml("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`)
   ].join("");
-  requireElement("output-path").textContent = outputPath;
-  requireElement("report-path").textContent = reportPath ?? "리포트 저장이 꺼져 있습니다.";
+  requireElement("output-path").textContent = `결과 파일: ${fileNameFromPath(outputPath)}`;
+  requireElement("report-path").textContent = reportPath
+    ? `현재 리포트: ${fileNameFromPath(reportPath)}`
+    : "리포트 저장이 꺼져 있습니다.";
   openReportButton.disabled = !reportPath;
   reverifyButton.disabled = false;
   compareButton.disabled = state.mode === "safe";

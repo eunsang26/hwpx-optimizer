@@ -16,7 +16,9 @@
         <div class="local-copy">
           <span class="shield-icon" aria-hidden="true"></span>
           <strong class="app-title">HWPX 보고서 용량 최적화</strong>
-          <span id="safety-text">로컬에서만 처리하며 원본은 보존합니다. 보안 문서는 해제하거나 우회하지 않습니다.</span>
+          <span id="safety-text">
+            로컬에서만 처리하며 원본은 보존합니다. 보안 문서는 우회하지 않고 최근 파일·처리 이력·내부 로그를 저장하지 않습니다.
+          </span>
           <span id="status-text" class="sr-only">대기 중입니다.</span>
         </div>
         <div class="top-actions">
@@ -82,7 +84,7 @@
               <div class="file-badge" aria-hidden="true"><span>HWPX</span></div>
               <div class="selected-file-copy">
                 <h3 id="selected-file-name">sample2.hwpx</h3>
-                <p id="selected-file-path">C:\reports\sample2.hwpx</p>
+                <p id="selected-file-path">파일 경로는 앱 기록으로 저장하지 않습니다.</p>
                 <div class="selected-meta">
                   <span>HWPX</span>
                   <span id="selected-original-meta">원본 크기: -</span>
@@ -255,10 +257,10 @@
         <details class="analysis-details">
           <summary>
             <span class="history-icon" aria-hidden="true"></span>
-            <strong>처리 내역</strong>
-            <span>이전 처리 이력과 로그를 확인합니다.</span>
+            <strong>이번 실행 결과</strong>
+            <span>이전 이력이나 내부 로그를 저장하지 않고 현재 결과만 표시합니다.</span>
           </summary>
-          <p class="detail-placeholder">처리 완료 후 저장된 결과 파일과 리포트 경로가 표시됩니다.</p>
+          <p class="detail-placeholder">처리 완료 후 현재 실행에서 생성된 결과 파일과 선택 리포트만 표시됩니다.</p>
         </details>
       </section>
 
@@ -294,7 +296,7 @@
             <button id="open-folder-button" class="ghost">폴더 보기</button>
             <button id="compare-button" class="ghost" disabled>결과 비교</button>
             <button id="reverify-button" class="ghost" disabled>다시 검증</button>
-            <button id="open-report-button" class="ghost" disabled>처리 내역</button>
+            <button id="open-report-button" class="ghost" disabled>현재 리포트</button>
           </div>
         </div>
         <div id="result-summary" class="metric-grid"></div>
@@ -326,7 +328,7 @@
           </select>
         </label>
         <label><input id="setting-save-next" type="checkbox" /> 원본 파일 옆에 저장</label>
-        <label><input id="setting-save-report" type="checkbox" /> JSON 리포트 저장</label>
+        <label><input id="setting-save-report" type="checkbox" /> JSON 리포트 저장(선택)</label>
         <label><input id="setting-prevent-overwrite" type="checkbox" /> 같은 이름 덮어쓰기 방지</label>
         <label><input id="setting-aggressive-warning" type="checkbox" /> 최대 압축 경고 표시</label>
         <p id="setting-output-directory">저장 위치: 원본 문서 폴더</p>
@@ -334,7 +336,7 @@
           <button id="setting-output-button" class="ghost">폴더 선택</button>
           <button id="setting-output-reset-button" class="ghost">원본 폴더 사용</button>
         </div>
-        <p>설정은 이 컴퓨터에만 저장됩니다.</p>
+        <p>설정에는 최근 파일, 출력 폴더, 처리 이력, 내부 로그를 저장하지 않습니다.</p>
       </aside>
     </main>
     <script type="module" src="./renderer.js"></script>
