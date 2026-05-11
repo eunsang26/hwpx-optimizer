@@ -14,13 +14,14 @@ export type DesktopSettings = {
   showAggressiveWarning: boolean;
   submissionLimit: SubmissionLimit;
   preservationPreference: PreservationPreference;
-  outputDirectory?: string;
 };
+
+export type DesktopSettingsPatch = Partial<DesktopSettings> & Record<string, unknown>;
 
 export const defaultDesktopSettings: DesktopSettings = {
   defaultMode: "balanced",
   saveNextToOriginal: true,
-  saveReport: true,
+  saveReport: false,
   preventOverwrite: true,
   showAggressiveWarning: true,
   submissionLimit: { id: "mb20" },
@@ -86,7 +87,7 @@ export async function optimizeDesktopFile(
   onProgress?.({ percent: 70, item: "Writing optimized document" });
   const outputPath = await nextOutputPath(
     input.filePath,
-    input.outputDirectory ?? input.settings.outputDirectory,
+    input.outputDirectory,
     input.settings,
     input.outputMode
   );
@@ -163,6 +164,18 @@ export async function nextOutputPath(
   throw new Error("Could not create a non-overwriting output path.");
 }
 
+export function persistentDesktopSettingsPatch(patch: DesktopSettingsPatch): Partial<DesktopSettings> {
+  const sanitized: Partial<DesktopSettings> = {};
+  if (isOptimizationMode(patch.defaultMode)) sanitized.defaultMode = patch.defaultMode;
+  if (patch.saveNextToOriginal === true) sanitized.saveNextToOriginal = true;
+  if (typeof patch.saveReport === "boolean") sanitized.saveReport = patch.saveReport;
+  if (typeof patch.preventOverwrite === "boolean") sanitized.preventOverwrite = patch.preventOverwrite;
+  if (typeof patch.showAggressiveWarning === "boolean") sanitized.showAggressiveWarning = patch.showAggressiveWarning;
+  if (isSubmissionLimit(patch.submissionLimit)) sanitized.submissionLimit = patch.submissionLimit;
+  if (isPreservationPreference(patch.preservationPreference)) sanitized.preservationPreference = patch.preservationPreference;
+  return sanitized;
+}
+
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path, constants.F_OK);
@@ -170,4 +183,27 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function isOptimizationMode(value: unknown): value is OptimizationMode {
+  return value === "safe" || value === "balanced" || value === "aggressive";
+}
+
+function isSubmissionLimit(value: unknown): value is SubmissionLimit {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { id?: unknown; customBytes?: unknown };
+  if (
+    candidate.id !== "none" &&
+    candidate.id !== "mb10" &&
+    candidate.id !== "mb20" &&
+    candidate.id !== "mb50" &&
+    candidate.id !== "custom"
+  ) {
+    return false;
+  }
+  return candidate.customBytes === undefined || typeof candidate.customBytes === "number";
+}
+
+function isPreservationPreference(value: unknown): value is PreservationPreference {
+  return value === "preserve" || value === "recommended" || value === "size";
 }

@@ -7,17 +7,25 @@ if (!electronApi) {
   throw new Error("Electron API bridge was not initialized.");
 }
 
-const { app, BrowserWindow: BrowserWindowClass, dialog, ipcMain, shell } = electronApi;
-import { mkdir, readFile as readFileFs, readdir, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+const { app, BrowserWindow: BrowserWindowClass, dialog, ipcMain, shell, session } = electronApi;
+import { mkdir, readFile as readFileFs, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
-import { defaultDesktopSettings, previewImageDiffs, verifyDesktopFile } from "./main/desktopService.js";
+import {
+  defaultDesktopSettings,
+  persistentDesktopSettingsPatch,
+  previewImageDiffs,
+  verifyDesktopFile
+} from "./main/desktopService.js";
 import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
-import type { DesktopSettings, OptimizationMode } from "./main/desktopService.js";
+import type { DesktopSettings, DesktopSettingsPatch, OptimizationMode } from "./main/desktopService.js";
 
 let mainWindow: BrowserWindow | null = null;
 let activeAnalyzeWorker: Worker | null = null;
 let activeOptimizeWorker: Worker | null = null;
+const allowedInputPaths = new Set<string>();
+const allowedOutputDirectories = new Set<string>();
+const allowedGeneratedPaths = new Set<string>();
 const isSmokeTest = process.argv.includes("--smoke-test");
 if (isSmokeTest) {
   app.setPath("userData", join(process.cwd(), ".tmp", "electron-smoke"));
@@ -52,6 +60,7 @@ async function createWindow(): Promise<BrowserWindow> {
 
 app.whenReady()
   .then(async () => {
+    blockExternalNetworkRequests();
     registerIpc();
     const window = await createWindow();
 
@@ -83,7 +92,10 @@ function registerIpc(): void {
       filters: [{ name: "HWPX 문서", extensions: ["hwpx"] }]
     };
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
-    return result.canceled ? null : result.filePaths[0] ?? null;
+    if (result.canceled) return null;
+    const selected = result.filePaths[0] ?? null;
+    if (selected) await registerAllowedInputPath(selected);
+    return selected;
   });
 
   ipcMain.handle("dialog:select-hwpx-many", async () => {
@@ -92,7 +104,11 @@ function registerIpc(): void {
       filters: [{ name: "HWPX 문서", extensions: ["hwpx"] }]
     };
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
-    return result.canceled ? null : result.filePaths;
+    if (result.canceled) return null;
+    for (const filePath of result.filePaths) {
+      await registerAllowedInputPath(filePath);
+    }
+    return result.filePaths;
   });
 
   ipcMain.handle("dialog:select-hwpx-folder", async () => {
@@ -100,11 +116,15 @@ function registerIpc(): void {
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
     if (result.canceled || result.filePaths.length === 0) return null;
     const directory = result.filePaths[0];
+    await registerAllowedOutputDirectory(directory);
     const entries = await readdir(directory, { withFileTypes: true });
     const files = entries
       .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name))
       .map((entry) => join(directory, entry.name))
       .sort();
+    for (const filePath of files) {
+      await registerAllowedInputPath(filePath);
+    }
     return { directory, files };
   });
 
@@ -113,17 +133,21 @@ function registerIpc(): void {
       properties: ["openDirectory"]
     };
     const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
-    return result.canceled ? null : result.filePaths[0] ?? null;
+    if (result.canceled) return null;
+    const selected = result.filePaths[0] ?? null;
+    if (selected) await registerAllowedOutputDirectory(selected);
+    return selected;
   });
 
   ipcMain.handle("settings:load", loadSettings);
-  ipcMain.handle("settings:save", async (_event, patch: Partial<DesktopSettings>) => saveSettings(patch));
+  ipcMain.handle("settings:save", async (_event, patch: DesktopSettingsPatch) => saveSettings(patch));
 
   ipcMain.handle("hwpx:analyze", async (_event, filePath: string) => {
     if (activeAnalyzeWorker) {
       throw new Error("Another analysis is already running.");
     }
-    return runAnalyzeWorker(filePath);
+    const allowedPath = await registerAllowedInputPath(filePath);
+    return runAnalyzeWorker(allowedPath);
   });
 
   ipcMain.handle(
@@ -141,10 +165,18 @@ function registerIpc(): void {
       if (activeOptimizeWorker) {
         throw new Error("Another optimization is already running.");
       }
+      const filePath = await requireAllowedInputPath(input.filePath);
+      const outputDirectory = input.outputDirectory
+        ? await requireAllowedOutputDirectory(input.outputDirectory)
+        : undefined;
       const settings = await loadSettings();
-      return runOptimizeWorker({ ...input, settings }, (progress) => {
+      const effectiveSettings = outputDirectory ? { ...settings, saveNextToOriginal: false } : settings;
+      const result = await runOptimizeWorker({ ...input, filePath, outputDirectory, settings: effectiveSettings }, (progress) => {
         mainWindow?.webContents.send("hwpx:optimize-progress", progress);
       });
+      await registerGeneratedPath(result.outputPath);
+      if (result.reportPath) await registerGeneratedPath(result.reportPath);
+      return result;
     }
   );
 
@@ -163,36 +195,36 @@ function registerIpc(): void {
     return { cancelled: true };
   });
 
-  ipcMain.handle("hwpx:verify", async (_event, filePath: string) => verifyDesktopFile(filePath));
+  ipcMain.handle("hwpx:verify", async (_event, filePath: string) => verifyDesktopFile(await requireKnownDocumentPath(filePath)));
 
   ipcMain.handle(
     "hwpx:image-preview",
     async (_event, input: { originalPath: string; optimizedPath: string; maxItems?: number; maxInputBytes?: number }) =>
-      previewImageDiffs(input.originalPath, input.optimizedPath, {
+      previewImageDiffs(await requireAllowedInputPath(input.originalPath), await requireGeneratedPath(input.optimizedPath), {
         maxItems: input.maxItems,
         maxInputBytes: input.maxInputBytes
       })
   );
 
   ipcMain.handle("shell:show-item", async (_event, filePath: string) => {
-    shell.showItemInFolder(filePath);
+    shell.showItemInFolder(await requireGeneratedPath(filePath));
   });
 
-  ipcMain.handle("shell:open-path", async (_event, filePath: string) => shell.openPath(filePath));
+  ipcMain.handle("shell:open-path", async (_event, filePath: string) => shell.openPath(await requireGeneratedPath(filePath)));
 }
 
 async function loadSettings(): Promise<DesktopSettings> {
   try {
     const raw = await readFileFs(settingsPath(), "utf8");
-    return { ...defaultDesktopSettings, ...JSON.parse(raw) };
+    return { ...defaultDesktopSettings, ...persistentDesktopSettingsPatch(JSON.parse(raw) as DesktopSettingsPatch) };
   } catch {
     return defaultDesktopSettings;
   }
 }
 
-async function saveSettings(patch: Partial<DesktopSettings>): Promise<DesktopSettings> {
+async function saveSettings(patch: DesktopSettingsPatch): Promise<DesktopSettings> {
   const current = await loadSettings();
-  const next = { ...current, ...patch };
+  const next = { ...current, ...persistentDesktopSettingsPatch(patch) };
   await mkdir(app.getPath("userData"), { recursive: true });
   await writeFile(settingsPath(), JSON.stringify(next, null, 2));
   return next;
@@ -200,6 +232,81 @@ async function saveSettings(patch: Partial<DesktopSettings>): Promise<DesktopSet
 
 function settingsPath(): string {
   return join(app.getPath("userData"), "settings.json");
+}
+
+function blockExternalNetworkRequests(): void {
+  session.defaultSession.webRequest.onBeforeRequest(
+    { urls: ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*"] },
+    (_details, callback) => callback({ cancel: true })
+  );
+}
+
+async function registerAllowedInputPath(filePath: string): Promise<string> {
+  const normalized = await normalizeExistingFilePath(filePath);
+  if (!/\.hwpx$/i.test(normalized)) {
+    throw new Error("HWPX 파일만 선택할 수 있습니다.");
+  }
+  allowedInputPaths.add(normalized);
+  allowedOutputDirectories.add(await normalizeExistingDirectoryPath(dirname(normalized)));
+  return normalized;
+}
+
+async function registerAllowedOutputDirectory(directoryPath: string): Promise<string> {
+  const normalized = await normalizeExistingDirectoryPath(directoryPath);
+  allowedOutputDirectories.add(normalized);
+  return normalized;
+}
+
+async function registerGeneratedPath(filePath: string): Promise<string> {
+  const normalized = await normalizeExistingFilePath(filePath);
+  allowedGeneratedPaths.add(normalized);
+  return normalized;
+}
+
+async function requireAllowedInputPath(filePath: string): Promise<string> {
+  const normalized = await normalizeExistingFilePath(filePath);
+  if (!allowedInputPaths.has(normalized)) throw new Error("선택된 HWPX 파일만 처리할 수 있습니다.");
+  return normalized;
+}
+
+async function requireAllowedOutputDirectory(directoryPath: string): Promise<string> {
+  const normalized = await normalizeExistingDirectoryPath(directoryPath);
+  if (!allowedOutputDirectories.has(normalized)) throw new Error("선택된 저장 위치만 사용할 수 있습니다.");
+  return normalized;
+}
+
+async function requireGeneratedPath(filePath: string): Promise<string> {
+  const normalized = await normalizeExistingFilePath(filePath);
+  if (!allowedGeneratedPaths.has(normalized)) throw new Error("이번 실행에서 생성된 결과 파일만 열 수 있습니다.");
+  return normalized;
+}
+
+async function requireKnownDocumentPath(filePath: string): Promise<string> {
+  const normalized = await normalizeExistingFilePath(filePath);
+  if (!allowedInputPaths.has(normalized) && !allowedGeneratedPaths.has(normalized)) {
+    throw new Error("이번 실행에서 선택 또는 생성된 문서만 검증할 수 있습니다.");
+  }
+  return normalized;
+}
+
+async function normalizeExistingFilePath(filePath: string): Promise<string> {
+  if (typeof filePath !== "string" || filePath.trim().length === 0) {
+    throw new Error("유효한 파일 경로가 아닙니다.");
+  }
+  const normalized = await realpath(resolve(filePath));
+  const info = await stat(normalized);
+  if (!info.isFile()) throw new Error("유효한 파일 경로가 아닙니다.");
+  return normalized;
+}
+
+async function normalizeExistingDirectoryPath(directoryPath: string): Promise<string> {
+  if (typeof directoryPath !== "string" || directoryPath.trim().length === 0) {
+    throw new Error("유효한 폴더 경로가 아닙니다.");
+  }
+  const normalized = await realpath(resolve(directoryPath));
+  const info = await stat(normalized);
+  if (!info.isDirectory()) throw new Error("유효한 폴더 경로가 아닙니다.");
+  return normalized;
 }
 
 async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
@@ -226,6 +333,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           resolve({
             title: document.title,
             fileName: document.getElementById("file-name")?.textContent,
+            safetyText: document.getElementById("safety-text")?.textContent,
             appReady: document.body.dataset.appReady,
             preloadApi: document.body.dataset.preloadApi,
             settingsOpen: document.getElementById("settings-panel")?.classList.contains("is-open"),
@@ -241,6 +349,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   `)) as {
     title?: string;
     fileName?: string;
+    safetyText?: string;
     appReady?: string;
     preloadApi?: string;
     settingsOpen?: boolean;
@@ -253,6 +362,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   }
   if (result.fileName !== "HWPX 파일을 끌어오거나 선택하세요") {
     throw new Error(`Desktop smoke failed: renderer did not load expected start view`);
+  }
+  if (!result.safetyText?.includes("보안 문서")) {
+    throw new Error(`Desktop smoke failed: local security policy text is missing`);
   }
   if (result.appReady !== "true" || result.preloadApi !== "ready") {
     throw new Error(`Desktop smoke failed: renderer/preload init did not complete`);
@@ -269,6 +381,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     (async () => {
       const progress = [];
       const unsubscribe = window.hwpxOptimizer.onOptimizeProgress((item) => progress.push(item));
+      const saved = await window.hwpxOptimizer.saveSettings({ outputDirectory: ${JSON.stringify(smokeDir)} });
       const analysis = await window.hwpxOptimizer.analyze(${JSON.stringify(smokeInputPath)});
       const result = await window.hwpxOptimizer.optimize({
         filePath: ${JSON.stringify(smokeInputPath)},
@@ -282,7 +395,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
         outputPath: result.outputPath,
         reportPath: result.reportPath,
         verified: verification.ok,
-        progressCount: progress.length
+        progressCount: progress.length,
+        savedOutputDirectory: saved.outputDirectory
       };
     })()
   `)) as {
@@ -291,6 +405,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     reportPath?: string;
     verified?: boolean;
     progressCount?: number;
+    savedOutputDirectory?: string;
   };
 
   if (!workflow.originalSize || workflow.originalSize <= 0) {
@@ -299,8 +414,11 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (!workflow.outputPath?.endsWith("_optimized.hwpx")) {
     throw new Error(`Desktop smoke failed: unexpected output path ${String(workflow.outputPath)}`);
   }
-  if (!workflow.reportPath?.endsWith(".report.json")) {
-    throw new Error(`Desktop smoke failed: report path was not returned`);
+  if (workflow.reportPath !== undefined) {
+    throw new Error(`Desktop smoke failed: report path was returned with default report saving disabled`);
+  }
+  if (workflow.savedOutputDirectory !== undefined) {
+    throw new Error("Desktop smoke failed: output directory was persisted in settings");
   }
   if (workflow.verified !== true) {
     throw new Error("Desktop smoke failed: optimized output did not verify");

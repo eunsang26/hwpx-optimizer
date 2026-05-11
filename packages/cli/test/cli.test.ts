@@ -99,6 +99,30 @@ describe("runCli", () => {
     expect(await readFile(inputPath)).toEqual(original);
   });
 
+  it("prints the protected document policy when analysis rejects a protected HWPX", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "protected.hwpx");
+    await writeFile(
+      inputPath,
+      await createHwpxFixture({
+        entries: {
+          "_xmlsignatures/sig1.xml": "<Signature />"
+        }
+      })
+    );
+    const errors: string[] = [];
+    const errorSpy = vi.spyOn(console, "error").mockImplementation((message?: unknown) => {
+      errors.push(String(message));
+    });
+
+    const code = await runCli(["analyze", inputPath]);
+    errorSpy.mockRestore();
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("보안 처리된 문서는 최적화 대상이 아닙니다");
+    expect(errors.join("\n")).toContain("해제하거나 우회하지 않습니다");
+  });
+
   it("optimizes a file and writes output plus report", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
