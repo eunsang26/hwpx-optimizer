@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
@@ -7,6 +7,7 @@ import type { PreservationPreference, SubmissionLimit } from "../shared/submissi
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
 
 export type DesktopSettings = {
+  settingsVersion?: number;
   defaultMode: OptimizationMode;
   saveNextToOriginal: boolean;
   saveReport: boolean;
@@ -19,6 +20,7 @@ export type DesktopSettings = {
 export type DesktopSettingsPatch = Partial<DesktopSettings> & Record<string, unknown>;
 
 export const defaultDesktopSettings: DesktopSettings = {
+  settingsVersion: 2,
   defaultMode: "balanced",
   saveNextToOriginal: true,
   saveReport: false,
@@ -28,6 +30,7 @@ export const defaultDesktopSettings: DesktopSettings = {
   preservationPreference: "recommended"
 };
 
+const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
 const DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES = 200 * 1024 * 1024;
 
 export type DesktopAnalysisResult = {
@@ -42,6 +45,7 @@ export type DesktopOptimizeInput = {
   outputDirectory?: string;
   outputMode?: "single" | "batch";
   actions?: string[];
+  maxInputBytes?: number;
 };
 
 export type DesktopOptimizeResult = {
@@ -67,7 +71,11 @@ async function loadCoreModule(): Promise<CoreModule> {
   return coreModulePromise;
 }
 
-export async function analyzeDesktopFile(filePath: string): Promise<DesktopAnalysisResult> {
+export async function analyzeDesktopFile(
+  filePath: string,
+  options: { maxInputBytes?: number } = {}
+): Promise<DesktopAnalysisResult> {
+  await assertSupportedLocalInput(filePath, options);
   const { analyzeHwpxBuffer } = await loadCoreModule();
   const report = await analyzeHwpxBuffer(await readFile(filePath));
   return { filePath, report };
@@ -78,6 +86,7 @@ export async function optimizeDesktopFile(
   onProgress?: (progress: DesktopProgress) => void
 ): Promise<DesktopOptimizeResult> {
   onProgress?.({ percent: 10, item: "Reading HWPX package" });
+  await assertSupportedLocalInput(input.filePath, { maxInputBytes: input.maxInputBytes });
   let source: Buffer | undefined = await readFile(input.filePath);
 
   onProgress?.({ percent: 35, item: `Optimizing document in ${input.mode} mode` });
@@ -92,20 +101,25 @@ export async function optimizeDesktopFile(
     input.outputMode
   );
   await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, result.output);
 
   let reportPath: string | undefined;
+  let reportContent: string | undefined;
   if (input.settings.saveReport) {
     onProgress?.({ percent: 82, item: "Writing JSON report" });
     reportPath = `${outputPath}.report.json`;
-    await writeFile(reportPath, JSON.stringify(result.report, null, 2));
+    reportContent = JSON.stringify(result.report, null, 2);
   }
+  await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent);
 
   onProgress?.({ percent: 92, item: "Finalizing optimized document" });
   return { outputPath, reportPath, report: result.report };
 }
 
-export async function verifyDesktopFile(filePath: string): Promise<{ ok: true }> {
+export async function verifyDesktopFile(
+  filePath: string,
+  options: { maxInputBytes?: number } = {}
+): Promise<{ ok: true }> {
+  await assertSupportedLocalInput(filePath, options);
   const { verifyHwpxOutput } = await loadCoreModule();
   await verifyHwpxOutput(await readFile(filePath));
   return { ok: true };
@@ -174,6 +188,81 @@ export function persistentDesktopSettingsPatch(patch: DesktopSettingsPatch): Par
   if (isSubmissionLimit(patch.submissionLimit)) sanitized.submissionLimit = patch.submissionLimit;
   if (isPreservationPreference(patch.preservationPreference)) sanitized.preservationPreference = patch.preservationPreference;
   return sanitized;
+}
+
+export function normalizeDesktopSettings(raw: Partial<DesktopSettings> | undefined): DesktopSettings {
+  const parsed = raw ?? {};
+  const migratedMode =
+    parsed.settingsVersion === undefined &&
+    parsed.defaultMode === "safe" &&
+    (parsed.preservationPreference ?? defaultDesktopSettings.preservationPreference) === "recommended"
+      ? "balanced"
+      : parsed.defaultMode;
+  return {
+    ...defaultDesktopSettings,
+    ...parsed,
+    defaultMode: migratedMode ?? defaultDesktopSettings.defaultMode,
+    settingsVersion: defaultDesktopSettings.settingsVersion
+  };
+}
+
+export async function assertSupportedLocalInput(
+  filePath: string,
+  options: { maxInputBytes?: number } = {}
+): Promise<void> {
+  const maxInputBytes = options.maxInputBytes ?? DEFAULT_MAX_HWPX_INPUT_BYTES;
+  const { size } = await stat(filePath);
+  if (size > maxInputBytes) {
+    throw new Error(
+      `${filePath} exceeds the supported local processing limit (${size} bytes; limit ${maxInputBytes} bytes).`
+    );
+  }
+}
+
+async function writeOptimizationArtifacts(
+  outputPath: string,
+  output: Buffer,
+  reportPath: string | undefined,
+  reportContent: string | undefined
+): Promise<void> {
+  const outputTmpPath = temporaryPath(outputPath);
+  const reportTmpPath = reportPath && reportContent ? temporaryPath(reportPath) : undefined;
+  let reportPromoted = false;
+  try {
+    await assertArtifactTargetIsWritable(outputPath);
+    if (reportPath) await assertArtifactTargetIsWritable(reportPath);
+    await writeFile(outputTmpPath, output);
+    if (reportPath && reportContent && reportTmpPath) {
+      await writeFile(reportTmpPath, reportContent);
+      await rename(reportTmpPath, reportPath);
+      reportPromoted = true;
+    }
+    await rename(outputTmpPath, outputPath);
+  } catch (error) {
+    await Promise.all([
+      rm(outputTmpPath, { force: true }),
+      reportTmpPath ? rm(reportTmpPath, { force: true }) : Promise.resolve(),
+      reportPromoted && reportPath ? rm(reportPath, { force: true }) : Promise.resolve()
+    ]);
+    throw error;
+  }
+}
+
+async function assertArtifactTargetIsWritable(path: string): Promise<void> {
+  try {
+    const target = await stat(path);
+    if (target.isDirectory()) {
+      throw new Error(`Refusing to write artifact over directory: ${path}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    throw error;
+  }
+}
+
+function temporaryPath(path: string): string {
+  const nonce = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${path}.tmp-${nonce}`;
 }
 
 async function pathExists(path: string): Promise<boolean> {

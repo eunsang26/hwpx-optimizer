@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
@@ -7,6 +7,7 @@ import { createHwpxFixture } from "../../../packages/core/test/fixtures.js";
 import {
   analyzeDesktopFile,
   defaultDesktopSettings,
+  normalizeDesktopSettings,
   optimizeDesktopFile,
   previewImageDiffs,
   persistentDesktopSettingsPatch,
@@ -22,6 +23,15 @@ describe("desktop service", () => {
     expect(settings.submissionLimit).toEqual({ id: "mb20" });
     expect(settings.preservationPreference).toBe("recommended");
     expect(settings.saveReport).toBe(false);
+  });
+
+  it("migrates legacy recommended safe defaults to balanced mode", () => {
+    expect(
+      normalizeDesktopSettings({
+        defaultMode: "safe",
+        preservationPreference: "recommended"
+      }).defaultMode
+    ).toBe("balanced");
   });
 
   it("analyzes, optimizes, skips report by default, and preserves the source file", async () => {
@@ -131,6 +141,25 @@ describe("desktop service", () => {
     expect(result.outputPath).toBe(join(outputDirectory, "input_optimized.hwpx"));
   });
 
+  it("does not leave final output files when report finalization fails", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "input.hwpx");
+    const outputPath = join(dir, "input_optimized.hwpx");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await mkdir(`${outputPath}.report.json`);
+
+    await expect(
+      optimizeDesktopFile({
+        filePath: inputPath,
+        mode: "safe",
+        settings: { ...defaultDesktopSettings, saveReport: true }
+      })
+    ).rejects.toThrow();
+
+    await expect(readFile(outputPath)).rejects.toThrow();
+    expect((await readdir(dir)).filter((name) => name.includes(".tmp-"))).toEqual([]);
+  });
+
   it("writes batch output to a dedicated output folder by default", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
@@ -174,6 +203,21 @@ describe("desktop service", () => {
     await expect(previewImageDiffs(originalPath, optimizedPath, { maxInputBytes: 10 })).rejects.toThrow(
       "too large for image preview"
     );
+  });
+
+  it("rejects optimization inputs over the configured local processing limit", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "large.hwpx");
+    await writeFile(inputPath, Buffer.alloc(16));
+
+    await expect(
+      optimizeDesktopFile({
+        filePath: inputPath,
+        mode: "safe",
+        settings: defaultDesktopSettings,
+        maxInputBytes: 10
+      })
+    ).rejects.toThrow("exceeds the supported local processing limit");
   });
 
   it("forwards actions through balanced optimization", async () => {

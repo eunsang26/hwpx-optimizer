@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { createHwpxFixture } from "../../core/test/fixtures.js";
-import { isCliEntrypoint, runCli } from "../src/index.js";
+import { isCliEntrypoint, printAnalysisSummaryForTest, renderHumanReport, runCli } from "../src/index.js";
+import type { OptimizationReport } from "@hwpx-optimizer/core";
 
 describe("runCli", () => {
   it("prints the action catalog with list-actions", async () => {
@@ -71,6 +72,105 @@ describe("runCli", () => {
     expect(logs.join("\n")).toContain("Opportunities:");
     expect(logs.join("\n")).toContain("clean-shape-comment: 1 target");
     expect(logs.join("\n")).toContain("Suggested: hwpx-opt optimize");
+  });
+
+  it("prints non-overlapping total potential savings in human reports", () => {
+    const text = renderHumanReport("/x/input.hwpx", {
+      ...minimalReport,
+      originalSize: 20 * 1024 * 1024,
+      opportunityGroups: [
+        {
+          action: "resize-jpeg",
+          label: "Resize JPEG",
+          count: 1,
+          estimatedSavingBytes: 10 * 1024 * 1024,
+          beforeSize: 15,
+          afterSize: 5,
+          confidence: "estimated",
+          risk: "medium",
+          visualImpact: "medium",
+          defaultEnabledIn: ["balanced", "aggressive"],
+          targets: ["BinData/a.jpg"]
+        },
+        {
+          action: "strip-metadata",
+          label: "Strip metadata",
+          count: 1,
+          estimatedSavingBytes: 9 * 1024 * 1024,
+          beforeSize: 10,
+          afterSize: 1,
+          confidence: "estimated",
+          risk: "safe",
+          visualImpact: "none",
+          defaultEnabledIn: ["balanced", "aggressive"],
+          targets: ["BinData/a.jpg"]
+        }
+      ]
+    });
+
+    expect(text).toContain("Potential saving (non-overlap): 10.00 MiB");
+    expect(text).not.toContain("Potential saving (non-overlap): 19.00 MiB");
+  });
+
+  it("prints non-overlapping total potential savings in analyze summaries", () => {
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      logs.push(String(message));
+    });
+
+    printAnalysisSummaryForTest("/x/input.hwpx", {
+      ...minimalReport,
+      originalSize: 20 * 1024 * 1024,
+      opportunityGroups: [
+        {
+          action: "resize-jpeg",
+          label: "Resize JPEG",
+          count: 1,
+          estimatedSavingBytes: 10 * 1024 * 1024,
+          beforeSize: 15,
+          afterSize: 5,
+          confidence: "estimated",
+          risk: "medium",
+          visualImpact: "medium",
+          defaultEnabledIn: ["balanced", "aggressive"],
+          targets: ["BinData/a.jpg"]
+        },
+        {
+          action: "strip-metadata",
+          label: "Strip metadata",
+          count: 1,
+          estimatedSavingBytes: 9 * 1024 * 1024,
+          beforeSize: 10,
+          afterSize: 1,
+          confidence: "estimated",
+          risk: "safe",
+          visualImpact: "none",
+          defaultEnabledIn: ["balanced", "aggressive"],
+          targets: ["BinData/a.jpg"]
+        }
+      ]
+    });
+    logSpy.mockRestore();
+
+    const text = logs.join("\n");
+    expect(text).toContain("Potential saving (non-overlap): 10.00 MiB");
+    expect(text).not.toContain("Potential saving (non-overlap): 19.00 MiB");
+  });
+
+  it("rejects files over the configured input size limit before reading them", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "large.hwpx");
+    await writeFile(inputPath, Buffer.alloc(16));
+    const errors: string[] = [];
+    const errorSpy = vi.spyOn(console, "error").mockImplementation((message?: unknown) => {
+      errors.push(String(message));
+    });
+
+    const code = await runCli(["verify", inputPath, "--max-input-bytes", "10"]);
+    errorSpy.mockRestore();
+
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("exceeds the supported local processing limit");
   });
 
   it("does not overwrite existing analysis reports by default", async () => {
@@ -386,3 +486,24 @@ describe("runCli", () => {
     expect((await readFile(join(outDir, "batch-report-2.json"))).byteLength).toBeGreaterThan(0);
   });
 });
+
+const minimalReport: OptimizationReport = {
+  originalSize: 0,
+  categorySizes: {
+    xml: 0,
+    image: 0,
+    font: 0,
+    ole: 0,
+    bindata: 0,
+    other: 0
+  },
+  images: [],
+  duplicateImages: [],
+  sameVisualDuplicateImages: [],
+  unusedBinData: [],
+  riskyResources: [],
+  actions: { planned: [], applied: [], skipped: [] },
+  opportunities: [],
+  opportunityGroups: [],
+  warnings: []
+};

@@ -33,6 +33,7 @@ describe("CommonJS preload bridge", () => {
     });
 
     expect(typeof exposedApi?.cancelAnalyze).toBe("function");
+    expect((exposedApi?.getPathForFile as (file: File) => string)({} as File)).toBe("/tmp/a.hwpx");
     await (exposedApi?.cancelAnalyze as () => Promise<unknown>)();
     await (exposedApi?.previewImageDiffs as (input: unknown) => Promise<unknown>)({
       originalPath: "/tmp/original.hwpx",

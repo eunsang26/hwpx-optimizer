@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 
 import { constants, realpathSync } from "node:fs";
-import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   analyzeHwpxBuffer,
+  estimateNonOverlappingSavingBytes,
   optimizeHwpxBufferAggressive,
   optimizeHwpxBufferBalanced,
   optimizeHwpxBufferSafe,
   verifyHwpxOutput
 } from "@hwpx-optimizer/core";
 import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
+
+const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
 
 export async function runCli(argv: string[]): Promise<number> {
   const [command, inputPath, ...rest] = argv;
@@ -27,7 +30,7 @@ export async function runCli(argv: string[]): Promise<number> {
   const options = parseOptions(rest);
   try {
     if (command === "analyze") {
-      const report = await analyzeHwpxBuffer(await readFile(inputPath));
+      const report = await analyzeHwpxBuffer(await readSupportedInput(inputPath, options));
       const requestedReportPath = options.report ?? `${inputPath}.report.json`;
       const reportPath =
         options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
@@ -40,7 +43,7 @@ export async function runCli(argv: string[]): Promise<number> {
     }
 
     if (command === "report") {
-      const report = await analyzeHwpxBuffer(await readFile(inputPath));
+      const report = await analyzeHwpxBuffer(await readSupportedInput(inputPath, options));
       const text = renderHumanReport(inputPath, report);
       const requestedReportPath = options.out ?? `${inputPath}.report.txt`;
       const reportPath =
@@ -53,7 +56,7 @@ export async function runCli(argv: string[]): Promise<number> {
     }
 
     if (command === "verify") {
-      await verifyHwpxOutput(await readFile(inputPath));
+      await verifyHwpxOutput(await readSupportedInput(inputPath, options));
       console.log(`Verified: ${inputPath}`);
       return 0;
     }
@@ -71,7 +74,7 @@ export async function runCli(argv: string[]): Promise<number> {
         console.error("Only --mode safe, --mode balanced, and --mode aggressive are supported");
         return 1;
       }
-      const input = await readFile(inputPath);
+      const input = await readSupportedInput(inputPath, options);
       const result = await optimizeByMode(input, mode, options);
       const overwrite = options.overwrite === "true";
       const requestedOutputPath = options.out ?? defaultOutputPath(inputPath);
@@ -80,8 +83,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const requestedReportPath = options.report ?? `${outputPath}.report.json`;
       const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       assertDoesNotTargetInput(reportPath, inputPath, "report");
-      await writeFile(outputPath, result.output);
-      await writeFile(reportPath, JSON.stringify(result.report, null, 2));
+      await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2));
       console.log(`Optimized ${inputPath}`);
       printOptimizationSummary(result.report);
       console.log(`Output: ${outputPath}`);
@@ -139,6 +141,30 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+async function readSupportedInput(path: string, options: Record<string, string>): Promise<Buffer> {
+  await assertSupportedLocalInput(path, options);
+  return readFile(path);
+}
+
+async function assertSupportedLocalInput(path: string, options: Record<string, string>): Promise<void> {
+  const maxInputBytes = parseMaxInputBytes(options["max-input-bytes"]);
+  const { size } = await stat(path);
+  if (size > maxInputBytes) {
+    throw new Error(
+      `${path} exceeds the supported local processing limit (${size} bytes; limit ${maxInputBytes} bytes).`
+    );
+  }
+}
+
+function parseMaxInputBytes(value: string | undefined): number {
+  if (!value) return DEFAULT_MAX_HWPX_INPUT_BYTES;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error("--max-input-bytes must be a positive number.");
+  }
+  return Math.floor(parsed);
+}
+
 function assertDoesNotTargetInput(targetPath: string, inputPath: string, kind: "output" | "report"): void {
   if (pathsReferToSameFile(targetPath, inputPath)) {
     throw new Error(`Refusing to overwrite the original input file with ${kind}.`);
@@ -156,11 +182,11 @@ function pathsReferToSameFile(left: string, right: string): boolean {
 
 function printUsage(): void {
   console.error("Usage:");
-  console.error("  hwpx-opt analyze <file.hwpx> [--report report.json]");
-  console.error("  hwpx-opt report <file.hwpx> [--out report.txt]");
-  console.error("  hwpx-opt verify <file.hwpx>");
-  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json]");
-  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory]");
+  console.error("  hwpx-opt analyze <file.hwpx> [--report report.json] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt report <file.hwpx> [--out report.txt] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt verify <file.hwpx> [--max-input-bytes bytes]");
+  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--max-input-bytes bytes]");
   console.error("  hwpx-opt list-actions");
 }
 
@@ -266,6 +292,7 @@ function printAnalysisSummary(inputPath: string, report: OptimizationReport): vo
     return;
   }
 
+  console.log(`Potential saving (non-overlap): ${formatBytes(estimateNonOverlappingSavingBytes(report.opportunityGroups))}`);
   console.log("Opportunities:");
   for (const group of report.opportunityGroups) {
     console.log(
@@ -274,6 +301,8 @@ function printAnalysisSummary(inputPath: string, report: OptimizationReport): vo
   }
   console.log(`Suggested: hwpx-opt optimize ${inputPath} --mode balanced`);
 }
+
+export const printAnalysisSummaryForTest = printAnalysisSummary;
 
 function printOptimizationSummary(report: OptimizationReport): void {
   const savedBytes = report.savedBytes ?? 0;
@@ -326,7 +355,7 @@ async function runBatch(
     const progressPrefix = `[${index + 1}/${files.length}] ${file}`;
     let stage: BatchFailureStage = "read-input";
     try {
-      const buffer = await readFile(sourcePath);
+      const buffer = await readSupportedInput(sourcePath, options);
       stage = "optimize";
       const result = await optimizeByMode(buffer, mode, options);
       stage = "resolve-output-path";
@@ -335,9 +364,7 @@ async function runBatch(
       const requestedReportPath = `${outputPath}.report.json`;
       const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       stage = "write-output";
-      await writeFile(outputPath, result.output);
-      stage = "write-report";
-      await writeFile(reportPath, JSON.stringify(result.report, null, 2));
+      await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2));
       results.push({ input: file, status: "optimized", output: outputPath, report: reportPath });
       const savedBytes = result.report.savedBytes ?? 0;
       const savedPercent = result.report.savedPercent ?? 0;
@@ -371,7 +398,7 @@ async function runBatch(
   };
 }
 
-function renderHumanReport(inputPath: string, report: OptimizationReport): string {
+export function renderHumanReport(inputPath: string, report: OptimizationReport): string {
   const lines = [
     "HWPX Optimization Report",
     `File: ${inputPath}`,
@@ -382,7 +409,8 @@ function renderHumanReport(inputPath: string, report: OptimizationReport): strin
     `Duplicate image groups: ${report.duplicateImages.length}`,
     `Same-visual duplicate image groups: ${report.sameVisualDuplicateImages.length}`,
     `Unused BinData candidates: ${report.unusedBinData.length}`,
-    `Risky resources: ${report.riskyResources.length}`
+    `Risky resources: ${report.riskyResources.length}`,
+    `Potential saving (non-overlap): ${formatBytes(estimateNonOverlappingSavingBytes(report.opportunityGroups))}`
   ];
   if (report.opportunityGroups.length > 0) {
     lines.push("Opportunities:");
@@ -419,6 +447,50 @@ function formatBytes(bytes: number): string {
   if (absolute < 1024) return `${sign}${absolute} B`;
   if (absolute < 1024 * 1024) return `${sign}${(absolute / 1024).toFixed(1)} KiB`;
   return `${sign}${(absolute / 1024 / 1024).toFixed(2)} MiB`;
+}
+
+async function writeOptimizationArtifacts(
+  outputPath: string,
+  output: Buffer,
+  reportPath: string,
+  reportContent: string
+): Promise<void> {
+  const outputTmpPath = temporaryPath(outputPath);
+  const reportTmpPath = temporaryPath(reportPath);
+  let reportPromoted = false;
+  try {
+    await assertArtifactTargetIsWritable(outputPath);
+    await assertArtifactTargetIsWritable(reportPath);
+    await writeFile(outputTmpPath, output);
+    await writeFile(reportTmpPath, reportContent);
+    await rename(reportTmpPath, reportPath);
+    reportPromoted = true;
+    await rename(outputTmpPath, outputPath);
+  } catch (error) {
+    await Promise.all([
+      rm(outputTmpPath, { force: true }),
+      rm(reportTmpPath, { force: true }),
+      reportPromoted ? rm(reportPath, { force: true }) : Promise.resolve()
+    ]);
+    throw error;
+  }
+}
+
+async function assertArtifactTargetIsWritable(path: string): Promise<void> {
+  try {
+    const target = await stat(path);
+    if (target.isDirectory()) {
+      throw new Error(`Refusing to write artifact over directory: ${path}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    throw error;
+  }
+}
+
+function temporaryPath(path: string): string {
+  const nonce = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${path}.tmp-${nonce}`;
 }
 
 function parseActionList(value?: string): string[] | undefined {

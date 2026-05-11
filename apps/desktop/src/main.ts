@@ -12,7 +12,7 @@ import { mkdir, readFile as readFileFs, readdir, realpath, rm, stat, writeFile }
 import { dirname, join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
 import {
-  defaultDesktopSettings,
+  normalizeDesktopSettings,
   persistentDesktopSettingsPatch,
   previewImageDiffs,
   verifyDesktopFile
@@ -216,9 +216,13 @@ function registerIpc(): void {
 async function loadSettings(): Promise<DesktopSettings> {
   try {
     const raw = await readFileFs(settingsPath(), "utf8");
-    return { ...defaultDesktopSettings, ...persistentDesktopSettingsPatch(JSON.parse(raw) as DesktopSettingsPatch) };
+    const parsed = JSON.parse(raw) as DesktopSettingsPatch;
+    return normalizeDesktopSettings({
+      ...persistentDesktopSettingsPatch(parsed),
+      settingsVersion: typeof parsed.settingsVersion === "number" ? parsed.settingsVersion : undefined
+    });
   } catch {
-    return defaultDesktopSettings;
+    return normalizeDesktopSettings(undefined);
   }
 }
 
