@@ -1,0 +1,55 @@
+<h2>A안 상세: 단계형 첫 사용 흐름</h2>
+<p class="subtitle">기존 기능은 유지하고, 처음 쓰는 사람이 다음 행동을 바로 알 수 있게 화면 순서를 재배치합니다.</p>
+
+<div class="mockup">
+  <div class="mockup-header">권장 화면 구조</div>
+  <div class="mockup-body">
+    <div style="display:grid; gap:12px">
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px">
+        <div class="placeholder" style="background:#dceafe">1 파일</div>
+        <div class="placeholder">2 분석</div>
+        <div class="placeholder">3 방식</div>
+        <div class="placeholder">4 결과</div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1.35fr .65fr; gap:12px">
+        <div style="display:grid; gap:10px">
+          <div class="placeholder" style="height:92px">
+            큰 파일 드롭 영역<br>
+            파일 선택 / 여러 파일 / 폴더 선택
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px">
+            <div class="placeholder">원본 용량</div>
+            <div class="placeholder">예상 절감</div>
+            <div class="placeholder">주의사항</div>
+          </div>
+          <div class="placeholder" style="height:74px">상위 절감 후보 3개 + 경고 요약</div>
+        </div>
+
+        <div style="display:grid; gap:10px">
+          <div class="placeholder" style="height:56px">현재 단계 상태</div>
+          <div class="placeholder" style="height:96px">추천 모드 / 선택 모드</div>
+          <button class="mock-button">최적화 실행</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>흐름</h3>
+  <p><strong>1 파일</strong>: 첫 화면은 파일 드롭/선택만 강하게 보입니다. 여러 파일과 폴더는 보조 액션으로 유지합니다.</p>
+  <p><strong>2 분석</strong>: 파일을 고르면 자동 분석하고, 핵심 숫자 3~4개만 먼저 보여줍니다. 세부 차트와 작업 선택은 접거나 아래로 보냅니다.</p>
+  <p><strong>3 방식</strong>: Safe/Balanced/Aggressive는 카드 3개로 유지하되, 추천/주의 문구와 실행 버튼을 같은 영역에 둡니다.</p>
+  <p><strong>4 결과</strong>: 결과 파일 열기, 폴더 보기, 이미지 비교를 가장 눈에 띄게 배치합니다.</p>
+</div>
+
+<div class="section">
+  <h3>구현 범위</h3>
+  <p>1차는 renderer-only에 가깝게 진행합니다. 핵심은 HTML/CSS 구조, 상태 문구, 버튼 우선순위, hidden/visible 전환입니다. core 최적화 로직, IPC, 파일 저장 규칙은 건드리지 않습니다.</p>
+</div>
+
+<div class="section">
+  <h3>검증</h3>
+  <p>기존 desktop smoke가 깨지지 않아야 합니다. 추가로 view-model 또는 renderer smoke assertion에서 단계 헤더와 주요 버튼 렌더링을 확인합니다.</p>
+</div>

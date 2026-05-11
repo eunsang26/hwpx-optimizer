@@ -9,7 +9,6 @@ release/
 build/
 *.log
 .tmp/
-.superpowers/
 /sample*.hwp
 /sample*.hwpx
 /sample*.json
