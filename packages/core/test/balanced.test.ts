@@ -689,6 +689,27 @@ describe("balanced optimization", () => {
     );
   });
 
+  it("applies no advanced actions when an empty action list is explicit", async () => {
+    const fixture = await createReferencedImageFixture(
+      {
+        image1: { path: "BinData/image1.png", mediaType: "image/png", data: Buffer.from([0x89, 0x50, 0x4e, 0x47]) }
+      },
+      `<hp:shapeComment>그림입니다.
+원본 그림의 이름: IMG_1234.JPG
+원본 그림의 크기: 가로 5712pixel, 세로 4284pixel</hp:shapeComment>`
+    );
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { actions: [], allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+
+    expect(section).toContain("IMG_1234");
+    expect(section).toContain("5712pixel");
+    expect(result.report.actions.applied).not.toContainEqual(
+      expect.objectContaining({ type: "clean-shape-comment", target: "Contents/section0.xml" })
+    );
+  });
+
   it("does not record clean-shape-comment as applied when manifest changes alone touched the XML", async () => {
     const bmp = createBmp24(120, 80, [0xaa, 0xbb, 0xcc]);
     const fixture = await createHwpxFixture({

@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
+import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
 
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
 
@@ -11,6 +12,8 @@ export type DesktopSettings = {
   saveReport: boolean;
   preventOverwrite: boolean;
   showAggressiveWarning: boolean;
+  submissionLimit: SubmissionLimit;
+  preservationPreference: PreservationPreference;
   outputDirectory?: string;
 };
 
@@ -19,7 +22,9 @@ export const defaultDesktopSettings: DesktopSettings = {
   saveNextToOriginal: true,
   saveReport: true,
   preventOverwrite: true,
-  showAggressiveWarning: true
+  showAggressiveWarning: true,
+  submissionLimit: { id: "mb20" },
+  preservationPreference: "recommended"
 };
 
 export type DesktopAnalysisResult = {
@@ -113,7 +118,7 @@ export async function optimizeByMode(
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
   const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
   if (mode === "safe") return optimizeHwpxBufferSafe(input);
-  const advanced = actions && actions.length > 0 ? { actions } : {};
+  const advanced = actions ? { actions } : {};
   if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advanced);
   return optimizeHwpxBufferBalanced(input, advanced);
 }

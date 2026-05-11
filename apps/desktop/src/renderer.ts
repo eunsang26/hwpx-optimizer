@@ -2,16 +2,22 @@ import { applyOptimizationResultToBatchItem, summarizeBatchItems } from "./share
 import { escapeHtml, fileNameFromPath, looksLikeOptimizedFileName } from "./shared/format.js";
 import { actionLabel, modeLabel, modeWarningMessage, progressLabel, warningLabel } from "./shared/labels.js";
 import {
-  actionToggleHtml,
   batchItemRowHtml,
   categoryBarHtml,
   imageComparePairHtml,
-  metricHtml
+  metricHtml,
+  submissionActionRowHtml
 } from "./shared/templates.js";
-import { createActionToggles, createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
-import type { ActionToggleViewModel } from "./shared/viewModel.js";
+import { createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
+import { createSubmissionPlan, modeForPreservation } from "./shared/submissionPlan.js";
+import type {
+  PreservationPreference,
+  SubmissionActionId,
+  SubmissionLimit,
+  SubmissionPlan
+} from "./shared/submissionPlan.js";
 
 declare global {
   interface Window {
@@ -23,8 +29,14 @@ type BatchItem = {
   path: string;
   fileName: string;
   status: "pending" | "running" | "done" | "failed" | "cancelled";
+  report?: OptimizationReport;
   outputPath?: string;
   reportPath?: string;
+  originalSizeBytes?: number;
+  expectedSizeBytes?: number;
+  originalSizeLabel?: string;
+  expectedSizeLabel?: string;
+  targetStatusLabel?: string;
   savedBytes?: number;
   savedPercent?: number;
   error?: string;
@@ -37,7 +49,10 @@ type AppState = {
   mode: "safe" | "balanced" | "aggressive";
   outputDirectory?: string;
   settings?: DesktopSettings;
-  actionSelections: Map<string, boolean>;
+  actionSelections: Map<SubmissionActionId, boolean>;
+  submissionLimit: SubmissionLimit;
+  preservationPreference: PreservationPreference;
+  currentPlan?: SubmissionPlan;
   batchItems: BatchItem[];
   batchRunning: boolean;
   batchCancelled: boolean;
@@ -46,10 +61,14 @@ type AppState = {
 const state: AppState = {
   mode: "safe",
   actionSelections: new Map(),
+  submissionLimit: { id: "mb20" },
+  preservationPreference: "recommended",
   batchItems: [],
   batchRunning: false,
   batchCancelled: false
 };
+
+let settingsSaveSequence = 0;
 
 type DesktopSettings = {
   defaultMode: AppState["mode"];
@@ -57,6 +76,8 @@ type DesktopSettings = {
   saveReport: boolean;
   preventOverwrite: boolean;
   showAggressiveWarning: boolean;
+  submissionLimit: SubmissionLimit;
+  preservationPreference: PreservationPreference;
   outputDirectory?: string;
 };
 
@@ -111,6 +132,19 @@ const settingAggressiveWarning = requireInput("setting-aggressive-warning");
 const settingOutputDirectory = requireElement("setting-output-directory");
 const settingOutputButton = requireButton("setting-output-button");
 const settingOutputResetButton = requireButton("setting-output-reset-button");
+const singleWorkspace = requireElement("single-workspace");
+const predictionSummary = requireElement("prediction-summary");
+const predictionSize = requireElement("prediction-size");
+const predictionStatus = requireElement("prediction-status");
+const predictionPercent = requireElement("prediction-percent");
+const submissionLimitSelect = requireSelect("submission-limit-select");
+const customLimitField = requireElement("custom-limit-field");
+const customLimitInput = requireInput("custom-limit-input");
+const preservationSelect = requireSelect("preservation-select");
+const planTitle = requireElement("plan-title");
+const planSummary = requireElement("plan-summary");
+const planTotal = requireElement("plan-total");
+const analysisDetailSummary = requireElement("analysis-detail-summary");
 
 void init();
 
@@ -119,7 +153,10 @@ async function init(): Promise<void> {
   state.settings = settings;
   state.mode = settings.defaultMode ?? "safe";
   state.outputDirectory = settings.outputDirectory;
+  state.submissionLimit = settings.submissionLimit ?? { id: "mb20" };
+  state.preservationPreference = settings.preservationPreference ?? "recommended";
   renderSettings(settings);
+  renderSubmissionControls();
   modeInputs.find((input) => input.value === state.mode)?.click();
 
   chooseButton.addEventListener("click", async () => {
@@ -147,6 +184,7 @@ async function init(): Promise<void> {
     state.batchItems = [];
     renderBatchList();
     batchPanel.hidden = true;
+    singleWorkspace.hidden = false;
     setStatus("배치 목록을 비웠습니다.");
   });
 
@@ -195,27 +233,60 @@ async function init(): Promise<void> {
       state.mode = input.value as AppState["mode"];
       void saveSettings({ defaultMode: state.mode });
       renderModeWarning();
-      resetActionSelectionsToMode();
-      renderActionPanel();
+      refreshSubmissionPlan();
     });
   }
 
   actionSelectAll.addEventListener("click", () => {
     setAllActionSelections(true);
-    renderActionPanel();
+    refreshSubmissionPlan();
   });
   actionSelectNone.addEventListener("click", () => {
     setAllActionSelections(false);
-    renderActionPanel();
+    refreshSubmissionPlan();
   });
   actionReset.addEventListener("click", () => {
-    resetActionSelectionsToMode();
-    renderActionPanel();
+    state.actionSelections.clear();
+    refreshSubmissionPlan();
   });
   actionCheckboxes.addEventListener("change", (event) => {
     const target = event.target as HTMLInputElement | null;
     if (!target || target.type !== "checkbox") return;
-    state.actionSelections.set(target.value, target.checked);
+    const actions = actionValuesFromCheckbox(target);
+    for (const action of actions) {
+      state.actionSelections.set(action, target.checked);
+    }
+    refreshSubmissionPlan();
+  });
+
+  submissionLimitSelect.addEventListener("change", () => {
+    state.submissionLimit = {
+      id: submissionLimitSelect.value as SubmissionLimit["id"],
+      customBytes: state.submissionLimit.customBytes
+    };
+    renderSubmissionControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+    void saveSettings({ submissionLimit: state.submissionLimit });
+  });
+  customLimitInput.addEventListener("change", () => {
+    const value = Number(customLimitInput.value);
+    state.submissionLimit = {
+      id: "custom",
+      customBytes: Number.isFinite(value) && value > 0 ? value * 1024 * 1024 : undefined
+    };
+    renderSubmissionControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+    void saveSettings({ submissionLimit: state.submissionLimit });
+  });
+  preservationSelect.addEventListener("change", () => {
+    state.preservationPreference = preservationSelect.value as PreservationPreference;
+    state.actionSelections.clear();
+    renderSubmissionControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+    void saveSettings({ preservationPreference: state.preservationPreference });
   });
 
   settingDefaultMode.addEventListener("change", () => {
@@ -303,10 +374,15 @@ async function init(): Promise<void> {
 }
 
 async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
+  const sequence = ++settingsSaveSequence;
   const settings = (await window.hwpxOptimizer.saveSettings(patch)) as DesktopSettings;
+  if (sequence !== settingsSaveSequence) return;
   state.settings = settings;
   state.outputDirectory = settings.outputDirectory;
+  state.submissionLimit = settings.submissionLimit ?? state.submissionLimit;
+  state.preservationPreference = settings.preservationPreference ?? state.preservationPreference;
   renderSettings(settings);
+  renderSubmissionControls();
 }
 
 function renderSettings(settings: DesktopSettings): void {
@@ -323,6 +399,51 @@ function renderSettings(settings: DesktopSettings): void {
   settingOutputResetButton.disabled = settings.saveNextToOriginal && !settings.outputDirectory;
 }
 
+function renderSubmissionControls(): void {
+  submissionLimitSelect.value = state.submissionLimit.id;
+  customLimitField.hidden = state.submissionLimit.id !== "custom";
+  customLimitInput.value = state.submissionLimit.customBytes
+    ? String(Math.round(state.submissionLimit.customBytes / 1024 / 1024))
+    : "";
+  preservationSelect.value = state.preservationPreference;
+}
+
+function refreshSubmissionPlan(): void {
+  if (!state.report) {
+    state.currentPlan = undefined;
+    predictionSummary.hidden = true;
+    planTitle.textContent = "자동 최적화 계획";
+    planSummary.textContent = "파일을 분석하면 예상 절감량을 표시합니다.";
+    planTotal.textContent = "예상 절감 0 B";
+    actionPanelHint.textContent = "옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.";
+    actionCheckboxes.innerHTML = "";
+    optimizeButton.disabled = true;
+    return;
+  }
+  const plan = createSubmissionPlan(state.report, {
+    submissionLimit: state.submissionLimit,
+    preservationPreference: state.preservationPreference,
+    actionOverrides: state.actionSelections
+  });
+  state.currentPlan = plan;
+  state.mode = plan.mode;
+  predictionSummary.hidden = false;
+  predictionSize.textContent = `${plan.originalSizeLabel} → 예상 ${plan.expectedSizeLabel}`;
+  predictionStatus.textContent = plan.targetStatusLabel;
+  predictionPercent.textContent = plan.savedPercentLabel;
+  planTitle.textContent = plan.kind === "custom" ? "사용자 지정 계획" : "자동 최적화 계획";
+  planSummary.textContent = `${plan.targetStatusLabel} · 예상 결과 ${plan.expectedSizeLabel}`;
+  planTotal.textContent = `예상 절감 ${plan.expectedSavingLabel}`;
+  actionPanelHint.textContent =
+    plan.mode === "safe"
+      ? "외형 보존 우선에서는 안전한 항목만 적용합니다."
+      : "옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.";
+  actionCheckboxes.innerHTML = plan.actionRows.map(submissionActionRowHtml).join("");
+  syncActionCheckboxIndeterminateState();
+  renderModeWarning();
+  optimizeButton.disabled = false;
+}
+
 async function loadFile(path: string): Promise<void> {
   if (state.batchRunning) {
     setStatus("일괄 처리 중에는 새 파일을 열 수 없습니다. 완료 후 다시 시도하세요.");
@@ -333,9 +454,12 @@ async function loadFile(path: string): Promise<void> {
   state.filePath = path;
   state.report = undefined;
   state.result = undefined;
+  state.currentPlan = undefined;
   state.actionSelections.clear();
+  singleWorkspace.hidden = false;
   actionPanel.hidden = true;
   actionCheckboxes.innerHTML = "";
+  refreshSubmissionPlan();
   resultPanel.hidden = true;
   compareButton.disabled = true;
   closeImageCompareModal();
@@ -355,10 +479,9 @@ async function analyzeFile(path: string): Promise<void> {
     setBusy("문서를 분석하는 중입니다...");
     const response = await window.hwpxOptimizer.analyze(path);
     state.report = response.report;
-    resetActionSelectionsToMode();
+    state.actionSelections.clear();
     renderAnalysis(response.report);
-    renderActionPanel();
-    optimizeButton.disabled = false;
+    refreshSubmissionPlan();
     setStatus("분석이 완료되었습니다. 최적화 방식을 선택하세요.");
   } catch (error) {
     setStatus(errorMessage(error));
@@ -382,7 +505,7 @@ async function optimizeCurrentFile(): Promise<void> {
     });
     state.result = response;
     renderResult(response.report, response.outputPath, response.reportPath);
-    setStatus("최적화가 완료되었습니다. 결과 파일을 확인하세요.");
+    setStatus("최적화가 완료되었습니다. 파일을 열어 제출 전 상태를 확인하세요.");
     succeeded = true;
   } catch (error) {
     setStatus(errorMessage(error));
@@ -401,6 +524,7 @@ function renderProgress(percent: number, item: string): void {
 
 function renderAnalysis(report: OptimizationReport): void {
   const view = createAnalysisViewModel(report);
+  analysisDetailSummary.textContent = `세부 분석 보기 · 예상 절감 ${view.estimatedSavingLabel}`;
   analysisGrid.innerHTML = [
     metricHtml("원본 용량", view.originalSizeLabel),
     metricHtml("이미지", String(view.imageCount)),
@@ -439,10 +563,10 @@ function renderAnalysis(report: OptimizationReport): void {
 function renderResult(report: OptimizationReport, outputPath: string, reportPath?: string): void {
   resultPanel.hidden = false;
   resultSummary.innerHTML = [
+    metricHtml("원본 용량", formatBytes(report.originalSize)),
     metricHtml("결과 용량", formatBytes(report.optimizedSize ?? report.originalSize)),
-    metricHtml("절감 용량", formatBytes(report.savedBytes ?? 0)),
-    metricHtml("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`),
-    metricHtml("수행 작업", `${report.actions.applied.length}개`)
+    metricHtml("실제 절감", formatBytes(report.savedBytes ?? 0)),
+    metricHtml("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`)
   ].join("");
   requireElement("output-path").textContent = outputPath;
   requireElement("report-path").textContent = reportPath ?? "리포트 저장이 꺼져 있습니다.";
@@ -510,7 +634,7 @@ function setBusy(message: string): void {
 
 function setIdle(): void {
   analyzeButton.disabled = !state.filePath;
-  optimizeButton.disabled = !state.report;
+  optimizeButton.disabled = !state.currentPlan;
   cancelButton.disabled = true;
 }
 
@@ -522,52 +646,32 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function currentActionToggles(): ActionToggleViewModel[] {
-  if (!state.report) return [];
-  return createActionToggles(state.report, state.mode);
-}
-
-function resetActionSelectionsToMode(): void {
-  state.actionSelections.clear();
-  for (const toggle of currentActionToggles()) {
-    state.actionSelections.set(toggle.action, toggle.defaultEnabledForMode);
-  }
-}
-
 function setAllActionSelections(enabled: boolean): void {
-  for (const toggle of currentActionToggles()) {
-    state.actionSelections.set(toggle.action, enabled);
+  for (const action of currentPlanActions()) {
+    state.actionSelections.set(action, enabled);
   }
 }
 
-function isActionSelected(toggle: ActionToggleViewModel): boolean {
-  const stored = state.actionSelections.get(toggle.action);
-  return stored ?? toggle.defaultEnabledForMode;
+function currentPlanActions(): SubmissionActionId[] {
+  return state.currentPlan?.actionRows.flatMap((row) => row.actions) ?? [];
 }
 
 function selectedActionsForOptimize(): string[] | undefined {
-  const toggles = currentActionToggles();
-  if (state.mode === "safe" || toggles.length === 0) return undefined;
-  const selected = toggles.filter(isActionSelected).map((toggle) => toggle.action);
-  if (selected.length === toggles.length) return undefined;
+  if (!state.currentPlan || state.currentPlan.mode === "safe") return undefined;
+  const selected = state.currentPlan.selectedActions;
+  if (state.currentPlan.kind === "automatic") return undefined;
   return selected;
 }
 
-function renderActionPanel(): void {
-  const toggles = currentActionToggles();
-  if (state.mode === "safe" || toggles.length === 0) {
-    actionPanel.hidden = true;
-    actionCheckboxes.innerHTML = "";
-    return;
-  }
-  actionPanel.hidden = false;
-  actionPanelHint.textContent =
-    state.mode === "aggressive"
-      ? "최대 압축 모드: 기본값은 모든 항목이 켜져 있습니다. 시각 영향이 큰 항목을 끌 수 있습니다."
-      : "균형 모드: 기본값은 시각 영향이 낮은 항목 위주입니다. 필요에 따라 조정하세요.";
-  actionCheckboxes.innerHTML = toggles
-    .map((toggle) => actionToggleHtml(toggle, isActionSelected(toggle)))
-    .join("");
+function actionValuesFromCheckbox(input: HTMLInputElement): SubmissionActionId[] {
+  const actions = input.dataset.actions?.split(",").filter(Boolean) as SubmissionActionId[] | undefined;
+  return actions && actions.length > 0 ? actions : [input.value as SubmissionActionId];
+}
+
+function syncActionCheckboxIndeterminateState(): void {
+  actionCheckboxes.querySelectorAll<HTMLInputElement>("input[data-indeterminate='true']").forEach((input) => {
+    input.indeterminate = true;
+  });
 }
 
 function enterBatchMode(paths: string[]): void {
@@ -575,10 +679,13 @@ function enterBatchMode(paths: string[]): void {
   state.filePath = undefined;
   state.report = undefined;
   state.result = undefined;
+  state.currentPlan = undefined;
   state.actionSelections.clear();
   resultPanel.hidden = true;
   actionPanel.hidden = true;
   actionCheckboxes.innerHTML = "";
+  singleWorkspace.hidden = true;
+  refreshSubmissionPlan();
   fileName.textContent = "여러 HWPX 일괄 처리";
   fileMeta.textContent = `${paths.length}개 파일`;
   analyzeButton.disabled = true;
@@ -596,6 +703,7 @@ function enterBatchMode(paths: string[]): void {
   }
   batchPanel.hidden = false;
   renderBatchList();
+  void analyzeBatchItems();
   setStatus(`${state.batchItems.length}개 파일이 일괄 처리 대기 중입니다.`);
 }
 
@@ -610,6 +718,46 @@ function renderBatchList(): void {
   batchList.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach((button) => {
     button.addEventListener("click", () => handleBatchRowAction(button));
   });
+}
+
+async function analyzeBatchItems(): Promise<void> {
+  for (const item of state.batchItems) {
+    if (item.report || item.status !== "pending") continue;
+    try {
+      const response = await window.hwpxOptimizer.analyze(item.path);
+      const plan = createSubmissionPlan(response.report, {
+        submissionLimit: state.submissionLimit,
+        preservationPreference: state.preservationPreference,
+        actionOverrides: state.actionSelections
+      });
+      item.report = response.report;
+      item.originalSizeBytes = response.report.originalSize;
+      item.expectedSizeBytes = plan.expectedSizeBytes;
+      item.originalSizeLabel = plan.originalSizeLabel;
+      item.expectedSizeLabel = plan.expectedSizeLabel;
+      item.targetStatusLabel = plan.targetStatusLabel;
+      renderBatchList();
+    } catch (error) {
+      item.status = "failed";
+      item.error = errorMessage(error);
+      renderBatchList();
+    }
+  }
+}
+
+function refreshBatchPlans(): void {
+  for (const item of state.batchItems) {
+    if (!item.report) continue;
+    const plan = createSubmissionPlan(item.report, {
+      submissionLimit: state.submissionLimit,
+      preservationPreference: state.preservationPreference,
+      actionOverrides: state.actionSelections
+    });
+    item.expectedSizeBytes = plan.expectedSizeBytes;
+    item.expectedSizeLabel = plan.expectedSizeLabel;
+    item.targetStatusLabel = plan.targetStatusLabel;
+  }
+  renderBatchList();
 }
 
 function handleBatchRowAction(button: HTMLButtonElement): void {
@@ -628,6 +776,7 @@ function handleBatchRowAction(button: HTMLButtonElement): void {
     state.batchItems.splice(index, 1);
     if (state.batchItems.length === 0) {
       batchPanel.hidden = true;
+      singleWorkspace.hidden = false;
       setStatus("배치 목록을 비웠습니다.");
     }
     renderBatchList();
@@ -656,10 +805,18 @@ async function runBatch(): Promise<void> {
     renderBatchList();
     renderProgress(5, `${item.fileName} 처리 시작`);
     try {
+      const plan = item.report
+        ? createSubmissionPlan(item.report, {
+            submissionLimit: state.submissionLimit,
+            preservationPreference: state.preservationPreference,
+            actionOverrides: state.actionSelections
+          })
+        : undefined;
       const response = await window.hwpxOptimizer.optimize({
         filePath: item.path,
-        mode: state.mode,
-        outputDirectory: state.outputDirectory
+        mode: plan?.mode ?? modeForPreservation(state.preservationPreference),
+        outputDirectory: state.outputDirectory,
+        actions: selectedActionsForPlan(plan)
       });
       Object.assign(item, applyOptimizationResultToBatchItem(item, response));
     } catch (error) {
@@ -680,6 +837,11 @@ async function runBatch(): Promise<void> {
   const completed = state.batchItems.filter((item) => item.status === "done").length;
   const failed = state.batchItems.filter((item) => item.status === "failed").length;
   setStatus(`일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}.`);
+}
+
+function selectedActionsForPlan(plan: SubmissionPlan | undefined): string[] | undefined {
+  if (!plan || plan.mode === "safe" || plan.kind === "automatic") return undefined;
+  return plan.selectedActions;
 }
 
 function resolveDroppedFilePath(file: File): string {
