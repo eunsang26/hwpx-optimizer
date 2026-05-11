@@ -12,6 +12,7 @@ Release requirements:
 - No login, account, billing, cloud storage, or telemetry.
 - Original files are preserved.
 - Protected documents are not decrypted, bypassed, or optimized.
+- Desktop stores no recent files, processing history, output folder path, or internal logs.
 - Optimized outputs pass verifier.
 - README commands work on a clean checkout.
 - Known blockers and non-blockers are documented.
@@ -127,7 +128,7 @@ On Linux/WSL without Wine, run the portable Windows release gate:
 npm run release:check:win-portable
 ```
 
-This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact and `release/HWPX Optimizer-0.1.0-x64.zip` as a faster-starting extracted-folder distribution. It verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifacts. It does not replace a clean Windows runtime test.
+This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact and `release/HWPX Optimizer-0.1.0-x64.zip` as a faster-starting extracted-folder distribution. It verifies that packaged artifacts do not contain development files or user-history files, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifacts. It does not replace a clean Windows runtime test.
 
 To verify the native Windows image runtime layout on an existing Windows build:
 
@@ -154,6 +155,14 @@ For the ZIP artifact, extract `HWPX Optimizer-0.1.0-x64.zip`, open PowerShell in
 Use [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) for the full clean-machine manual and CLI verification pass before treating a Windows artifact as product-ready.
 
 For internal release approval, also confirm that protected HWPX files are rejected without decryption or bypass and that the app start screen states the local-only/original-preserving/security-document policy.
+
+Also run the artifact hygiene check after packaging:
+
+```bash
+npm run release:verify-artifacts
+```
+
+This check inspects `app.asar` and the Windows ZIP, when present, and fails if they contain source maps, type declarations, tests, docs, git/editor metadata, samples, generated reports, optimized outputs, `settings.json`, recent-file/history records, logs, or smoke workspaces.
 
 If the portable artifact already exists and only the checksum files need to be refreshed:
 
@@ -190,12 +199,13 @@ Before treating a build as releasable:
 3. Verify the app can analyze and optimize a local HWPX file.
 4. Run `npm run desktop:pack:win` to confirm a Windows unpacked folder can be generated.
 5. Run `npm run desktop:local:win` to create both the portable EXE and the faster-starting ZIP artifact.
-6. Run `scripts/windows-portable-smoke.ps1` on a clean Windows machine.
-7. Complete [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) on a clean Windows machine.
-8. Attach [Internal Distribution Guide](INTERNAL_DISTRIBUTION.md), [Security Review Checklist](SECURITY_REVIEW.md), SHA256 checksums, and test evidence to the internal approval record.
-9. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
-10. Code-sign the Windows artifact when an approved certificate is available; otherwise document the unsigned status in the approval record.
-11. Install or launch the generated artifact on a clean Windows machine.
+6. Run `npm run release:verify-artifacts`.
+7. Run `scripts/windows-portable-smoke.ps1` on a clean Windows machine.
+8. Complete [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) on a clean Windows machine.
+9. Attach [Internal Distribution Guide](INTERNAL_DISTRIBUTION.md), [Security Review Checklist](SECURITY_REVIEW.md), SHA256 checksums, and test evidence to the internal approval record.
+10. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
+11. Code-sign the Windows artifact when an approved certificate is available; otherwise document the unsigned status in the approval record.
+12. Install or launch the generated artifact on a clean Windows machine.
 
 Suggested future scripts:
 
@@ -225,7 +235,7 @@ Do not include:
 - Generated report JSON or text files.
 - Local `결과/` output folders.
 - Local Electron caches.
-- `node_modules`.
+- Source maps, TypeScript declaration files, test files, git/editor metadata, user settings, recent-file/history records, logs, smoke workspaces, or docs in packaged desktop artifacts.
 
 Do include:
 

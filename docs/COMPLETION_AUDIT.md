@@ -13,6 +13,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 - No server upload, login, account, billing, cloud storage, or telemetry.
 - Original files are never modified in place.
 - Protected documents are rejected without decryption, DRM bypass, or electronic-signature preservation promises.
+- Desktop stores no recent files, processing history, output folder path, or internal logs.
 - Shared core engine for CLI and desktop.
 - CLI and Electron desktop app both work.
 - HWPX analysis, optimization, verification, and reports work.
@@ -50,9 +51,10 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop mode selection | renderer radio controls | Implemented |
 | Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with stage-based progress |
 | Desktop result details | `apps/desktop/src/index.html`, `apps/desktop/src/renderer.ts` | Implemented with output file, output folder, and JSON report open actions |
-| Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts` local settings | Implemented with default mode, output folder controls, report saving, overwrite prevention, and aggressive warning preferences |
+| Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts` local settings | Implemented with default mode, session-only output folder controls, opt-in report saving, overwrite prevention, and aggressive warning preferences |
 | Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
 | Local-only operation | no network/server code in app path; filesystem-only APIs | Implemented |
+| Zero-history Desktop policy | `apps/desktop/src/main.ts`, `desktopService.ts`, `renderer.ts`, `index.html`, `apps/desktop/test/desktopService.test.ts` | Implemented: no recent files, processing history, persisted output folder, result path, report path, or internal log records are stored by the app |
 | Protected document policy | `packages/core/src/reader.ts`, `packages/core/test/reader.test.ts`, `packages/cli/test/cli.test.ts`, `apps/desktop/src/index.html`, `apps/desktop/src/main.ts` | Implemented: encrypted ZIP flags, signature/security paths, and protection metadata are rejected with a no-bypass message |
 | Original file preservation and overwrite prevention | output path generation in `desktopService.ts`; CLI non-overwrite suffixing; CLI rejects `optimize --out`, `optimize --report`, `analyze --report`, and `report --out` when the final target is the original input path | Implemented and regression-tested |
 | JSON reports | CLI and desktop service report write paths | Implemented |
@@ -64,6 +66,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Windows portable artifact | `npm run desktop:portable:win`, `release/HWPX Optimizer-0.1.0-x64.exe` | Verified build artifact |
 | Windows fast-start ZIP artifact | `npm run desktop:zip:win`, `release/HWPX Optimizer-0.1.0-x64.zip` | Verified build artifact |
 | Windows portable release gate | `npm run release:check:win-portable` | Verified |
+| Release artifact hygiene | `scripts/check-release-artifacts.mjs`, `package.json` `release:verify-artifacts` | Implemented: packaged app/ZIP are checked for source maps, type declarations, tests, docs, git/editor metadata, samples, generated reports, optimized outputs, settings, history, logs, and smoke workspaces |
 | Windows sharp native runtime packaging | `package.json` `asarUnpack`, `scripts/prepare-win-sharp-runtime.mjs`, `scripts/verify-win-native-runtime.mjs`, `npm run release:verify-win-native` | Verified: `sharp-win32-x64.node`, `libvips-cpp.dll`, and `libvips-42.dll` are unpacked outside `app.asar` |
 | Desktop startup does not eagerly load sharp/core | `apps/desktop/src/main/desktopService.ts`, `apps/desktop/test/desktopService.lazy.test.ts` | Verified: desktop service module can import without loading `@hwpx-optimizer/core` |
 | Windows portable smoke script | `scripts/windows-portable-smoke.ps1` | Prepared, not executed in this Linux/WSL environment |

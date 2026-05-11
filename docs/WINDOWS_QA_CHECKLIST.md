@@ -4,7 +4,7 @@ This checklist verifies the release candidate on a clean Windows machine. It is 
 
 ## Scope
 
-Verify that the Windows build runs locally, does not upload files, preserves the original HWPX file, rejects protected documents without bypass, and can analyze, optimize, save, and verify optimized HWPX outputs.
+Verify that the Windows build runs locally, does not upload files, preserves the original HWPX file, rejects protected documents without bypass, stores no recent-file/history/log paths in the app, and can analyze, optimize, save, and verify optimized HWPX outputs.
 
 ## Prerequisites
 
@@ -38,6 +38,7 @@ Expected result:
 
 - The checksum matches.
 - Manifest verification exits with code 0.
+- Packaged artifacts do not include source maps, type declarations, samples, generated reports, `settings.json`, recent-file/history records, logs, or smoke workspaces when `npm run release:verify-artifacts` is run from the source tree.
 
 ## Automated Portable Smoke
 
@@ -74,7 +75,7 @@ Expected result:
 
 1. Launch the portable executable or installed app.
 2. Confirm the app opens without a terminal dependency.
-3. Confirm the start screen says processing is local, the original is preserved, and protected documents are not bypassed.
+3. Confirm the start screen says processing is local, the original is preserved, protected documents are not bypassed, and recent files/history/internal logs are not stored.
 4. Drag and drop a local `.hwpx` file.
 5. Confirm the analysis screen shows:
    - original file name,
@@ -94,7 +95,7 @@ Expected result:
    - applied/skipped/failed action summary,
    - output file action,
    - output folder action,
-   - report action.
+   - optional current-report action only when report saving is enabled.
 9. Open the optimized file in Hancom Office or another HWPX-compatible viewer.
 10. Confirm the original file timestamp and size did not change.
 11. Repeat with `Balanced` mode.
@@ -127,8 +128,10 @@ Expected result:
 
 Expected result:
 
-- Settings persist locally.
-- Output files are written to the configured folder when selected.
+- Non-sensitive settings persist locally.
+- Output files are written to the selected folder during the current app session.
+- The selected output folder is not restored after restart and is not written to `settings.json`.
+- No recent files, processing history, result paths, report paths, or internal logs are restored after restart.
 - Overwrite prevention creates a suffixed output path instead of replacing an existing file.
 
 ## CLI Checks On Windows

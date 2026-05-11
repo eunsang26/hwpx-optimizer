@@ -4,7 +4,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop drag/drop now uses Electron `webUtils.getPathForFile`, but final hands-on QA on a clean Windows machine for drag/drop, settings persistence, repeated files, very large packages, and representative real-world documents remains pending.
+- Desktop drag/drop now uses Electron `webUtils.getPathForFile`, but final hands-on QA on a clean Windows machine for drag/drop, non-sensitive settings persistence, zero-history restart behavior, repeated files, very large packages, and representative real-world documents remains pending.
 
 ## Verified Release Infrastructure
 
@@ -28,7 +28,7 @@ This file separates release blockers from non-blockers so the project does not o
 - EXIF removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size.
 - Safe-mode optimization can still take time on image-heavy documents because it performs lossless image metadata/PNG processing and ZIP verification even when final savings are zero.
 - Some safe-mode rewrites can make an individual entry slightly larger. The optimizer records skipped or applied actions so this can be audited.
-- Desktop settings controls are functional, but final visual QA on the target Windows desktop environment is still required.
+- Desktop settings controls are functional. Output folder selection is session-only by policy, and final visual QA on the target Windows desktop environment is still required.
 - Desktop analysis and optimization run off the main UI path, but progress is still stage-based rather than per-image/action.
 - `npm audit` currently reports 0 vulnerabilities after dependency updates on 2026-05-08.
 
