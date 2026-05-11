@@ -1,5 +1,12 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import type { OpenDialogOptions } from "electron";
+// Electron's ESM main entry only exposes a single default export (it is a
+// CommonJS module wrapped for interop); named ESM imports throw at runtime on
+// Electron 28+. Always destructure values from the default export here and
+// import the matching types separately.
+import electron from "electron";
+import type { BrowserWindow as BrowserWindowInstance, OpenDialogOptions } from "electron";
+
+const { app, BrowserWindow, dialog, ipcMain, shell } = electron;
+type BrowserWindow = BrowserWindowInstance;
 import { mkdir, readFile as readFileFs, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -33,7 +40,7 @@ async function createWindow(): Promise<BrowserWindow> {
   });
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  mainWindow.webContents.on("will-navigate", (event) => {
+  mainWindow.webContents.on("will-navigate", (event: Electron.Event) => {
     event.preventDefault();
   });
 

@@ -94,4 +94,23 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(result.report.opportunities).not.toContainEqual(expect.objectContaining({ action: "resize-jpeg" }));
     expect(result.report.opportunities.every((opportunity) => opportunity.risk === "safe")).toBe(true);
   });
+
+  it("surfaces safe-mode optimizer failures in report.warnings", async () => {
+    // A file with a .png extension whose bytes are not a real PNG triggers a
+    // sharp failure inside applySafeOptimizationPlan. The previous behaviour
+    // swallowed the error; now it must reach report.warnings so users can see
+    // why the optimization did not shrink that image.
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": '<root><img href="BinData/broken.png" /></root>',
+        "BinData/broken.png": Buffer.from("not actually a png")
+      }
+    });
+
+    const result = await optimizeHwpxBufferSafe(input);
+
+    expect(result.report.warnings.some((warning) => warning.includes("BinData/broken.png"))).toBe(
+      true
+    );
+  });
 });
