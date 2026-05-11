@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   actionLabel,
   batchStatusLabel,
+  errorLabel,
   formatPsnr,
   modeLabel,
   modeWarningMessage,
@@ -21,6 +22,12 @@ describe("shared labels", () => {
     expect(progressLabel("Optimizing document in balanced mode")).toBe("균형 모드로 문서를 최적화하는 중입니다");
     expect(progressLabel("Optimizing document in aggressive mode")).toBe("최대 압축 모드로 문서를 최적화하는 중입니다");
     expect(progressLabel("Some untranslated stage")).toBe("Some untranslated stage");
+  });
+
+  it("translates known runtime errors to user-facing Korean messages", () => {
+    expect(errorLabel("Analysis cancelled.")).toBe("분석이 취소되었습니다.");
+    expect(errorLabel("Optimization cancelled.")).toBe("최적화가 취소되었습니다.");
+    expect(errorLabel("Unknown failure")).toBe("Unknown failure");
   });
 
   it("matches warning patterns case-insensitively and falls back to the raw text", () => {

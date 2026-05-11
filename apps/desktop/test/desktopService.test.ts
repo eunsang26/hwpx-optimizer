@@ -4,13 +4,20 @@ import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { createHwpxFixture } from "../../../packages/core/test/fixtures.js";
-import { analyzeDesktopFile, defaultDesktopSettings, optimizeDesktopFile, verifyDesktopFile } from "../src/main/desktopService.js";
+import {
+  analyzeDesktopFile,
+  defaultDesktopSettings,
+  optimizeDesktopFile,
+  previewImageDiffs,
+  verifyDesktopFile
+} from "../src/main/desktopService.js";
 import type { DesktopSettings } from "../src/main/desktopService.js";
 
 describe("desktop service", () => {
   it("defines submission UI defaults in desktop settings", () => {
     const settings: DesktopSettings = defaultDesktopSettings;
 
+    expect(settings.defaultMode).toBe("balanced");
     expect(settings.submissionLimit).toEqual({ id: "mb20" });
     expect(settings.preservationPreference).toBe("recommended");
   });
@@ -107,6 +114,36 @@ describe("desktop service", () => {
     });
 
     expect(result.outputPath).toBe(join(dir, "output", "input_optimized.hwpx"));
+  });
+
+  it("writes batch output under a dedicated output folder inside a configured directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const outputDirectory = join(dir, "selected");
+    const inputPath = join(dir, "input.hwpx");
+    await mkdir(outputDirectory);
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const result = await optimizeDesktopFile({
+      filePath: inputPath,
+      mode: "safe",
+      outputDirectory,
+      outputMode: "batch",
+      settings: defaultDesktopSettings
+    });
+
+    expect(result.outputPath).toBe(join(outputDirectory, "output", "input_optimized.hwpx"));
+  });
+
+  it("rejects image preview requests that would require loading too many bytes at once", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const originalPath = join(dir, "original.hwpx");
+    const optimizedPath = join(dir, "optimized.hwpx");
+    await writeFile(originalPath, Buffer.alloc(8));
+    await writeFile(optimizedPath, Buffer.alloc(8));
+
+    await expect(previewImageDiffs(originalPath, optimizedPath, { maxInputBytes: 10 })).rejects.toThrow(
+      "too large for image preview"
+    );
   });
 
   it("forwards actions through balanced optimization", async () => {

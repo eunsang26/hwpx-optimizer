@@ -41,6 +41,43 @@ describe("desktop view model", () => {
     expect(balancedToggles[0]?.label).toBe("큰 JPEG 리사이즈");
     expect(balancedToggles[1]?.label).toBe("PNG 무손실 최적화");
   });
+
+  it("does not double-count overlapping targets in the headline estimated saving", () => {
+    const view = createAnalysisViewModel({
+      ...reportFixture,
+      originalSize: 20 * 1024 * 1024,
+      opportunityGroups: [
+        {
+          action: "resize-jpeg",
+          label: "Resize",
+          count: 1,
+          estimatedSavingBytes: 10 * 1024 * 1024,
+          beforeSize: 15,
+          afterSize: 5,
+          confidence: "estimated",
+          risk: "medium",
+          visualImpact: "medium",
+          defaultEnabledIn: ["balanced", "aggressive"],
+          targets: ["BinData/a.jpg"]
+        },
+        {
+          action: "strip-metadata",
+          label: "Metadata",
+          count: 1,
+          estimatedSavingBytes: 9 * 1024 * 1024,
+          beforeSize: 10,
+          afterSize: 1,
+          confidence: "estimated",
+          risk: "safe",
+          visualImpact: "none",
+          defaultEnabledIn: ["balanced", "aggressive"],
+          targets: ["BinData/a.jpg"]
+        }
+      ]
+    });
+
+    expect(view.estimatedSavingLabel).toBe("10.00 MiB");
+  });
 });
 
 const reportFixture: OptimizationReport = {

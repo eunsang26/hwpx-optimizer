@@ -27,6 +27,13 @@ export type BatchSummary = {
   text: string;
 };
 
+export type SelectedPathMode = "empty" | "single" | "batch";
+
+export function selectionModeForPaths(paths: readonly string[]): SelectedPathMode {
+  if (paths.length === 0) return "empty";
+  return paths.length === 1 ? "single" : "batch";
+}
+
 export function summarizeBatchItems(items: BatchItemLike[], options: { running: boolean } = { running: false }): BatchSummary {
   if (items.length === 0) {
     return {

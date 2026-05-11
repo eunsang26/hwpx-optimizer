@@ -16,12 +16,21 @@ const PROGRESS_LABELS: Record<string, string> = {
   "Optimization cancelled": "최적화가 취소되었습니다"
 };
 
+const ERROR_LABELS: Record<string, string> = {
+  "Analysis cancelled.": "분석이 취소되었습니다.",
+  "Optimization cancelled.": "최적화가 취소되었습니다."
+};
+
 export function progressLabel(item: string): string {
   if (item.startsWith("Optimizing document in ")) {
     const mode = item.includes("aggressive") ? "최대 압축" : item.includes("balanced") ? "균형" : "안전";
     return `${mode} 모드로 문서를 최적화하는 중입니다`;
   }
   return PROGRESS_LABELS[item] ?? item;
+}
+
+export function errorLabel(message: string): string {
+  return ERROR_LABELS[message] ?? message;
 }
 
 type WarningCategory =

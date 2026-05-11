@@ -55,6 +55,7 @@ button {
   font-weight: 700;
   cursor: pointer;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 button:hover:not(:disabled) {
@@ -204,6 +205,7 @@ p {
 .section-title {
   gap: 8px;
   min-width: 0;
+  flex: 0 0 auto;
 }
 
 .section-title span,
@@ -212,6 +214,7 @@ p {
   font-size: 25px;
   font-weight: 900;
   line-height: 1.1;
+  white-space: nowrap;
 }
 
 .selection-pill {
@@ -229,7 +232,11 @@ p {
 .file-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+}
+
+.file-actions button {
+  padding-inline: 14px;
 }
 
 body[data-view="empty"] .file-actions,
@@ -249,10 +256,10 @@ body[data-view="empty"] .selection-pill,
   border-radius: 8px;
   background: #fff;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 190px minmax(0, 1fr);
   align-items: center;
   justify-content: center;
-  padding: 28px 64px;
+  padding: 28px 42px;
 }
 
 .drop-zone.is-over {
@@ -296,7 +303,7 @@ body[data-view="empty"] .selection-pill,
 
 .drop-copy h3 {
   color: #142037;
-  font-size: 26px;
+  font-size: 24px;
   line-height: 1.2;
   font-weight: 900;
 }
@@ -313,13 +320,13 @@ body[data-view="empty"] .selection-pill,
 }
 
 .primary-inline {
-  min-width: 208px;
+  min-width: 166px;
   background: var(--blue);
   box-shadow: 0 5px 12px rgba(9, 102, 232, 0.2);
 }
 
 .drop-actions .ghost {
-  min-width: 208px;
+  min-width: 166px;
 }
 
 .drop-hint {
@@ -334,9 +341,9 @@ body[data-view="empty"] .selection-pill,
   border-radius: 8px;
   background: #fff;
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr) 520px;
+  grid-template-columns: 112px minmax(240px, 1fr) 356px;
   align-items: center;
-  padding: 22px 30px;
+  padding: 20px;
 }
 
 .selected-file-card[hidden],
@@ -389,7 +396,7 @@ body[data-view="empty"] .selection-pill,
 
 .file-size-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr 130px;
+  grid-template-columns: 1fr 1fr 112px;
   align-items: center;
   text-align: center;
 }
@@ -414,8 +421,8 @@ body[data-view="empty"] .selection-pill,
 }
 
 .saving-ring {
-  width: 124px;
-  height: 124px;
+  width: 106px;
+  height: 106px;
   margin-left: auto;
   border: 9px solid #36af58;
   border-left-color: #cfe9d7;
@@ -427,7 +434,7 @@ body[data-view="empty"] .selection-pill,
 
 .saving-ring span {
   color: var(--green);
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 900;
   line-height: 1;
 }

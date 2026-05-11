@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyOptimizationResultToBatchItem,
   batchItemMetaText,
+  selectionModeForPaths,
   summarizeBatchItems
 } from "../src/shared/batchView.js";
 import type { BatchItemLike } from "../src/shared/batchView.js";
@@ -31,6 +32,12 @@ describe("batchView helpers", () => {
     ]);
 
     expect(summary.text).toBe("선택: 2개 파일 · 총 원본 용량: 82.00 MiB");
+  });
+
+  it("routes one selected path to single mode and multiple selected paths to batch mode", () => {
+    expect(selectionModeForPaths([])).toBe("empty");
+    expect(selectionModeForPaths(["/x/a.hwpx"])).toBe("single");
+    expect(selectionModeForPaths(["/x/a.hwpx", "/x/b.hwpx"])).toBe("batch");
   });
 
   it("renders target status in pending row meta", () => {

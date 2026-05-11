@@ -1,5 +1,6 @@
 import type { HwpxEntryKind, OptimizationOpportunityGroup, OptimizationReport } from "@hwpx-optimizer/core";
 import { OPPORTUNITY_ACTION_LABELS } from "./actionLabels.js";
+import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
 
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
 
@@ -54,7 +55,7 @@ const CATEGORY_ORDER: HwpxEntryKind[] = ["image", "xml", "font", "ole", "bindata
 const ESTIMATED_SAVING_DISPLAY_RATIO = 0.95;
 
 export function createAnalysisViewModel(report: OptimizationReport): AnalysisViewModel {
-  const estimatedSavingRaw = report.opportunityGroups.reduce((sum, group) => sum + group.estimatedSavingBytes, 0);
+  const estimatedSavingRaw = estimateNonOverlappingSavingBytes(report.opportunityGroups);
   const cap = Math.max(0, Math.floor(report.originalSize * ESTIMATED_SAVING_DISPLAY_RATIO));
   const cappedSaving = report.originalSize > 0 ? Math.min(estimatedSavingRaw, cap) : estimatedSavingRaw;
   const wasCapped = estimatedSavingRaw > cappedSaving;

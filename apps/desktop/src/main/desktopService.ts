@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
@@ -18,7 +18,7 @@ export type DesktopSettings = {
 };
 
 export const defaultDesktopSettings: DesktopSettings = {
-  defaultMode: "safe",
+  defaultMode: "balanced",
   saveNextToOriginal: true,
   saveReport: true,
   preventOverwrite: true,
@@ -26,6 +26,8 @@ export const defaultDesktopSettings: DesktopSettings = {
   submissionLimit: { id: "mb20" },
   preservationPreference: "recommended"
 };
+
+const DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES = 200 * 1024 * 1024;
 
 export type DesktopAnalysisResult = {
   filePath: string;
@@ -75,10 +77,11 @@ export async function optimizeDesktopFile(
   onProgress?: (progress: DesktopProgress) => void
 ): Promise<DesktopOptimizeResult> {
   onProgress?.({ percent: 10, item: "Reading HWPX package" });
-  const source = await readFile(input.filePath);
+  let source: Buffer | undefined = await readFile(input.filePath);
 
   onProgress?.({ percent: 35, item: `Optimizing document in ${input.mode} mode` });
   const result = await optimizeByMode(source, input.mode, input.actions);
+  source = undefined;
 
   onProgress?.({ percent: 70, item: "Writing optimized document" });
   const outputPath = await nextOutputPath(
@@ -110,8 +113,15 @@ export async function verifyDesktopFile(filePath: string): Promise<{ ok: true }>
 export async function previewImageDiffs(
   originalPath: string,
   optimizedPath: string,
-  options: { maxItems?: number } = {}
+  options: { maxItems?: number; maxInputBytes?: number } = {}
 ): Promise<ImagePreviewPair[]> {
+  const [originalStat, optimizedStat] = await Promise.all([stat(originalPath), stat(optimizedPath)]);
+  const maxInputBytes = options.maxInputBytes ?? DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES;
+  if (originalStat.size + optimizedStat.size > maxInputBytes) {
+    throw new Error(
+      `Files are too large for image preview (${originalStat.size + optimizedStat.size} bytes; limit ${maxInputBytes} bytes).`
+    );
+  }
   const { extractImageDiffPreviews } = await loadCoreModule();
   const [original, optimized] = await Promise.all([readFile(originalPath), readFile(optimizedPath)]);
   return extractImageDiffPreviews(original, optimized, options);
@@ -139,7 +149,7 @@ export async function nextOutputPath(
   const base = basename(filePath, parsedExt);
   const dir =
     outputMode === "batch"
-      ? outputDirectory ?? join(dirname(filePath), "output")
+      ? join(outputDirectory ?? dirname(filePath), "output")
       : settings.saveNextToOriginal || !outputDirectory
         ? dirname(filePath)
         : outputDirectory;

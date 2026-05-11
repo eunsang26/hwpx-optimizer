@@ -16,6 +16,7 @@ import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/deskto
 import type { DesktopSettings, OptimizationMode } from "./main/desktopService.js";
 
 let mainWindow: BrowserWindow | null = null;
+let activeAnalyzeWorker: Worker | null = null;
 let activeOptimizeWorker: Worker | null = null;
 const isSmokeTest = process.argv.includes("--smoke-test");
 if (isSmokeTest) {
@@ -118,7 +119,12 @@ function registerIpc(): void {
   ipcMain.handle("settings:load", loadSettings);
   ipcMain.handle("settings:save", async (_event, patch: Partial<DesktopSettings>) => saveSettings(patch));
 
-  ipcMain.handle("hwpx:analyze", async (_event, filePath: string) => runAnalyzeWorker(filePath));
+  ipcMain.handle("hwpx:analyze", async (_event, filePath: string) => {
+    if (activeAnalyzeWorker) {
+      throw new Error("Another analysis is already running.");
+    }
+    return runAnalyzeWorker(filePath);
+  });
 
   ipcMain.handle(
     "hwpx:optimize",
@@ -150,12 +156,22 @@ function registerIpc(): void {
     return { cancelled: true };
   });
 
+  ipcMain.handle("hwpx:cancel-analyze", async () => {
+    const worker = activeAnalyzeWorker;
+    if (!worker) return { cancelled: false };
+    await worker.terminate();
+    return { cancelled: true };
+  });
+
   ipcMain.handle("hwpx:verify", async (_event, filePath: string) => verifyDesktopFile(filePath));
 
   ipcMain.handle(
     "hwpx:image-preview",
-    async (_event, input: { originalPath: string; optimizedPath: string; maxItems?: number }) =>
-      previewImageDiffs(input.originalPath, input.optimizedPath, { maxItems: input.maxItems })
+    async (_event, input: { originalPath: string; optimizedPath: string; maxItems?: number; maxInputBytes?: number }) =>
+      previewImageDiffs(input.originalPath, input.optimizedPath, {
+        maxItems: input.maxItems,
+        maxInputBytes: input.maxInputBytes
+      })
   );
 
   ipcMain.handle("shell:show-item", async (_event, filePath: string) => {
@@ -191,12 +207,14 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   await rm(smokeDir, { recursive: true, force: true });
   await mkdir(smokeDir, { recursive: true });
   const smokeInputPath = join(smokeDir, "smoke.hwpx");
+  const smokeSecondInputPath = join(smokeDir, "smoke-second.hwpx");
   const smokeSourcePath = process.env.HWPX_OPT_SMOKE_INPUT;
   const smokeMode = parseSmokeMode(process.env.HWPX_OPT_SMOKE_MODE);
   await writeFile(
     smokeInputPath,
     smokeSourcePath ? await readFileFs(resolve(smokeSourcePath)) : await createSmokeHwpxFixture()
   );
+  await writeFile(smokeSecondInputPath, await createSmokeHwpxFixture());
 
   const result = (await window.webContents.executeJavaScript(`
     new Promise((resolve) => {
@@ -290,6 +308,52 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (!workflow.progressCount || workflow.progressCount < 1) {
     throw new Error("Desktop smoke failed: no optimization progress was emitted");
   }
+
+  const multiDrop = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const dropZone = document.getElementById("drop-zone");
+      const event = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "dataTransfer", {
+        value: {
+          files: [
+            { name: "smoke.hwpx", path: ${JSON.stringify(smokeInputPath)} },
+            { name: "smoke-second.hwpx", path: ${JSON.stringify(smokeSecondInputPath)} }
+          ]
+        }
+      });
+      dropZone.dispatchEvent(event);
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        const rowCount = document.querySelectorAll("#batch-list tr").length;
+        if ((document.body.dataset.view === "batch" && rowCount === 2) || attempts > 80) {
+          resolve({
+            view: document.body.dataset.view,
+            pill: document.getElementById("selection-pill")?.textContent,
+            rowCount,
+            dropHidden: document.getElementById("drop-zone")?.hidden === true
+          });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    view?: string;
+    pill?: string;
+    rowCount?: number;
+    dropHidden?: boolean;
+  };
+
+  if (
+    multiDrop.view !== "batch" ||
+    multiDrop.pill !== "일괄 처리 · 2개 파일" ||
+    multiDrop.rowCount !== 2 ||
+    multiDrop.dropHidden !== true
+  ) {
+    throw new Error(`Desktop smoke failed: multi-file drop did not enter batch view ${JSON.stringify(multiDrop)}`);
+  }
 }
 
 function parseSmokeMode(value: string | undefined): OptimizationMode {
@@ -310,17 +374,30 @@ async function createSmokeHwpxFixture(): Promise<Buffer> {
 function runAnalyzeWorker(filePath: string): Promise<DesktopAnalysisResult> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(join(import.meta.dirname, "main", "analyzeWorker.js"), { workerData: filePath });
+    activeAnalyzeWorker = worker;
+    let settled = false;
+    const settle = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (activeAnalyzeWorker === worker) activeAnalyzeWorker = null;
+      action();
+    };
 
     worker.on("message", (message: AnalyzeWorkerMessage) => {
       if (message.type === "complete") {
-        resolve(message.result);
+        settle(() => resolve(message.result));
       } else if (message.type === "error") {
-        reject(new Error(message.message));
+        settle(() => reject(new Error(message.message)));
       }
     });
-    worker.on("error", reject);
+    worker.on("error", (error) => {
+      settle(() => reject(error));
+    });
     worker.on("exit", (code) => {
-      if (code !== 0) reject(new Error("Analysis worker exited unexpectedly."));
+      settle(() => {
+        if (code === 0) reject(new Error("Analysis worker exited unexpectedly."));
+        else reject(new Error("Analysis cancelled."));
+      });
     });
   });
 }
@@ -330,6 +407,7 @@ function runOptimizeWorker(
     filePath: string;
     mode: OptimizationMode;
     outputDirectory?: string;
+    outputMode?: "single" | "batch";
     actions?: string[];
     settings: DesktopSettings;
   },

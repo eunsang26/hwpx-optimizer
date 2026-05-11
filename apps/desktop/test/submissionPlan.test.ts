@@ -39,12 +39,7 @@ describe("submission optimization plan", () => {
     expect(plan.targetStatus).toBe("target-met");
     expect(plan.targetStatusLabel).toBe("목표 달성 가능");
     expect(plan.actionRows.every((row) => row.checked)).toBe(true);
-    expect(plan.actionRows.map((row) => row.savingLabel)).toEqual([
-      "8.00 MiB",
-      "3.00 MiB",
-      "500.0 KiB",
-      "500.0 KiB"
-    ]);
+    expect(plan.actionRows.map((row) => row.savingLabel)).toEqual(["11.00 MiB", "500.0 KiB", "500.0 KiB"]);
   });
 
   it("creates a custom submission plan when action overrides change defaults", () => {
@@ -163,7 +158,7 @@ describe("submission optimization plan", () => {
     expect(plan.actionRows).toHaveLength(1);
     expect(plan.actionRows[0]).toEqual(
       expect.objectContaining({
-        label: "큰 이미지 적정 크기로 줄이기",
+        label: "이미지 용량 최적화",
         count: 3,
         checked: true,
         savingBytes: 3 * MIB,
@@ -214,7 +209,7 @@ describe("submission optimization plan", () => {
     expect(plan.actionRows).toHaveLength(1);
     expect(plan.actionRows[0]).toEqual(
       expect.objectContaining({
-        label: "큰 이미지 적정 크기로 줄이기",
+        label: "이미지 용량 최적화",
         action: "resize-jpeg",
         checked: false,
         partiallyChecked: true,
@@ -275,6 +270,66 @@ describe("submission optimization plan", () => {
       })
     );
     expect(plan.selectedActions).toEqual(["resize-jpeg"]);
+  });
+
+  it("uses canonical mockup buckets for the automatic plan cards", () => {
+    const plan = createSubmissionPlan({
+      report: reportFixture,
+      limit: { id: "mb20" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+
+    expect(plan.actionRows.map((row) => row.label)).toEqual([
+      "이미지 용량 최적화",
+      "불필요한 이미지 정보 제거",
+      "작성자·편집 흔적 정리"
+    ]);
+    expect(plan.actionRows.map((row) => row.savingLabel)).toEqual(["11.00 MiB", "500.0 KiB", "500.0 KiB"]);
+  });
+
+  it("does not double-count overlapping targets when estimating whether the target will pass", () => {
+    const plan = createSubmissionPlan({
+      report: {
+        ...reportFixture,
+        originalSize: 20 * MIB,
+        opportunityGroups: [
+          {
+            action: "resize-jpeg",
+            label: "Resize JPEG",
+            count: 1,
+            estimatedSavingBytes: 10 * MIB,
+            beforeSize: 15 * MIB,
+            afterSize: 5 * MIB,
+            confidence: "estimated",
+            risk: "medium",
+            visualImpact: "medium",
+            defaultEnabledIn: ["balanced", "aggressive"],
+            targets: ["BinData/a.jpg"]
+          },
+          {
+            action: "strip-metadata",
+            label: "Strip metadata",
+            count: 1,
+            estimatedSavingBytes: 9 * MIB,
+            beforeSize: 10 * MIB,
+            afterSize: MIB,
+            confidence: "estimated",
+            risk: "safe",
+            visualImpact: "none",
+            defaultEnabledIn: ["balanced", "aggressive"],
+            targets: ["BinData/a.jpg"]
+          }
+        ]
+      },
+      limit: { id: "custom", customBytes: 5 * MIB },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+
+    expect(plan.expectedSavingBytes).toBe(10 * MIB);
+    expect(plan.expectedSizeLabel).toBe("10.00 MiB");
+    expect(plan.targetStatus).toBe("target-missed");
   });
 });
 

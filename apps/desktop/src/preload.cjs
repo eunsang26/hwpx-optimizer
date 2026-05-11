@@ -17,6 +17,7 @@ const api = {
   saveSettings: (patch) => ipcRenderer.invoke("settings:save", patch),
   analyze: (filePath) => ipcRenderer.invoke("hwpx:analyze", filePath),
   optimize: (input) => ipcRenderer.invoke("hwpx:optimize", input),
+  cancelAnalyze: () => ipcRenderer.invoke("hwpx:cancel-analyze"),
   cancelOptimize: () => ipcRenderer.invoke("hwpx:cancel-optimize"),
   onOptimizeProgress: (callback) => {
     const listener = (_event, progress) => callback(progress);

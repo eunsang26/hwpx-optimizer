@@ -1,10 +1,12 @@
 import type { OptimizationOpportunityGroup, OptimizationReport } from "@hwpx-optimizer/core";
+import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
 import { createActionToggles, formatBytes, type OptimizationMode } from "./viewModel.js";
 
 export type SubmissionLimitId = "none" | "mb10" | "mb20" | "mb50" | "custom";
 export type PreservationPreference = "preserve" | "recommended" | "size";
 export type PlanStatus = "target-met" | "target-missed" | "already-under-target" | "no-target";
 export type PlanKind = "automatic" | "custom";
+export type SubmissionActionBucket = "image" | "metadata" | "author";
 export type SubmissionActionId = OptimizationOpportunityGroup["action"];
 
 export type SubmissionLimit = {
@@ -22,6 +24,7 @@ export type SubmissionActionRow = {
   action: SubmissionActionId;
   actions: SubmissionActionId[];
   selectedActions: SubmissionActionId[];
+  bucket: SubmissionActionBucket;
   label: string;
   count: number;
   checked: boolean;
@@ -73,14 +76,31 @@ export const PRESERVATION_LABELS: Record<PreservationPreference, string> = {
 };
 
 const ACTION_DISPLAY_LABELS: Partial<Record<OptimizationOpportunityGroup["action"], string>> = {
-  "resize-jpeg": "큰 이미지 적정 크기로 줄이기",
-  "resize-png": "큰 이미지 적정 크기로 줄이기",
-  "convert-bmp-to-png": "큰 이미지 적정 크기로 줄이기",
-  "convert-tiff-to-png": "큰 이미지 적정 크기로 줄이기",
-  "consolidate-duplicate-images": "중복 이미지 정리",
-  "strip-metadata": "이미지 불필요 정보 제거",
-  "optimize-png": "이미지 불필요 정보 제거",
-  "clean-shape-comment": "개인정보 흔적 정리"
+  "resize-jpeg": "이미지 용량 최적화",
+  "resize-png": "이미지 용량 최적화",
+  "convert-bmp-to-png": "이미지 용량 최적화",
+  "convert-tiff-to-png": "이미지 용량 최적화",
+  "consolidate-duplicate-images": "이미지 용량 최적화",
+  "strip-metadata": "불필요한 이미지 정보 제거",
+  "optimize-png": "불필요한 이미지 정보 제거",
+  "clean-shape-comment": "작성자·편집 흔적 정리"
+};
+
+const ACTION_BUCKETS: Partial<Record<OptimizationOpportunityGroup["action"], SubmissionActionBucket>> = {
+  "resize-jpeg": "image",
+  "resize-png": "image",
+  "convert-bmp-to-png": "image",
+  "convert-tiff-to-png": "image",
+  "consolidate-duplicate-images": "image",
+  "strip-metadata": "metadata",
+  "optimize-png": "metadata",
+  "clean-shape-comment": "author"
+};
+
+const ACTION_BUCKET_ORDER: Record<SubmissionActionBucket, number> = {
+  image: 0,
+  metadata: 1,
+  author: 2
 };
 
 const SUMMARY_SAVING_GRANULARITY_BYTES = 1024 * 1024;
@@ -110,15 +130,18 @@ export function createSubmissionPlan(
   const input = normalizeInput(reportOrInput, maybeInput);
   const mode = modeForPreservation(input.preservationPreference);
   const toggles = createActionToggles(report, mode);
-  const savingByAction = new Map(report.opportunityGroups.map((group) => [group.action, group.estimatedSavingBytes]));
+  const groupByAction = new Map(report.opportunityGroups.map((group) => [group.action, group]));
   const rawActionRows = toggles.map((toggle) => {
+    const group = groupByAction.get(toggle.action);
     const override = input.actionOverrides.get(toggle.action);
     const checked = override ?? toggle.defaultEnabledForMode;
-    const savingBytes = savingByAction.get(toggle.action) ?? 0;
+    const savingBytes = group?.estimatedSavingBytes ?? 0;
+    const bucket = actionBucket(toggle.action);
     return {
       action: toggle.action,
       actions: [toggle.action],
       selectedActions: checked ? [toggle.action] : [],
+      bucket,
       label: ACTION_DISPLAY_LABELS[toggle.action] ?? toggle.label,
       count: toggle.count,
       checked,
@@ -126,7 +149,8 @@ export function createSubmissionPlan(
       savingBytes,
       savingLabel: formatBytes(savingBytes),
       risk: toggle.risk,
-      visualImpact: toggle.visualImpact
+      visualImpact: toggle.visualImpact,
+      group
     };
   });
   const actionRows = aggregateActionRows(rawActionRows);
@@ -135,9 +159,8 @@ export function createSubmissionPlan(
     return override !== undefined && override !== toggle.defaultEnabledForMode;
   });
   const selectedActions = rawActionRows.filter((row) => row.checked).map((row) => row.action);
-  const rawExpectedSavingBytes = rawActionRows.reduce(
-    (sum, row) => (row.checked ? sum + row.savingBytes : sum),
-    0
+  const rawExpectedSavingBytes = estimateNonOverlappingSavingBytes(
+    rawActionRows.flatMap((row) => (row.checked && row.group ? [row.group] : []))
   );
   const savingCapBytes =
     report.originalSize > 0
@@ -170,39 +193,59 @@ export function createSubmissionPlan(
   };
 }
 
-function aggregateActionRows(actionRows: SubmissionActionRow[]): SubmissionActionRow[] {
-  const rowsByLabel = new Map<string, SubmissionActionRow>();
-  const selectedSavingByLabel = new Map<string, number>();
-  for (const row of actionRows) {
-    if (row.checked) {
-      selectedSavingByLabel.set(row.label, (selectedSavingByLabel.get(row.label) ?? 0) + row.savingBytes);
+type RawSubmissionActionRow = SubmissionActionRow & {
+  group?: OptimizationOpportunityGroup;
+};
+
+function aggregateActionRows(actionRows: RawSubmissionActionRow[]): SubmissionActionRow[] {
+  const rowsByBucket = new Map<
+    SubmissionActionBucket,
+    RawSubmissionActionRow & {
+      groups: OptimizationOpportunityGroup[];
+      selectedGroups: OptimizationOpportunityGroup[];
     }
-    const existing = rowsByLabel.get(row.label);
+  >();
+  for (const row of actionRows) {
+    const existing = rowsByBucket.get(row.bucket);
     if (!existing) {
-      rowsByLabel.set(row.label, { ...row, actions: [...row.actions] });
+      rowsByBucket.set(row.bucket, {
+        ...row,
+        actions: [...row.actions],
+        groups: row.group ? [row.group] : [],
+        selectedGroups: row.checked && row.group ? [row.group] : []
+      });
       continue;
     }
     existing.actions.push(...row.actions);
     existing.selectedActions.push(...row.selectedActions);
     existing.count += row.count;
     existing.checked = existing.checked && row.checked;
-    existing.savingBytes += row.savingBytes;
-    existing.savingLabel = formatBytes(existing.savingBytes);
     existing.risk = highestRisk(existing.risk, row.risk);
     existing.visualImpact = highestVisualImpact(existing.visualImpact, row.visualImpact);
+    if (row.group) existing.groups.push(row.group);
+    if (row.checked && row.group) existing.selectedGroups.push(row.group);
   }
-  return [...rowsByLabel.values()].map((row) => {
-    const selectedSavingBytes = selectedSavingByLabel.get(row.label) ?? row.savingBytes;
+
+  return [...rowsByBucket.values()]
+    .sort((left, right) => ACTION_BUCKET_ORDER[left.bucket] - ACTION_BUCKET_ORDER[right.bucket])
+    .map((row) => {
     const partiallyChecked = row.selectedActions.length > 0 && row.selectedActions.length < row.actions.length;
-    if (row.selectedActions.length === 0) return { ...row, partiallyChecked };
+    const estimatedGroups = row.selectedGroups.length > 0 ? row.selectedGroups : row.groups;
+    const savingBytes = estimateNonOverlappingSavingBytes(estimatedGroups);
+    const { group: _group, groups: _groups, selectedGroups: _selectedGroups, ...publicRow } = row;
+    if (row.selectedActions.length === 0) return { ...publicRow, partiallyChecked, savingBytes, savingLabel: formatBytes(savingBytes) };
     return {
-      ...row,
+      ...publicRow,
       action: row.selectedActions[0],
       partiallyChecked,
-      savingBytes: selectedSavingBytes,
-      savingLabel: formatBytes(selectedSavingBytes)
+      savingBytes,
+      savingLabel: formatBytes(savingBytes)
     };
   });
+}
+
+function actionBucket(action: OptimizationOpportunityGroup["action"]): SubmissionActionBucket {
+  return ACTION_BUCKETS[action] ?? "image";
 }
 
 function highestRisk(
