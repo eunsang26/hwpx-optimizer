@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { isSafePackagePath, readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture } from "./fixtures.js";
 
+const protectedDocumentMessage = /보안 처리된 문서는 최적화 대상이 아닙니다/;
+
 describe("readHwpxPackage", () => {
   it("reads entries from a valid HWPX zip buffer", async () => {
     const fixture = await createHwpxFixture({
@@ -23,6 +25,31 @@ describe("readHwpxPackage", () => {
 
   it("fails clearly for an invalid zip buffer", async () => {
     await expect(readHwpxPackage(Buffer.from("not a zip"))).rejects.toThrow(/Invalid HWPX package/);
+  });
+
+  it("fails clearly for an encrypted HWPX zip package", async () => {
+    await expect(readHwpxPackage(createEncryptedZipHeaderFixture())).rejects.toThrow(protectedDocumentMessage);
+  });
+
+  it("fails clearly when protected HWPX signature entries are present", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "_xmlsignatures/sig1.xml": "<Signature />"
+      }
+    });
+
+    await expect(readHwpxPackage(fixture)).rejects.toThrow(protectedDocumentMessage);
+  });
+
+  it("fails clearly when protected HWPX metadata is present", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf":
+          '<opf:package xmlns:opf="http://www.idpf.org/2007/opf"><opf:metadata><opf:meta name="documentProtection" content="readOnly" /></opf:metadata></opf:package>'
+      }
+    });
+
+    await expect(readHwpxPackage(fixture)).rejects.toThrow(protectedDocumentMessage);
   });
 
   it("fails clearly when required HWPX package files are missing", async () => {
@@ -58,3 +85,30 @@ describe("readHwpxPackage", () => {
     );
   });
 });
+
+function createEncryptedZipHeaderFixture(): Buffer {
+  const fileName = Buffer.from("Contents/content.hpf");
+  const localHeader = Buffer.alloc(30);
+  localHeader.writeUInt32LE(0x04034b50, 0);
+  localHeader.writeUInt16LE(20, 4);
+  localHeader.writeUInt16LE(1, 6);
+  localHeader.writeUInt16LE(0, 8);
+  localHeader.writeUInt16LE(fileName.length, 26);
+
+  const centralHeader = Buffer.alloc(46);
+  centralHeader.writeUInt32LE(0x02014b50, 0);
+  centralHeader.writeUInt16LE(20, 4);
+  centralHeader.writeUInt16LE(20, 6);
+  centralHeader.writeUInt16LE(1, 8);
+  centralHeader.writeUInt16LE(0, 10);
+  centralHeader.writeUInt16LE(fileName.length, 28);
+
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(centralHeader.length + fileName.length, 12);
+  end.writeUInt32LE(localHeader.length + fileName.length, 16);
+
+  return Buffer.concat([localHeader, fileName, centralHeader, fileName, end]);
+}

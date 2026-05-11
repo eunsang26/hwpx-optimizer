@@ -208,6 +208,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           resolve({
             title: document.title,
             fileName: document.getElementById("file-name")?.textContent,
+            safetyText: document.getElementById("safety-text")?.textContent,
             appReady: document.body.dataset.appReady,
             preloadApi: document.body.dataset.preloadApi,
             settingsOpen: document.getElementById("settings-panel")?.classList.contains("is-open"),
@@ -223,6 +224,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   `)) as {
     title?: string;
     fileName?: string;
+    safetyText?: string;
     appReady?: string;
     preloadApi?: string;
     settingsOpen?: boolean;
@@ -235,6 +237,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   }
   if (result.fileName !== "HWPX 파일을 끌어오거나 선택하세요") {
     throw new Error(`Desktop smoke failed: renderer did not load expected start view`);
+  }
+  if (!result.safetyText?.includes("보안 문서")) {
+    throw new Error(`Desktop smoke failed: local security policy text is missing`);
   }
   if (result.appReady !== "true" || result.preloadApi !== "ready") {
     throw new Error(`Desktop smoke failed: renderer/preload init did not complete`);
