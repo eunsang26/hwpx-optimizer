@@ -1,4 +1,5 @@
 import type { OptimizationOpportunityGroup } from "@hwpx-optimizer/core";
+import { APPLIED_ACTION_LABELS } from "./actionLabels.js";
 import type { OptimizationMode } from "./viewModel.js";
 
 export type BatchItemStatus = "pending" | "running" | "done" | "failed" | "cancelled";
@@ -44,24 +45,8 @@ export function warningLabel(warning: string): string {
   return warning;
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  "remove-exif": "이미지 메타데이터 제거",
-  "compress-image": "이미지 무손실 최적화",
-  "strip-metadata": "이미지 메타데이터 제거",
-  "optimize-png": "PNG 무손실 최적화",
-  "resize-jpeg": "큰 JPEG 리사이즈",
-  "resize-png": "큰 PNG 리사이즈",
-  "convert-bmp-to-png": "BMP를 PNG로 변환",
-  "convert-tiff-to-png": "TIFF를 PNG로 변환",
-  "remove-unused": "미사용 리소스 제거",
-  "minify-xml": "문서 XML 정리",
-  "repack-zip": "HWPX 재압축",
-  "clean-shape-comment": "이미지 설명 메타데이터 정리",
-  "consolidate-duplicate-images": "중복 이미지 참조 정리"
-};
-
 export function actionLabel(action: string): string {
-  return ACTION_LABELS[action] ?? action;
+  return (APPLIED_ACTION_LABELS as Record<string, string>)[action] ?? action;
 }
 
 export function modeLabel(mode: OptimizationMode): string {

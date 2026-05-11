@@ -1,4 +1,5 @@
 import { buildManifestPathById, parseTagAttributes } from "./manifest.js";
+import { normalizeImagePath } from "./packagePath.js";
 import type { HwpxPackage, ImageDisplayReference } from "./types.js";
 
 const HWP_UNITS_PER_96_DPI_PIXEL = 75;
@@ -84,14 +85,6 @@ function parsePositiveInteger(value?: string): number | null {
   if (!value) return null;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function normalizeImagePath(value: string): string | null {
-  const cleaned = value.replace(/^#/, "").replace(/^\.?\//, "").replace(/\\/g, "/");
-  const binDataIndex = cleaned.toLowerCase().indexOf("bindata/");
-  if (binDataIndex >= 0) return cleaned.slice(binDataIndex);
-  if (/\.(png|jpg|jpeg|bmp|gif|tif|tiff|webp)$/i.test(cleaned)) return cleaned;
-  return null;
 }
 
 function hwpUnitsToPx96(value: number): number {

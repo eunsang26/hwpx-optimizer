@@ -48,7 +48,10 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
         { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
       ],
       opportunities,
-      warnings: ["Safe mode did not produce a smaller file; original package bytes returned."]
+      warnings: [
+        "Safe mode did not produce a smaller file; original package bytes returned.",
+        ...optimized.warnings
+      ]
     });
     return { output: input, report };
   }
@@ -64,7 +67,8 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
     planned: plan.actions,
     applied,
     skipped: optimized.skipped,
-    opportunities
+    opportunities,
+    warnings: optimized.warnings.length > 0 ? optimized.warnings : undefined
   });
   return { output, report };
 }
@@ -154,7 +158,7 @@ async function optimizeHwpxBufferAdvanced(
         { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
       ],
       opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
-      warnings: [settings.rollbackWarning, ...(settings.warnings ?? [])]
+      warnings: [settings.rollbackWarning, ...(settings.warnings ?? []), ...optimized.warnings]
     });
     return { output: input, report };
   }
@@ -163,6 +167,7 @@ async function optimizeHwpxBufferAdvanced(
     ...optimized.applied,
     { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
   ];
+  const combinedWarnings = [...(settings.warnings ?? []), ...optimized.warnings];
   const report = createOptimizationReport({
     analysis,
     originalSize: input.byteLength,
@@ -171,7 +176,7 @@ async function optimizeHwpxBufferAdvanced(
     applied,
     skipped: optimized.skipped,
     opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
-    warnings: settings.warnings
+    warnings: combinedWarnings.length > 0 ? combinedWarnings : undefined
   });
   return { output, report };
 }

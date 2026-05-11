@@ -4,6 +4,7 @@ import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageActionWithBudget } from "./opportunities.js";
 import type { ImageOptimizationProfile, TransformImageAction } from "./opportunities.js";
+import { normalizePackagePath } from "./packagePath.js";
 import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan } from "./types.js";
 import { getStringAttribute, getXmlAttributes, isXmlNode, setAttribute } from "./xmlNode.js";
 import type { XmlNode } from "./xmlNode.js";
@@ -14,7 +15,7 @@ export async function applyBalancedOptimizationPlan(input: {
   pkg: HwpxPackage;
   plan: OptimizationPlan;
   profile?: ImageOptimizationProfile;
-}): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[] }> {
+}): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[] }> {
   const profile = input.profile ?? balancedImageProfile;
   const duplicateTargets = new Set(
     input.plan.actions.filter((action) => action.type === "consolidate-duplicate-images").map((action) => action.target)
@@ -22,6 +23,7 @@ export async function applyBalancedOptimizationPlan(input: {
   const consolidated = await consolidateDuplicateImages(input.pkg, duplicateTargets);
   const applied: AppliedAction[] = [...consolidated.applied];
   const skipped: AppliedAction[] = [...consolidated.skipped];
+  const warnings: string[] = [];
   const transformTargets = new Set(
     input.plan.actions
       .filter(
@@ -82,7 +84,9 @@ export async function applyBalancedOptimizationPlan(input: {
         return { ...task, status: "skipped", size: transformed.data.byteLength };
       }
       return { ...task, status: "transformed", outputPath: transformed.outputPath, data: transformed.data };
-    } catch {
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      warnings.push(`${task.action} skipped for ${task.entry.path}: ${reason}`);
       return { ...task, status: "skipped" };
     }
   });
@@ -136,7 +140,7 @@ export async function applyBalancedOptimizationPlan(input: {
     return { ...entry, data, size: data.byteLength };
   });
 
-  return { pkg: { entries }, applied, skipped };
+  return { pkg: { entries }, applied, skipped, warnings };
 }
 
 async function consolidateDuplicateImages(
@@ -389,19 +393,3 @@ function findUpdatedPackagePath(value: string, pathUpdates: Map<string, string>)
   return normalized ? pathUpdates.get(normalized) ?? null : null;
 }
 
-function normalizePackagePath(value: string): string | null {
-  const cleaned = decodePath(value.trim()).replace(/^#/, "").replace(/^\.?\//, "").replace(/\\/g, "/");
-  const binDataIndex = cleaned.toLowerCase().indexOf("bindata/");
-  if (binDataIndex < 0) return null;
-  const resourcePath = cleaned.slice(binDataIndex);
-  if (resourcePath.split("/").some((segment) => segment === ".." || segment === "." || segment === "")) return null;
-  return resourcePath;
-}
-
-function decodePath(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}

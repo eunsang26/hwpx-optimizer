@@ -1,4 +1,5 @@
 import { buildManifestPathById } from "./manifest.js";
+import { BIN_DATA_PREFIX, normalizePackagePath } from "./packagePath.js";
 import type { HwpxPackage, ReferenceGraph, ResourceReference } from "./types.js";
 
 export function buildReferenceGraph(pkg: HwpxPackage): ReferenceGraph {
@@ -74,30 +75,11 @@ function markReference(input: {
   if (resource) {
     resource.referenced = true;
     resource.refs.push(input.referrer);
-  } else if (input.path.startsWith("BinData/")) {
+  } else if (input.path.startsWith(BIN_DATA_PREFIX)) {
     input.missingReferences.push(input.path);
   }
 }
 
 function isPackageManifest(path: string): boolean {
   return path === "Contents/content.hpf";
-}
-
-function normalizePackagePath(value: string): string | null {
-  const cleaned = decodePath(value.trim()).replace(/^#/, "").replace(/^\.?\//, "").replace(/\\/g, "/");
-  const binDataIndex = cleaned.toLowerCase().indexOf("bindata/");
-  if (binDataIndex >= 0) {
-    const resourcePath = cleaned.slice(binDataIndex);
-    if (resourcePath.split("/").some((segment) => segment === ".." || segment === "." || segment === "")) return null;
-    return resourcePath;
-  }
-  return null;
-}
-
-function decodePath(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }

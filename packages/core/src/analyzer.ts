@@ -90,7 +90,7 @@ async function inspectImage(
   }
 
   try {
-    const metadata = await sharp(data).metadata();
+    const metadata = await sharp(data).rotate().metadata();
     const metadataFormat = metadata.format ? String(metadata.format) : undefined;
     return {
       path,

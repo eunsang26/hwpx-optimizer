@@ -20,6 +20,13 @@ const PSNR_MINIMUM_DB: Record<Exclude<VerifyMode, "safe">, number> = {
 };
 
 export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutputOptions = {}): Promise<void> {
+  const hasOriginal = options.original !== undefined;
+  const hasMode = options.mode !== undefined;
+  if (hasOriginal !== hasMode) {
+    throw new Error(
+      "verifyHwpxOutput requires both `original` and `mode` for cross-package verification, or neither."
+    );
+  }
   const pkg = await readHwpxPackage(output);
   verifyParsedXml(pkg);
   const graph = buildReferenceGraph(pkg);

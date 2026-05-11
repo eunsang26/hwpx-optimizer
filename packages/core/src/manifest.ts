@@ -1,7 +1,14 @@
+import { XMLParser } from "fast-xml-parser";
 import type { HwpxPackage } from "./types.js";
 
-const ITEM_PATTERN = /<(?:\w+:)?item\b([^>]*)>/gi;
 const ATTRIBUTE_PATTERN = /([\w:-]+)=["']([^"']*)["']/g;
+
+const ITEM_PARSER = new XMLParser({
+  ignoreAttributes: false,
+  preserveOrder: true,
+  attributeNamePrefix: "",
+  removeNSPrefix: true
+});
 
 export type ManifestItem = {
   id: string;
@@ -10,13 +17,36 @@ export type ManifestItem = {
 
 export function extractManifestItems(xml: string): ManifestItem[] {
   const items: ManifestItem[] = [];
-  for (const match of xml.matchAll(ITEM_PATTERN)) {
-    const attrs = parseTagAttributes(match[1] ?? "");
-    if (typeof attrs.id === "string" && typeof attrs.href === "string") {
-      items.push({ id: attrs.id, href: attrs.href });
-    }
+  let document: unknown;
+  try {
+    document = ITEM_PARSER.parse(xml);
+  } catch {
+    return items;
   }
+  collectItems(document, items);
   return items;
+}
+
+function collectItems(node: unknown, items: ManifestItem[]): void {
+  if (Array.isArray(node)) {
+    for (const child of node) collectItems(child, items);
+    return;
+  }
+  if (!node || typeof node !== "object") return;
+  const record = node as Record<string, unknown>;
+  for (const [key, value] of Object.entries(record)) {
+    if (key === ":@") continue;
+    if (key.toLowerCase() === "item" || key.toLowerCase().endsWith(":item")) {
+      const attrs = (record[":@"] as Record<string, unknown> | undefined) ?? {};
+      const id = attrs.id;
+      const href = attrs.href;
+      if (typeof id === "string" && typeof href === "string") {
+        items.push({ id, href });
+      }
+    }
+    if (Array.isArray(value)) collectItems(value, items);
+    else if (value && typeof value === "object") collectItems(value, items);
+  }
 }
 
 export function buildManifestPathById(pkg: HwpxPackage, transform: (href: string) => string | null): Map<string, string> {

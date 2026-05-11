@@ -283,7 +283,7 @@ describe("runCli", () => {
 
     const code = await runCli(["batch", inputDir, "--mode", "safe", "--out", outDir]);
 
-    expect(code).toBe(0);
+    expect(code).toBe(1);
     expect((await readFile(join(outDir, "good.optimized.hwpx"))).byteLength).toBeGreaterThan(0);
     const summary = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8")) as {
       results: Array<{ input: string; status: "optimized" | "failed"; error?: string }>;

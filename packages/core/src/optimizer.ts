@@ -5,9 +5,10 @@ import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 export async function applySafeOptimizationPlan(input: {
   pkg: HwpxPackage;
   plan: OptimizationPlan;
-}): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[] }> {
+}): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[] }> {
   const applied: AppliedAction[] = [];
   const skipped: AppliedAction[] = [];
+  const warnings: string[] = [];
   const removeTargets = new Set(
     input.plan.actions.filter((action) => action.type === "remove-unused").map((action) => action.target)
   );
@@ -36,8 +37,9 @@ export async function applySafeOptimizationPlan(input: {
           continue;
         }
         skipped.push({ type: "strip-metadata", target: entry.path, beforeSize: entry.size });
-      } catch {
+      } catch (error) {
         skipped.push({ type: "strip-metadata", target: entry.path, beforeSize: entry.size });
+        warnings.push(`strip-metadata skipped for ${entry.path}: ${describeError(error)}`);
       }
     }
 
@@ -58,8 +60,9 @@ export async function applySafeOptimizationPlan(input: {
           continue;
         }
         skipped.push({ type: "optimize-png", target: entry.path, beforeSize: entry.size });
-      } catch {
+      } catch (error) {
         skipped.push({ type: "optimize-png", target: entry.path, beforeSize: entry.size });
+        warnings.push(`optimize-png skipped for ${entry.path}: ${describeError(error)}`);
       }
     }
 
@@ -76,15 +79,20 @@ export async function applySafeOptimizationPlan(input: {
           continue;
         }
         skipped.push({ type: "minify-xml", target: entry.path, beforeSize: entry.size, afterSize: data.byteLength });
-      } catch {
+      } catch (error) {
         skipped.push({ type: "minify-xml", target: entry.path, beforeSize: entry.size });
+        warnings.push(`minify-xml skipped for ${entry.path}: ${describeError(error)}`);
       }
     }
 
     entries.push(entry);
   }
 
-  return { pkg: { entries }, applied, skipped };
+  return { pkg: { entries }, applied, skipped, warnings };
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function minifyXml(xml: string): string {

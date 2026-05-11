@@ -62,7 +62,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const summary = await runBatch(inputPath, options);
       console.log(`Batch complete: ${summary.optimized} optimized, ${summary.failed} failed`);
       console.log(`Report: ${summary.reportPath}`);
-      return 0;
+      return summary.failed > 0 ? 1 : 0;
     }
 
     if (command === "optimize") {
@@ -423,10 +423,18 @@ function formatBytes(bytes: number): string {
 
 function parseActionList(value?: string): string[] | undefined {
   if (!value) return undefined;
-  return value
+  const actions = value
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+  const allowed = new Set(ACTION_CATALOG.map((item) => item.action));
+  const unknown = actions.filter((action) => !allowed.has(action));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown --actions: ${unknown.join(", ")}. Run "hwpx-opt list-actions" to see valid actions.`
+    );
+  }
+  return actions;
 }
 
 type OptimizationMode = "safe" | "balanced" | "aggressive";
