@@ -7,7 +7,7 @@ if (!electronApi) {
   throw new Error("Electron API bridge was not initialized.");
 }
 
-const { app, BrowserWindow: BrowserWindowClass, dialog, ipcMain, shell, session } = electronApi;
+const { app, BrowserWindow: BrowserWindowClass, dialog, ipcMain, shell, session, Menu } = electronApi;
 import { mkdir, readFile as readFileFs, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -32,13 +32,16 @@ if (isSmokeTest) {
 }
 
 async function createWindow(): Promise<BrowserWindow> {
+  Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindowClass({
-    width: 1180,
-    height: 780,
-    minWidth: 920,
-    minHeight: 640,
+    width: 1080,
+    height: 590,
+    minWidth: 1000,
+    minHeight: 560,
+    useContentSize: true,
     show: !isSmokeTest,
     title: "HWPX 보고서 용량 최적화",
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,

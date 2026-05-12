@@ -148,6 +148,7 @@ const planTitle = requireElement("plan-title");
 const planSummary = requireElement("plan-summary");
 const planTotal = requireElement("plan-total");
 const analysisDetailSummary = requireElement("analysis-detail-summary");
+const analysisDetails = requireElement("analysis-details") as HTMLDetailsElement;
 const selectionPill = requireElement("selection-pill");
 const selectedFileCard = requireElement("selected-file-card");
 const selectedFileName = requireElement("selected-file-name");
@@ -605,6 +606,9 @@ function renderSingleSummary(plan: SubmissionPlan): void {
   singleExpectedSize.textContent = plan.expectedSizeLabel.replace(/^약 /, "");
   const savingPercent = percentFromPlan(plan);
   singleSavingRing.textContent = `${savingPercent.toFixed(2)}%`;
+  const ringDeg = Math.max(0, Math.min(360, (savingPercent / 100) * 360));
+  const ringHost = singleSavingRing.closest(".saving-ring") as HTMLElement | null;
+  if (ringHost) ringHost.style.setProperty("--ring-deg", `${ringDeg.toFixed(1)}deg`);
   summaryOriginal.textContent = plan.originalSizeLabel;
   summaryExpected.textContent = plan.expectedSizeLabel.replace(/^약 /, "");
   summarySaving.textContent = plan.expectedSavingLabel.replace(/^최대 /, "");
@@ -784,7 +788,10 @@ function renderAnalysis(report: OptimizationReport): void {
   const view = createAnalysisViewModel(report);
   selectedOriginalMeta.textContent = `원본 크기: ${view.originalSizeLabel}`;
   selectedModifiedMeta.textContent = `수정일: ${new Date().toISOString().slice(0, 16).replace("T", " ")}`;
-  analysisDetailSummary.textContent = `세부 분석 보기 · 예상 절감 ${view.estimatedSavingLabel}`;
+  analysisDetails.open = false;
+  analysisDetailSummary.innerHTML = `<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>예상 절감 ${escapeHtml(
+    view.estimatedSavingLabel
+  )}</span>`;
   analysisGrid.innerHTML = [
     metricHtml("원본 용량", view.originalSizeLabel),
     metricHtml("이미지", String(view.imageCount)),

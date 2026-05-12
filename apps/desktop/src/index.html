@@ -13,23 +13,24 @@
   <body data-view="empty">
     <main class="shell">
       <header class="local-strip">
-        <div class="local-copy">
-          <span class="shield-icon" aria-hidden="true"></span>
+        <div class="brand-row">
+          <span class="brand-mark" aria-hidden="true"></span>
           <strong class="app-title">HWPX 보고서 용량 최적화</strong>
-          <span id="safety-text">
-            로컬에서만 처리하며 원본은 보존합니다. 보안 문서는 우회하지 않고 최근 파일·처리 이력·내부 로그를 저장하지 않습니다.
-          </span>
-          <span id="status-text" class="sr-only">대기 중입니다.</span>
+          <div class="top-actions">
+            <button type="button" class="chrome-button" title="도움말" aria-label="도움말">
+              <span class="help-icon" aria-hidden="true"></span>
+              도움말
+            </button>
+            <button id="settings-button" type="button" class="chrome-button" title="설정" aria-label="설정">
+              <span class="settings-icon" aria-hidden="true"></span>
+              설정
+            </button>
+          </div>
         </div>
-        <div class="top-actions">
-          <button type="button" class="chrome-button" title="도움말" aria-label="도움말">
-            <span class="help-icon" aria-hidden="true"></span>
-            도움말
-          </button>
-          <button id="settings-button" type="button" class="chrome-button" title="설정" aria-label="설정">
-            <span class="settings-icon" aria-hidden="true"></span>
-            설정
-          </button>
+        <div class="safety-row">
+          <span class="shield-icon" aria-hidden="true"></span>
+          <span id="safety-text">원본은 변경하지 않고, 보안 문서 우회 없이 내 PC에서만 처리됩니다.</span>
+          <span id="status-text" class="sr-only">대기 중입니다.</span>
         </div>
       </header>
 
@@ -74,7 +75,7 @@
               </div>
               <div class="drop-copy">
                 <h3 id="file-name">HWPX 파일을 끌어오거나 선택하세요</h3>
-                <p id="file-meta">일반 HWPX만 최적화하며 암호화·DRM·전자서명·권한 제한 문서는 제외합니다.</p>
+                <p id="file-meta">공공기관 제출용 보고서 파일을 안전하게 최적화합니다.</p>
                 <div class="drop-actions">
                   <button id="empty-choose-button" type="button" class="primary-inline icon-text">
                     <span class="folder-icon" aria-hidden="true"></span>
@@ -85,7 +86,7 @@
                     폴더 선택
                   </button>
                 </div>
-                <p class="drop-hint">파일을 선택하면 로컬에서 제출 기준 충족 여부와 예상 절감량을 분석합니다.</p>
+                <p class="drop-hint">파일을 선택하면 제출 기준 충족 여부와 예상 절감량을 분석합니다.</p>
               </div>
             </div>
 
