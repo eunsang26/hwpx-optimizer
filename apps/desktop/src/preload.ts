@@ -14,6 +14,12 @@ const api = {
       return "";
     }
   },
+  registerDroppedHwpxFiles: (files: File[] | FileList): Promise<string[]> => {
+    const paths = Array.from(files)
+      .map((file) => pathForDroppedFile(file))
+      .filter((path) => path.length > 0);
+    return ipcRenderer.invoke("hwpx:register-dropped-paths", paths);
+  },
   loadSettings: () => ipcRenderer.invoke("settings:load"),
   saveSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("settings:save", patch),
   analyze: (filePath: string) => ipcRenderer.invoke("hwpx:analyze", filePath),
@@ -41,3 +47,15 @@ const api = {
 contextBridge.exposeInMainWorld("hwpxOptimizer", api);
 
 export type HwpxOptimizerApi = typeof api;
+
+function pathForDroppedFile(file: File): string {
+  if (!file) return "";
+  try {
+    const path = webUtils.getPathForFile(file);
+    if (path) return path;
+  } catch {
+    // Fall back below for smoke tests and older Electron drop payloads.
+  }
+  const legacyPath = (file as File & { path?: string }).path;
+  return typeof legacyPath === "string" ? legacyPath : "";
+}

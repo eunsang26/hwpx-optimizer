@@ -145,11 +145,23 @@ function registerIpc(): void {
   ipcMain.handle("settings:load", loadSettings);
   ipcMain.handle("settings:save", async (_event, patch: DesktopSettingsPatch) => saveSettings(patch));
 
+  ipcMain.handle("hwpx:register-dropped-paths", async (_event, paths: unknown) => {
+    if (!Array.isArray(paths)) {
+      throw new Error("드롭한 파일 경로가 올바르지 않습니다.");
+    }
+    const registered: string[] = [];
+    for (const filePath of paths) {
+      if (typeof filePath !== "string") continue;
+      registered.push(await registerAllowedInputPath(filePath));
+    }
+    return registered;
+  });
+
   ipcMain.handle("hwpx:analyze", async (_event, filePath: string) => {
     if (activeAnalyzeWorker) {
       throw new Error("Another analysis is already running.");
     }
-    const allowedPath = await registerAllowedInputPath(filePath);
+    const allowedPath = await requireAllowedInputPath(filePath);
     return runAnalyzeWorker(allowedPath);
   });
 
@@ -329,6 +341,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     smokeSourcePath ? await readFileFs(resolve(smokeSourcePath)) : await createSmokeHwpxFixture()
   );
   await writeFile(smokeSecondInputPath, await createSmokeHwpxFixture());
+  await registerAllowedInputPath(smokeInputPath);
+  await registerAllowedInputPath(smokeSecondInputPath);
+  await registerAllowedOutputDirectory(smokeDir);
 
   const result = (await window.webContents.executeJavaScript(`
     new Promise((resolve) => {
@@ -367,7 +382,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (result.title !== "HWPX 보고서 용량 최적화") {
     throw new Error(`Desktop smoke failed: unexpected title ${String(result.title)}`);
   }
-  if (result.fileName !== "HWPX 파일을 끌어오거나 선택하세요") {
+  if (result.fileName !== "HWPX 파일 가져오기") {
     throw new Error(`Desktop smoke failed: renderer did not load expected start view`);
   }
   if (!result.safetyText?.includes("보안 문서")) {

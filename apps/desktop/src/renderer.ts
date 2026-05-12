@@ -396,22 +396,17 @@ async function init(): Promise<void> {
       setStatus("HWPX 파일만 선택할 수 있습니다.");
       return;
     }
-    const paths: string[] = [];
-    let unresolved = 0;
-    let nonHwpx = 0;
-    for (const file of Array.from(dropped)) {
-      const path = resolveDroppedFilePath(file);
-      if (!path) {
-        if (file.name.toLowerCase().endsWith(".hwpx")) unresolved += 1;
-        else nonHwpx += 1;
-        continue;
-      }
-      if (path.toLowerCase().endsWith(".hwpx")) {
-        paths.push(path);
-      } else {
-        nonHwpx += 1;
-      }
+    const files = Array.from(dropped);
+    const hwpxFiles = files.filter((file) => file.name.toLowerCase().endsWith(".hwpx"));
+    const nonHwpx = files.length - hwpxFiles.length;
+    let paths: string[] = [];
+    try {
+      paths = await window.hwpxOptimizer.registerDroppedHwpxFiles(hwpxFiles);
+    } catch (error) {
+      setStatus(errorMessage(error));
+      return;
     }
+    const unresolved = Math.max(0, hwpxFiles.length - paths.length);
     if (paths.length === 0) {
       if (unresolved > 0) {
         setStatus("드롭한 파일의 경로를 확인할 수 없습니다. 파일 선택 버튼을 사용하세요.");
@@ -1184,16 +1179,6 @@ async function runBatch(): Promise<void> {
 function selectedActionsForPlan(plan: SubmissionPlan | undefined): string[] | undefined {
   if (!plan || plan.mode === "safe" || plan.kind === "automatic") return undefined;
   return plan.selectedActions;
-}
-
-function resolveDroppedFilePath(file: File): string {
-  const legacyPath = (file as File & { path?: string }).path;
-  if (typeof legacyPath === "string" && legacyPath.length > 0) return legacyPath;
-  const api = window.hwpxOptimizer;
-  if (typeof api?.getPathForFile === "function") {
-    return api.getPathForFile(file);
-  }
-  return "";
 }
 
 function requireElement(id: string): HTMLElement {

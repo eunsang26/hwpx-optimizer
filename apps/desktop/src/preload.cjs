@@ -13,6 +13,12 @@ const api = {
       return "";
     }
   },
+  registerDroppedHwpxFiles: (files) => {
+    const paths = Array.from(files)
+      .map((file) => pathForDroppedFile(file))
+      .filter((path) => path.length > 0);
+    return ipcRenderer.invoke("hwpx:register-dropped-paths", paths);
+  },
   loadSettings: () => ipcRenderer.invoke("settings:load"),
   saveSettings: (patch) => ipcRenderer.invoke("settings:save", patch),
   analyze: (filePath) => ipcRenderer.invoke("hwpx:analyze", filePath),
@@ -31,3 +37,14 @@ const api = {
 };
 
 contextBridge.exposeInMainWorld("hwpxOptimizer", api);
+
+function pathForDroppedFile(file) {
+  if (!file) return "";
+  try {
+    const path = webUtils.getPathForFile(file);
+    if (path) return path;
+  } catch {
+    // Fall back below for smoke tests and older Electron drop payloads.
+  }
+  return typeof file.path === "string" ? file.path : "";
+}

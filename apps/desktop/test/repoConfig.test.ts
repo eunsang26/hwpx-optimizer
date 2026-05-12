@@ -1,0 +1,28 @@
+import { access, readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+
+describe("repository runtime and cleanup configuration", () => {
+  it("pins the Node runtime used by current Vitest and Electron tooling", async () => {
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
+      engines?: { node?: string };
+    };
+
+    expect(packageJson.engines?.node).toBe(">=20.20.0");
+    await expect(readFile(".nvmrc", "utf8")).resolves.toBe("20.20.2\n");
+    await expect(readFile(".node-version", "utf8")).resolves.toBe("20.20.2\n");
+  });
+
+  it("keeps release packaging and local artifact cleanup explicit", async () => {
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.["release:clean"]).toBe("node scripts/clean-release-artifacts.mjs");
+    expect(packageJson.scripts?.["clean:local-artifacts"]).toBe("node scripts/clean-local-artifacts.mjs");
+    expect(packageJson.scripts?.["desktop:pack"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["desktop:pack:win"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["desktop:local:win"]).toMatch(/^npm run release:clean && /);
+    await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
+    await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
+  });
+});

@@ -144,6 +144,10 @@ const api: HwpxOptimizerApi = {
   selectHwpxFolder: async () => ({ directory: "preview-folder", files: [previewPath, "sample3.hwpx"] }),
   selectDirectory: async () => "preview-output",
   getPathForFile: () => previewPath,
+  registerDroppedHwpxFiles: async (files) =>
+    Array.from(files).map(
+      (file, index) => (file as File & { path?: string }).path ?? (index === 0 ? previewPath : "sample3.hwpx")
+    ),
   loadSettings: async () => settings,
   saveSettings: async (patch) => {
     settings = { ...settings, ...patch };
