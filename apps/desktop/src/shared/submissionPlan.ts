@@ -35,6 +35,13 @@ export type SubmissionActionRow = {
   visualImpact: OptimizationOpportunityGroup["visualImpact"];
 };
 
+export type SubmissionPlanNote = {
+  kind: "target" | "quality" | "review";
+  label: string;
+  detail: string;
+  count: number;
+};
+
 export type SubmissionPlan = {
   kind: PlanKind;
   mode: OptimizationMode;
@@ -50,6 +57,7 @@ export type SubmissionPlan = {
   targetStatusLabel: string;
   selectedActions: SubmissionActionId[];
   actionRows: SubmissionActionRow[];
+  planNotes: SubmissionPlanNote[];
 };
 
 type ActionOverrideRecord = Partial<Record<SubmissionActionId, boolean>>;
@@ -189,8 +197,53 @@ export function createSubmissionPlan(
     targetStatus,
     targetStatusLabel: targetStatusLabel(targetStatus),
     selectedActions,
-    actionRows
+    actionRows,
+    planNotes: createPlanNotes({ report, mode, targetBytes, targetStatus })
   };
+}
+
+function createPlanNotes(input: {
+  report: OptimizationReport;
+  mode: OptimizationMode;
+  targetBytes?: number;
+  targetStatus: PlanStatus;
+}): SubmissionPlanNote[] {
+  const notes: SubmissionPlanNote[] = [];
+  if (input.targetBytes && input.targetStatus === "target-missed" && input.mode !== "safe") {
+    notes.push({
+      kind: "target",
+      label: "목표 용량 기반 추가 압축",
+      detail: `${formatBytes(input.targetBytes)} 목표까지 JPEG 품질/크기 후보를 순차 검토`,
+      count: 1
+    });
+  }
+  if (input.mode !== "safe" && input.report.opportunityGroups.some((group) => group.visualImpact !== "none")) {
+    notes.push({
+      kind: "quality",
+      label: "이미지 품질 자동 검증",
+      detail: "PSNR/SSIM 기준을 통과한 이미지 후보만 적용",
+      count: 1
+    });
+  }
+  const nearDuplicateCount = input.report.nearDuplicateImages?.length ?? 0;
+  if (nearDuplicateCount > 0) {
+    notes.push({
+      kind: "review",
+      label: "유사 이미지 확인 필요",
+      detail: `${nearDuplicateCount}개 후보는 자동 병합하지 않음`,
+      count: nearDuplicateCount
+    });
+  }
+  const diagnosticCount = input.report.resourceDiagnostics?.length ?? 0;
+  if (diagnosticCount > 0) {
+    notes.push({
+      kind: "review",
+      label: "폰트/OLE 용량 확인",
+      detail: `${diagnosticCount}개 진단은 자동 제거하지 않음`,
+      count: diagnosticCount
+    });
+  }
+  return notes;
 }
 
 type RawSubmissionActionRow = SubmissionActionRow & {

@@ -1052,7 +1052,7 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 6px;
 }
 .plan-actions > li,
@@ -1103,12 +1103,18 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
   width: 16px; height: 16px;
   background-color: currentColor;
 }
-.plan-card .plan-icon.plan-image  { background: var(--blue-soft);   color: var(--blue); }
-.plan-card .plan-icon.plan-image::before  { -webkit-mask: var(--ic-image) center/contain no-repeat; mask: var(--ic-image) center/contain no-repeat; }
-.plan-card .plan-icon.plan-metadata { background: var(--purple-soft); color: var(--purple); }
-.plan-card .plan-icon.plan-metadata::before { -webkit-mask: var(--ic-trash) center/contain no-repeat; mask: var(--ic-trash) center/contain no-repeat; }
-.plan-card .plan-icon.plan-author { background: var(--teal-soft);   color: var(--teal); }
-.plan-card .plan-icon.plan-author::before { -webkit-mask: var(--ic-user) center/contain no-repeat; mask: var(--ic-user) center/contain no-repeat; }
+.plan-card.plan-image .plan-icon  { background: var(--blue-soft);   color: var(--blue); }
+.plan-card.plan-image .plan-icon::before  { -webkit-mask: var(--ic-image) center/contain no-repeat; mask: var(--ic-image) center/contain no-repeat; }
+.plan-card.plan-metadata .plan-icon { background: var(--purple-soft); color: var(--purple); }
+.plan-card.plan-metadata .plan-icon::before { -webkit-mask: var(--ic-trash) center/contain no-repeat; mask: var(--ic-trash) center/contain no-repeat; }
+.plan-card.plan-author .plan-icon { background: var(--teal-soft);   color: var(--teal); }
+.plan-card.plan-author .plan-icon::before { -webkit-mask: var(--ic-user) center/contain no-repeat; mask: var(--ic-user) center/contain no-repeat; }
+.plan-card.plan-target .plan-icon { background: var(--green-soft); color: var(--green); }
+.plan-card.plan-target .plan-icon::before { -webkit-mask: var(--ic-down) center/contain no-repeat; mask: var(--ic-down) center/contain no-repeat; }
+.plan-card.plan-quality .plan-icon { background: var(--blue-soft); color: var(--blue); }
+.plan-card.plan-quality .plan-icon::before { -webkit-mask: var(--ic-shield-check) center/contain no-repeat; mask: var(--ic-shield-check) center/contain no-repeat; }
+.plan-card.plan-review .plan-icon { background: var(--orange-soft); color: var(--orange); }
+.plan-card.plan-review .plan-icon::before { -webkit-mask: var(--ic-info) center/contain no-repeat; mask: var(--ic-info) center/contain no-repeat; }
 
 .plan-card .plan-copy {
   display: grid;
@@ -1121,7 +1127,7 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
   font-weight: 700;
   line-height: 1.2;
   color: var(--text);
-  letter-spacing: -0.012em;
+  letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

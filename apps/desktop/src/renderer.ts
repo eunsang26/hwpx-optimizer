@@ -527,6 +527,7 @@ function renderPlanActions(plan?: SubmissionPlan): void {
     label: string;
     savingLabel: string;
     kind: string;
+    detail?: string;
     checked?: boolean;
     action?: SubmissionActionId;
     actions?: SubmissionActionId[];
@@ -538,14 +539,22 @@ function renderPlanActions(plan?: SubmissionPlan): void {
   ];
   const displayRows: DisplayPlanRow[] =
     rows.length > 0
-      ? rows.slice(0, 3).map((row) => ({
-          label: row.label,
-          savingLabel: row.savingLabel,
-          kind: row.bucket,
-          checked: row.checked,
-          action: row.action,
-          actions: row.actions
-        }))
+      ? [
+          ...rows.map((row) => ({
+            label: row.label,
+            savingLabel: row.savingLabel,
+            kind: row.bucket,
+            checked: row.checked,
+            action: row.action,
+            actions: row.actions
+          })),
+          ...(plan?.planNotes ?? []).map((note) => ({
+            label: note.label,
+            savingLabel: `${note.count}개`,
+            kind: note.kind,
+            detail: note.detail
+          }))
+        ]
       : fallbackRows;
   actionCheckboxes.innerHTML = displayRows
     .map((row) => {
@@ -556,13 +565,13 @@ function renderPlanActions(plan?: SubmissionPlan): void {
           row.action
         )}" data-actions="${actionsAttr}"${checkedAttr} /><span class="plan-icon" aria-hidden="true"></span><span class="plan-copy"><strong>${escapeHtml(
           row.label
-        )}</strong><em>${planActionDescription(row.kind)}</em></span><span class="plan-saving"><small>예상 절감</small><strong>${escapeHtml(
+        )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>예상 절감</small><strong>${escapeHtml(
           row.savingLabel
         )}</strong></span></label></li>`;
       }
       return `<li class="plan-card plan-${escapeHtml(row.kind)} is-placeholder"><span class="plan-icon" aria-hidden="true"></span><span class="plan-copy"><strong>${escapeHtml(
         row.label
-      )}</strong><em>${planActionDescription(row.kind)}</em></span><span class="plan-saving"><small>예상 절감</small><strong>${escapeHtml(
+      )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>예상 절감</small><strong>${escapeHtml(
         row.savingLabel
       )}</strong></span></li>`;
     })
@@ -570,6 +579,9 @@ function renderPlanActions(plan?: SubmissionPlan): void {
 }
 
 function planActionDescription(kind: string): string {
+  if (kind === "target") return "목표 용량에 맞춰 추가 후보를 검토합니다.";
+  if (kind === "quality") return "품질 기준을 통과한 후보만 적용합니다.";
+  if (kind === "review") return "자동 처리하지 않고 확인 항목으로 표시합니다.";
   if (kind === "author") return "작성자 정보 및 편집 기록 등 개인 정보를 정리합니다.";
   if (kind === "metadata") return "불필요한 메타데이터 및 숨은 정보를 제거합니다.";
   return "이미지 압축 및 크기 조정으로 파일 용량을 줄입니다.";

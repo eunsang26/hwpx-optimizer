@@ -331,6 +331,60 @@ describe("submission optimization plan", () => {
     expect(plan.expectedSizeLabel).toBe("10.00 MiB");
     expect(plan.targetStatus).toBe("target-missed");
   });
+
+  it("surfaces target-aware and review-only diagnostics in the automatic plan", () => {
+    const plan = createSubmissionPlan({
+      report: {
+        ...reportFixture,
+        nearDuplicateImages: [
+          {
+            hash: "near",
+            paths: ["BinData/a.jpg", "BinData/b.jpg"],
+            count: 2,
+            totalBytes: 2 * MIB,
+            wastedBytes: MIB,
+            maxDistance: 4,
+            reason: "Images have similar average hashes and should be reviewed before manual consolidation."
+          }
+        ],
+        resourceDiagnostics: [
+          {
+            type: "large-ole",
+            kind: "ole",
+            paths: ["BinData/embedded.ole"],
+            sizeBytes: 6 * MIB,
+            reason: "Large OLE or attachment resource contributes materially to document size."
+          }
+        ]
+      },
+      limit: { id: "mb10" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+
+    expect(plan.planNotes).toEqual([
+      expect.objectContaining({
+        kind: "target",
+        label: "목표 용량 기반 추가 압축",
+        detail: expect.stringContaining("JPEG 품질")
+      }),
+      expect.objectContaining({
+        kind: "quality",
+        label: "이미지 품질 자동 검증",
+        detail: expect.stringContaining("PSNR/SSIM")
+      }),
+      expect.objectContaining({
+        kind: "review",
+        label: "유사 이미지 확인 필요",
+        detail: expect.stringContaining("자동 병합하지 않음")
+      }),
+      expect.objectContaining({
+        kind: "review",
+        label: "폰트/OLE 용량 확인",
+        detail: expect.stringContaining("자동 제거하지 않음")
+      })
+    ]);
+  });
 });
 
 const reportFixture: OptimizationReport = {
@@ -346,8 +400,10 @@ const reportFixture: OptimizationReport = {
   images: [],
   duplicateImages: [],
   sameVisualDuplicateImages: [],
+  nearDuplicateImages: [],
   unusedBinData: [],
   riskyResources: [],
+  resourceDiagnostics: [],
   actions: { planned: [], applied: [], skipped: [] },
   opportunities: [],
   opportunityGroups: [
