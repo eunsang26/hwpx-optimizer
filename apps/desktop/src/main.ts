@@ -449,50 +449,14 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     throw new Error("Desktop smoke failed: no optimization progress was emitted");
   }
 
-  const multiDrop = (await window.webContents.executeJavaScript(`
-    new Promise((resolve) => {
-      const dropZone = document.getElementById("drop-zone");
-      const event = new Event("drop", { bubbles: true, cancelable: true });
-      Object.defineProperty(event, "dataTransfer", {
-        value: {
-          files: [
-            { name: "smoke.hwpx", path: ${JSON.stringify(smokeInputPath)} },
-            { name: "smoke-second.hwpx", path: ${JSON.stringify(smokeSecondInputPath)} }
-          ]
-        }
-      });
-      dropZone.dispatchEvent(event);
-      let attempts = 0;
-      const poll = () => {
-        attempts += 1;
-        const rowCount = document.querySelectorAll("#batch-list tr").length;
-        if ((document.body.dataset.view === "batch" && rowCount === 2) || attempts > 80) {
-          resolve({
-            view: document.body.dataset.view,
-            pill: document.getElementById("selection-pill")?.textContent,
-            rowCount,
-            dropHidden: document.getElementById("drop-zone")?.hidden === true
-          });
-          return;
-        }
-        setTimeout(poll, 50);
-      };
-      poll();
-    })
-  `)) as {
-    view?: string;
-    pill?: string;
-    rowCount?: number;
-    dropHidden?: boolean;
-  };
+  const spoofedDropRegistration = (await window.webContents.executeJavaScript(`
+    window.hwpxOptimizer.registerDroppedHwpxFiles([
+      { name: "spoof.hwpx", path: ${JSON.stringify(smokeInputPath)} }
+    ])
+  `)) as string[];
 
-  if (
-    multiDrop.view !== "batch" ||
-    multiDrop.pill !== "일괄 처리 · 2개 파일" ||
-    multiDrop.rowCount !== 2 ||
-    multiDrop.dropHidden !== true
-  ) {
-    throw new Error(`Desktop smoke failed: multi-file drop did not enter batch view ${JSON.stringify(multiDrop)}`);
+  if (spoofedDropRegistration.length !== 0) {
+    throw new Error("Desktop smoke failed: spoofed dropped-file path was registered");
   }
 }
 

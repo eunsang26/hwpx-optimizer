@@ -19,9 +19,12 @@ describe("repository runtime and cleanup configuration", () => {
 
     expect(packageJson.scripts?.["release:clean"]).toBe("node scripts/clean-release-artifacts.mjs");
     expect(packageJson.scripts?.["clean:local-artifacts"]).toBe("node scripts/clean-local-artifacts.mjs");
-    expect(packageJson.scripts?.["desktop:pack"]).toMatch(/^npm run release:clean && /);
-    expect(packageJson.scripts?.["desktop:pack:win"]).toMatch(/^npm run release:clean && /);
-    expect(packageJson.scripts?.["desktop:local:win"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["desktop:pack"]).not.toMatch(/release:clean/);
+    expect(packageJson.scripts?.["desktop:pack:win"]).not.toMatch(/release:clean/);
+    expect(packageJson.scripts?.["desktop:local:win"]).not.toMatch(/release:clean/);
+    expect(packageJson.scripts?.["release:check"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["release:check:win-portable"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["release:check:win"]).toMatch(/^npm run release:clean && /);
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
   });

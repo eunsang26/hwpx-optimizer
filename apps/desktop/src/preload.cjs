@@ -5,14 +5,6 @@ const api = {
   selectHwpxMany: () => ipcRenderer.invoke("dialog:select-hwpx-many"),
   selectHwpxFolder: () => ipcRenderer.invoke("dialog:select-hwpx-folder"),
   selectDirectory: () => ipcRenderer.invoke("dialog:select-directory"),
-  getPathForFile: (file) => {
-    if (!file || typeof webUtils?.getPathForFile !== "function") return "";
-    try {
-      return webUtils.getPathForFile(file) ?? "";
-    } catch {
-      return "";
-    }
-  },
   registerDroppedHwpxFiles: (files) => {
     const paths = Array.from(files)
       .map((file) => pathForDroppedFile(file))
@@ -41,10 +33,8 @@ contextBridge.exposeInMainWorld("hwpxOptimizer", api);
 function pathForDroppedFile(file) {
   if (!file) return "";
   try {
-    const path = webUtils.getPathForFile(file);
-    if (path) return path;
+    return webUtils.getPathForFile(file) ?? "";
   } catch {
-    // Fall back below for smoke tests and older Electron drop payloads.
+    return "";
   }
-  return typeof file.path === "string" ? file.path : "";
 }

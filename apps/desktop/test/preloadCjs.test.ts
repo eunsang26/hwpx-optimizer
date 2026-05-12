@@ -33,7 +33,7 @@ describe("CommonJS preload bridge", () => {
     });
 
     expect(typeof exposedApi?.cancelAnalyze).toBe("function");
-    expect((exposedApi?.getPathForFile as (file: File) => string)({} as File)).toBe("/tmp/a.hwpx");
+    expect(exposedApi?.getPathForFile).toBeUndefined();
     await (exposedApi?.cancelAnalyze as () => Promise<unknown>)();
     await (exposedApi?.previewImageDiffs as (input: unknown) => Promise<unknown>)({
       originalPath: "/tmp/original.hwpx",
@@ -47,7 +47,7 @@ describe("CommonJS preload bridge", () => {
 
   it("exposes a dedicated dropped-file registration API before renderer analysis", async () => {
     const source = await readFile(join(process.cwd(), "apps", "desktop", "src", "preload.cjs"), "utf8");
-    const invokedChannels: string[] = [];
+    const invoked: Array<{ channel: string; payload?: unknown }> = [];
     let exposedApi: Record<string, unknown> | undefined;
     const fakeElectron = {
       contextBridge: {
@@ -57,14 +57,14 @@ describe("CommonJS preload bridge", () => {
       },
       ipcRenderer: {
         invoke: (channel: string, payload?: unknown) => {
-          invokedChannels.push(channel);
+          invoked.push({ channel, payload });
           return Promise.resolve(payload ?? null);
         },
         on: () => undefined,
         off: () => undefined
       },
       webUtils: {
-        getPathForFile: () => "/tmp/a.hwpx"
+        getPathForFile: (file: { name?: string }) => (file.name === "real.hwpx" ? "/tmp/real.hwpx" : "")
       }
     };
 
@@ -74,9 +74,15 @@ describe("CommonJS preload bridge", () => {
       return fakeElectron;
     });
 
-    await (exposedApi?.registerDroppedHwpxFiles as (files: File[]) => Promise<unknown>)([{} as File]);
+    await (exposedApi?.registerDroppedHwpxFiles as (files: File[]) => Promise<unknown>)([
+      { name: "real.hwpx" } as File,
+      { name: "spoof.hwpx", path: "/tmp/spoof.hwpx" } as File & { path: string }
+    ]);
 
     expect(typeof exposedApi?.registerDroppedHwpxFiles).toBe("function");
-    expect(invokedChannels).toContain("hwpx:register-dropped-paths");
+    expect(invoked).toContainEqual({
+      channel: "hwpx:register-dropped-paths",
+      payload: ["/tmp/real.hwpx"]
+    });
   });
 });

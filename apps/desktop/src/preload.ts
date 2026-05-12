@@ -6,14 +6,6 @@ const api = {
   selectHwpxFolder: (): Promise<{ directory: string; files: string[] } | null> =>
     ipcRenderer.invoke("dialog:select-hwpx-folder"),
   selectDirectory: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-directory"),
-  getPathForFile: (file: File): string => {
-    if (!file || typeof webUtils?.getPathForFile !== "function") return "";
-    try {
-      return webUtils.getPathForFile(file) ?? "";
-    } catch {
-      return "";
-    }
-  },
   registerDroppedHwpxFiles: (files: File[] | FileList): Promise<string[]> => {
     const paths = Array.from(files)
       .map((file) => pathForDroppedFile(file))
@@ -51,11 +43,8 @@ export type HwpxOptimizerApi = typeof api;
 function pathForDroppedFile(file: File): string {
   if (!file) return "";
   try {
-    const path = webUtils.getPathForFile(file);
-    if (path) return path;
+    return webUtils.getPathForFile(file) ?? "";
   } catch {
-    // Fall back below for smoke tests and older Electron drop payloads.
+    return "";
   }
-  const legacyPath = (file as File & { path?: string }).path;
-  return typeof legacyPath === "string" ? legacyPath : "";
 }
