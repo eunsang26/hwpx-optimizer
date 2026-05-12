@@ -88,7 +88,6 @@ type DesktopSettings = {
 const dropZone = requireElement("drop-zone");
 const fileName = requireElement("file-name");
 const fileMeta = requireElement("file-meta");
-const analyzeButton = requireButton("analyze-button");
 const chooseButton = requireButton("choose-button");
 const chooseManyButton = requireButton("choose-many-button");
 const chooseFolderButton = requireButton("choose-folder-button");
@@ -101,6 +100,7 @@ const batchSummary = requireElement("batch-summary");
 const batchClearButton = requireButton("batch-clear");
 const batchRunButton = requireButton("batch-run");
 const outputButton = requireButton("output-button");
+const outputDirectoryLine = requireElement("output-directory-line");
 const settingsButton = requireButton("settings-button");
 const settingsPanel = requireElement("settings-panel");
 const resultPanel = requireElement("result-panel");
@@ -224,10 +224,6 @@ async function init(): Promise<void> {
   batchList.addEventListener("click", (event) => {
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>("button[data-action]");
     if (button) handleBatchRowAction(button);
-  });
-
-  analyzeButton.addEventListener("click", async () => {
-    if (state.filePath) await analyzeFile(state.filePath);
   });
 
   outputButton.addEventListener("click", async () => {
@@ -462,6 +458,9 @@ function renderSettings(settings: DesktopSettings): void {
   settingOutputDirectory.textContent = usingOriginal
     ? "이번 실행 저장 위치: 원본 문서 폴더"
     : `이번 실행 저장 위치: ${state.outputDirectory}`;
+  outputDirectoryLine.textContent = usingOriginal
+    ? "저장 폴더: 원본 문서 폴더"
+    : `저장 폴더: ${state.outputDirectory}`;
   settingOutputButton.disabled = settings.saveNextToOriginal;
   settingOutputResetButton.disabled = settings.saveNextToOriginal && !state.outputDirectory;
 }
@@ -719,7 +718,6 @@ async function loadFile(path: string): Promise<void> {
   selectedModifiedMeta.textContent = "수정일: 분석 중";
   selectedFileCard.hidden = false;
   dropZone.hidden = true;
-  analyzeButton.disabled = false;
   optimizeButton.disabled = true;
   if (looksLikeOptimizedFileName(baseName)) {
     setStatus("이미 최적화된 파일로 보입니다. 추가 절감 효과는 작을 수 있습니다.");
@@ -934,12 +932,10 @@ function setBusy(message: string, options: { cancelable: boolean; kind?: "analys
   progressPanel.hidden = false;
   progressPanel.classList.add("is-loading");
   optimizeButton.disabled = true;
-  analyzeButton.disabled = true;
   cancelButton.disabled = !options.cancelable;
 }
 
 function setIdle(): void {
-  analyzeButton.disabled = !state.filePath;
   optimizeButton.disabled = !state.currentPlan;
   cancelButton.disabled = true;
 }
@@ -1013,7 +1009,6 @@ function enterBatchMode(paths: string[]): void {
   dropZone.hidden = true;
   fileName.textContent = "여러 HWPX 일괄 처리";
   fileMeta.textContent = `${paths.length}개 파일`;
-  analyzeButton.disabled = true;
   optimizeButton.disabled = true;
   batchPanel.hidden = false;
   renderBatchList();
@@ -1146,7 +1141,6 @@ async function runBatch(): Promise<void> {
     cancelable: true
   });
   optimizeButton.disabled = true;
-  analyzeButton.disabled = true;
   renderBatchList();
 
   for (let index = 0; index < state.batchItems.length; index += 1) {

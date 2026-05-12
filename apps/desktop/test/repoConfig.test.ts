@@ -28,4 +28,15 @@ describe("repository runtime and cleanup configuration", () => {
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
   });
+
+  it("keeps desktop analysis automatic and shows the selected output folder in the run panel", async () => {
+    const html = await readFile("apps/desktop/src/index.html", "utf8");
+    const renderer = await readFile("apps/desktop/src/renderer.ts", "utf8");
+
+    expect(html).not.toContain('id="analyze-button"');
+    expect(html).not.toContain("다시 분석");
+    expect(html).toContain('id="output-directory-line"');
+    expect(renderer).not.toContain('requireButton("analyze-button")');
+    expect(renderer).toContain("outputDirectoryLine.textContent");
+  });
 });
