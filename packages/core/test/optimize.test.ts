@@ -20,6 +20,19 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(result.report.targetMissReason).toContain("quality-preserving");
   });
 
+  it("rejects invalid core target sizes", async () => {
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": "<root />"
+      }
+    });
+
+    await expect(analyzeHwpxBuffer(input, { targetBytes: 0 })).rejects.toThrow(/targetBytes must be a positive number/);
+    await expect(optimizeHwpxBufferBalanced(input, { targetBytes: -1 })).rejects.toThrow(
+      /targetBytes must be a positive number/
+    );
+  });
+
   it("carries target status through balanced optimization", async () => {
     const input = await createHwpxFixture({
       entries: {

@@ -18,16 +18,18 @@ import type { AppliedAction, OptimizationOpportunity, OptimizationReport } from 
 type OptimizeOptions = { actions?: string[]; allowLarger?: boolean; targetBytes?: number };
 
 export async function analyzeHwpxBuffer(input: Buffer, options: { targetBytes?: number } = {}): Promise<OptimizationReport> {
+  const targetBytes = normalizeTargetBytes(options.targetBytes);
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
   const opportunities = await detectEstimatedOptimizationOpportunities(pkg);
-  return createAnalysisReport(analysis, input.byteLength, opportunities, { targetBytes: options.targetBytes });
+  return createAnalysisReport(analysis, input.byteLength, opportunities, { targetBytes });
 }
 
 export async function optimizeHwpxBufferSafe(input: Buffer, options: { targetBytes?: number } = {}): Promise<{
   output: Buffer;
   report: OptimizationReport;
 }> {
+  const targetBytes = normalizeTargetBytes(options.targetBytes);
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
   const graph = analysis.referenceGraph ?? buildReferenceGraph(pkg);
@@ -50,7 +52,7 @@ export async function optimizeHwpxBufferSafe(input: Buffer, options: { targetByt
         { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
       ],
       opportunities,
-      targetBytes: options.targetBytes,
+      targetBytes,
       warnings: [
         "Safe mode did not produce a smaller file; original package bytes returned.",
         ...optimized.warnings
@@ -71,7 +73,7 @@ export async function optimizeHwpxBufferSafe(input: Buffer, options: { targetByt
     applied,
     skipped: optimized.skipped,
     opportunities,
-    targetBytes: options.targetBytes,
+    targetBytes,
     warnings: optimized.warnings.length > 0 ? optimized.warnings : undefined
   });
   return { output, report };
@@ -105,18 +107,20 @@ async function optimizeHwpxBufferAdvanced(
   output: Buffer;
   report: OptimizationReport;
 }> {
-  const profiles = createTargetProfileLadder(settings.mode, settings.profile, settings.options.targetBytes);
+  const options = { ...settings.options, targetBytes: normalizeTargetBytes(settings.options.targetBytes) };
+  const profiles = createTargetProfileLadder(settings.mode, settings.profile, options.targetBytes);
   let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
   const verificationWarnings: string[] = [];
   for (const profile of profiles) {
     try {
       const candidate = await optimizeHwpxBufferWithProfile(input, {
         ...settings,
+        options,
         profile,
         warnings: [...(settings.warnings ?? []), ...verificationWarnings]
       });
       best = chooseBestCandidate(best, candidate);
-      if (!settings.options.targetBytes || candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target") {
+      if (!options.targetBytes || candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target") {
         return candidate;
       }
     } catch (error) {
@@ -126,6 +130,14 @@ async function optimizeHwpxBufferAdvanced(
   }
   if (best) return best;
   throw new Error("No verified optimization candidate could be produced.");
+}
+
+function normalizeTargetBytes(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error("targetBytes must be a positive number.");
+  }
+  return Math.floor(value);
 }
 
 async function optimizeHwpxBufferWithProfile(

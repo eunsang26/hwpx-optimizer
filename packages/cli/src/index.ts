@@ -213,11 +213,11 @@ function pathsReferToSameFile(left: string, right: string): boolean {
 
 function printUsage(): void {
   console.error("Usage:");
-  console.error("  hwpx-opt analyze <file.hwpx> [--report report.json] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt analyze <file.hwpx> [--report report.json] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
   console.error("  hwpx-opt report <file.hwpx> [--out report.txt] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
   console.error("  hwpx-opt verify <file.hwpx> [--max-input-bytes bytes]");
   console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json] [--max-input-bytes bytes]");
-  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--max-input-bytes bytes]");
   console.error("  hwpx-opt list-actions");
 }
 

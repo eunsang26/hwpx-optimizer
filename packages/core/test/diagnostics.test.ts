@@ -8,9 +8,16 @@ import { createHwpxFixture } from "./fixtures.js";
 
 describe("analysis diagnostics", () => {
   it("reports near-duplicate images without turning them into consolidation actions", async () => {
-    const base = await sharp({
-      create: { width: 96, height: 96, channels: 3, background: "#6688aa" }
-    })
+    const raw = Buffer.alloc(96 * 96 * 3);
+    for (let y = 0; y < 96; y += 1) {
+      for (let x = 0; x < 96; x += 1) {
+        const offset = (y * 96 + x) * 3;
+        raw[offset] = (x * 2) % 256;
+        raw[offset + 1] = (y * 2) % 256;
+        raw[offset + 2] = 128;
+      }
+    }
+    const base = await sharp(raw, { raw: { width: 96, height: 96, channels: 3 } })
       .png()
       .toBuffer();
     const similar = await sharp(base).modulate({ brightness: 1.03 }).jpeg({ quality: 92 }).toBuffer();
@@ -34,6 +41,29 @@ describe("analysis diagnostics", () => {
     expect(report.opportunities).not.toContainEqual(
       expect.objectContaining({ action: "consolidate-duplicate-images", target: "BinData/b.jpg" })
     );
+  });
+
+  it("does not report unrelated flat-color images as near-duplicates", async () => {
+    const red = await sharp({
+      create: { width: 96, height: 96, channels: 3, background: "#ff0000" }
+    })
+      .png()
+      .toBuffer();
+    const blue = await sharp({
+      create: { width: 96, height: 96, channels: 3, background: "#0000ff" }
+    })
+      .png()
+      .toBuffer();
+    const input = await createHwpxFixture({
+      entries: {
+        "BinData/red.png": red,
+        "BinData/blue.png": blue
+      }
+    });
+
+    const report = await analyzeHwpxBuffer(input);
+
+    expect(report.nearDuplicateImages).toEqual([]);
   });
 
   it("reports large and byte-identical font/OLE resource diagnostics without actions", async () => {

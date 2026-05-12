@@ -18,6 +18,7 @@ const sameVisualGroupsCache = new WeakMap<HwpxPackage, Promise<ImageConsolidatio
 const imageConsolidationGroupsCache = new WeakMap<HwpxPackage, Promise<ImageConsolidationGroup[]>>();
 const nearDuplicateGroupsCache = new WeakMap<HwpxPackage, Promise<NearDuplicateImageGroup[]>>();
 const NEAR_DUPLICATE_MAX_DISTANCE = 6;
+const NEAR_DUPLICATE_MIN_HASH_STDDEV = 3;
 
 export function findByteIdenticalImageGroups(pkg: HwpxPackage): ImageConsolidationGroup[] {
   const cached = byteIdenticalGroupsCache.get(pkg);
@@ -102,6 +103,7 @@ async function collectNearDuplicateImageGroups(pkg: HwpxPackage): Promise<NearDu
     await mapLimit(imageEntries, 4, async (entry) => {
       const averageHash = await computeAverageHash(entry.data);
       if (!averageHash) return null;
+      if (averageHash.standardDeviation < NEAR_DUPLICATE_MIN_HASH_STDDEV) return null;
       return {
         path: entry.path,
         size: entry.size,

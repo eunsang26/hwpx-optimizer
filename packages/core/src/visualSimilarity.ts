@@ -7,6 +7,8 @@ const HASH_PIXELS = HASH_SIZE * HASH_SIZE;
 
 export type AverageHash = {
   bits: Uint8Array;
+  mean: number;
+  standardDeviation: number;
 };
 
 export type DecodedPixelHash = {
@@ -47,11 +49,15 @@ export async function computeAverageHash(data: Buffer): Promise<AverageHash | nu
     for (let index = 0; index < HASH_PIXELS; index += 1) total += raw[index]!;
     const mean = total / HASH_PIXELS;
 
+    let variance = 0;
     const bits = new Uint8Array(HASH_PIXELS);
     for (let index = 0; index < HASH_PIXELS; index += 1) {
-      bits[index] = raw[index]! >= mean ? 1 : 0;
+      const value = raw[index]!;
+      const delta = value - mean;
+      variance += delta * delta;
+      bits[index] = value >= mean ? 1 : 0;
     }
-    return { bits };
+    return { bits, mean, standardDeviation: Math.sqrt(variance / HASH_PIXELS) };
   } catch {
     return null;
   }

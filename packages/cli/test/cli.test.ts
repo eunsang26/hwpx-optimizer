@@ -8,6 +8,21 @@ import { isCliEntrypoint, printAnalysisSummaryForTest, renderHumanReport, runCli
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 
 describe("runCli", () => {
+  it("documents target options anywhere they are accepted", async () => {
+    const errors: string[] = [];
+    const errorSpy = vi.spyOn(console, "error").mockImplementation((message?: unknown) => {
+      errors.push(String(message));
+    });
+
+    const code = await runCli([]);
+    errorSpy.mockRestore();
+
+    expect(code).toBe(1);
+    const usage = errors.join("\n");
+    expect(usage).toContain("analyze <file.hwpx> [--report report.json] [--target-bytes bytes|--target-mb mb]");
+    expect(usage).toContain("batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb]");
+  });
+
   it("prints the action catalog with list-actions", async () => {
     const logs: string[] = [];
     const logSpy = vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
