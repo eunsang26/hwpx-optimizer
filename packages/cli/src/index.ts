@@ -30,7 +30,9 @@ export async function runCli(argv: string[]): Promise<number> {
   const options = parseOptions(rest);
   try {
     if (command === "analyze") {
-      const report = await analyzeHwpxBuffer(await readSupportedInput(inputPath, options));
+      const report = await analyzeHwpxBuffer(await readSupportedInput(inputPath, options), {
+        targetBytes: parseTargetBytes(options)
+      });
       const requestedReportPath = options.report ?? `${inputPath}.report.json`;
       const reportPath =
         options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
@@ -43,7 +45,9 @@ export async function runCli(argv: string[]): Promise<number> {
     }
 
     if (command === "report") {
-      const report = await analyzeHwpxBuffer(await readSupportedInput(inputPath, options));
+      const report = await analyzeHwpxBuffer(await readSupportedInput(inputPath, options), {
+        targetBytes: parseTargetBytes(options)
+      });
       const text = renderHumanReport(inputPath, report);
       const requestedReportPath = options.out ?? `${inputPath}.report.txt`;
       const reportPath =
@@ -165,6 +169,33 @@ function parseMaxInputBytes(value: string | undefined): number {
   return Math.floor(parsed);
 }
 
+function parseTargetBytes(options: Record<string, string>): number | undefined {
+  const hasBytes = options["target-bytes"] !== undefined;
+  const hasMb = options["target-mb"] !== undefined;
+  if (hasBytes && hasMb) {
+    throw new Error("Use only one of --target-bytes or --target-mb.");
+  }
+  if (hasBytes) {
+    const bytes = Math.floor(parsePositiveNumber(options["target-bytes"], "--target-bytes"));
+    if (bytes <= 0) throw new Error("--target-bytes must be a positive number.");
+    return bytes;
+  }
+  if (hasMb) {
+    const bytes = Math.floor(parsePositiveNumber(options["target-mb"], "--target-mb") * 1024 * 1024);
+    if (bytes <= 0) throw new Error("--target-mb must be at least one byte.");
+    return bytes;
+  }
+  return undefined;
+}
+
+function parsePositiveNumber(value: string | undefined, flag: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${flag} must be a positive number.`);
+  }
+  return parsed;
+}
+
 function assertDoesNotTargetInput(targetPath: string, inputPath: string, kind: "output" | "report"): void {
   if (pathsReferToSameFile(targetPath, inputPath)) {
     throw new Error(`Refusing to overwrite the original input file with ${kind}.`);
@@ -183,9 +214,9 @@ function pathsReferToSameFile(left: string, right: string): boolean {
 function printUsage(): void {
   console.error("Usage:");
   console.error("  hwpx-opt analyze <file.hwpx> [--report report.json] [--max-input-bytes bytes]");
-  console.error("  hwpx-opt report <file.hwpx> [--out report.txt] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt report <file.hwpx> [--out report.txt] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
   console.error("  hwpx-opt verify <file.hwpx> [--max-input-bytes bytes]");
-  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json] [--max-input-bytes bytes]");
   console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--max-input-bytes bytes]");
   console.error("  hwpx-opt list-actions");
 }
@@ -206,10 +237,10 @@ const ACTION_CATALOG: Array<{
   },
   {
     action: "optimize-png",
-    description: "Re-encode PNG losslessly with maximum DEFLATE",
+    description: "Re-encode PNG with maximum DEFLATE; aggressive mode may use palette reduction",
     modes: "safe, balanced, aggressive",
-    risk: "safe",
-    visualImpact: "none"
+    risk: "safe~medium",
+    visualImpact: "none~low"
   },
   {
     action: "minify-xml",
@@ -287,6 +318,7 @@ function printActionList(): void {
 
 function printAnalysisSummary(inputPath: string, report: OptimizationReport): void {
   console.log(`Original: ${formatBytes(report.originalSize)}`);
+  printTargetSummary(report);
   if (report.opportunityGroups.length === 0) {
     console.log("Opportunities: none");
     return;
@@ -308,6 +340,7 @@ function printOptimizationSummary(report: OptimizationReport): void {
   const savedBytes = report.savedBytes ?? 0;
   const savedPercent = report.savedPercent ?? 0;
   console.log(`Saved: ${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
+  printTargetSummary(report);
 
   const counts = countAppliedActions(report.actions.applied);
   if (counts.length === 0) {
@@ -323,10 +356,12 @@ async function optimizeByMode(
   mode: OptimizationMode,
   options: Record<string, string>
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
-  if (mode === "safe") return optimizeHwpxBufferSafe(input);
+  const targetBytes = parseTargetBytes(options);
+  if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes });
   const advancedOptions = {
     actions: parseActionList(options.actions),
-    allowLarger: options["allow-larger"] === "true"
+    allowLarger: options["allow-larger"] === "true",
+    targetBytes
   };
   if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advancedOptions);
   return optimizeHwpxBufferBalanced(input, advancedOptions);
@@ -403,6 +438,7 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
     "HWPX Optimization Report",
     `File: ${inputPath}`,
     `Original: ${formatBytes(report.originalSize)}`,
+    ...(report.targetBytes ? [`Target: ${formatBytes(report.targetBytes)} (${report.targetStatus ?? "unknown"})`] : []),
     `Images: ${report.images.length}`,
     `BMP candidates: ${report.images.filter((image) => image.isBmpCandidate).length}`,
     `Images with metadata: ${report.images.filter((image) => image.hasMetadata).length}`,
@@ -410,6 +446,8 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
     `Same-visual duplicate image groups: ${report.sameVisualDuplicateImages.length}`,
     `Unused BinData candidates: ${report.unusedBinData.length}`,
     `Risky resources: ${report.riskyResources.length}`,
+    `Near-duplicate image candidates: ${report.nearDuplicateImages?.length ?? 0}`,
+    `Resource diagnostics: ${report.resourceDiagnostics?.length ?? 0}`,
     `Potential saving (non-overlap): ${formatBytes(estimateNonOverlappingSavingBytes(report.opportunityGroups))}`
   ];
   if (report.opportunityGroups.length > 0) {
@@ -426,7 +464,26 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
       lines.push(`- ${warning}`);
     }
   }
+  if (report.targetMissReason) lines.push(`Target note: ${report.targetMissReason}`);
+  if ((report.nearDuplicateImages?.length ?? 0) > 0) {
+    lines.push("Near-duplicate candidates:");
+    for (const group of report.nearDuplicateImages ?? []) {
+      lines.push(`- ${group.paths.join(", ")} (max distance ${group.maxDistance})`);
+    }
+  }
+  if ((report.resourceDiagnostics?.length ?? 0) > 0) {
+    lines.push("Resource diagnostics:");
+    for (const item of report.resourceDiagnostics ?? []) {
+      lines.push(`- ${item.type}: ${formatBytes(item.sizeBytes)}; ${item.paths.join(", ")}`);
+    }
+  }
   return `${lines.join("\n")}\n`;
+}
+
+function printTargetSummary(report: OptimizationReport): void {
+  if (!report.targetBytes) return;
+  console.log(`Target: ${formatBytes(report.targetBytes)} (${report.targetStatus ?? "unknown"})`);
+  if (report.targetMissReason) console.log(`Target note: ${report.targetMissReason}`);
 }
 
 function countAppliedActions(actions: AppliedAction[]): Array<[AppliedAction["type"], number]> {

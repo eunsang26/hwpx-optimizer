@@ -246,6 +246,55 @@ describe("runCli", () => {
     expect(logs.join("\n")).toContain("Applied:");
   });
 
+  it("accepts --target-bytes and records target status in optimization reports", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const outputPath = join(dir, "output.hwpx");
+    const reportPath = join(dir, "report.json");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const code = await runCli([
+      "optimize",
+      inputPath,
+      "--mode",
+      "balanced",
+      "--target-bytes",
+      "1",
+      "--out",
+      outputPath,
+      "--report",
+      reportPath
+    ]);
+
+    expect(code).toBe(0);
+    const report = JSON.parse(await readFile(reportPath, "utf8")) as {
+      targetBytes: number;
+      targetStatus: string;
+      targetMissReason?: string;
+    };
+    expect(report.targetBytes).toBe(1);
+    expect(report.targetStatus).toBe("missed");
+    expect(report.targetMissReason).toContain("quality-preserving");
+  });
+
+  it("accepts --target-mb and rejects invalid target values", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    const errors: string[] = [];
+    const errorSpy = vi.spyOn(console, "error").mockImplementation((message?: unknown) => {
+      errors.push(String(message));
+    });
+
+    const ok = await runCli(["optimize", inputPath, "--mode", "safe", "--target-mb", "10"]);
+    const bad = await runCli(["optimize", inputPath, "--mode", "safe", "--target-bytes", "0"]);
+    errorSpy.mockRestore();
+
+    expect(ok).toBe(0);
+    expect(bad).toBe(1);
+    expect(errors.join("\n")).toContain("--target-bytes must be a positive number");
+  });
+
   it("does not overwrite existing optimized output files by default", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
@@ -369,6 +418,40 @@ describe("runCli", () => {
     expect(text).toContain("HWPX Optimization Report");
     expect(text).toContain("Original:");
     expect(text).toContain("Images:");
+  });
+
+  it("includes target and diagnostic sections in human reports", () => {
+    const text = renderHumanReport("/x/input.hwpx", {
+      ...minimalReport,
+      originalSize: 12 * 1024 * 1024,
+      targetBytes: 10 * 1024 * 1024,
+      targetStatus: "missed",
+      targetMissReason: "No quality-preserving candidate reached the target.",
+      nearDuplicateImages: [
+        {
+          hash: "near",
+          paths: ["BinData/a.jpg", "BinData/b.jpg"],
+          count: 2,
+          totalBytes: 100,
+          wastedBytes: 40,
+          maxDistance: 3,
+          reason: "Review manually."
+        }
+      ],
+      resourceDiagnostics: [
+        {
+          type: "large-ole",
+          kind: "ole",
+          paths: ["BinData/a.ole"],
+          sizeBytes: 123,
+          reason: "Large OLE resource."
+        }
+      ]
+    });
+
+    expect(text).toContain("Target: 10.00 MiB (missed)");
+    expect(text).toContain("Near-duplicate image candidates: 1");
+    expect(text).toContain("Resource diagnostics: 1");
   });
 
   it("does not overwrite existing human-readable reports by default", async () => {

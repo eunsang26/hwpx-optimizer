@@ -93,6 +93,8 @@ export function classifyEntry(path: string): HwpxEntryKind {
   const lower = path.toLowerCase();
   if (lower.endsWith(".xml") || lower.endsWith(".hpf") || lower.endsWith(".opf")) return "xml";
   if (lower.includes("bindata/")) {
+    if (/\.(ttf|otf|woff|woff2)$/i.test(lower)) return "font";
+    if (/\.ole$/i.test(lower)) return "ole";
     if (/\.(png|jpg|jpeg|bmp|gif|tif|tiff|webp)$/i.test(lower)) return "image";
     return "bindata";
   }

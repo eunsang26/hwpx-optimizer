@@ -247,6 +247,25 @@ describe("desktop service", () => {
     expect(result.report.actions.applied.some((action) => action.type === "resize-jpeg")).toBe(false);
   });
 
+  it("passes submission limits to core optimization as target bytes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "input.hwpx");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const result = await optimizeDesktopFile({
+      filePath: inputPath,
+      mode: "balanced",
+      settings: {
+        ...defaultDesktopSettings,
+        submissionLimit: { id: "custom", customBytes: 1 }
+      }
+    });
+
+    expect(result.report.targetBytes).toBe(1);
+    expect(result.report.targetStatus).toBe("missed");
+  });
+
+
   it("preserves explicit empty action selections", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "shape.hwpx");

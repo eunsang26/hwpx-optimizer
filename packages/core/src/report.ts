@@ -6,20 +6,31 @@ import type {
   OptimizationReport,
   PackageAnalysis
 } from "./types.js";
+import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
 
 export function createAnalysisReport(
   analysis: PackageAnalysis,
   originalSize = analysis.totalSize,
-  opportunities: OptimizationOpportunity[] = []
+  opportunities: OptimizationOpportunity[] = [],
+  options: { targetBytes?: number } = {}
 ): OptimizationReport {
+  const projectedOptimizedSize = Math.max(0, originalSize - estimateNonOverlappingSavingBytes(groupOpportunities(opportunities)));
   return {
     originalSize,
+    ...createTargetFields({
+      originalSize,
+      optimizedSize: projectedOptimizedSize,
+      targetBytes: options.targetBytes,
+      missReason: "No quality-preserving optimization candidate is projected to reach the target."
+    }),
     categorySizes: analysis.categorySizes,
     images: analysis.images,
     duplicateImages: analysis.duplicateImages,
     sameVisualDuplicateImages: analysis.sameVisualDuplicateImages,
+    nearDuplicateImages: analysis.nearDuplicateImages ?? [],
     unusedBinData: analysis.unusedBinData,
     riskyResources: analysis.riskyResources,
+    resourceDiagnostics: analysis.resourceDiagnostics ?? [],
     actions: { planned: [], applied: [], skipped: [] },
     opportunities,
     opportunityGroups: groupOpportunities(opportunities),
@@ -36,6 +47,8 @@ export function createOptimizationReport(input: {
   skipped: AppliedAction[];
   opportunities?: OptimizationOpportunity[];
   warnings?: string[];
+  targetBytes?: number;
+  targetMissReason?: string;
 }): OptimizationReport {
   const savedBytes = input.originalSize - input.optimizedSize;
   return {
@@ -43,12 +56,20 @@ export function createOptimizationReport(input: {
     optimizedSize: input.optimizedSize,
     savedBytes,
     savedPercent: input.originalSize === 0 ? 0 : (savedBytes / input.originalSize) * 100,
+    ...createTargetFields({
+      originalSize: input.originalSize,
+      optimizedSize: input.optimizedSize,
+      targetBytes: input.targetBytes,
+      missReason: input.targetMissReason ?? "No quality-preserving optimization candidate reached the target."
+    }),
     categorySizes: input.analysis.categorySizes,
     images: input.analysis.images,
     duplicateImages: input.analysis.duplicateImages,
     sameVisualDuplicateImages: input.analysis.sameVisualDuplicateImages,
+    nearDuplicateImages: input.analysis.nearDuplicateImages ?? [],
     unusedBinData: input.analysis.unusedBinData,
     riskyResources: input.analysis.riskyResources,
+    resourceDiagnostics: input.analysis.resourceDiagnostics ?? [],
     actions: {
       planned: input.planned,
       applied: input.applied,
@@ -57,6 +78,26 @@ export function createOptimizationReport(input: {
     opportunities: input.opportunities ?? [],
     opportunityGroups: groupOpportunities(input.opportunities ?? []),
     warnings: [...createWarnings(input.analysis), ...(input.warnings ?? [])]
+  };
+}
+
+function createTargetFields(input: {
+  originalSize: number;
+  optimizedSize: number;
+  targetBytes?: number;
+  missReason: string;
+}): Pick<OptimizationReport, "targetBytes" | "targetStatus" | "targetMissReason"> {
+  if (!input.targetBytes) return {};
+  if (input.originalSize <= input.targetBytes) {
+    return { targetBytes: input.targetBytes, targetStatus: "already-under-target" };
+  }
+  if (input.optimizedSize <= input.targetBytes) {
+    return { targetBytes: input.targetBytes, targetStatus: "met" };
+  }
+  return {
+    targetBytes: input.targetBytes,
+    targetStatus: "missed",
+    targetMissReason: input.missReason
   };
 }
 

@@ -3,6 +3,51 @@ import { createAnalysisReport } from "../src/report.js";
 import type { OptimizationOpportunity, PackageAnalysis } from "../src/types.js";
 
 describe("optimization reports", () => {
+  it("projects target status and carries diagnostic candidate fields", () => {
+    const report = createAnalysisReport(
+      {
+        ...analysisFixture,
+        nearDuplicateImages: [
+          {
+            hash: "near",
+            paths: ["BinData/a.jpg", "BinData/c.jpg"],
+            count: 2,
+            totalBytes: 300,
+            wastedBytes: 120,
+            maxDistance: 4,
+            reason: "Images have similar average hashes and should be reviewed before manual consolidation."
+          }
+        ],
+        resourceDiagnostics: [
+          {
+            type: "large-font",
+            kind: "font",
+            paths: ["BinData/font.ttf"],
+            sizeBytes: 2_000_000,
+            reason: "Embedded font is large; review whether it is required."
+          }
+        ]
+      },
+      10_000,
+      [
+        opportunity({
+          action: "strip-metadata",
+          target: "BinData/a.jpg",
+          estimatedSavingBytes: 2_000,
+          beforeSize: 3_000,
+          afterSize: 1_000
+        })
+      ],
+      { targetBytes: 8_500 }
+    );
+
+    expect(report.targetBytes).toBe(8_500);
+    expect(report.targetStatus).toBe("met");
+    expect(report.targetMissReason).toBeUndefined();
+    expect(report.nearDuplicateImages).toHaveLength(1);
+    expect(report.resourceDiagnostics).toHaveLength(1);
+  });
+
   it("groups opportunities by action and sorts the largest savings first", () => {
     const report = createAnalysisReport(analysisFixture, 10_000, [
       opportunity({

@@ -12,8 +12,8 @@ describe("desktop view model", () => {
       bmpCount: 1,
       metadataImageCount: 1,
       unusedResourceCount: 2,
-      duplicateGroupCount: 1,
-      riskyResourceCount: 1,
+      duplicateGroupCount: 2,
+      riskyResourceCount: 2,
       estimatedSavingLabel: "3.00 MiB",
       topOpportunities: [
         { action: "resize-jpeg", count: 2, savingLabel: "2.00 MiB", risk: "medium" },
@@ -23,7 +23,11 @@ describe("desktop view model", () => {
         { kind: "image", bytes: 200, ratio: 200 / 300, label: "이미지" },
         { kind: "xml", bytes: 100, ratio: 100 / 300, label: "문서 XML" }
       ],
-      warnings: ["OLE objects can be user-visible."]
+      warnings: [
+        "OLE objects can be user-visible.",
+        "Near-duplicate images need manual review: a, b",
+        "Large OLE resource."
+      ]
     });
   });
 
@@ -118,11 +122,31 @@ const reportFixture: OptimizationReport = {
   ],
   duplicateImages: [{ hash: "abc", paths: ["a", "b"], count: 2, totalBytes: 200, wastedBytes: 100 }],
   sameVisualDuplicateImages: [],
+  nearDuplicateImages: [
+    {
+      hash: "near",
+      paths: ["a", "b"],
+      count: 2,
+      totalBytes: 200,
+      wastedBytes: 100,
+      maxDistance: 3,
+      reason: "Near-duplicate images need manual review: a, b"
+    }
+  ],
   unusedBinData: [
     { path: "BinData/unused1.bin", kind: "bindata", size: 1 },
     { path: "BinData/unused2.bin", kind: "bindata", size: 1 }
   ],
   riskyResources: [{ path: "Object/a.ole", kind: "ole", size: 1, reason: "OLE objects can be user-visible." }],
+  resourceDiagnostics: [
+    {
+      type: "large-ole",
+      kind: "ole",
+      paths: ["Object/a.ole"],
+      sizeBytes: 1,
+      reason: "Large OLE resource."
+    }
+  ],
   actions: { planned: [], applied: [], skipped: [] },
   opportunities: [],
   opportunityGroups: [

@@ -845,7 +845,10 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
     metricHtml("원본 용량", formatBytes(report.originalSize)),
     metricHtml("결과 용량", formatBytes(report.optimizedSize ?? report.originalSize)),
     metricHtml("실제 절감", formatBytes(report.savedBytes ?? 0)),
-    metricHtml("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`)
+    metricHtml("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`),
+    ...(report.targetBytes
+      ? [metricHtml("제출 목표", `${formatBytes(report.targetBytes)} · ${targetStatusText(report.targetStatus)}`)]
+      : [])
   ].join("");
   requireElement("output-path").textContent = `결과 파일: ${fileNameFromPath(outputPath)}`;
   requireElement("report-path").textContent = reportPath
@@ -854,6 +857,13 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
   openReportButton.disabled = !reportPath;
   reverifyButton.disabled = false;
   compareButton.disabled = state.mode === "safe";
+}
+
+function targetStatusText(status: OptimizationReport["targetStatus"]): string {
+  if (status === "met") return "목표 달성";
+  if (status === "already-under-target") return "이미 목표 이하";
+  if (status === "missed") return "목표 미달 가능 / 추가 수동 확인 필요";
+  return "목표 확인 필요";
 }
 
 async function openImageCompareModal(): Promise<void> {

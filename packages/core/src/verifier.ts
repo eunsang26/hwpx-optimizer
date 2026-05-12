@@ -2,7 +2,7 @@ import { XMLParser } from "fast-xml-parser";
 import sharp from "sharp";
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
-import { computePsnr } from "./imagePreview.js";
+import { computePsnr, computeSsim } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
 import type { HwpxEntry, HwpxPackage, ImageInventoryItem } from "./types.js";
@@ -17,6 +17,10 @@ export type VerifyHwpxOutputOptions = {
 const PSNR_MINIMUM_DB: Record<Exclude<VerifyMode, "safe">, number> = {
   balanced: 18,
   aggressive: 14
+};
+const SSIM_MINIMUM: Record<Exclude<VerifyMode, "safe">, number> = {
+  balanced: 0.72,
+  aggressive: 0.55
 };
 
 export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutputOptions = {}): Promise<void> {
@@ -114,13 +118,19 @@ async function verifyVisualSimilarityPairs(
   });
 
   for (const pair of uniquePairs) {
-    const psnr = await computePsnr(pair.original.data, pair.output.data);
-    if (psnr === null) continue;
-    if (psnr < minimum) {
+    const [psnr, ssim] = await Promise.all([
+      computePsnr(pair.original.data, pair.output.data),
+      computeSsim(pair.original.data, pair.output.data)
+    ]);
+    if (psnr === null && ssim === null) continue;
+    const ssimMinimum = SSIM_MINIMUM[mode];
+    if ((psnr !== null && psnr < minimum) || (ssim !== null && ssim < ssimMinimum)) {
       const diff = await describeImagePairDiff(pair.original, pair.output);
       const suffix = diff ? ` ${diff}` : "";
+      const psnrText = psnr === null ? "PSNR n/a" : `PSNR ${psnr.toFixed(2)} dB, minimum ${minimum} dB`;
+      const ssimText = ssim === null ? "SSIM n/a" : `SSIM ${ssim.toFixed(3)}, minimum ${ssimMinimum.toFixed(3)}`;
       throw new Error(
-        `Verification failed: ${mode} mode image quality too low (PSNR ${psnr.toFixed(2)} dB, minimum ${minimum} dB) for ${pair.original.path}${suffix}`
+        `Verification failed: ${mode} mode image quality too low (${psnrText}; ${ssimText}) for ${pair.original.path}${suffix}`
       );
     }
   }

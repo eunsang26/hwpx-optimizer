@@ -45,8 +45,10 @@ export type PackageAnalysis = {
   images: ImageInventoryItem[];
   duplicateImages: DuplicateImageGroup[];
   sameVisualDuplicateImages: DuplicateImageGroup[];
+  nearDuplicateImages?: NearDuplicateImageGroup[];
   unusedBinData: UnusedResource[];
   riskyResources: RiskyResource[];
+  resourceDiagnostics?: ResourceDiagnostic[];
   referenceGraph?: ReferenceGraph;
 };
 
@@ -56,6 +58,11 @@ export type DuplicateImageGroup = {
   count: number;
   totalBytes: number;
   wastedBytes: number;
+};
+
+export type NearDuplicateImageGroup = DuplicateImageGroup & {
+  maxDistance: number;
+  reason: string;
 };
 
 export type UnusedResource = {
@@ -68,6 +75,14 @@ export type RiskyResource = {
   path: string;
   kind: "font" | "ole";
   size: number;
+  reason: string;
+};
+
+export type ResourceDiagnostic = {
+  type: "large-font" | "duplicate-font" | "large-ole" | "ole-size-share";
+  kind: "font" | "ole";
+  paths: string[];
+  sizeBytes: number;
   reason: string;
 };
 
@@ -148,12 +163,17 @@ export type OptimizationReport = {
   optimizedSize?: number;
   savedBytes?: number;
   savedPercent?: number;
+  targetBytes?: number;
+  targetStatus?: "met" | "missed" | "already-under-target";
+  targetMissReason?: string;
   categorySizes: Record<HwpxEntryKind, number>;
   images: ImageInventoryItem[];
   duplicateImages: DuplicateImageGroup[];
   sameVisualDuplicateImages: DuplicateImageGroup[];
+  nearDuplicateImages?: NearDuplicateImageGroup[];
   unusedBinData: UnusedResource[];
   riskyResources: RiskyResource[];
+  resourceDiagnostics?: ResourceDiagnostic[];
   actions: {
     planned: OptimizationAction[];
     applied: AppliedAction[];

@@ -15,14 +15,16 @@ import { verifyHwpxOutput } from "./verifier.js";
 import { writeHwpxPackage } from "./writer.js";
 import type { AppliedAction, OptimizationOpportunity, OptimizationReport } from "./types.js";
 
-export async function analyzeHwpxBuffer(input: Buffer): Promise<OptimizationReport> {
+type OptimizeOptions = { actions?: string[]; allowLarger?: boolean; targetBytes?: number };
+
+export async function analyzeHwpxBuffer(input: Buffer, options: { targetBytes?: number } = {}): Promise<OptimizationReport> {
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
   const opportunities = await detectEstimatedOptimizationOpportunities(pkg);
-  return createAnalysisReport(analysis, input.byteLength, opportunities);
+  return createAnalysisReport(analysis, input.byteLength, opportunities, { targetBytes: options.targetBytes });
 }
 
-export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
+export async function optimizeHwpxBufferSafe(input: Buffer, options: { targetBytes?: number } = {}): Promise<{
   output: Buffer;
   report: OptimizationReport;
 }> {
@@ -48,6 +50,7 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
         { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
       ],
       opportunities,
+      targetBytes: options.targetBytes,
       warnings: [
         "Safe mode did not produce a smaller file; original package bytes returned.",
         ...optimized.warnings
@@ -68,6 +71,7 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
     applied,
     skipped: optimized.skipped,
     opportunities,
+    targetBytes: options.targetBytes,
     warnings: optimized.warnings.length > 0 ? optimized.warnings : undefined
   });
   return { output, report };
@@ -75,7 +79,7 @@ export async function optimizeHwpxBufferSafe(input: Buffer): Promise<{
 
 export async function optimizeHwpxBufferBalanced(
   input: Buffer,
-  options: { actions?: string[]; allowLarger?: boolean } = {}
+  options: OptimizeOptions = {}
 ): Promise<{
   output: Buffer;
   report: OptimizationReport;
@@ -91,7 +95,43 @@ export async function optimizeHwpxBufferBalanced(
 async function optimizeHwpxBufferAdvanced(
   input: Buffer,
   settings: {
-    options: { actions?: string[]; allowLarger?: boolean };
+    options: OptimizeOptions;
+    mode: "balanced" | "aggressive";
+    profile: ImageOptimizationProfile;
+    rollbackWarning: string;
+    warnings?: string[];
+  }
+): Promise<{
+  output: Buffer;
+  report: OptimizationReport;
+}> {
+  const profiles = createTargetProfileLadder(settings.mode, settings.profile, settings.options.targetBytes);
+  let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
+  const verificationWarnings: string[] = [];
+  for (const profile of profiles) {
+    try {
+      const candidate = await optimizeHwpxBufferWithProfile(input, {
+        ...settings,
+        profile,
+        warnings: [...(settings.warnings ?? []), ...verificationWarnings]
+      });
+      best = chooseBestCandidate(best, candidate);
+      if (!settings.options.targetBytes || candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target") {
+        return candidate;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      verificationWarnings.push(`Candidate profile skipped after verification failure: ${message}`);
+    }
+  }
+  if (best) return best;
+  throw new Error("No verified optimization candidate could be produced.");
+}
+
+async function optimizeHwpxBufferWithProfile(
+  input: Buffer,
+  settings: {
+    options: OptimizeOptions;
     mode: "balanced" | "aggressive";
     profile: ImageOptimizationProfile;
     rollbackWarning: string;
@@ -141,7 +181,7 @@ async function optimizeHwpxBufferAdvanced(
     actions: [...actions, { type: "repack-zip" as const, target: "*" as const, risk: "safe" as const }]
   };
   const optimized = await applyBalancedOptimizationPlan({ pkg, plan, profile: settings.profile });
-  const exactOpportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied);
+  const exactOpportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied, settings.profile);
   const output = await writeHwpxPackage(optimized.pkg);
   await verifyHwpxOutput(output, { original: input, mode: settings.mode });
 
@@ -158,6 +198,7 @@ async function optimizeHwpxBufferAdvanced(
         { type: "repack-zip", target: "*", beforeSize: input.byteLength, afterSize: output.byteLength }
       ],
       opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
+      targetBytes: settings.options.targetBytes,
       warnings: [settings.rollbackWarning, ...(settings.warnings ?? []), ...optimized.warnings]
     });
     return { output: input, report };
@@ -176,21 +217,62 @@ async function optimizeHwpxBufferAdvanced(
     applied,
     skipped: optimized.skipped,
     opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
+    targetBytes: settings.options.targetBytes,
     warnings: combinedWarnings.length > 0 ? combinedWarnings : undefined
   });
   return { output, report };
 }
 
-function createOptimizationOpportunitiesFromAppliedActions(actions: AppliedAction[]): OptimizationOpportunity[] {
+function chooseBestCandidate(
+  previous: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined,
+  candidate: { output: Buffer; report: OptimizationReport }
+): { output: Buffer; report: OptimizationReport; targetMet: boolean } {
+  const targetMet = candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target";
+  const current = { ...candidate, targetMet };
+  if (!previous) return current;
+  if (current.targetMet && !previous.targetMet) return current;
+  if (current.targetMet === previous.targetMet && current.output.byteLength < previous.output.byteLength) return current;
+  return previous;
+}
+
+function createTargetProfileLadder(
+  mode: "balanced" | "aggressive",
+  base: ImageOptimizationProfile,
+  targetBytes?: number
+): ImageOptimizationProfile[] {
+  if (!targetBytes) return [base];
+  if (mode === "balanced") {
+    return [
+      base,
+      { ...base, maxEdge: 1600, jpegQuality: 84, forceJpegRecompress: true },
+      { ...base, maxEdge: 1440, jpegQuality: 80, forceJpegRecompress: true },
+      { ...base, maxEdge: 1280, jpegQuality: 76, forceJpegRecompress: true }
+    ];
+  }
+  return [
+    base,
+    { ...base, maxEdge: 1120, jpegQuality: 74, forceJpegRecompress: true, pngPalette: true },
+    { ...base, maxEdge: 960, jpegQuality: 68, forceJpegRecompress: true, pngPalette: true },
+    { ...base, maxEdge: 800, jpegQuality: 62, forceJpegRecompress: true, pngPalette: true }
+  ];
+}
+
+function createOptimizationOpportunitiesFromAppliedActions(
+  actions: AppliedAction[],
+  profile: ImageOptimizationProfile = balancedImageProfile
+): OptimizationOpportunity[] {
   const opportunities: OptimizationOpportunity[] = [];
   for (const action of actions) {
-    const opportunity = createOptimizationOpportunityFromAppliedAction(action);
+    const opportunity = createOptimizationOpportunityFromAppliedAction(action, profile);
     if (opportunity) opportunities.push(opportunity);
   }
   return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
 }
 
-function createOptimizationOpportunityFromAppliedAction(action: AppliedAction): OptimizationOpportunity | null {
+function createOptimizationOpportunityFromAppliedAction(
+  action: AppliedAction,
+  profile: ImageOptimizationProfile = balancedImageProfile
+): OptimizationOpportunity | null {
   if (action.beforeSize === undefined || action.afterSize === undefined) return null;
   const estimatedSavingBytes = action.beforeSize - action.afterSize;
   if (estimatedSavingBytes <= 0) return null;
@@ -198,16 +280,21 @@ function createOptimizationOpportunityFromAppliedAction(action: AppliedAction): 
   if (action.type === "strip-metadata" || action.type === "optimize-png") {
     return {
       id: `${action.type}:${action.target}`,
-      label: action.type === "strip-metadata" ? "Strip JPEG metadata" : "Optimize PNG losslessly",
+      label:
+        action.type === "strip-metadata"
+          ? "Strip JPEG metadata"
+          : profile.pngPalette
+            ? "Optimize PNG with aggressive palette reduction"
+            : "Optimize PNG losslessly",
       action: action.type,
       target: action.target,
       estimatedSavingBytes,
       beforeSize: action.beforeSize,
       afterSize: action.afterSize,
       confidence: "exact",
-      risk: "safe",
-      visualImpact: "none",
-      defaultEnabledIn: ["safe", "balanced", "aggressive"]
+      risk: action.type === "optimize-png" && profile.pngPalette ? "medium" : "safe",
+      visualImpact: action.type === "optimize-png" && profile.pngPalette ? "low" : "none",
+      defaultEnabledIn: action.type === "optimize-png" && profile.pngPalette ? ["aggressive"] : ["safe", "balanced", "aggressive"]
     };
   }
 
@@ -312,7 +399,7 @@ function createOptimizationOpportunityFromAppliedAction(action: AppliedAction): 
 
 export async function optimizeHwpxBufferAggressive(
   input: Buffer,
-  options: { actions?: string[]; allowLarger?: boolean } = {}
+  options: OptimizeOptions = {}
 ): Promise<{
   output: Buffer;
   report: OptimizationReport;

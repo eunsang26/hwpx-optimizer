@@ -65,8 +65,9 @@ export function createAnalysisViewModel(report: OptimizationReport): AnalysisVie
     bmpCount: report.images.filter((image) => image.isBmpCandidate).length,
     metadataImageCount: report.images.filter((image) => image.hasMetadata).length,
     unusedResourceCount: report.unusedBinData.length,
-    duplicateGroupCount: report.duplicateImages.length + report.sameVisualDuplicateImages.length,
-    riskyResourceCount: report.riskyResources.length,
+    duplicateGroupCount:
+      report.duplicateImages.length + report.sameVisualDuplicateImages.length + (report.nearDuplicateImages?.length ?? 0),
+    riskyResourceCount: report.riskyResources.length + (report.resourceDiagnostics?.length ?? 0),
     estimatedSavingLabel: wasCapped ? `최대 ${formatBytes(cappedSaving)}` : formatBytes(cappedSaving),
     topOpportunities: report.opportunityGroups.slice(0, 5).map((group) => ({
       action: group.action,
@@ -75,7 +76,12 @@ export function createAnalysisViewModel(report: OptimizationReport): AnalysisVie
       risk: group.risk
     })),
     categoryBreakdown: createCategoryBreakdown(report),
-    warnings: [...report.warnings, ...report.riskyResources.map((resource) => resource.reason)]
+    warnings: [
+      ...report.warnings,
+      ...report.riskyResources.map((resource) => resource.reason),
+      ...(report.nearDuplicateImages ?? []).map((group) => group.reason),
+      ...(report.resourceDiagnostics ?? []).map((diagnostic) => diagnostic.reason)
+    ]
   };
 }
 

@@ -1,9 +1,16 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
+import { computeSsim } from "../src/imagePreview.js";
 import { verifyHwpxOutput } from "../src/verifier.js";
 import { createHwpxFixture } from "./fixtures.js";
 
 describe("verifyHwpxOutput", () => {
+  it("computes SSIM for identical images", async () => {
+    const image = await createPng(64, 64);
+
+    await expect(computeSsim(image, image)).resolves.toBe(1);
+  });
+
   it("rejects outputs without required HWPX package files", async () => {
     const output = await createHwpxFixture({
       includeRequiredFiles: false,
@@ -89,6 +96,13 @@ describe("verifyHwpxOutput", () => {
     await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(
       /96×64 png ori=1 → 96×64 png ori=1/
     );
+  });
+
+  it("includes SSIM in image quality rejection messages", async () => {
+    const original = await createReferencedImageFixture("BinData/image1.png", await createGradientPng(96, 64));
+    const output = await createReferencedImageFixture("BinData/image1.png", await createInvertedGradientPng(96, 64));
+
+    await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(/SSIM/);
   });
 
   it("allows aggressive-mode outputs that stay above the PSNR minimum", async () => {

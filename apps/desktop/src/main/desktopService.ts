@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
+import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
 
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
@@ -90,7 +91,7 @@ export async function optimizeDesktopFile(
   let source: Buffer | undefined = await readFile(input.filePath);
 
   onProgress?.({ percent: 35, item: `Optimizing document in ${input.mode} mode` });
-  const result = await optimizeByMode(source, input.mode, input.actions);
+  const result = await optimizeByMode(source, input.mode, input.actions, resolveSubmissionLimitBytes(input.settings.submissionLimit));
   source = undefined;
 
   onProgress?.({ percent: 70, item: "Writing optimized document" });
@@ -145,11 +146,12 @@ export async function previewImageDiffs(
 export async function optimizeByMode(
   input: Buffer,
   mode: OptimizationMode,
-  actions?: string[]
+  actions?: string[],
+  targetBytes?: number
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
   const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
-  if (mode === "safe") return optimizeHwpxBufferSafe(input);
-  const advanced = actions ? { actions } : {};
+  if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes });
+  const advanced = { ...(actions ? { actions } : {}), targetBytes };
   if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advanced);
   return optimizeHwpxBufferBalanced(input, advanced);
 }

@@ -26,6 +26,7 @@ export type ImageOptimizationProfile = {
   displayScale: number;
   jpegQuality: number;
   pngPalette: boolean;
+  forceJpegRecompress?: boolean;
   opportunityLabel: string;
 };
 
@@ -82,7 +83,7 @@ async function collectOpportunities(
 
     const metadata = await readMetadata(entry.data);
     const resizeBudget = normalizeResizeBudget(resizeBudgets.get(entry.path), profile);
-    if (isJpeg(entry.path) && shouldResize(metadata.width, metadata.height, resizeBudget, profile)) {
+    if (isJpeg(entry.path) && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
       const afterSize = await measureOrEstimateImageSize({
         confidence,
         size: entry.size,
@@ -166,7 +167,7 @@ async function collectOpportunities(
       continue;
     }
 
-    if (isPng(entry.path) && (confidence === "exact" || entry.size > 4096)) {
+    if (isPng(entry.path)) {
       if (shouldResize(metadata.width, metadata.height, resizeBudget, profile)) {
         const afterSize = await measureOrEstimateImageSize({
           confidence,
@@ -202,15 +203,15 @@ async function collectOpportunities(
       if (afterSize === null) continue;
       addOpportunityIfSmaller(opportunities, {
         id: `optimize-png:${entry.path}`,
-        label: "Optimize PNG losslessly",
+        label: profile.pngPalette ? "Optimize PNG with aggressive palette reduction" : "Optimize PNG losslessly",
         action: "optimize-png",
         target: entry.path,
         beforeSize: entry.size,
         afterSize,
         confidence,
-        risk: "safe",
-        visualImpact: "none",
-        defaultEnabledIn: ["safe", "balanced", "aggressive"]
+        risk: profile.pngPalette ? "medium" : "safe",
+        visualImpact: profile.pngPalette ? "low" : "none",
+        defaultEnabledIn: profile.pngPalette ? ["aggressive"] : ["safe", "balanced", "aggressive"]
       });
     }
   }
@@ -348,7 +349,7 @@ export async function transformImageBalancedWithBudget(
       data: await convertTiffToPng(data, metadata.width, metadata.height, resizeBudget, profile)
     };
   }
-  if (isJpeg(path) && shouldResize(metadata.width, metadata.height, resizeBudget)) {
+  if (isJpeg(path) && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
     return {
       outputPath: replaceExtension(path, ".jpg"),
       data: await resizeJpeg(data, resizeBudget, profile)
@@ -542,6 +543,15 @@ function shouldResize(
   if (!width || !height) return false;
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   return width > target.width || height > target.height;
+}
+
+function shouldResizeOrRecompress(
+  width?: number,
+  height?: number,
+  budget?: { width: number; height: number },
+  profile: ImageOptimizationProfile = balancedImageProfile
+): boolean {
+  return shouldResize(width, height, budget, profile) || Boolean(profile.forceJpegRecompress);
 }
 
 function normalizeResizeBudget(

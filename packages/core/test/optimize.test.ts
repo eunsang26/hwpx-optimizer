@@ -1,10 +1,72 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { analyzeHwpxBuffer, optimizeHwpxBufferSafe } from "../src/optimize.js";
+import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
 import { readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture } from "./fixtures.js";
 
 describe("optimizeHwpxBufferSafe", () => {
+  it("records a missed target without over-compressing or mutating the original result", async () => {
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": "<root />"
+      }
+    });
+
+    const result = await optimizeHwpxBufferSafe(input, { targetBytes: 1 });
+
+    expect(result.output).toEqual(input);
+    expect(result.report.targetBytes).toBe(1);
+    expect(result.report.targetStatus).toBe("missed");
+    expect(result.report.targetMissReason).toContain("quality-preserving");
+  });
+
+  it("carries target status through balanced optimization", async () => {
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": "<root />"
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(input, { targetBytes: input.byteLength * 2 });
+
+    expect(result.report.targetBytes).toBe(input.byteLength * 2);
+    expect(result.report.targetStatus).toBe("already-under-target");
+  });
+
+  it("uses target-aware JPEG recompression candidates when ordinary balanced resizing is not applicable", async () => {
+    const width = 640;
+    const height = 480;
+    const raw = Buffer.alloc(width * height * 3);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 3;
+        raw[offset] = x % 256;
+        raw[offset + 1] = y % 256;
+        raw[offset + 2] = (x + y) % 256;
+      }
+    }
+    const jpeg = await sharp(raw, { raw: { width, height, channels: 3 } })
+      .jpeg({ quality: 100 })
+      .toBuffer();
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.jpg" media-type="image/jpeg"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hc:img binaryItemIDRef="image1" /></root>`,
+        "BinData/image1.jpg": jpeg
+      }
+    });
+
+    const withoutTarget = await optimizeHwpxBufferBalanced(input, { actions: ["resize-jpeg"] });
+    const withTarget = await optimizeHwpxBufferBalanced(input, {
+      actions: ["resize-jpeg"],
+      targetBytes: input.byteLength - 100
+    });
+
+    expect(withoutTarget.report.actions.applied).not.toContainEqual(expect.objectContaining({ type: "resize-jpeg" }));
+    expect(withTarget.report.actions.applied).toContainEqual(expect.objectContaining({ type: "resize-jpeg" }));
+    expect(withTarget.output.byteLength).toBeLessThan(input.byteLength);
+  });
+
   it("removes unreferenced BinData and writes a verified package", async () => {
     const input = await createHwpxFixture({
       entries: {

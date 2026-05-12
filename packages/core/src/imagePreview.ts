@@ -26,6 +26,7 @@ export type ImagePreviewOptions = {
 
 const PSNR_DEFAULT_SAMPLE_SIZE = 256;
 const PSNR_MAX_DB = 80;
+const SSIM_DEFAULT_SAMPLE_SIZE = 256;
 
 export async function extractImageDiffPreviews(
   originalBuffer: Buffer,
@@ -109,6 +110,49 @@ export async function computePsnr(original: Buffer, optimized: Buffer, sampleSiz
   }
 }
 
+export async function computeSsim(original: Buffer, optimized: Buffer, sampleSize = SSIM_DEFAULT_SAMPLE_SIZE): Promise<number | null> {
+  try {
+    const [originalRaw, optimizedRaw] = await Promise.all([
+      decodeForSsim(original, sampleSize),
+      decodeForSsim(optimized, sampleSize)
+    ]);
+    if (!originalRaw || !optimizedRaw || originalRaw.length !== optimizedRaw.length || originalRaw.length === 0) return null;
+
+    let meanOriginal = 0;
+    let meanOptimized = 0;
+    for (let index = 0; index < originalRaw.length; index += 1) {
+      meanOriginal += originalRaw[index]!;
+      meanOptimized += optimizedRaw[index]!;
+    }
+    meanOriginal /= originalRaw.length;
+    meanOptimized /= optimizedRaw.length;
+
+    let varianceOriginal = 0;
+    let varianceOptimized = 0;
+    let covariance = 0;
+    for (let index = 0; index < originalRaw.length; index += 1) {
+      const originalDelta = originalRaw[index]! - meanOriginal;
+      const optimizedDelta = optimizedRaw[index]! - meanOptimized;
+      varianceOriginal += originalDelta * originalDelta;
+      varianceOptimized += optimizedDelta * optimizedDelta;
+      covariance += originalDelta * optimizedDelta;
+    }
+    const denominator = Math.max(1, originalRaw.length - 1);
+    varianceOriginal /= denominator;
+    varianceOptimized /= denominator;
+    covariance /= denominator;
+
+    const c1 = (0.01 * 255) ** 2;
+    const c2 = (0.03 * 255) ** 2;
+    const numerator = (2 * meanOriginal * meanOptimized + c1) * (2 * covariance + c2);
+    const ssimDenominator = (meanOriginal ** 2 + meanOptimized ** 2 + c1) * (varianceOriginal + varianceOptimized + c2);
+    if (ssimDenominator === 0) return 1;
+    return Math.max(-1, Math.min(1, numerator / ssimDenominator));
+  } catch {
+    return null;
+  }
+}
+
 async function decodeForPsnr(data: Buffer, sampleSize: number): Promise<Buffer | null> {
   try {
     const bmp = decodeBmp(data);
@@ -118,6 +162,24 @@ async function decodeForPsnr(data: Buffer, sampleSize: number): Promise<Buffer |
     return await pipeline
       .rotate()
       .removeAlpha()
+      .resize(sampleSize, sampleSize, { fit: "fill", kernel: "lanczos3" })
+      .raw()
+      .toBuffer();
+  } catch {
+    return null;
+  }
+}
+
+async function decodeForSsim(data: Buffer, sampleSize: number): Promise<Buffer | null> {
+  try {
+    const bmp = decodeBmp(data);
+    const pipeline = bmp
+      ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } })
+      : sharp(data);
+    return await pipeline
+      .rotate()
+      .removeAlpha()
+      .grayscale()
       .resize(sampleSize, sampleSize, { fit: "fill", kernel: "lanczos3" })
       .raw()
       .toBuffer();
