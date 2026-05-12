@@ -1,0 +1,1000 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>안 D · Modern Trust — HWPX 보고서 용량 최적화</title>
+    <style>
+      :root {
+        --bg: #f6f8fb;
+        --surface: #ffffff;
+        --surface-2: #fafbfd;
+        --surface-3: #f3f6fb;
+        --text: #0b1426;
+        --text-2: #1f2937;
+        --muted: #5a6577;
+        --muted-2: #8a93a4;
+        --hairline: #eef1f6;
+        --border: #e3e8f0;
+        --border-strong: #d6dce6;
+
+        --blue: #2563eb;
+        --blue-2: #1d4ed8;
+        --blue-soft: #eff4ff;
+        --blue-icon: #3b82f6;
+
+        --green: #16a34a;
+        --green-2: #15803d;
+        --green-soft: #ecfdf3;
+        --green-border: #bbf2cf;
+
+        --orange: #ea7a16;
+        --orange-soft: #fff2e2;
+
+        --purple: #7c3aed;
+        --purple-soft: #f3edff;
+
+        --teal: #0e9384;
+        --teal-soft: #e7f8f5;
+
+        --amber: #d97706;
+
+        --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+        --shadow-md: 0 1px 0 rgba(15, 23, 42, 0.02), 0 1px 3px rgba(15, 23, 42, 0.06), 0 6px 18px rgba(15, 23, 42, 0.04);
+        --shadow-cta: 0 6px 18px rgba(37, 99, 235, 0.32), 0 1px 2px rgba(37, 99, 235, 0.18);
+
+        --radius: 14px;
+        --radius-sm: 10px;
+        --radius-xs: 8px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-size: 13.5px;
+        line-height: 1.55;
+        letter-spacing: -0.005em;
+        -webkit-font-smoothing: antialiased;
+        font-feature-settings: "ss01", "cv11";
+      }
+      h1, h2, h3, p { margin: 0; }
+      .num {
+        font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace;
+        font-feature-settings: "tnum";
+        letter-spacing: -0.01em;
+      }
+
+      .shell {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 18px 22px 32px;
+      }
+
+      /* ---------- HEADER ---------- */
+      .topbar {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 8px 18px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .brand-mark {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #eaf2ff 0%, #d8e6ff 100%);
+        display: grid;
+        place-items: center;
+        position: relative;
+        box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+      }
+      .brand-mark svg { display: block; }
+      .brand-text h1 {
+        font-size: 18.5px;
+        font-weight: 800;
+        letter-spacing: -0.018em;
+        color: var(--text);
+      }
+      .brand-text p {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .top-actions {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+      }
+      .chrome-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 36px;
+        padding: 0 12px;
+        background: transparent;
+        border: none;
+        border-radius: 10px;
+        color: var(--muted);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 120ms ease, color 120ms ease;
+      }
+      .chrome-btn:hover { background: var(--blue-soft); color: var(--blue); }
+      .chrome-btn svg { width: 16px; height: 16px; }
+
+      /* ---------- WORKSPACE GRID ---------- */
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 18px;
+        align-items: start;
+      }
+      .stack { display: grid; gap: 16px; }
+
+      /* ---------- CARD ---------- */
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-md);
+        padding: 20px 22px;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .step {
+        width: 26px; height: 26px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 12.5px;
+        font-weight: 800;
+        flex-shrink: 0;
+      }
+      .card-head h2 {
+        font-size: 15.5px;
+        font-weight: 800;
+        letter-spacing: -0.012em;
+        color: var(--text);
+      }
+      .card-head .badge {
+        margin-left: auto;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--muted);
+        background: var(--surface-3);
+        padding: 4px 10px;
+        border-radius: 999px;
+      }
+
+      /* ---------- FILE CARD / DROP ZONE ---------- */
+      .dropzone {
+        border: 1.5px dashed #c2d2ef;
+        background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+        border-radius: var(--radius);
+        padding: 28px 28px 26px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 26px;
+        align-items: center;
+        transition: border-color 120ms, background 120ms;
+      }
+      .dropzone:hover {
+        border-color: var(--blue);
+        background: linear-gradient(180deg, #fafcff 0%, #eff5ff 100%);
+      }
+      .doc-illu {
+        width: 96px;
+        height: 116px;
+        border-radius: 12px;
+        background: #fff;
+        border: 1.5px solid #d4e0f5;
+        position: relative;
+        display: grid;
+        place-items: end center;
+        padding-bottom: 14px;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08);
+      }
+      .doc-illu::before {
+        content: "";
+        position: absolute;
+        top: 0; right: 0;
+        width: 24px; height: 24px;
+        background:
+          linear-gradient(225deg, var(--blue-soft) 50%, transparent 50%);
+        border-bottom-left-radius: 6px;
+      }
+      .doc-illu .ribbon {
+        font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+        font-size: 10.5px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #fff;
+        background: var(--blue);
+        padding: 3px 8px;
+        border-radius: 4px;
+      }
+      .drop-copy h3 {
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: -0.014em;
+        margin-bottom: 4px;
+      }
+      .drop-copy > p {
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 14px;
+      }
+      .drop-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        height: 38px;
+        padding: 0 18px;
+        font: inherit;
+        font-size: 13.5px;
+        font-weight: 700;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: background 120ms, border-color 120ms, box-shadow 120ms, transform 80ms;
+      }
+      .btn svg { width: 16px; height: 16px; }
+      .btn-primary {
+        background: var(--blue);
+        color: #fff;
+        box-shadow: var(--shadow-cta);
+      }
+      .btn-primary:hover { background: var(--blue-2); }
+      .btn-primary:active { transform: translateY(1px); }
+      .btn-ghost {
+        background: #fff;
+        color: var(--text-2);
+        border-color: var(--border);
+        box-shadow: var(--shadow-sm);
+      }
+      .btn-ghost:hover { border-color: var(--border-strong); background: var(--surface-2); }
+      .drop-hint {
+        margin-top: 14px;
+        font-size: 12px;
+        color: var(--muted-2);
+      }
+
+      /* ---------- OPTIONS ---------- */
+      .options-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 1.1fr 0.9fr;
+        gap: 14px;
+      }
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+      .field > label {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .select {
+        height: 44px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0 14px 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        transition: border-color 120ms, box-shadow 120ms;
+      }
+      .select:hover { border-color: var(--border-strong); }
+      .select:focus-within {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+      }
+      .select .ic {
+        width: 22px; height: 22px;
+        display: grid; place-items: center;
+        color: var(--blue);
+        flex-shrink: 0;
+      }
+      .select .val {
+        flex: 1;
+        font-weight: 600;
+        font-size: 13.5px;
+        color: var(--text);
+      }
+      .select .caret {
+        color: var(--muted-2);
+        flex-shrink: 0;
+      }
+      .toggle-row {
+        height: 44px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .toggle {
+        width: 38px;
+        height: 22px;
+        background: var(--blue);
+        border-radius: 999px;
+        position: relative;
+        flex-shrink: 0;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+        cursor: pointer;
+      }
+      .toggle::after {
+        content: "";
+        position: absolute;
+        top: 2px; right: 2px;
+        width: 18px; height: 18px;
+        background: #fff;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+      }
+      .toggle-row .state {
+        font-weight: 700;
+        font-size: 13.5px;
+        color: var(--text);
+      }
+      .help-icon {
+        margin-left: auto;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--surface-3);
+        color: var(--muted);
+        display: grid;
+        place-items: center;
+        font-size: 10px;
+        font-weight: 700;
+        cursor: help;
+      }
+      .options-hint {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .info-dot {
+        width: 16px; height: 16px;
+        border-radius: 50%;
+        background: var(--blue-soft);
+        color: var(--blue);
+        display: grid; place-items: center;
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      /* ---------- SUMMARY ---------- */
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+      }
+      .metric {
+        padding: 14px 14px 12px;
+        border: 1px solid var(--hairline);
+        border-radius: 12px;
+        background: #fff;
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        gap: 12px;
+        align-items: center;
+      }
+      .metric .ic {
+        width: 40px; height: 40px;
+        border-radius: 12px;
+        display: grid; place-items: center;
+      }
+      .metric .ic.blue   { background: var(--blue-soft);   color: var(--blue); }
+      .metric .ic.orange { background: var(--orange-soft); color: var(--orange); }
+      .metric .ic.green  { background: var(--green-soft);  color: var(--green); }
+      .metric .ic.purple { background: var(--purple-soft); color: var(--purple); }
+      .metric .lbl {
+        font-size: 11.5px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .metric .v {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text);
+        margin-top: 2px;
+        letter-spacing: -0.012em;
+      }
+      .metric .v .u {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-left: 4px;
+        font-weight: 700;
+      }
+
+      /* ---------- TARGET PROGRESS ---------- */
+      .target-card {
+        margin-top: 14px;
+        border-radius: 12px;
+        border: 1px solid var(--green-border);
+        background: linear-gradient(180deg, #f4fcf6 0%, #ecfdf3 100%);
+        padding: 16px 18px 14px;
+      }
+      .target-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .target-head .seal {
+        width: 28px; height: 28px;
+        border-radius: 50%;
+        background: var(--green);
+        color: #fff;
+        display: grid; place-items: center;
+      }
+      .target-head .title {
+        font-weight: 800;
+        color: var(--green-2);
+        font-size: 14.5px;
+      }
+      .target-head .meta {
+        margin-left: auto;
+        color: var(--green-2);
+        font-size: 12.5px;
+        font-weight: 700;
+      }
+      .target-head .meta b { font-weight: 800; }
+      .target-sub {
+        color: #527964;
+        font-size: 12px;
+        margin-bottom: 12px;
+      }
+      .progress {
+        position: relative;
+        height: 12px;
+        background: #e6efe9;
+        border-radius: 999px;
+        overflow: visible;
+      }
+      .progress .fill {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 49.3%;
+        background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
+        border-radius: 999px;
+        box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.18);
+      }
+      .progress .marker {
+        position: absolute;
+        top: -3px;
+        width: 2px;
+        height: 18px;
+        background: var(--text-2);
+        border-radius: 1px;
+      }
+      .progress .marker.cap {
+        background: var(--text-2);
+        opacity: 0.4;
+      }
+      .progress .marker.curr {
+        background: var(--green-2);
+      }
+      .progress .marker.curr::after {
+        content: "▲";
+        position: absolute;
+        top: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: var(--green-2);
+        font-size: 8px;
+      }
+      .scale-row {
+        margin-top: 22px;
+        display: flex;
+        justify-content: space-between;
+        font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        position: relative;
+      }
+      .scale-row span.active { color: var(--green-2); }
+      .scale-row span.cap b   { color: var(--text-2); }
+
+      /* ---------- PRIMARY CTA ---------- */
+      .run-row {
+        margin-top: 18px;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 10px;
+      }
+      .cta-primary {
+        height: 56px;
+        background: linear-gradient(180deg, var(--blue) 0%, var(--blue-2) 100%);
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 800;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        box-shadow: var(--shadow-cta);
+        letter-spacing: -0.005em;
+        transition: filter 120ms ease, transform 80ms ease;
+      }
+      .cta-primary:hover { filter: brightness(1.04); }
+      .cta-primary:active { transform: translateY(1px); }
+      .cta-primary svg { width: 18px; height: 18px; }
+      .cta-secondary {
+        height: 56px;
+        padding: 0 18px;
+        background: #fff;
+        color: var(--text-2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font: inherit;
+        font-size: 13.5px;
+        font-weight: 700;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: var(--shadow-sm);
+      }
+      .cta-secondary:hover { border-color: var(--border-strong); background: var(--surface-2); }
+      .cta-secondary svg { width: 16px; height: 16px; color: var(--muted); }
+
+      /* ---------- SIDEBAR ---------- */
+      .sidebar {
+        align-self: start;
+        position: sticky;
+        top: 18px;
+        display: grid;
+        gap: 14px;
+      }
+      .sidebar-card {
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-md);
+        padding: 18px 18px 8px;
+      }
+      .sidebar-title {
+        font-size: 14.5px;
+        font-weight: 800;
+        letter-spacing: -0.012em;
+        margin-bottom: 14px;
+      }
+      .protocol {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .protocol li {
+        display: grid;
+        grid-template-columns: 38px 1fr auto;
+        gap: 12px;
+        padding: 12px 0 14px;
+        border-bottom: 1px solid var(--hairline);
+      }
+      .protocol li:last-child { border-bottom: none; }
+      .protocol .ic {
+        width: 38px; height: 38px;
+        border-radius: 10px;
+        display: grid; place-items: center;
+      }
+      .protocol .ic.blue   { background: var(--blue-soft);   color: var(--blue); }
+      .protocol .ic.purple { background: var(--purple-soft); color: var(--purple); }
+      .protocol .ic.teal   { background: var(--teal-soft);   color: var(--teal); }
+      .protocol .name {
+        font-size: 13.5px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+      .protocol .desc {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+        line-height: 1.45;
+      }
+      .protocol .est {
+        text-align: right;
+        align-self: start;
+      }
+      .protocol .est .lbl {
+        font-size: 11px;
+        color: var(--muted-2);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .protocol .est .v {
+        font-size: 12px;
+        color: var(--blue);
+        font-weight: 800;
+        white-space: nowrap;
+        margin-top: 2px;
+      }
+
+      .safe-card {
+        background: linear-gradient(180deg, #f4fcf6 0%, #ecfdf3 100%);
+        border: 1px solid var(--green-border);
+        border-radius: var(--radius);
+        padding: 16px 16px 18px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 12px;
+        align-items: start;
+      }
+      .safe-icon {
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        background: var(--green);
+        color: #fff;
+        display: grid; place-items: center;
+        flex-shrink: 0;
+      }
+      .safe-card .h {
+        font-size: 13.5px;
+        font-weight: 800;
+        color: var(--green-2);
+      }
+      .safe-card p {
+        color: #2f5d3f;
+        margin-top: 4px;
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+
+      /* ---------- ICONS (inline svgs use currentColor) ---------- */
+      .ic-svg { display: block; }
+
+      @media (max-width: 1140px) {
+        .workspace { grid-template-columns: 1fr; }
+        .sidebar { position: static; }
+        .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <!-- HEADER -->
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 3v5h5"/>
+              <path d="M9 13h6M9 17h4"/>
+            </svg>
+          </span>
+          <div class="brand-text">
+            <h1>HWPX 보고서 용량 최적화</h1>
+            <p>제출 기준을 충족하도록 보고서 파일 용량을 안전하게 최적화합니다.</p>
+          </div>
+        </div>
+        <div></div>
+        <div class="top-actions">
+          <button class="chrome-btn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M9.5 9a2.5 2.5 0 1 1 4.5 1.5c-.8.6-2 1-2 2"/>
+              <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
+            </svg>
+            도움말
+          </button>
+          <button class="chrome-btn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            설정
+          </button>
+        </div>
+      </header>
+
+      <!-- WORKSPACE -->
+      <div class="workspace">
+        <div class="stack">
+
+          <!-- ① 파일 선택 -->
+          <section class="card">
+            <header class="card-head">
+              <span class="step">1</span>
+              <h2>파일 선택</h2>
+            </header>
+            <div class="dropzone">
+              <div class="doc-illu">
+                <span class="ribbon">HWPX</span>
+              </div>
+              <div class="drop-copy">
+                <h3>HWPX 파일을 끌어오거나 선택하세요</h3>
+                <p>공공기관 제출용 보고서 파일을 안전하게 최적화합니다.</p>
+                <div class="drop-actions">
+                  <button class="btn btn-primary" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+                      <path d="M14 3v5h5"/>
+                    </svg>
+                    파일 선택
+                  </button>
+                  <button class="btn btn-ghost" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    </svg>
+                    폴더 선택
+                  </button>
+                </div>
+                <p class="drop-hint">파일을 선택하면 제출 기준 충족 여부와 예상 절감량을 분석합니다.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ② 제출 기준 및 옵션 -->
+          <section class="card">
+            <header class="card-head">
+              <span class="step">2</span>
+              <h2>제출 기준 및 옵션</h2>
+            </header>
+            <div class="options-grid">
+              <div class="field">
+                <label>제출 제한</label>
+                <div class="select">
+                  <span class="ic">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 2L4 6v6c0 5 3.4 9.4 8 10 4.6-.6 8-5 8-10V6z"/>
+                      <path d="M9 12l2 2 4-4"/>
+                    </svg>
+                  </span>
+                  <span class="val">20MB 이하</span>
+                  <svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+              </div>
+              <div class="field">
+                <label>보존 기준</label>
+                <div class="select">
+                  <span class="ic">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="3"/>
+                      <path d="M3 9h18M9 21V9"/>
+                    </svg>
+                  </span>
+                  <span class="val">권장(균형)</span>
+                  <svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+              </div>
+              <div class="field">
+                <label>작성자·편집 흔적 정리
+                  <span class="help-icon" title="개인정보·편집 이력 정리">?</span>
+                </label>
+                <div class="toggle-row">
+                  <span class="toggle" aria-hidden="true"></span>
+                  <span class="state">켜짐</span>
+                </div>
+              </div>
+            </div>
+            <p class="options-hint">
+              <span class="info-dot">i</span>
+              권장: 보고서 품질과 용량 절감의 균형을 맞춥니다.
+            </p>
+          </section>
+
+          <!-- ③ 분석 요약 -->
+          <section class="card">
+            <header class="card-head">
+              <span class="step">3</span>
+              <h2>분석 요약</h2>
+              <span class="badge">제출 기준 · 20MB</span>
+            </header>
+            <div class="summary-grid">
+              <div class="metric">
+                <span class="ic blue" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/>
+                    <path d="M22 12A10 10 0 0 0 12 2v10z"/>
+                  </svg>
+                </span>
+                <div>
+                  <div class="lbl">총 원본 용량</div>
+                  <div class="v num">25.4<span class="u">MB</span></div>
+                </div>
+              </div>
+              <div class="metric">
+                <span class="ic orange" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+                    <path d="M14 3v5h5"/>
+                  </svg>
+                </span>
+                <div>
+                  <div class="lbl">예상 결과 용량</div>
+                  <div class="v num">14.8<span class="u">MB</span></div>
+                </div>
+              </div>
+              <div class="metric">
+                <span class="ic green" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 4v12"/>
+                    <path d="M6 10l6 6 6-6"/>
+                    <path d="M4 20h16"/>
+                  </svg>
+                </span>
+                <div>
+                  <div class="lbl">예상 절감량</div>
+                  <div class="v num">10.6<span class="u">MB</span></div>
+                </div>
+              </div>
+              <div class="metric">
+                <span class="ic blue" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6.5" cy="6.5" r="2.5"/>
+                    <circle cx="17.5" cy="17.5" r="2.5"/>
+                    <path d="M19 5L5 19"/>
+                  </svg>
+                </span>
+                <div>
+                  <div class="lbl">예상 절감률</div>
+                  <div class="v num">41.7<span class="u">%</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 충족 예상 -->
+            <div class="target-card">
+              <div class="target-head">
+                <span class="seal" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12l5 5L20 7"/>
+                  </svg>
+                </span>
+                <span class="title">제출 기준 충족 예상</span>
+                <span class="meta">여유 용량 <b>5.2 MB (26.0%)</b></span>
+              </div>
+              <p class="target-sub">예상 결과: 14.8 MB · 제출 제한 20 MB 이하</p>
+              <div class="progress">
+                <div class="fill"></div>
+                <div class="marker curr" style="left: 49.3%"></div>
+                <div class="marker cap"  style="left: 66.7%"></div>
+              </div>
+              <div class="scale-row">
+                <span>0MB</span>
+                <span class="active" style="margin-left:auto;margin-right:auto;transform:translateX(-90px)">14.8MB</span>
+                <span class="cap" style="position:absolute;left:66.7%;transform:translateX(-50%)"><b>20MB</b> 제한</span>
+                <span style="margin-left:auto">30MB</span>
+              </div>
+            </div>
+
+            <!-- CTA -->
+            <div class="run-row">
+              <button class="cta-primary" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2L4 6v6c0 5 3.4 9.4 8 10 4.6-.6 8-5 8-10V6z"/>
+                  <path d="M9 12l2 2 4-4"/>
+                </svg>
+                제출 가능성 분석 시작
+              </button>
+              <button class="cta-secondary" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                다시 분석
+              </button>
+              <button class="cta-secondary" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                </svg>
+                저장 위치
+              </button>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+          <div class="sidebar-card">
+            <h2 class="sidebar-title">자동 최적화 계획</h2>
+            <ul class="protocol">
+              <li>
+                <span class="ic blue" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <path d="M21 15l-5-5L5 21"/>
+                  </svg>
+                </span>
+                <div>
+                  <div class="name">이미지 용량 최적화</div>
+                  <div class="desc">이미지 압축 및 크기 조정으로 파일 용량을 줄입니다.</div>
+                </div>
+                <div class="est">
+                  <div class="lbl">예상 절감</div>
+                  <div class="v">분석 후 표시</div>
+                </div>
+              </li>
+              <li>
+                <span class="ic purple" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"/>
+                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  </svg>
+                </span>
+                <div>
+                  <div class="name">불필요한 이미지 정보 제거</div>
+                  <div class="desc">불필요한 메타데이터 및 숨은 정보를 제거합니다.</div>
+                </div>
+                <div class="est">
+                  <div class="lbl">예상 절감</div>
+                  <div class="v">분석 후 표시</div>
+                </div>
+              </li>
+              <li>
+                <span class="ic teal" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>
+                  </svg>
+                </span>
+                <div>
+                  <div class="name">작성자·편집 흔적 정리</div>
+                  <div class="desc">작성자 정보 및 편집 기록 등 개인 정보를 정리합니다.</div>
+                </div>
+                <div class="est">
+                  <div class="lbl">예상 절감</div>
+                  <div class="v">분석 후 표시</div>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="safe-card">
+            <span class="safe-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L4 6v6c0 5 3.4 9.4 8 10 4.6-.6 8-5 8-10V6z"/>
+                <path d="M9 12l2 2 4-4"/>
+              </svg>
+            </span>
+            <div>
+              <div class="h">안전한 최적화</div>
+              <p>원본은 그대로 유지되며,<br/>보안 문서 우회 없이 새 파일로 저장됩니다.</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </body>
+</html>

@@ -592,7 +592,7 @@ function renderEmptySummary(): void {
   summaryResultLine.textContent = "예상 결과: -";
   summaryTargetLine.textContent = `제출 기준: ${targetLabelForDisplay()}`;
   targetTrackFill.style.width = "0%";
-  optimizeButton.textContent = "파일을 선택해 분석 시작";
+  optimizeButton.textContent = "파일을 선택해 시작하세요";
   optimizeButton.disabled = true;
 }
 

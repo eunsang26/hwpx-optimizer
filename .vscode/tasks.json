@@ -1,0 +1,80 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "desktop:dev",
+            "type": "npm",
+            "script": "desktop:dev",
+            "problemMatcher": ["$tsc-watch"],
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": false
+            },
+            "detail": "TypeScript watch + Electron 자동 재시작"
+        },
+        {
+            "label": "desktop:start",
+            "type": "npm",
+            "script": "desktop:start",
+            "problemMatcher": ["$tsc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "detail": "한 번 빌드 후 Electron 실행"
+        },
+        {
+            "label": "desktop:preview",
+            "type": "npm",
+            "script": "desktop:preview",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "detail": "Vite 브라우저 미리보기 (Electron 없이 UI만)"
+        },
+        {
+            "label": "build",
+            "type": "npm",
+            "script": "build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$tsc"],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "detail": "전체 워크스페이스 빌드"
+        },
+        {
+            "label": "typecheck",
+            "type": "npm",
+            "script": "typecheck",
+            "problemMatcher": ["$tsc"],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "test",
+            "type": "npm",
+            "script": "test",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        }
+    ]
+}

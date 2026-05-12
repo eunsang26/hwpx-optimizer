@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>안 A · Bureau of Records — HWPX 보고서 검수국</title>
+    <style>
+      :root {
+        --paper: #f3ecdb;
+        --paper-2: #ece2c9;
+        --paper-3: #e3d6b5;
+        --ink: #1a1410;
+        --ink-2: #3a2f23;
+        --ink-3: #6a5a44;
+        --rule: #b9a878;
+        --rule-soft: #d6c79e;
+        --seal: #a8262a;
+        --seal-deep: #821c1f;
+        --ok: #2a5739;
+        --warn: #8a5a18;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background:
+          radial-gradient(1200px 600px at 80% -10%, #f7f0df 0%, var(--paper) 60%),
+          var(--paper);
+        background-attachment: fixed;
+        color: var(--ink);
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+        font-size: 13px;
+        letter-spacing: -0.003em;
+        -webkit-font-smoothing: antialiased;
+        position: relative;
+      }
+      body::before {
+        content: "";
+        position: fixed; inset: 0;
+        pointer-events: none;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1  0 0 0 0 0.08  0 0 0 0 0.05  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+        mix-blend-mode: multiply;
+        opacity: 0.6;
+        z-index: 0;
+      }
+      .display, h1, h2, h3 {
+        font-family: "Iowan Old Style", "Charter", "Source Serif Pro", Georgia,
+          "Noto Serif KR", "AppleMyungjo", "Batang", serif;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0;
+      }
+      .mono, code, kbd {
+        font-family: "JetBrains Mono", "IBM Plex Mono", "SF Mono", ui-monospace, Consolas, monospace;
+        font-feature-settings: "tnum", "ss01";
+      }
+      .label {
+        font-family: "JetBrains Mono", ui-monospace, Consolas, monospace;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .shell {
+        position: relative;
+        z-index: 1;
+        max-width: 1480px;
+        margin: 0 auto;
+        padding: 28px 36px 56px;
+      }
+
+      /* MASTHEAD */
+      .masthead {
+        border-top: 2px solid var(--ink);
+        border-bottom: 1px solid var(--ink);
+        padding: 16px 0 14px;
+        position: relative;
+      }
+      .masthead::after {
+        content: "";
+        display: block;
+        height: 1px;
+        background: var(--ink);
+        margin-top: 4px;
+        opacity: 0.55;
+      }
+      .masthead-top {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      .masthead-id {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .seal {
+        width: 56px; height: 56px;
+        display: grid; place-items: center;
+        background: var(--seal);
+        color: #f3ecdb;
+        font-family: "AppleMyungjo", "Batang", "Noto Serif KR", serif;
+        font-size: 28px;
+        font-weight: 700;
+        transform: rotate(-4deg);
+        box-shadow:
+          0 0 0 2px var(--seal-deep) inset,
+          2px 3px 0 rgba(0,0,0,0.08);
+        position: relative;
+      }
+      .seal::after {
+        content: "";
+        position: absolute; inset: -6px;
+        border: 1px dashed var(--seal-deep);
+        opacity: 0.45;
+      }
+      .titleblock h1 {
+        font-size: 38px;
+        line-height: 1.02;
+        letter-spacing: -0.018em;
+      }
+      .titleblock h1 em {
+        font-style: italic;
+        color: var(--ink-2);
+      }
+      .titleblock .kicker {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--ink-3);
+      }
+      .masthead-meta {
+        text-align: right;
+        line-height: 1.5;
+      }
+      .masthead-meta .row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 14px;
+        align-items: baseline;
+      }
+      .masthead-meta .row + .row { margin-top: 2px; }
+      .masthead-meta .v { color: var(--ink); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px; letter-spacing: 0.04em; }
+      .top-actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      .ghost-btn {
+        background: transparent;
+        border: 1px solid var(--ink);
+        color: var(--ink);
+        padding: 6px 12px;
+        font: inherit;
+        font-size: 11px;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .ghost-btn:hover { background: var(--ink); color: var(--paper); }
+
+      /* SAFETY STRIP */
+      .safety-strip {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 16px;
+        align-items: center;
+        padding: 10px 14px;
+        background: var(--paper-2);
+        border: 1px solid var(--rule);
+        position: relative;
+      }
+      .safety-strip::before {
+        content: "";
+        position: absolute; left: -1px; top: -1px; bottom: -1px;
+        width: 6px;
+        background: repeating-linear-gradient(45deg, var(--ink) 0 4px, transparent 4px 8px);
+      }
+      .safety-strip .mark {
+        display: inline-grid; place-items: center;
+        width: 28px; height: 28px;
+        border: 1.5px solid var(--ok);
+        color: var(--ok);
+        font-family: "AppleMyungjo", "Batang", serif;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .safety-strip .meta {
+        color: var(--ink-3);
+      }
+
+      /* MAIN GRID */
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 28px;
+        margin-top: 28px;
+      }
+      .stack { display: grid; gap: 22px; }
+
+      /* PANEL */
+      .panel {
+        background: transparent;
+        position: relative;
+      }
+      .panel + .panel { padding-top: 22px; border-top: 1px solid var(--rule); }
+      .section-head {
+        display: grid;
+        grid-template-columns: 60px 1fr auto;
+        gap: 18px;
+        align-items: baseline;
+        margin-bottom: 14px;
+      }
+      .section-num {
+        font-family: "Iowan Old Style", Georgia, "Noto Serif KR", serif;
+        font-size: 42px;
+        line-height: 1;
+        font-style: italic;
+        color: var(--ink);
+        font-weight: 400;
+      }
+      .section-num small {
+        display: block;
+        font-style: normal;
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        color: var(--ink-3);
+        margin-top: 4px;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+      }
+      .section-title h2 {
+        font-size: 22px;
+        line-height: 1.1;
+      }
+      .section-title .sub {
+        margin-top: 4px;
+        color: var(--ink-3);
+        font-size: 12.5px;
+      }
+      .section-aside {
+        text-align: right;
+        color: var(--ink-3);
+      }
+
+      /* FILE PANEL */
+      .dropzone {
+        margin-left: 78px;
+        border: 1.5px dashed var(--ink);
+        background: var(--paper-2);
+        padding: 38px 36px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 32px;
+        align-items: center;
+        position: relative;
+      }
+      .dropzone::before, .dropzone::after {
+        content: "✣";
+        position: absolute;
+        font-family: serif;
+        font-size: 14px;
+        color: var(--ink-2);
+      }
+      .dropzone::before { top: 8px; left: 10px; }
+      .dropzone::after { bottom: 8px; right: 10px; }
+      .doc-stamp {
+        width: 130px; height: 168px;
+        background: var(--paper);
+        border: 1.5px solid var(--ink);
+        position: relative;
+        display: grid;
+        grid-template-rows: 1fr auto auto 1fr;
+        padding: 14px 12px;
+        text-align: center;
+      }
+      .doc-stamp::before {
+        content: "";
+        position: absolute;
+        top: 0; right: 0;
+        width: 26px; height: 26px;
+        background: linear-gradient(225deg, transparent 50%, var(--ink) 50%);
+      }
+      .doc-stamp .doc-mark {
+        font-family: "Iowan Old Style", Georgia, "Noto Serif KR", serif;
+        font-style: italic;
+        font-size: 32px;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .doc-stamp .doc-cap {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.24em;
+        color: var(--ink-3);
+        margin-top: 6px;
+      }
+      .doc-stamp .doc-rule {
+        height: 1px; background: var(--ink); margin: 10px 14px 8px;
+      }
+      .drop-copy h3 {
+        font-size: 24px;
+        line-height: 1.15;
+        margin-bottom: 8px;
+      }
+      .drop-copy p {
+        margin: 0 0 16px;
+        color: var(--ink-3);
+        max-width: 460px;
+      }
+      .drop-actions { display: flex; gap: 10px; align-items: center; }
+      .seal-btn {
+        background: var(--seal);
+        color: #f5e9c8;
+        border: none;
+        padding: 12px 22px;
+        font-family: "Iowan Old Style", Georgia, serif;
+        font-size: 14.5px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+        position: relative;
+        box-shadow: 3px 3px 0 var(--ink);
+        transition: transform 80ms ease, box-shadow 80ms ease;
+      }
+      .seal-btn:hover { transform: translate(1px,1px); box-shadow: 2px 2px 0 var(--ink); }
+      .seal-btn::before {
+        content: "❖";
+        margin-right: 8px;
+        font-size: 13px;
+        opacity: 0.8;
+      }
+      .outline-btn {
+        background: transparent;
+        color: var(--ink);
+        border: 1.5px solid var(--ink);
+        padding: 11px 18px;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 11.5px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .outline-btn:hover { background: var(--ink); color: var(--paper); }
+      .drop-hint {
+        margin-top: 18px !important;
+        color: var(--ink-3) !important;
+        font-size: 11.5px !important;
+        border-top: 1px dotted var(--rule);
+        padding-top: 12px;
+      }
+
+      /* OPTIONS */
+      .options-grid {
+        margin-left: 78px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 0;
+        border: 1px solid var(--rule);
+        background: var(--paper-2);
+      }
+      .options-grid .opt {
+        padding: 16px 20px;
+        border-right: 1px solid var(--rule);
+        position: relative;
+      }
+      .options-grid .opt:last-child { border-right: none; }
+      .opt-label {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 9.5px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .opt-label .idx {
+        color: var(--ink-3);
+      }
+      .opt-value {
+        font-family: "Iowan Old Style", Georgia, "Noto Serif KR", serif;
+        font-size: 17px;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .opt-value .caret {
+        color: var(--ink-3);
+        font-size: 11px;
+      }
+      .toggle-pill {
+        display: inline-flex; align-items: center; gap: 10px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .toggle-track {
+        width: 36px; height: 18px;
+        background: var(--ok);
+        border-radius: 999px;
+        position: relative;
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+      }
+      .toggle-track::after {
+        content: ""; position: absolute;
+        top: 2px; right: 2px;
+        width: 14px; height: 14px;
+        background: var(--paper);
+        border-radius: 50%;
+      }
+      .options-note {
+        margin: 12px 0 0 78px;
+        font-size: 11.5px;
+        color: var(--ink-3);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .options-note::before {
+        content: "ℹ";
+        font-family: serif;
+        font-size: 14px;
+        color: var(--ink);
+      }
+
+      /* SUMMARY */
+      .summary-row {
+        margin-left: 78px;
+        border: 1px solid var(--rule);
+        background: var(--paper-2);
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .metric {
+        padding: 18px 20px;
+        border-right: 1px solid var(--rule);
+        position: relative;
+      }
+      .metric:last-child { border-right: none; }
+      .metric .label {
+        display: flex;
+        justify-content: space-between;
+      }
+      .metric .label .nr {
+        opacity: 0.6;
+      }
+      .metric .v {
+        font-family: "Iowan Old Style", Georgia, serif;
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 1.05;
+        margin-top: 12px;
+        letter-spacing: -0.01em;
+      }
+      .metric .v.empty {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 24px;
+        color: var(--ink-3);
+        font-weight: 400;
+      }
+      .metric .sub {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10.5px;
+        color: var(--ink-3);
+        margin-top: 6px;
+        letter-spacing: 0.04em;
+      }
+      .target {
+        border-top: 1px dashed var(--rule);
+        padding: 14px 20px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 14px;
+        align-items: center;
+      }
+      .target .status {
+        display: flex; align-items: center; gap: 10px;
+        font-family: "Iowan Old Style", Georgia, serif;
+        font-size: 15px;
+      }
+      .status-dot {
+        width: 8px; height: 8px; background: var(--ok);
+        border-radius: 50%;
+        box-shadow: 0 0 0 3px rgba(42,87,57,0.18);
+      }
+      .target .reading {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        color: var(--ink-3);
+        letter-spacing: 0.06em;
+      }
+      .target-track {
+        margin: 0 20px 16px;
+        height: 6px;
+        background: var(--paper-3);
+        position: relative;
+        border: 1px solid var(--rule);
+      }
+      .target-track .fill {
+        position: absolute; inset: 0 auto 0 0;
+        width: 0;
+        background: repeating-linear-gradient(45deg, var(--ok) 0 4px, #336d49 4px 8px);
+      }
+
+      /* PRIMARY ACTION */
+      .primary-row {
+        margin: 22px 0 0 78px;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 14px;
+        align-items: stretch;
+      }
+      .cta {
+        background: var(--ink);
+        color: var(--paper);
+        border: none;
+        padding: 20px 26px;
+        text-align: left;
+        position: relative;
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 18px;
+        box-shadow: 4px 4px 0 var(--seal);
+        transition: transform 80ms, box-shadow 80ms;
+      }
+      .cta:hover { transform: translate(1px,1px); box-shadow: 3px 3px 0 var(--seal); }
+      .cta.disabled {
+        background: var(--paper-3);
+        color: var(--ink-3);
+        box-shadow: 4px 4px 0 var(--rule);
+        cursor: not-allowed;
+      }
+      .cta .lead {
+        font-family: "Iowan Old Style", Georgia, "Noto Serif KR", serif;
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.1;
+      }
+      .cta .sub {
+        margin-top: 4px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10.5px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        opacity: 0.75;
+      }
+      .cta .arr {
+        font-family: "Iowan Old Style", serif;
+        font-size: 32px;
+        font-style: italic;
+        line-height: 1;
+      }
+
+      /* SIDEBAR */
+      .sidebar {
+        border-top: 2px solid var(--ink);
+        padding-top: 16px;
+        position: sticky;
+        top: 24px;
+        align-self: start;
+      }
+      .sidebar h2 {
+        font-size: 22px;
+        margin-bottom: 4px;
+      }
+      .sidebar .kicker { display: block; margin-bottom: 8px; }
+      .protocol {
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+        border-top: 1px solid var(--rule);
+      }
+      .protocol li {
+        padding: 16px 0 16px 36px;
+        border-bottom: 1px solid var(--rule);
+        position: relative;
+      }
+      .protocol li::before {
+        content: counter(p, decimal-leading-zero);
+        counter-increment: p;
+        position: absolute;
+        left: 0; top: 16px;
+        font-family: "Iowan Old Style", Georgia, serif;
+        font-size: 14px;
+        font-style: italic;
+        color: var(--ink-3);
+      }
+      .protocol { counter-reset: p; }
+      .protocol .name {
+        font-family: "Iowan Old Style", Georgia, "Noto Serif KR", serif;
+        font-size: 15.5px;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .protocol .name .est {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        font-weight: 400;
+      }
+      .protocol .desc {
+        margin-top: 6px;
+        color: var(--ink-3);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .protocol .check {
+        position: absolute;
+        right: 0; top: 16px;
+        font-family: "AppleMyungjo", serif;
+        font-size: 16px;
+        color: var(--ok);
+      }
+      .safe-card {
+        margin-top: 22px;
+        padding: 20px;
+        background: var(--paper-2);
+        border: 1px solid var(--ok);
+        position: relative;
+      }
+      .safe-card::before {
+        content: "";
+        position: absolute;
+        left: 0; right: 0; top: -1px;
+        height: 4px;
+        background: repeating-linear-gradient(45deg, var(--ok) 0 4px, transparent 4px 8px);
+      }
+      .safe-card .head {
+        display: flex; align-items: center; gap: 10px;
+        font-family: "Iowan Old Style", Georgia, serif;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--ok);
+      }
+      .safe-card .head .glyph {
+        width: 26px; height: 26px;
+        display: grid; place-items: center;
+        background: var(--ok); color: var(--paper);
+        font-family: "AppleMyungjo", serif;
+      }
+      .safe-card p {
+        margin-top: 10px;
+        color: var(--ink-2);
+        line-height: 1.55;
+      }
+      .signature {
+        margin-top: 18px;
+        padding-top: 12px;
+        border-top: 1px dashed var(--rule);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="masthead">
+        <div class="masthead-top">
+          <div class="masthead-id">
+            <div class="seal">局</div>
+            <div class="titleblock">
+              <span class="kicker label">Bureau of Document Optimization · 보고서 검수국</span>
+              <h1>HWPX <em>보고서 용량 최적화</em></h1>
+            </div>
+          </div>
+          <div class="masthead-meta">
+            <div class="row label">
+              <span>Folio</span>
+              <span class="v">HWPX-OPT / VOL.&nbsp;Ⅲ</span>
+            </div>
+            <div class="row label">
+              <span>Issued</span>
+              <span class="v">2026 · 05 · 12</span>
+            </div>
+            <div class="row label">
+              <span>Workspace</span>
+              <span class="v">/local/PC · OFFLINE</span>
+            </div>
+            <div class="top-actions">
+              <button class="ghost-btn">? 도움말</button>
+              <button class="ghost-btn">⚙ 설정</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="safety-strip">
+        <span class="mark">緘</span>
+        <span>원본은 변경하지 않고, 보안 문서 우회 없이 내 PC에서만 처리됩니다.</span>
+        <span class="meta label">LOCAL ONLY · NO NETWORK · NO TELEMETRY</span>
+      </div>
+
+      <div class="workspace">
+        <div class="stack">
+          <!-- §01 파일 선택 -->
+          <section class="panel">
+            <div class="section-head">
+              <div class="section-num">§ 01<small>FOLIO ENTRY</small></div>
+              <div class="section-title">
+                <h2>파일 선택</h2>
+                <div class="sub">검수 대상 HWPX 문서를 등록합니다. 단일 또는 다중 파일을 받을 수 있습니다.</div>
+              </div>
+              <div class="section-aside label">단일 · BATCH 가능</div>
+            </div>
+            <div class="dropzone">
+              <div class="doc-stamp">
+                <div></div>
+                <div class="doc-mark">H</div>
+                <div class="doc-cap">HWPX</div>
+                <div class="doc-rule"></div>
+                <div class="doc-cap" style="font-size:8.5px">DOC TYPE</div>
+              </div>
+              <div class="drop-copy">
+                <h3>HWPX 파일을 끌어오거나 선택하세요</h3>
+                <p>공공기관 제출용 보고서 파일을 안전하게 최적화합니다. 본 도구는 원본 문서를 결코 수정하지 않으며, 모든 처리는 내 PC 안에서 끝납니다.</p>
+                <div class="drop-actions">
+                  <button class="seal-btn">파일 선택</button>
+                  <button class="outline-btn">폴더 선택</button>
+                  <button class="outline-btn">여러 파일</button>
+                </div>
+                <p class="drop-hint">파일을 선택하면 제출 기준 충족 여부와 예상 절감량을 분석합니다.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- §02 옵션 -->
+          <section class="panel">
+            <div class="section-head">
+              <div class="section-num">§ 02<small>PARAMETERS</small></div>
+              <div class="section-title">
+                <h2>제출 기준 및 옵션</h2>
+                <div class="sub">기관별 제출 한도와 보존 기준을 지정합니다.</div>
+              </div>
+              <div class="section-aside label">DEFAULT · 권장</div>
+            </div>
+            <div class="options-grid">
+              <div class="opt">
+                <div class="opt-label"><span>제출 제한 / SUBMISSION CAP</span><span class="idx">a</span></div>
+                <div class="opt-value"><span>20 MB 이하</span><span class="caret">▾</span></div>
+              </div>
+              <div class="opt">
+                <div class="opt-label"><span>보존 기준 / PRESERVATION</span><span class="idx">b</span></div>
+                <div class="opt-value"><span>권장 (균형)</span><span class="caret">▾</span></div>
+              </div>
+              <div class="opt">
+                <div class="opt-label"><span>흔적 정리 / METADATA SCRUB</span><span class="idx">c</span></div>
+                <div class="opt-value">
+                  <span class="toggle-pill">
+                    <span class="toggle-track"></span>
+                    <span>ENABLED</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <p class="options-note">권장: 보고서 품질과 용량 절감의 균형을 맞춥니다. 보존 기준을 강화하려면 「보수(외형)」을 선택하세요.</p>
+          </section>
+
+          <!-- §03 분석 요약 -->
+          <section class="panel">
+            <div class="section-head">
+              <div class="section-num">§ 03<small>ASSESSMENT</small></div>
+              <div class="section-title">
+                <h2>분석 요약</h2>
+                <div class="sub">제출 기준 대비 현재 문서의 위치를 보여줍니다.</div>
+              </div>
+              <div class="section-aside label">TARGET&nbsp;:&nbsp;20MB</div>
+            </div>
+            <div class="summary-row">
+              <div class="summary-grid">
+                <div class="metric">
+                  <div class="label"><span>총 원본 용량</span><span class="nr">a</span></div>
+                  <div class="v empty">— · —</div>
+                  <div class="sub">ORIGINAL · MB</div>
+                </div>
+                <div class="metric">
+                  <div class="label"><span>예상 결과 용량</span><span class="nr">b</span></div>
+                  <div class="v empty">— · —</div>
+                  <div class="sub">EXPECTED · MB</div>
+                </div>
+                <div class="metric">
+                  <div class="label"><span>예상 절감량</span><span class="nr">c</span></div>
+                  <div class="v empty">— · —</div>
+                  <div class="sub">SAVED · MB</div>
+                </div>
+                <div class="metric">
+                  <div class="label"><span>예상 절감률</span><span class="nr">d</span></div>
+                  <div class="v empty">— %</div>
+                  <div class="sub">RATIO · 0~100</div>
+                </div>
+              </div>
+              <div class="target">
+                <div class="status">
+                  <span class="status-dot"></span>
+                  <span>파일을 선택하면 분석 결과가 표시됩니다.</span>
+                </div>
+                <div class="reading">예상 결과 : — · 제출 기준 : 20 MB</div>
+              </div>
+              <div class="target-track"><span class="fill"></span></div>
+            </div>
+
+            <div class="primary-row">
+              <button class="cta disabled">
+                <div>
+                  <div class="lead">파일을 선택해 분석 시작</div>
+                  <div class="sub">Enter Folio · Begin Assessment</div>
+                </div>
+                <span class="arr">→</span>
+              </button>
+              <button class="outline-btn">다시 분석</button>
+              <button class="outline-btn">저장 위치</button>
+            </div>
+          </section>
+        </div>
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+          <span class="kicker label">Inspection Protocol · 검수 계획</span>
+          <h2>자동 최적화 계획</h2>
+          <ol class="protocol">
+            <li>
+              <div class="name">이미지 용량 최적화 <span class="est">예상 절감 · 분석 후</span></div>
+              <div class="desc">이미지 압축 및 크기 조정으로 파일 용량을 줄입니다.</div>
+              <span class="check">✓</span>
+            </li>
+            <li>
+              <div class="name">불필요한 이미지 정보 제거 <span class="est">예상 절감 · 분석 후</span></div>
+              <div class="desc">불필요한 메타데이터 및 숨은 정보를 제거합니다.</div>
+              <span class="check">✓</span>
+            </li>
+            <li>
+              <div class="name">작성자·편집 흔적 정리 <span class="est">예상 절감 · 분석 후</span></div>
+              <div class="desc">작성자 정보 및 편집 기록 등 개인 정보를 정리합니다.</div>
+              <span class="check">✓</span>
+            </li>
+          </ol>
+          <div class="safe-card">
+            <div class="head"><span class="glyph">安</span><span>안전한 최적화</span></div>
+            <p>원본은 그대로 유지되며, 보안 문서 우회 없이 새 파일로 저장됩니다. 처리 이력과 내부 로그는 어디에도 남지 않습니다.</p>
+          </div>
+          <div class="signature">SIGNED · BUREAU OF DOCUMENT OPTIMIZATION</div>
+        </aside>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,15 +1,65 @@
 {
-    // IntelliSense를 사용하여 가능한 특성에 대해 알아보세요.
-    // 기존 특성에 대한 설명을 보려면 가리킵니다.
-    // 자세한 내용을 보려면 https://go.microsoft.com/fwlink/?linkid=830387을(를) 방문하세요.
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "PowerShell: Launch Current File",
-            "type": "PowerShell",
+            "name": "▶ 데스크탑 앱 실행 (개발 · 자동 재시작)",
+            "type": "node",
             "request": "launch",
-            "script": "${file}",
-            "args": []
+            "cwd": "${workspaceFolder}",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "desktop:dev"],
+            "skipFiles": ["<node_internals>/**"],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "outputCapture": "std",
+            "presentation": {
+                "group": "1-desktop",
+                "order": 1
+            }
+        },
+        {
+            "name": "데스크탑 앱 한 번 실행 (빌드 → 시작)",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "desktop:start"],
+            "skipFiles": ["<node_internals>/**"],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "presentation": {
+                "group": "1-desktop",
+                "order": 2
+            }
+        },
+        {
+            "name": "브라우저 미리보기 (Vite)",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "desktop:preview"],
+            "skipFiles": ["<node_internals>/**"],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "presentation": {
+                "group": "2-preview",
+                "order": 1
+            }
+        },
+        {
+            "name": "CLI 실행 (현재 파일 인자로)",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "cli", "--", "analyze", "${file}"],
+            "skipFiles": ["<node_internals>/**"],
+            "console": "integratedTerminal",
+            "presentation": {
+                "group": "3-cli",
+                "order": 1
+            }
         }
     ]
 }

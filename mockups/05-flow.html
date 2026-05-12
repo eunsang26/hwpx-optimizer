@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>안 E · Flow — 임포트 + 실행 한 카드</title>
+    <style>
+      :root {
+        --bg: #f6f8fb;
+        --surface: #ffffff;
+        --surface-2: #fafbfd;
+        --surface-3: #f3f6fb;
+        --text: #0b1426;
+        --text-2: #1f2937;
+        --muted: #5a6577;
+        --muted-2: #8a93a4;
+        --hairline: #eef1f6;
+        --border: #e3e8f0;
+        --border-strong: #d6dce6;
+        --blue: #2563eb;
+        --blue-2: #1d4ed8;
+        --blue-soft: #eff4ff;
+        --green: #16a34a;
+        --green-2: #15803d;
+        --green-soft: #ecfdf3;
+        --green-border: #bbf2cf;
+        --green-track: #e6efe9;
+        --orange: #ea7a16;
+        --orange-soft: #fff2e2;
+        --purple: #7c3aed;
+        --purple-soft: #f3edff;
+        --teal: #0e9384;
+        --teal-soft: #e7f8f5;
+        --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+        --shadow-md: 0 1px 0 rgba(15, 23, 42, 0.02), 0 1px 3px rgba(15, 23, 42, 0.06), 0 6px 18px rgba(15, 23, 42, 0.04);
+        --shadow-cta: 0 6px 18px rgba(37, 99, 235, 0.32), 0 1px 2px rgba(37, 99, 235, 0.18);
+        --radius: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          "Pretendard Variable", "Pretendard", "Inter Variable", "Inter",
+          "Apple SD Gothic Neo", system-ui, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        letter-spacing: -0.012em;
+        -webkit-font-smoothing: antialiased;
+        font-feature-settings: "ss01", "ss02", "cv01", "cv11", "tnum";
+      }
+      h1, h2, h3, p { margin: 0; }
+      .mono { font-variant-numeric: tabular-nums; }
+
+      .shell {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 18px 14px;
+      }
+
+      /* HEADER */
+      .top {
+        display: grid;
+        grid-template-columns: auto auto 1fr auto;
+        align-items: center;
+        gap: 10px;
+        margin: 0 -18px 8px;
+        padding: 8px 22px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--hairline);
+      }
+      .top .mark {
+        width: 30px; height: 30px;
+        border-radius: 9px;
+        background: linear-gradient(180deg, #eaf2ff 0%, #d8e6ff 100%);
+        display: grid; place-items: center;
+        box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+      }
+      .top .title {
+        font-size: 13.5px;
+        font-weight: 800;
+        letter-spacing: -0.018em;
+        white-space: nowrap;
+      }
+      .top .safety {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 11.5px;
+        padding-left: 10px;
+        border-left: 1px solid var(--hairline);
+        min-width: 0;
+      }
+      .top .safety svg { color: var(--blue); }
+      .top .actions { display: flex; gap: 2px; }
+      .top .actions button {
+        height: 30px;
+        padding: 0 10px;
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+        display: inline-flex; align-items: center; gap: 5px;
+      }
+      .top .actions button:hover { background: var(--blue-soft); color: var(--blue); }
+
+      /* WORKSPACE */
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 308px;
+        gap: 10px;
+        align-items: start;
+      }
+      .col { display: grid; gap: 8px; }
+
+      /* HERO CARD: import + run + result */
+      .hero {
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-md);
+        padding: 12px 14px 14px;
+        display: grid;
+        grid-template-columns: minmax(280px, 1fr) 1px minmax(420px, 1.4fr);
+        gap: 16px;
+      }
+      .hero-divider {
+        background: var(--hairline);
+        align-self: stretch;
+      }
+
+      /* LEFT: Import zone */
+      .import-side h2 {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .dropzone {
+        border: 1.5px dashed #c2d2ef;
+        background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+        border-radius: 10px;
+        padding: 14px 14px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 12px;
+        align-items: center;
+      }
+      .doc {
+        width: 56px; height: 70px;
+        border-radius: 8px;
+        background: #fff;
+        border: 1.5px solid #d4e0f5;
+        position: relative;
+        display: grid; place-items: end center;
+        padding-bottom: 7px;
+        box-shadow: 0 3px 10px rgba(37, 99, 235, 0.08);
+      }
+      .doc::before {
+        content: "";
+        position: absolute; top: 0; right: 0;
+        width: 16px; height: 16px;
+        background: linear-gradient(225deg, var(--blue-soft) 50%, transparent 50%);
+        border-bottom-left-radius: 4px;
+      }
+      .doc span {
+        font-family: ui-monospace, monospace;
+        font-size: 8.5px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #fff;
+        background: var(--blue);
+        padding: 2px 5px;
+        border-radius: 3px;
+      }
+      .import-copy h3 {
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: -0.018em;
+        color: var(--text);
+        margin-bottom: 2px;
+      }
+      .import-copy p {
+        color: var(--muted);
+        font-size: 11.5px;
+        margin-bottom: 8px;
+      }
+      .import-actions { display: flex; gap: 6px; }
+      .btn {
+        height: 34px;
+        padding: 0 14px;
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 700;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn-primary {
+        background: var(--blue);
+        color: #fff;
+        box-shadow: var(--shadow-cta);
+      }
+      .btn-primary:hover { filter: brightness(1.04); }
+      .btn-ghost {
+        background: #fff;
+        color: var(--text-2);
+        border-color: var(--border);
+        box-shadow: var(--shadow-sm);
+      }
+      .btn-ghost:hover { border-color: var(--border-strong); background: var(--surface-2); }
+
+      .micro-hint {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px dashed rgba(194, 210, 239, 0.7);
+        font-size: 11px;
+        color: var(--muted-2);
+      }
+      .micro-hint b { color: var(--blue); }
+
+      /* RIGHT: Run + result preview */
+      .run-side {
+        display: grid;
+        gap: 8px;
+        align-content: start;
+      }
+      .run-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: space-between;
+      }
+      .run-head .label {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .run-head .target {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--muted);
+        background: var(--surface-3);
+        padding: 3px 8px;
+        border-radius: 999px;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+      }
+      .m {
+        padding: 8px 10px;
+        border: 1px solid var(--hairline);
+        border-radius: 9px;
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        gap: 6px;
+        align-items: center;
+      }
+      .m .ic { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; }
+      .m .ic.b { background: var(--blue-soft);   color: var(--blue); }
+      .m .ic.o { background: var(--orange-soft); color: var(--orange); }
+      .m .ic.g { background: var(--green-soft);  color: var(--green); }
+      .m .ic.p { background: var(--blue-soft);   color: var(--blue); }
+      .m .lbl  { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+      .m .v    { font-size: 14px; font-weight: 800; color: var(--text); letter-spacing: -0.018em; line-height: 1.1; }
+      .m.idle .ic { background: var(--surface-3); color: var(--muted-2); }
+      .m.idle .v  { color: var(--muted-2); font-weight: 600; }
+
+      /* target line (compact) */
+      .target-band {
+        margin-top: 2px;
+        border-radius: 9px;
+        border: 1px solid var(--green-border);
+        background: linear-gradient(180deg, #f4fcf6 0%, #ecfdf3 100%);
+        padding: 8px 12px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: center;
+      }
+      .target-band .lead {
+        display: flex; align-items: center; gap: 8px;
+      }
+      .target-band .dot {
+        width: 18px; height: 18px; border-radius: 50%;
+        background: var(--green); color: #fff;
+        display: grid; place-items: center;
+      }
+      .target-band .text { font-size: 12.5px; font-weight: 700; color: var(--green-2); }
+      .target-band .meta { font-size: 11.5px; color: var(--green-2); font-weight: 700; white-space: nowrap; }
+      .target-track {
+        grid-column: 1 / -1;
+        height: 6px;
+        background: var(--green-track);
+        border-radius: 999px;
+        position: relative;
+        margin-top: 2px;
+      }
+      .target-track .fill {
+        position: absolute; inset: 0 auto 0 0;
+        width: 49.3%;
+        background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
+        border-radius: 999px;
+      }
+      .target-band.idle {
+        border: 1px dashed var(--border-strong);
+        background: linear-gradient(180deg, #fbfcfe 0%, #f6f8fb 100%);
+      }
+      .target-band.idle .dot { background: var(--surface-3); color: var(--muted-2); border: 1px solid var(--border); }
+      .target-band.idle .text { color: var(--text-2); }
+      .target-band.idle .meta { color: var(--muted); }
+      .target-band.idle .target-track {
+        background: repeating-linear-gradient(135deg, var(--surface-3) 0 6px, var(--surface) 6px 12px);
+        border: 1px solid var(--hairline);
+      }
+      .target-band.idle .fill { display: none; }
+
+      /* RUN CTA: sits right under target band, visually attached to import */
+      .run-cta {
+        margin-top: 4px;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 6px;
+      }
+      .run-cta button {
+        height: 42px;
+        font: inherit;
+        font-weight: 800;
+        font-size: 13.5px;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        letter-spacing: -0.012em;
+      }
+      .run-cta .primary {
+        background: linear-gradient(180deg, var(--blue) 0%, var(--blue-2) 100%);
+        color: #fff;
+        box-shadow: var(--shadow-cta);
+      }
+      .run-cta .primary.disabled {
+        background: var(--surface-3); color: var(--muted-2); box-shadow: none;
+        border: 1px solid var(--border);
+        cursor: not-allowed;
+      }
+      .run-cta .ghost {
+        background: #fff;
+        color: var(--text-2);
+        border: 1px solid var(--border);
+        padding: 0 12px;
+        font-size: 12.5px;
+        font-weight: 700;
+        box-shadow: var(--shadow-sm);
+      }
+
+      /* SIDEBAR: options on top, then plan, safe */
+      .sidebar {
+        align-self: start;
+        position: sticky;
+        top: 8px;
+        display: grid;
+        gap: 8px;
+      }
+      .side-card {
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-md);
+        padding: 10px 12px;
+      }
+      .side-card h3 {
+        font-size: 12.5px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        letter-spacing: -0.018em;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .side-card h3 .small {
+        font-size: 10.5px;
+        color: var(--muted);
+        font-weight: 600;
+        letter-spacing: 0;
+      }
+      .opt-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 7px 0;
+        border-bottom: 1px solid var(--hairline);
+        font-size: 12px;
+      }
+      .opt-row:last-child { border-bottom: none; }
+      .opt-row .k { color: var(--muted); font-weight: 600; }
+      .opt-row .v { font-weight: 700; color: var(--text); display: inline-flex; gap: 5px; align-items: center; }
+      .opt-row .v .caret { color: var(--muted-2); }
+      .toggle {
+        width: 32px; height: 18px; background: var(--blue);
+        border-radius: 999px; position: relative;
+      }
+      .toggle::after {
+        content: ""; position: absolute; top: 1px; right: 1px;
+        width: 14px; height: 14px; background: #fff;
+        border-radius: 50%;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+      }
+
+      .plan-list { list-style: none; padding: 0; margin: 0; }
+      .plan-list li {
+        display: grid;
+        grid-template-columns: 26px 1fr;
+        gap: 9px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--hairline);
+      }
+      .plan-list li:last-child { border-bottom: none; }
+      .plan-list .ic { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; }
+      .plan-list .ic.b { background: var(--blue-soft);   color: var(--blue); }
+      .plan-list .ic.p { background: var(--purple-soft); color: var(--purple); }
+      .plan-list .ic.t { background: var(--teal-soft);   color: var(--teal); }
+      .plan-list .nm { font-size: 12.5px; font-weight: 700; letter-spacing: -0.012em; }
+      .plan-list .ds { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+      .safe {
+        background: linear-gradient(180deg, #f4fcf6 0%, #ecfdf3 100%);
+        border: 1px solid var(--green-border);
+        border-radius: var(--radius);
+        padding: 10px 12px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 10px;
+        align-items: center;
+      }
+      .safe .glyph {
+        width: 28px; height: 28px;
+        border-radius: 50%;
+        background: var(--green);
+        color: #fff;
+        display: grid; place-items: center;
+      }
+      .safe strong {
+        font-size: 12.5px; font-weight: 800; color: var(--green-2);
+      }
+      .safe p { font-size: 11.5px; color: #2f5d3f; line-height: 1.4; margin-top: 1px; }
+
+      /* Bottom accordions */
+      .bottom {
+        margin-top: 8px;
+        display: grid;
+        gap: 6px;
+      }
+      .acc {
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius);
+        padding: 10px 14px;
+        display: flex; align-items: center; gap: 10px;
+        font-size: 12.5px;
+        cursor: pointer;
+      }
+      .acc .ic { width: 20px; height: 20px; color: var(--blue); display: grid; place-items: center; }
+      .acc strong { font-weight: 800; }
+      .acc .meta { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <!-- HEADER -->
+      <header class="top">
+        <span class="mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 3v5h5"/>
+            <path d="M9 13h6M9 17h4"/>
+          </svg>
+        </span>
+        <span class="title">HWPX 보고서 용량 최적화</span>
+        <span class="safety">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.4 9.4 8 10 4.6-.6 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+          원본은 변경하지 않고, 보안 문서 우회 없이 내 PC에서만 처리됩니다.
+        </span>
+        <div class="actions">
+          <button>? 도움말</button>
+          <button>⚙ 설정</button>
+        </div>
+      </header>
+
+      <!-- WORKSPACE -->
+      <div class="workspace">
+        <div class="col">
+          <!-- HERO: import + run -->
+          <section class="hero">
+            <!-- LEFT: Import -->
+            <div class="import-side">
+              <h2>1. 파일 선택</h2>
+              <div class="dropzone">
+                <div class="doc"><span>HWPX</span></div>
+                <div class="import-copy">
+                  <h3>HWPX 파일을 끌어오세요</h3>
+                  <p>공공기관 제출용 보고서 파일을 안전하게 최적화합니다.</p>
+                  <div class="import-actions">
+                    <button class="btn btn-primary">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+                      파일 선택
+                    </button>
+                    <button class="btn btn-ghost">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                      폴더
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="micro-hint">
+                파일을 선택하면 <b>분석이 자동으로 시작</b>되고 결과가 오른쪽에 표시됩니다.
+              </div>
+            </div>
+
+            <div class="hero-divider"></div>
+
+            <!-- RIGHT: Run + result preview -->
+            <div class="run-side">
+              <div class="run-head">
+                <span class="label">2. 분석 결과 · 실행</span>
+                <span class="target">제출 기준 · 20MB</span>
+              </div>
+
+              <div class="metrics">
+                <div class="m">
+                  <span class="ic b">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                  </span>
+                  <div>
+                    <div class="lbl">원본</div>
+                    <div class="v mono">25.4 <span style="font-size:10.5px;color:var(--muted);">MB</span></div>
+                  </div>
+                </div>
+                <div class="m">
+                  <span class="ic o">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+                  </span>
+                  <div>
+                    <div class="lbl">결과</div>
+                    <div class="v mono">14.8 <span style="font-size:10.5px;color:var(--muted);">MB</span></div>
+                  </div>
+                </div>
+                <div class="m">
+                  <span class="ic g">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="M6 10l6 6 6-6"/><path d="M4 20h16"/></svg>
+                  </span>
+                  <div>
+                    <div class="lbl">절감량</div>
+                    <div class="v mono">10.6 <span style="font-size:10.5px;color:var(--muted);">MB</span></div>
+                  </div>
+                </div>
+                <div class="m">
+                  <span class="ic p">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/><path d="M19 5L5 19"/></svg>
+                  </span>
+                  <div>
+                    <div class="lbl">절감률</div>
+                    <div class="v mono">41.7 <span style="font-size:10.5px;color:var(--muted);">%</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="target-band">
+                <div class="lead">
+                  <span class="dot">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+                  </span>
+                  <span class="text">제출 기준 충족 예상</span>
+                </div>
+                <span class="meta">여유 5.2 MB · 26.0%</span>
+                <div class="target-track"><span class="fill"></span></div>
+              </div>
+
+              <div class="run-cta">
+                <button class="primary">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.4 9.4 8 10 4.6-.6 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+                  제출 기준에 맞게 줄이기
+                </button>
+                <button class="ghost">다시 분석</button>
+                <button class="ghost">저장 위치</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Bottom accordions -->
+          <div class="bottom">
+            <div class="acc">
+              <span class="ic">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              </span>
+              <strong>세부 분석 보기</strong>
+              <span class="meta">이미지·메타데이터·구조 항목 확인</span>
+            </div>
+            <div class="acc">
+              <span class="ic">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.4 9.4 8 10 4.6-.6 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+              </span>
+              <strong>자동 검증 결과</strong>
+              <span class="meta">누락 리소스·품질 기준 확인</span>
+            </div>
+            <div class="acc">
+              <span class="ic">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg>
+              </span>
+              <strong>이번 실행 결과</strong>
+              <span class="meta">현재 결과 파일·리포트</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+          <!-- Options moved here -->
+          <div class="side-card">
+            <h3>제출 기준 및 옵션 <span class="small">권장 기본값</span></h3>
+            <div class="opt-row"><span class="k">제출 제한</span><span class="v">20MB 이하 <span class="caret">▾</span></span></div>
+            <div class="opt-row"><span class="k">보존 기준</span><span class="v">권장(균형) <span class="caret">▾</span></span></div>
+            <div class="opt-row"><span class="k">흔적 정리</span><span class="v"><span class="toggle"></span></span></div>
+          </div>
+
+          <!-- Auto optimize plan -->
+          <div class="side-card">
+            <h3>자동 최적화 계획 <span class="small">3개 항목</span></h3>
+            <ul class="plan-list">
+              <li>
+                <span class="ic b">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                </span>
+                <div>
+                  <div class="nm">이미지 용량 최적화</div>
+                  <div class="ds">압축 및 크기 조정으로 용량 절감</div>
+                </div>
+              </li>
+              <li>
+                <span class="ic p">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                </span>
+                <div>
+                  <div class="nm">불필요한 이미지 정보 제거</div>
+                  <div class="ds">메타데이터·숨은 정보 제거</div>
+                </div>
+              </li>
+              <li>
+                <span class="ic t">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+                </span>
+                <div>
+                  <div class="nm">작성자·편집 흔적 정리</div>
+                  <div class="ds">작성자 정보 및 편집 기록 정리</div>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="safe">
+            <span class="glyph">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.4 9.4 8 10 4.6-.6 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+            </span>
+            <div>
+              <strong>안전한 최적화</strong>
+              <p>원본은 그대로, 새 파일로 저장됩니다.</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </body>
+</html>

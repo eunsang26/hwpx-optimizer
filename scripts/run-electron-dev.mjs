@@ -43,11 +43,22 @@ const tsc = spawn(
   }
 );
 
+let fastStarted = false;
+const startedAt = Date.now();
+
 tsc.stdout.setEncoding("utf8");
 tsc.stderr.setEncoding("utf8");
 tsc.stdout.on("data", (chunk) => {
   process.stdout.write(chunk);
   if (chunk.includes("Found 0 errors. Watching for file changes.")) {
+    // If we already fast-started and tsc reports completion within a few seconds,
+    // the build was already fresh — skip the redundant restart.
+    const elapsed = Date.now() - startedAt;
+    if (fastStarted && elapsed < 3000) {
+      fastStarted = false;
+      return;
+    }
+    fastStarted = false;
     void copyRuntimeAssets().then(() => restartElectron());
   }
 });
@@ -56,6 +67,21 @@ tsc.on("exit", (code) => {
   if (electronProcess) electronProcess.kill();
   process.exit(code ?? 0);
 });
+
+// Fast-start: if dist/ already has a usable build, launch Electron immediately
+// instead of waiting for tsc --watch to finish its first compilation pass.
+void (async () => {
+  if (existsSync(join(desktopDist, "main.cjs"))) {
+    try {
+      await copyRuntimeAssets();
+      restartElectron();
+      fastStarted = true;
+      console.log("[dev] fast-start: launched Electron from existing dist/. tsc watch continues in background.");
+    } catch (error) {
+      console.warn("[dev] fast-start skipped:", error?.message ?? error);
+    }
+  }
+})();
 
 watchDesktopAssets();
 

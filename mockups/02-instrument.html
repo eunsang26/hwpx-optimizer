@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>안 B · Precision Instrument — HWPX 정밀 검수 콘솔</title>
+    <style>
+      :root {
+        --bg: #0e1012;
+        --panel: #14171a;
+        --panel-2: #191d21;
+        --panel-3: #1f242a;
+        --rail: #2b3138;
+        --rail-2: #353d46;
+        --text: #e8e3d4;
+        --text-2: #b3afa3;
+        --text-3: #75716a;
+        --amber: #f5b942;
+        --amber-2: #c98f1f;
+        --phos: #6df0a8;
+        --phos-2: #28c074;
+        --hot: #ff5447;
+        --cool: #5da8ff;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background:
+          radial-gradient(1100px 600px at 100% 0%, #1a1d20 0%, transparent 60%),
+          radial-gradient(800px 400px at 0% 100%, #16191c 0%, transparent 55%),
+          var(--bg);
+        background-attachment: fixed;
+        color: var(--text);
+        font-family:
+          "JetBrains Mono", "IBM Plex Mono", "SF Mono", ui-monospace, Consolas,
+          "Pretendard", "Apple SD Gothic Neo", monospace;
+        font-size: 12.5px;
+        letter-spacing: 0.005em;
+        -webkit-font-smoothing: antialiased;
+      }
+      body::before {
+        content: "";
+        position: fixed; inset: 0;
+        pointer-events: none;
+        background-image: repeating-linear-gradient(
+          0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px);
+        z-index: 0;
+      }
+      .display {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .kr {
+        font-family: "Pretendard", "Apple SD Gothic Neo", system-ui, sans-serif;
+        letter-spacing: -0.005em;
+      }
+      h1, h2, h3, p { margin: 0; }
+      .shell {
+        position: relative;
+        z-index: 1;
+        max-width: 1480px;
+        margin: 0 auto;
+        padding: 14px 22px 32px;
+      }
+
+      /* TOP RAIL */
+      .top-rail {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 18px;
+        align-items: center;
+        padding: 10px 14px;
+        background: linear-gradient(180deg, #1a1f24, #15191d);
+        border: 1px solid var(--rail);
+        border-bottom: 2px solid #000;
+        position: relative;
+      }
+      .top-rail::after {
+        content: "";
+        position: absolute; left: 14px; right: 14px; bottom: -1px; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--amber-2), transparent);
+        opacity: 0.45;
+      }
+      .brand {
+        display: flex; align-items: center; gap: 12px;
+      }
+      .led-bank {
+        display: grid;
+        grid-template-columns: repeat(3, 8px);
+        gap: 6px;
+      }
+      .led {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #2a2e33;
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.6);
+      }
+      .led.on.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber), inset 0 0 0 1px rgba(0,0,0,0.6); }
+      .led.on.phos { background: var(--phos); box-shadow: 0 0 8px var(--phos), inset 0 0 0 1px rgba(0,0,0,0.6); }
+      .led.on.cool { background: var(--cool); box-shadow: 0 0 8px var(--cool), inset 0 0 0 1px rgba(0,0,0,0.6); }
+      .brand-title {
+        font-size: 13.5px;
+        letter-spacing: 0.04em;
+      }
+      .brand-title .accent { color: var(--amber); }
+      .brand-title .kr { display: block; color: var(--text-2); font-size: 10.5px; margin-top: 2px; letter-spacing: 0.04em; }
+
+      .rail-readout {
+        display: grid;
+        grid-template-columns: repeat(5, auto);
+        gap: 14px;
+        justify-content: end;
+        font-size: 10.5px;
+        color: var(--text-3);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .rail-readout .v {
+        display: block;
+        color: var(--text);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        margin-top: 2px;
+      }
+      .rail-readout .v.amber { color: var(--amber); }
+      .rail-readout .v.phos { color: var(--phos); }
+
+      .top-actions {
+        display: flex; gap: 6px;
+      }
+      .chip {
+        background: var(--panel-2);
+        border: 1px solid var(--rail);
+        color: var(--text-2);
+        padding: 6px 10px;
+        font: inherit;
+        font-size: 10.5px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .chip:hover { color: var(--amber); border-color: var(--amber-2); }
+
+      /* STATUS BAR */
+      .statusbar {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 16px;
+        align-items: center;
+        padding: 8px 14px;
+        background: var(--panel);
+        border: 1px solid var(--rail);
+        font-size: 10.5px;
+        color: var(--text-2);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .pulse {
+        display: inline-flex; align-items: center; gap: 6px;
+      }
+      .pulse .led { width: 7px; height: 7px; }
+      .pulse .led.on.phos { animation: blink 1.6s ease-in-out infinite; }
+      @keyframes blink { 0%, 70%, 100% { opacity: 1; } 78%, 92% { opacity: 0.25; } }
+
+      /* GRID */
+      .console {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 14px;
+      }
+      .col { display: grid; gap: 12px; }
+
+      .module {
+        background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+        border: 1px solid var(--rail);
+        position: relative;
+      }
+      .module::before {
+        content: "";
+        position: absolute; left: 8px; right: 8px; top: 0; height: 1px;
+        background: rgba(255,255,255,0.04);
+      }
+      .module-head {
+        padding: 10px 14px 8px;
+        border-bottom: 1px solid var(--rail);
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 12px;
+        align-items: center;
+        background: rgba(0,0,0,0.18);
+      }
+      .mod-id {
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        color: var(--amber);
+      }
+      .mod-title {
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        color: var(--text);
+      }
+      .mod-title .sep { color: var(--text-3); margin: 0 8px; }
+      .mod-title .kr { color: var(--text-2); font-size: 11.5px; }
+      .mod-meta {
+        font-size: 10px;
+        color: var(--text-3);
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      .module-body { padding: 16px; }
+
+      /* CHANNEL STRIP (file panel) */
+      .channel {
+        display: grid;
+        grid-template-columns: 200px 1fr auto;
+        gap: 18px;
+        align-items: stretch;
+      }
+      .cart {
+        background: var(--panel-3);
+        border: 1px solid var(--rail-2);
+        padding: 14px;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 10px;
+        position: relative;
+      }
+      .cart::after {
+        content: "";
+        position: absolute;
+        right: 8px; top: 8px; width: 14px; height: 14px;
+        background:
+          linear-gradient(45deg, transparent 47%, var(--amber) 47% 53%, transparent 53%),
+          linear-gradient(-45deg, transparent 47%, var(--amber) 47% 53%, transparent 53%);
+      }
+      .cart .tag {
+        font-size: 9.5px;
+        color: var(--text-3);
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+      .cart .big {
+        font-size: 48px;
+        line-height: 1;
+        color: var(--amber);
+        text-shadow: 0 0 12px rgba(245,185,66,0.35);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        text-align: center;
+        padding: 16px 0 4px;
+      }
+      .cart .bottom {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        font-size: 9.5px;
+        color: var(--text-3);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .cart .bottom span:last-child { text-align: right; color: var(--text-2); }
+      .drop-copy h3 {
+        font-size: 19px;
+        color: var(--text);
+        letter-spacing: -0.01em;
+        line-height: 1.2;
+        margin-bottom: 6px;
+      }
+      .drop-copy h3 .kr { font-family: "Pretendard", system-ui, sans-serif; }
+      .drop-copy p { color: var(--text-2); margin-bottom: 16px; line-height: 1.5; max-width: 480px; }
+      .drop-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .hard-btn {
+        background: linear-gradient(180deg, #2a2f35 0%, #1d2126 100%);
+        border: 1px solid var(--rail-2);
+        border-bottom-color: #000;
+        color: var(--text);
+        padding: 9px 16px;
+        font: inherit;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        cursor: pointer;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.5);
+      }
+      .hard-btn.primary {
+        background: linear-gradient(180deg, var(--amber) 0%, var(--amber-2) 100%);
+        color: #1a1206;
+        border-color: #6a4a0c;
+        text-shadow: 0 1px 0 rgba(255,255,255,0.18);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 12px rgba(245,185,66,0.25);
+      }
+      .hard-btn:hover { color: var(--amber); }
+      .hard-btn.primary:hover { color: #0a0500; filter: brightness(1.07); }
+      .drop-hint {
+        margin-top: 14px;
+        font-size: 10.5px;
+        color: var(--text-3);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .knobs {
+        display: grid;
+        grid-template-rows: repeat(3, 1fr);
+        gap: 14px;
+        width: 90px;
+        align-items: center;
+      }
+      .knob {
+        position: relative;
+        padding-bottom: 18px;
+      }
+      .knob .dial {
+        width: 56px; height: 56px; margin: 0 auto;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 30% 30%, #4a525b 0%, #1a1f23 60%, #0c0f12 100%);
+        border: 1px solid #000;
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.1),
+          0 2px 4px rgba(0,0,0,0.4);
+        position: relative;
+      }
+      .knob .dial::after {
+        content: "";
+        position: absolute;
+        top: 6px; left: 50%;
+        width: 2px; height: 14px;
+        background: var(--amber);
+        transform: translateX(-50%) rotate(var(--rot, 0deg));
+        transform-origin: center 22px;
+        box-shadow: 0 0 6px var(--amber);
+      }
+      .knob .lbl {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        text-align: center;
+        font-size: 9px;
+        color: var(--text-3);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      /* OPTIONS / PARAMETERS */
+      .params {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0;
+      }
+      .params .p {
+        padding: 14px 18px;
+        border-right: 1px solid var(--rail);
+        position: relative;
+      }
+      .params .p:last-child { border-right: none; }
+      .p-label {
+        font-size: 9.5px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--text-3);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .p-label .ix { color: var(--amber-2); }
+      .p-value {
+        margin-top: 10px;
+        font-size: 16px;
+        color: var(--text);
+        display: flex; justify-content: space-between; align-items: center;
+      }
+      .p-value .kr { font-family: "Pretendard", system-ui, sans-serif; font-size: 15px; }
+      .p-value .caret { color: var(--text-3); }
+      .switch {
+        display: inline-flex; align-items: center; gap: 10px;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+      }
+      .switch-track {
+        width: 44px; height: 22px;
+        background: var(--panel-3);
+        border: 1px solid var(--rail-2);
+        position: relative;
+      }
+      .switch-track::after {
+        content: ""; position: absolute;
+        top: 2px; right: 2px;
+        width: 16px; height: 16px;
+        background: linear-gradient(180deg, var(--phos) 0%, var(--phos-2) 100%);
+        box-shadow: 0 0 8px var(--phos);
+      }
+      .switch.on .lbl { color: var(--phos); }
+      .params-note {
+        padding: 10px 18px;
+        border-top: 1px solid var(--rail);
+        background: rgba(0,0,0,0.2);
+        font-size: 10.5px;
+        color: var(--text-3);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .params-note .led { width: 6px; height: 6px; }
+
+      /* METERS */
+      .meters {
+        padding: 18px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 14px;
+      }
+      .meter {
+        background: #08090b;
+        border: 1px solid var(--rail);
+        padding: 14px;
+        position: relative;
+        overflow: hidden;
+      }
+      .meter::before {
+        content: "";
+        position: absolute; inset: 0;
+        background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,255,255,0.015) 2px 3px);
+        pointer-events: none;
+      }
+      .meter .ml {
+        font-size: 9.5px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--text-3);
+        display: flex; justify-content: space-between;
+      }
+      .meter .ml .ix { color: var(--amber-2); }
+      .meter .mv {
+        margin-top: 14px;
+        font-size: 32px;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        color: var(--amber);
+        text-shadow: 0 0 12px rgba(245,185,66,0.4);
+        font-weight: 700;
+      }
+      .meter.idle .mv {
+        color: var(--text-3);
+        text-shadow: none;
+        font-weight: 400;
+      }
+      .meter .mu {
+        font-size: 10px;
+        color: var(--text-3);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-top: 6px;
+      }
+      .meter .bars {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 2px;
+        height: 14px;
+      }
+      .meter .bars span {
+        background: var(--rail);
+      }
+      .meter .bars span.on.a { background: var(--phos); box-shadow: 0 0 4px var(--phos); }
+      .meter .bars span.on.b { background: var(--amber); box-shadow: 0 0 4px var(--amber); }
+      .meter .bars span.on.c { background: var(--hot); box-shadow: 0 0 4px var(--hot); }
+
+      /* TARGET BAR */
+      .target-rail {
+        padding: 14px 18px 16px;
+        border-top: 1px solid var(--rail);
+        background: rgba(0,0,0,0.22);
+      }
+      .target-line {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 10.5px;
+        color: var(--text-2);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+      }
+      .target-line .status .led { width: 8px; height: 8px; }
+      .target-line .status { display: flex; align-items: center; gap: 8px; }
+      .scale {
+        position: relative; height: 24px;
+      }
+      .scale::before {
+        content: "";
+        position: absolute; left: 0; right: 0; top: 11px; height: 2px;
+        background: var(--rail);
+      }
+      .scale .tick {
+        position: absolute;
+        top: 4px;
+        width: 1px; height: 8px;
+        background: var(--text-3);
+      }
+      .scale .tick.major { height: 16px; top: 0; background: var(--text-2); }
+      .scale .tick .lbl {
+        position: absolute;
+        top: 18px; left: 50%;
+        transform: translateX(-50%);
+        font-size: 9px;
+        color: var(--text-3);
+        letter-spacing: 0.16em;
+      }
+      .scale .needle {
+        position: absolute;
+        top: -4px; bottom: -4px;
+        width: 2px;
+        background: var(--amber);
+        box-shadow: 0 0 8px var(--amber);
+      }
+
+      /* RUN */
+      .run-rack {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 10px;
+        padding: 14px;
+        border-top: 1px solid var(--rail);
+        background: linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.4));
+      }
+      .run-btn {
+        background:
+          linear-gradient(180deg, #2a2f35 0%, #11151a 100%);
+        border: 1px solid #000;
+        color: var(--text-3);
+        padding: 18px 22px;
+        font: inherit;
+        font-size: 13px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        cursor: not-allowed;
+        text-align: left;
+        position: relative;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+      }
+      .run-btn .lead { font-size: 15px; color: var(--text-2); letter-spacing: 0.18em; }
+      .run-btn .sub  { display: block; font-size: 10px; color: var(--text-3); letter-spacing: 0.2em; margin-top: 6px; }
+      .run-btn.armed {
+        background: linear-gradient(180deg, var(--amber) 0%, var(--amber-2) 100%);
+        color: #18130a;
+        cursor: pointer;
+        box-shadow: 0 0 24px rgba(245,185,66,0.35), inset 0 1px 0 rgba(255,255,255,0.3);
+      }
+      .run-btn.armed .lead { color: #0a0500; }
+      .run-btn.armed .sub  { color: rgba(0,0,0,0.55); }
+
+      /* SIDEBAR — RACK */
+      .rack {
+        background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+        border: 1px solid var(--rail);
+        align-self: start;
+        position: sticky;
+        top: 14px;
+      }
+      .rack-head {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--rail);
+        background: rgba(0,0,0,0.25);
+        display: grid;
+        gap: 4px;
+      }
+      .rack-head .id {
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        color: var(--amber);
+      }
+      .rack-head .title {
+        font-size: 15px;
+        letter-spacing: 0.02em;
+        color: var(--text);
+      }
+      .rack-head .title .kr {
+        font-family: "Pretendard", system-ui, sans-serif;
+        color: var(--text-2);
+        font-size: 13px;
+      }
+      .protocol {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .protocol li {
+        padding: 14px 16px 14px 50px;
+        border-bottom: 1px solid var(--rail);
+        position: relative;
+        display: grid;
+        gap: 4px;
+      }
+      .protocol li:last-child { border-bottom: none; }
+      .protocol .ix {
+        position: absolute;
+        left: 14px; top: 14px;
+        width: 24px; height: 24px;
+        background: var(--panel-3);
+        border: 1px solid var(--rail-2);
+        display: grid; place-items: center;
+        font-size: 10px;
+        color: var(--amber);
+        letter-spacing: 0.04em;
+      }
+      .protocol .name {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-size: 12.5px;
+        letter-spacing: 0.04em;
+      }
+      .protocol .name .est {
+        font-size: 9.5px;
+        color: var(--text-3);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+      .protocol .desc {
+        font-family: "Pretendard", system-ui, sans-serif;
+        font-size: 12px;
+        color: var(--text-2);
+        line-height: 1.5;
+        letter-spacing: -0.005em;
+      }
+      .safe {
+        margin: 14px;
+        padding: 14px;
+        background: rgba(109, 240, 168, 0.05);
+        border: 1px solid rgba(109,240,168,0.4);
+        position: relative;
+      }
+      .safe::before {
+        content: "";
+        position: absolute; left: 0; top: 0; bottom: 0;
+        width: 3px;
+        background: var(--phos);
+        box-shadow: 0 0 8px var(--phos);
+      }
+      .safe .h {
+        display: flex; gap: 10px; align-items: center;
+        font-size: 12px;
+        letter-spacing: 0.2em;
+        color: var(--phos);
+        text-transform: uppercase;
+      }
+      .safe .h .led { width: 8px; height: 8px; animation: blink 2s ease-in-out infinite; }
+      .safe p {
+        font-family: "Pretendard", system-ui, sans-serif;
+        font-size: 12.5px;
+        color: var(--text-2);
+        margin-top: 8px;
+        line-height: 1.55;
+      }
+
+      /* footer signature */
+      .footstrip {
+        margin-top: 14px;
+        padding: 8px 14px;
+        background: var(--panel);
+        border: 1px solid var(--rail);
+        display: flex; justify-content: space-between;
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        color: var(--text-3);
+        text-transform: uppercase;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="top-rail">
+        <div class="brand">
+          <div class="led-bank">
+            <span class="led on amber"></span>
+            <span class="led on phos"></span>
+            <span class="led on cool"></span>
+          </div>
+          <div class="brand-title">
+            HWPX <span class="accent">·</span> OPTIMIZER&nbsp;CONSOLE
+            <span class="kr">HWPX 보고서 용량 최적화</span>
+          </div>
+        </div>
+        <div class="rail-readout">
+          <div>MODEL<span class="v amber">HWPX-OPT/Ⅲ</span></div>
+          <div>BUILD<span class="v">2026.05.12</span></div>
+          <div>SESSION<span class="v phos">LOCAL-7F2A</span></div>
+          <div>NET<span class="v">OFFLINE</span></div>
+        </div>
+        <div class="top-actions">
+          <button class="chip">? Help</button>
+          <button class="chip">⚙ Config</button>
+        </div>
+      </header>
+
+      <div class="statusbar">
+        <span class="pulse"><span class="led on phos"></span> READY · 대기 중</span>
+        <span>INPUT BUS&nbsp;:&nbsp;—&nbsp;&nbsp;&nbsp;TARGET CAP&nbsp;:&nbsp;20.00&nbsp;MB&nbsp;&nbsp;&nbsp;MODE&nbsp;:&nbsp;BALANCED · 권장</span>
+        <span>LOCAL ONLY · NO NETWORK · NO TELEMETRY</span>
+      </div>
+
+      <div class="console">
+        <div class="col">
+          <!-- 01 INPUT CHANNEL -->
+          <section class="module">
+            <header class="module-head">
+              <span class="mod-id">CH-01</span>
+              <span class="mod-title">INPUT CHANNEL <span class="sep">/</span><span class="kr">파일 선택</span></span>
+              <span class="mod-meta">FOLIO · SINGLE / BATCH</span>
+            </header>
+            <div class="module-body">
+              <div class="channel">
+                <div class="cart">
+                  <div class="tag">▶ Doc Type</div>
+                  <div class="big">.hwpx</div>
+                  <div class="bottom">
+                    <span>FOLIO</span><span>—</span>
+                    <span>SIZE</span><span>—</span>
+                  </div>
+                </div>
+                <div class="drop-copy">
+                  <h3 class="kr">HWPX 파일을 끌어오거나 선택하세요</h3>
+                  <p class="kr">공공기관 제출용 보고서 파일을 안전하게 최적화합니다. 입력 채널에 파일이 패치되면 자동으로 측정이 시작됩니다.</p>
+                  <div class="drop-actions">
+                    <button class="hard-btn primary">▶ Patch File · 파일 선택</button>
+                    <button class="hard-btn">Folder</button>
+                    <button class="hard-btn">Multi</button>
+                  </div>
+                  <div class="drop-hint">▸ 파일 패치 시 제출 기준 충족 여부와 절감 예상치를 측정합니다.</div>
+                </div>
+                <div class="knobs">
+                  <div class="knob"><div class="dial" style="--rot:-45deg"></div><span class="lbl">Gain</span></div>
+                  <div class="knob"><div class="dial" style="--rot:20deg"></div><span class="lbl">Mode</span></div>
+                  <div class="knob"><div class="dial" style="--rot:65deg"></div><span class="lbl">Trim</span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 02 PARAMETERS -->
+          <section class="module">
+            <header class="module-head">
+              <span class="mod-id">CH-02</span>
+              <span class="mod-title">PARAMETERS <span class="sep">/</span><span class="kr">제출 기준 및 옵션</span></span>
+              <span class="mod-meta">PRESET · BALANCED 권장</span>
+            </header>
+            <div class="params">
+              <div class="p">
+                <div class="p-label"><span>SUBMISSION CAP</span><span class="ix">A1</span></div>
+                <div class="p-value"><span class="kr">20MB 이하</span><span class="caret">▾</span></div>
+              </div>
+              <div class="p">
+                <div class="p-label"><span>PRESERVATION</span><span class="ix">A2</span></div>
+                <div class="p-value"><span class="kr">권장 (균형)</span><span class="caret">▾</span></div>
+              </div>
+              <div class="p">
+                <div class="p-label"><span>METADATA SCRUB</span><span class="ix">A3</span></div>
+                <div class="p-value">
+                  <span class="switch on">
+                    <span class="switch-track"></span>
+                    <span class="lbl">ENGAGED</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div class="params-note">
+              <span class="led on phos"></span>
+              ▸ Balanced preset · 보고서 품질과 용량 절감의 균형을 맞춥니다.
+            </div>
+          </section>
+
+          <!-- 03 ASSESSMENT METERS -->
+          <section class="module">
+            <header class="module-head">
+              <span class="mod-id">CH-03</span>
+              <span class="mod-title">ASSESSMENT METERS <span class="sep">/</span><span class="kr">분석 요약</span></span>
+              <span class="mod-meta">TARGET&nbsp;CAP&nbsp;·&nbsp;20.00&nbsp;MB</span>
+            </header>
+            <div class="meters">
+              <div class="meter idle">
+                <div class="ml"><span>ORIGINAL</span><span class="ix">M1</span></div>
+                <div class="mv">— · —</div>
+                <div class="mu">MB · 총 원본 용량</div>
+                <div class="bars">
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+              <div class="meter idle">
+                <div class="ml"><span>EXPECTED</span><span class="ix">M2</span></div>
+                <div class="mv">— · —</div>
+                <div class="mu">MB · 예상 결과 용량</div>
+                <div class="bars">
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+              <div class="meter idle">
+                <div class="ml"><span>SAVED</span><span class="ix">M3</span></div>
+                <div class="mv">— · —</div>
+                <div class="mu">MB · 예상 절감량</div>
+                <div class="bars">
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+              <div class="meter idle">
+                <div class="ml"><span>RATIO</span><span class="ix">M4</span></div>
+                <div class="mv">— %</div>
+                <div class="mu">예상 절감률 · 0~100</div>
+                <div class="bars">
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+            <div class="target-rail">
+              <div class="target-line">
+                <span class="status"><span class="led on phos"></span> 파일을 패치하면 측정이 시작됩니다.</span>
+                <span>예상 결과 — / 제출 기준 20MB</span>
+              </div>
+              <div class="scale" aria-hidden="true">
+                <span class="tick major" style="left:0%"><span class="lbl">0</span></span>
+                <span class="tick" style="left:12.5%"></span>
+                <span class="tick" style="left:25%"><span class="lbl">5</span></span>
+                <span class="tick" style="left:37.5%"></span>
+                <span class="tick" style="left:50%"><span class="lbl">10</span></span>
+                <span class="tick" style="left:62.5%"></span>
+                <span class="tick" style="left:75%"><span class="lbl">15</span></span>
+                <span class="tick" style="left:87.5%"></span>
+                <span class="tick major" style="left:100%"><span class="lbl">20MB</span></span>
+              </div>
+            </div>
+            <div class="run-rack">
+              <button class="run-btn">
+                <span class="lead">▶ Begin Assessment</span>
+                <span class="sub">파일을 선택해 분석 시작 · idle</span>
+              </button>
+              <button class="hard-btn">Re-Analyze</button>
+              <button class="hard-btn">Output Path</button>
+            </div>
+          </section>
+        </div>
+
+        <!-- SIDEBAR RACK -->
+        <aside class="rack">
+          <div class="rack-head">
+            <span class="id">PROTOCOL · RACK B</span>
+            <span class="title">AUTO OPTIMIZE&nbsp;·&nbsp;<span class="kr">자동 최적화 계획</span></span>
+          </div>
+          <ol class="protocol">
+            <li>
+              <span class="ix">01</span>
+              <div class="name">IMAGE COMPRESS <span class="est">EST · 분석 후</span></div>
+              <div class="desc">이미지 압축 및 크기 조정으로 파일 용량을 줄입니다.</div>
+            </li>
+            <li>
+              <span class="ix">02</span>
+              <div class="name">META STRIP <span class="est">EST · 분석 후</span></div>
+              <div class="desc">불필요한 메타데이터 및 숨은 정보를 제거합니다.</div>
+            </li>
+            <li>
+              <span class="ix">03</span>
+              <div class="name">AUTHOR SCRUB <span class="est">EST · 분석 후</span></div>
+              <div class="desc">작성자 정보 및 편집 기록 등 개인 정보를 정리합니다.</div>
+            </li>
+          </ol>
+          <div class="safe">
+            <div class="h"><span class="led on phos"></span> SAFE PATH · 안전한 최적화</div>
+            <p>원본은 그대로 유지되며, 보안 문서 우회 없이 새 파일로 저장됩니다.</p>
+          </div>
+        </aside>
+      </div>
+
+      <footer class="footstrip">
+        <span>SIGNAL · LOCAL BUS</span>
+        <span>FIRMWARE&nbsp;HWPX-OPT/Ⅲ · 2026.05.12</span>
+        <span>NO NETWORK · NO TELEMETRY · NO HISTORY</span>
+      </footer>
+    </div>
+  </body>
+</html>

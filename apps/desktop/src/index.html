@@ -16,6 +16,11 @@
         <div class="brand-row">
           <span class="brand-mark" aria-hidden="true"></span>
           <strong class="app-title">HWPX 보고서 용량 최적화</strong>
+          <div class="safety-row">
+            <span class="shield-icon" aria-hidden="true"></span>
+            <span id="safety-text">원본은 변경하지 않고, 보안 문서 우회 없이 내 PC에서만 처리됩니다.</span>
+            <span id="status-text" class="sr-only">대기 중입니다.</span>
+          </div>
           <div class="top-actions">
             <button type="button" class="chrome-button" title="도움말" aria-label="도움말">
               <span class="help-icon" aria-hidden="true"></span>
@@ -26,11 +31,6 @@
               설정
             </button>
           </div>
-        </div>
-        <div class="safety-row">
-          <span class="shield-icon" aria-hidden="true"></span>
-          <span id="safety-text">원본은 변경하지 않고, 보안 문서 우회 없이 내 PC에서만 처리됩니다.</span>
-          <span id="status-text" class="sr-only">대기 중입니다.</span>
         </div>
       </header>
 
@@ -44,104 +44,153 @@
       </section>
 
       <section id="single-workspace" class="workspace-grid">
-        <div class="workflow-stack">
-          <section class="panel file-panel">
-            <div class="section-heading">
-              <div class="section-title">
-                <span>1.</span>
-                <h2>파일 선택</h2>
-                <strong id="selection-pill" class="selection-pill">단일 파일</strong>
-              </div>
-              <div class="file-actions">
-                <button id="choose-button" type="button" class="ghost icon-text">
-                  <span class="file-add-icon" aria-hidden="true"></span>
-                  파일 추가
-                </button>
-                <button id="choose-folder-button" type="button" class="ghost icon-text">
-                  <span class="folder-icon" aria-hidden="true"></span>
-                  폴더 추가
-                </button>
-                <button id="choose-many-button" type="button" class="ghost compact-action">여러 파일</button>
-                <button id="batch-clear" type="button" class="ghost icon-text" disabled>
-                  <span class="trash-icon" aria-hidden="true"></span>
-                  목록 비우기
-                </button>
-              </div>
+        <!-- ① IMPORT — single compact row -->
+        <section class="panel import-row file-panel">
+          <div class="section-heading">
+            <div class="section-title">
+              <span>1.</span>
+              <h2>파일 선택</h2>
+              <strong id="selection-pill" class="selection-pill">단일 파일</strong>
             </div>
+            <div class="file-actions">
+              <button id="choose-button" type="button" class="ghost icon-text">
+                <span class="file-add-icon" aria-hidden="true"></span>
+                파일 추가
+              </button>
+              <button id="choose-folder-button" type="button" class="ghost icon-text">
+                <span class="folder-icon" aria-hidden="true"></span>
+                폴더 추가
+              </button>
+              <button id="choose-many-button" type="button" class="ghost compact-action">여러 파일</button>
+              <button id="batch-clear" type="button" class="ghost icon-text" disabled>
+                <span class="trash-icon" aria-hidden="true"></span>
+                목록 비우기
+              </button>
+            </div>
+          </div>
 
-            <div id="drop-zone" class="drop-zone">
-              <div class="empty-file-illustration" aria-hidden="true">
+          <div id="drop-zone" class="drop-zone">
+            <div class="empty-file-illustration" aria-hidden="true">
+              <span>HWPX</span>
+            </div>
+            <div class="drop-copy">
+              <h3 id="file-name">HWPX 파일 가져오기</h3>
+              <p id="file-meta"><strong>창 어디에든</strong> 끌어다 놓거나, 아래 버튼으로 선택하세요.</p>
+            </div>
+            <div class="drop-actions">
+              <button id="empty-choose-button" type="button" class="primary-inline icon-text">
+                <span class="folder-icon" aria-hidden="true"></span>
+                파일 선택
+              </button>
+              <button id="empty-folder-button" type="button" class="ghost icon-text">
+                <span class="folder-icon" aria-hidden="true"></span>
+                폴더 선택
+              </button>
+            </div>
+            <p class="drop-hint">파일을 선택하면 자동으로 분석이 시작됩니다.</p>
+          </div>
+
+          <div id="selected-file-card" class="selected-file-card" hidden>
+            <div class="file-badge" aria-hidden="true"><span>HWPX</span></div>
+            <div class="selected-file-copy">
+              <h3 id="selected-file-name">sample2.hwpx</h3>
+              <p id="selected-file-path">파일 경로는 앱 기록으로 저장하지 않습니다.</p>
+              <div class="selected-meta">
                 <span>HWPX</span>
-              </div>
-              <div class="drop-copy">
-                <h3 id="file-name">HWPX 파일을 끌어오거나 선택하세요</h3>
-                <p id="file-meta">공공기관 제출용 보고서 파일을 안전하게 최적화합니다.</p>
-                <div class="drop-actions">
-                  <button id="empty-choose-button" type="button" class="primary-inline icon-text">
-                    <span class="folder-icon" aria-hidden="true"></span>
-                    파일 선택
-                  </button>
-                  <button id="empty-folder-button" type="button" class="ghost icon-text">
-                    <span class="folder-icon" aria-hidden="true"></span>
-                    폴더 선택
-                  </button>
-                </div>
-                <p class="drop-hint">파일을 선택하면 제출 기준 충족 여부와 예상 절감량을 분석합니다.</p>
+                <span id="selected-original-meta">원본 크기: -</span>
+                <span id="selected-modified-meta">수정일: -</span>
               </div>
             </div>
-
-            <div id="selected-file-card" class="selected-file-card" hidden>
-              <div class="file-badge" aria-hidden="true"><span>HWPX</span></div>
-              <div class="selected-file-copy">
-                <h3 id="selected-file-name">sample2.hwpx</h3>
-                <p id="selected-file-path">파일 경로는 앱 기록으로 저장하지 않습니다.</p>
-                <div class="selected-meta">
-                  <span>HWPX</span>
-                  <span id="selected-original-meta">원본 크기: -</span>
-                  <span id="selected-modified-meta">수정일: -</span>
-                </div>
+            <div class="file-size-stats">
+              <div>
+                <span>원본 크기</span>
+                <strong id="single-original-size">-</strong>
               </div>
-              <div class="file-size-stats">
-                <div>
-                  <span>원본 크기</span>
-                  <strong id="single-original-size">-</strong>
-                </div>
-                <div>
-                  <span>예상 결과 용량</span>
-                  <strong id="single-expected-size">-</strong>
-                </div>
-                <div class="saving-ring" aria-label="예상 절감률">
-                  <span id="single-saving-ring">-</span>
-                  <small>절감 예상</small>
-                </div>
+              <div>
+                <span>예상 결과 용량</span>
+                <strong id="single-expected-size">-</strong>
+              </div>
+              <div class="saving-ring" aria-label="예상 절감률">
+                <span id="single-saving-ring">-</span>
+                <small>절감 예상</small>
               </div>
             </div>
+          </div>
 
-            <section id="batch-panel" class="batch-table-panel" hidden>
-              <div class="batch-table-wrap">
-                <table class="batch-table">
-                  <thead>
-                    <tr>
-                      <th><input type="checkbox" checked aria-label="전체 선택" /></th>
-                      <th>파일명</th>
-                      <th>원본 용량</th>
-                      <th>예상 결과</th>
-                      <th>제출 기준</th>
-                      <th>상태</th>
-                    </tr>
-                  </thead>
-                  <tbody id="batch-list"></tbody>
-                </table>
-              </div>
-              <p id="batch-summary" class="batch-summary">파일을 추가하면 진행 상태가 여기에 표시됩니다.</p>
-              <button id="batch-run" type="button" hidden disabled>일괄 최적화</button>
-            </section>
+          <section id="batch-panel" class="batch-table-panel" hidden>
+            <div class="batch-table-wrap">
+              <table class="batch-table">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" checked aria-label="전체 선택" /></th>
+                    <th>파일명</th>
+                    <th>원본 용량</th>
+                    <th>예상 결과</th>
+                    <th>제출 기준</th>
+                    <th>상태</th>
+                  </tr>
+                </thead>
+                <tbody id="batch-list"></tbody>
+              </table>
+            </div>
+            <p id="batch-summary" class="batch-summary">파일을 추가하면 진행 상태가 여기에 표시됩니다.</p>
+            <button id="batch-run" type="button" hidden disabled>일괄 최적화</button>
           </section>
+        </section>
 
-          <section class="panel options-panel">
+        <!-- ② RESULT HERO — metrics + target + CTA -->
+        <section class="panel summary-panel">
+          <div class="section-heading">
             <div class="section-title">
               <span>2.</span>
-              <h2>제출 기준 및 옵션</h2>
+              <h2>분석 결과 · 실행</h2>
+            </div>
+            <span class="section-aside-pill" id="summary-target-line">제출 기준: 20MB</span>
+          </div>
+          <div id="summary-grid" class="summary-grid">
+            <div class="summary-card">
+              <span class="metric-icon pie-icon" aria-hidden="true"></span>
+              <div><span>총 원본 용량</span><strong id="summary-original">-</strong></div>
+            </div>
+            <div class="summary-card">
+              <span class="metric-icon doc-icon" aria-hidden="true"></span>
+              <div><span>예상 결과 용량</span><strong id="summary-expected">-</strong></div>
+            </div>
+            <div class="summary-card">
+              <span class="metric-icon down-icon" aria-hidden="true"></span>
+              <div><span>예상 절감량</span><strong id="summary-saving">-</strong></div>
+            </div>
+            <div class="summary-card">
+              <span class="metric-icon percent-icon" aria-hidden="true"></span>
+              <div><span>예상 절감률</span><strong id="summary-percent">-</strong></div>
+            </div>
+          </div>
+          <div class="target-row">
+            <div>
+              <strong id="summary-status">
+                <span class="success-dot" aria-hidden="true"></span>
+                파일을 선택하면 분석 결과가 표시됩니다.
+              </strong>
+              <span id="summary-result-line">예상 결과: -</span>
+            </div>
+          </div>
+          <div class="target-track"><span id="target-track-fill"></span></div>
+          <section class="primary-run-panel">
+            <button id="optimize-button" type="button" disabled>파일을 선택해 시작하세요</button>
+            <button id="analyze-button" type="button" class="ghost" disabled>다시 분석</button>
+            <button id="output-button" type="button" class="ghost">저장 위치</button>
+          </section>
+        </section>
+
+        <!-- ③ BOTTOM ROW — options chips + plan strip -->
+        <div class="bottom-row">
+          <section class="panel options-panel">
+            <div class="section-heading">
+              <div class="section-title">
+                <span>3.</span>
+                <h2>제출 기준 및 옵션</h2>
+              </div>
+              <span class="section-aside-pill">권장 기본값</span>
             </div>
             <div class="option-grid">
               <label>
@@ -174,66 +223,32 @@
             </div>
             <p class="option-hint">
               <span class="info-icon" aria-hidden="true"></span>
-              권장: 보고서 품질과 용량 절감의 균형을 맞춥니다.
+              권장: 품질과 용량 절감의 균형
             </p>
           </section>
 
-          <section class="panel summary-panel">
-            <div class="section-title">
-              <span>3.</span>
-              <h2>분석 요약</h2>
+          <section class="panel plan-strip" id="plan-sidebar">
+            <div class="section-heading">
+              <div class="section-title">
+                <h2 id="plan-title">자동 최적화 계획</h2>
+              </div>
+              <span class="section-aside-pill">3개 항목</span>
             </div>
-            <div id="summary-grid" class="summary-grid">
-              <div class="summary-card">
-                <span class="metric-icon pie-icon" aria-hidden="true"></span>
-                <div><span>총 원본 용량</span><strong id="summary-original">-</strong></div>
-              </div>
-              <div class="summary-card">
-                <span class="metric-icon doc-icon" aria-hidden="true"></span>
-                <div><span>예상 결과 용량</span><strong id="summary-expected">-</strong></div>
-              </div>
-              <div class="summary-card">
-                <span class="metric-icon down-icon" aria-hidden="true"></span>
-                <div><span>예상 절감량</span><strong id="summary-saving">-</strong></div>
-              </div>
-              <div class="summary-card">
-                <span class="metric-icon percent-icon" aria-hidden="true"></span>
-                <div><span>예상 절감률</span><strong id="summary-percent">-</strong></div>
-              </div>
-            </div>
-            <div class="target-row">
-              <div>
-                <strong id="summary-status">
-                  <span class="success-dot" aria-hidden="true"></span>
-                  파일을 선택하면 분석 결과가 표시됩니다.
-                </strong>
-                <span id="summary-result-line">예상 결과: -</span>
-              </div>
-              <span id="summary-target-line">제출 기준: 20MB</span>
-            </div>
-            <div class="target-track"><span id="target-track-fill"></span></div>
-            <section class="primary-run-panel">
-              <button id="optimize-button" type="button" disabled>파일을 선택해 분석 시작</button>
-              <button id="analyze-button" type="button" class="ghost" disabled>다시 분석</button>
-              <button id="output-button" type="button" class="ghost">저장 위치</button>
-            </section>
+            <p id="plan-summary" class="sr-only">파일을 분석하면 예상 절감량을 표시합니다.</p>
+            <div id="plan-total" class="sr-only">예상 절감 0 B</div>
+            <ul id="action-checkboxes" class="plan-actions"></ul>
+            <p id="action-panel-hint" class="sr-only">옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.</p>
           </section>
         </div>
 
-        <aside id="plan-sidebar" class="plan-sidebar">
-          <h2 id="plan-title">자동 최적화 계획</h2>
-          <p id="plan-summary" class="sr-only">파일을 분석하면 예상 절감량을 표시합니다.</p>
-          <div id="plan-total" class="sr-only">예상 절감 0 B</div>
-          <ul id="action-checkboxes" class="plan-actions"></ul>
-          <p id="action-panel-hint" class="sr-only">옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.</p>
-          <div class="safe-card">
-            <span class="large-shield-icon" aria-hidden="true"></span>
-            <div>
-              <strong>안전한 최적화</strong>
-              <p>원본은 그대로 유지되며,<br />보안 문서 우회 없이 새 파일로 저장됩니다.</p>
-            </div>
+        <!-- ④ SAFE LINE — single thin row -->
+        <div class="safe-card safe-line">
+          <span class="large-shield-icon" aria-hidden="true"></span>
+          <div>
+            <strong>안전한 최적화</strong>
+            <p>원본은 그대로 유지되며, 보안 문서 우회 없이 새 파일로 저장됩니다.</p>
           </div>
-        </aside>
+        </div>
       </section>
 
       <section class="bottom-accordions">
