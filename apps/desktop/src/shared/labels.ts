@@ -21,6 +21,27 @@ const ERROR_LABELS: Record<string, string> = {
   "Optimization cancelled.": "최적화가 취소되었습니다."
 };
 
+const ERROR_PATTERNS: Array<{ regex: RegExp; label: (match: RegExpMatchArray) => string }> = [
+  {
+    regex: /^Unsupported HWP binary file/i,
+    label: () => "HWP 파일은 직접 최적화할 수 없습니다. 한글에서 HWPX로 저장/내보낸 뒤 다시 선택하세요."
+  },
+  {
+    regex: /exceeds the supported local processing limit \((\d+ bytes); limit (\d+ bytes)\)/i,
+    label: (match) =>
+      `파일이 로컬 처리 한도를 초과했습니다. 더 작은 파일로 나누거나 HWPX 내부 이미지를 먼저 정리하세요. (${match[1]} / 한도 ${match[2]})`
+  },
+  {
+    regex: /Files are too large for image preview \((\d+ bytes); limit (\d+ bytes)\)/i,
+    label: (match) =>
+      `이미지 비교 미리보기 한도를 초과했습니다. 최적화 결과 파일은 생성되었으니 파일/폴더 열기로 확인하세요. (${match[1]} / 한도 ${match[2]})`
+  },
+  {
+    regex: /\b(EACCES|EPERM)\b|permission denied/i,
+    label: () => "파일 또는 폴더 권한이 없어 처리할 수 없습니다. 다른 저장 위치를 선택하거나 문서를 닫은 뒤 다시 시도하세요."
+  }
+];
+
 export function progressLabel(item: string): string {
   if (item.startsWith("Optimizing document in ")) {
     const mode = item.includes("aggressive") ? "최대 압축" : item.includes("balanced") ? "균형" : "안전";
@@ -30,7 +51,13 @@ export function progressLabel(item: string): string {
 }
 
 export function errorLabel(message: string): string {
-  return ERROR_LABELS[message] ?? message;
+  const exact = ERROR_LABELS[message];
+  if (exact) return exact;
+  for (const pattern of ERROR_PATTERNS) {
+    const match = message.match(pattern.regex);
+    if (match) return pattern.label(match);
+  }
+  return message;
 }
 
 type WarningCategory =

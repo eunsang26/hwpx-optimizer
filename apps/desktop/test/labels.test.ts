@@ -27,6 +27,18 @@ describe("shared labels", () => {
   it("translates known runtime errors to user-facing Korean messages", () => {
     expect(errorLabel("Analysis cancelled.")).toBe("분석이 취소되었습니다.");
     expect(errorLabel("Optimization cancelled.")).toBe("최적화가 취소되었습니다.");
+    expect(errorLabel("Unsupported HWP binary file: save or export the document as .hwpx before optimizing")).toBe(
+      "HWP 파일은 직접 최적화할 수 없습니다. 한글에서 HWPX로 저장/내보낸 뒤 다시 선택하세요."
+    );
+    expect(
+      errorLabel("/tmp/large.hwpx exceeds the supported local processing limit (600 bytes; limit 10 bytes).")
+    ).toBe("파일이 로컬 처리 한도를 초과했습니다. 더 작은 파일로 나누거나 HWPX 내부 이미지를 먼저 정리하세요. (600 bytes / 한도 10 bytes)");
+    expect(errorLabel("Files are too large for image preview (210 bytes; limit 100 bytes).")).toBe(
+      "이미지 비교 미리보기 한도를 초과했습니다. 최적화 결과 파일은 생성되었으니 파일/폴더 열기로 확인하세요. (210 bytes / 한도 100 bytes)"
+    );
+    expect(errorLabel("EACCES: permission denied, open '/locked/file.hwpx'")).toBe(
+      "파일 또는 폴더 권한이 없어 처리할 수 없습니다. 다른 저장 위치를 선택하거나 문서를 닫은 뒤 다시 시도하세요."
+    );
     expect(errorLabel("Unknown failure")).toBe("Unknown failure");
   });
 

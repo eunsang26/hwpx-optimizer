@@ -25,6 +25,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:win-portable"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:win"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["release:preflight"]).toBe(
+      "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit --audit-level=moderate && npm run desktop:smoke"
+    );
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
   });
@@ -68,6 +71,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).not.toContain('id="verification-summary"');
     expect(html).toContain('class="analysis-verification"');
     expect(html).toContain('id="verification-body"');
+    expect(html).toContain('id="result-guidance"');
     expect(renderer).not.toContain("chooseManyButton");
     expect(renderer).not.toContain("verificationDetails");
     expect(renderer).not.toContain("verificationSummary");
@@ -75,6 +79,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("verificationBody.textContent");
     expect(renderer).toContain("renderAnalysisVerification(report);");
     expect(renderer).toContain("renderVerificationFailure(error);");
+    expect(renderer).toContain("resultGuidanceText(report, plan)");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
     expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);

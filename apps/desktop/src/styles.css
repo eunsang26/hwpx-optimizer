@@ -1477,6 +1477,16 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
   flex-wrap: wrap;
 }
 .result .actions button { min-height: 32px; padding: 0 12px; font-size: 12.5px; }
+.result-guidance {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--green-border);
+  border-radius: 10px;
+  background: rgba(236, 253, 243, 0.7);
+  color: #2f5d3f;
+  font-size: 12px;
+  line-height: 1.45;
+}
 #output-path, #report-path {
   margin-top: 10px;
   font-family: ui-monospace, monospace;
