@@ -95,4 +95,26 @@ describe("repository runtime and cleanup configuration", () => {
     expect(resultPanel).toBeLessThan(bottomRow);
     expect(resultPanel).toBeLessThan(bottomAccordions);
   });
+
+  it("keeps private sample filenames out of desktop source placeholders", async () => {
+    const html = await readFile("apps/desktop/src/index.html", "utf8");
+    const browserMock = await readFile("apps/desktop/src/browserMock.ts", "utf8");
+
+    expect(html).not.toMatch(/sample\d*\.(hwp|hwpx|json|txt)/i);
+    expect(browserMock).not.toMatch(/sample\d*\.(hwp|hwpx|json|txt)/i);
+    expect(browserMock).not.toContain("Verifying optimized package");
+    expect(browserMock).not.toContain('"Done"');
+  });
+
+  it("keeps implementation notes aligned with shipped SSIM and diagnostics behavior", async () => {
+    const limitations = await readFile("docs/KNOWN_LIMITATIONS.md", "utf8");
+    const architecture = await readFile("docs/ARCHITECTURE.md", "utf8");
+
+    expect(limitations).not.toContain("SSIM-based image quality scoring is not yet implemented");
+    expect(limitations).not.toContain("Near-duplicate visual matching remains out of scope");
+    expect(architecture).not.toContain("advanced mode verification still checks structural invariants rather than exact quality");
+    expect(limitations).toContain("PSNR and SSIM");
+    expect(limitations).toContain("Near-duplicate images are reported as review-only candidates");
+    expect(architecture).toContain("PSNR and SSIM");
+  });
 });

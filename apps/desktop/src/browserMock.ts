@@ -13,7 +13,8 @@ type DesktopSettings = {
 const originalSize = 89.72 * 1024 * 1024;
 const optimizedSize = 4.72 * 1024 * 1024;
 const savedBytes = originalSize - optimizedSize;
-const previewPath = "sample2.hwpx";
+const previewPath = "preview.hwpx";
+const secondaryPreviewPath = "preview-batch.hwpx";
 const progressListeners = new Set<(progress: { percent: number; item: string }) => void>();
 
 let settings: DesktopSettings = {
@@ -140,12 +141,12 @@ const sampleReport = {
 
 const api: HwpxOptimizerApi = {
   selectHwpx: async () => previewPath,
-  selectHwpxMany: async () => [previewPath, "sample3.hwpx"],
-  selectHwpxFolder: async () => ({ directory: "preview-folder", files: [previewPath, "sample3.hwpx"] }),
+  selectHwpxMany: async () => [previewPath, secondaryPreviewPath],
+  selectHwpxFolder: async () => ({ directory: "preview-folder", files: [previewPath, secondaryPreviewPath] }),
   selectDirectory: async () => "preview-output",
   registerDroppedHwpxFiles: async (files) =>
     Array.from(files).map(
-      (file, index) => (file as File & { path?: string }).path ?? (index === 0 ? previewPath : "sample3.hwpx")
+      (file, index) => (file as File & { path?: string }).path ?? (index === 0 ? previewPath : secondaryPreviewPath)
     ),
   loadSettings: async () => settings,
   saveSettings: async (patch) => {
@@ -158,12 +159,12 @@ const api: HwpxOptimizerApi = {
     await wait(180);
     emitProgress(48, `Optimizing document in ${input.mode} mode`);
     await wait(260);
-    emitProgress(82, "Verifying optimized package");
+    emitProgress(82, "Verifying optimized document");
     await wait(220);
-    emitProgress(100, "Done");
+    emitProgress(100, "Optimization complete");
     return {
       outputPath: `preview-output/${input.filePath.replace(/\.hwpx$/u, ".optimized.hwpx")}`,
-      reportPath: settings.saveReport ? "preview-output/sample2.report.json" : undefined,
+      reportPath: settings.saveReport ? "preview-output/preview.report.json" : undefined,
       report: sampleReport
     };
   },

@@ -27,6 +27,10 @@ const ERROR_PATTERNS: Array<{ regex: RegExp; label: (match: RegExpMatchArray) =>
     label: () => "HWP 파일은 직접 최적화할 수 없습니다. 한글에서 HWPX로 저장/내보낸 뒤 다시 선택하세요."
   },
   {
+    regex: /^Invalid HWPX package: input is not a readable ZIP archive/i,
+    label: () => "HWPX 문서 구조를 읽을 수 없습니다. 파일이 손상되었거나 HWPX 형식이 아닙니다."
+  },
+  {
     regex: /exceeds the supported local processing limit \((\d+ bytes); limit (\d+ bytes)\)/i,
     label: (match) =>
       `파일이 로컬 처리 한도를 초과했습니다. 더 작은 파일로 나누거나 HWPX 내부 이미지를 먼저 정리하세요. (${match[1]} / 한도 ${match[2]})`
@@ -57,6 +61,21 @@ const ERROR_PATTERNS: Array<{ regex: RegExp; label: (match: RegExpMatchArray) =>
     regex: /^Verification failed: referenced resource removed (.+)$/i,
     label: (match) =>
       `결과 문서에서 필요한 리소스가 제거되었습니다. 해당 최적화는 적용하지 않고 다시 실행하세요. (${match[1]})`
+  },
+  {
+    regex: /^Verification failed: XML does not parse at (.+)$/i,
+    label: (match) =>
+      `결과 문서의 XML 구조가 유효하지 않습니다. 최적화를 보류하고 원본 문서로 다시 시도하세요. (${match[1]})`
+  },
+  {
+    regex: /^Verification failed: (safe|balanced|aggressive) mode image conversion is not allowed (.+)$/i,
+    label: (match) =>
+      `허용되지 않은 이미지 형식 변경이 감지되었습니다. 더 보수적인 보존 기준으로 다시 실행하세요. (${match[1]}, ${match[2]})`
+  },
+  {
+    regex: /^Verification failed: (safe|balanced|aggressive) mode image dimensions enlarged (.+)$/i,
+    label: (match) =>
+      `이미지 크기가 원본보다 커져 최적화를 보류했습니다. 더 보수적인 보존 기준으로 다시 실행하세요. (${match[1]}, ${match[2]})`
   }
 ];
 

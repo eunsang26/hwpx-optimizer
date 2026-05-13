@@ -435,6 +435,18 @@ describe("runCli", () => {
     expect(text).toContain("Images:");
   });
 
+  it("accepts --report as an alias for human-readable report output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const reportPath = join(dir, "custom-report.txt");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const code = await runCli(["report", inputPath, "--report", reportPath, "--overwrite"]);
+
+    expect(code).toBe(0);
+    await expect(readFile(reportPath, "utf8")).resolves.toContain("HWPX Optimization Report");
+  });
+
   it("includes target and diagnostic sections in human reports", () => {
     const text = renderHumanReport("/x/input.hwpx", {
       ...minimalReport,

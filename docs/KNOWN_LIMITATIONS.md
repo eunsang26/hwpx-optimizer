@@ -13,16 +13,16 @@ This file separates release blockers from non-blockers so the project does not o
 - GitHub Actions Windows release gate passes on `windows-latest` when artifact upload is disabled for manual runs.
 - Artifact upload is optional for manual workflow runs to avoid Actions storage quota failures. Tag builds still upload release artifacts.
 - Local Windows portable packaging verifies that the `sharp` Windows native runtime is unpacked outside `app.asar`.
-- Verifier checks mode-specific image format and dimension invariants and rejects balanced/aggressive outputs whose per-image PSNR drops below the per-mode minimum (balanced 18 dB, aggressive 14 dB). The reject error includes the original/output dimensions, format, and EXIF orientation to make catastrophic regressions (rotation bake, dimension swap) self-explanatory. PSNR computation lives in `packages/core/src/imagePreview.ts`. The 8x8 average hash in `packages/core/src/visualSimilarity.ts` is retained as a building block for future near-duplicate candidate listing but is NOT used as a release gate.
+- Verifier checks mode-specific image format and dimension invariants and rejects balanced/aggressive outputs whose per-image PSNR and SSIM scores fall below the per-mode thresholds. The reject error includes the original/output dimensions, format, and EXIF orientation to make catastrophic regressions (rotation bake, dimension swap) self-explanatory. Quality scoring lives in `packages/core/src/imagePreview.ts`. The 8x8 average hash in `packages/core/src/visualSimilarity.ts` is used for near-duplicate candidate reporting, not as a release gate.
 - Reference graph detection resolves manifest `id -> href` links, generic id-valued XML attributes, relative or percent-encoded BinData paths, and direct BinData path attributes. This keeps unused-resource deletion conservative when unfamiliar XML reference forms appear.
-- Duplicate image consolidation handles byte-identical image files and exact decoded-pixel same-visual duplicates across lossless encodings, such as BMP and PNG resources that decode to identical pixels. Near-duplicate visual matching remains out of scope.
+- Duplicate image consolidation handles byte-identical image files and exact decoded-pixel same-visual duplicates across lossless encodings, such as BMP and PNG resources that decode to identical pixels. Near-duplicate images are reported as review-only candidates and are not automatically merged.
 - HWPX zip-slip defense: reader rejects entries whose path contains `..`, `.`, drive letters, leading slash, or empty segments.
 
 ## Non-Blockers For Continued Development
 
 - Future reference graph additions should be driven by real HWPX samples that expose new reference forms.
-- Duplicate image consolidation does not merge near-duplicates or lossy re-encodes whose decoded pixels differ.
-- SSIM-based image quality scoring is not yet implemented. Balanced and aggressive mode quality gating currently uses PSNR plus image format/dimension invariants.
+- Duplicate image consolidation does not automatically merge near-duplicates or lossy re-encodes whose decoded pixels differ.
+- PSNR and SSIM thresholds are conservative quality gates, not perceptual proof that every image is visually identical. Manual review is still appropriate for high-stakes documents.
 - Embedded fonts and OLE objects are reported as risky resources but not optimized.
 - Display-size based image budgets depend on detectable HWPX picture size fields. If those fields are missing, fallback mode profile limits are used.
 - EXIF removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size.
