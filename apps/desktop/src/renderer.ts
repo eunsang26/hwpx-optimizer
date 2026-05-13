@@ -148,8 +148,6 @@ const planSummary = requireElement("plan-summary");
 const planTotal = requireElement("plan-total");
 const analysisDetailSummary = requireElement("analysis-detail-summary");
 const analysisDetails = requireElement("analysis-details") as HTMLDetailsElement;
-const verificationDetails = requireElement("verification-details") as HTMLDetailsElement;
-const verificationSummary = requireElement("verification-summary");
 const verificationBody = requireElement("verification-body");
 const selectionPill = requireElement("selection-pill");
 const selectedFileCard = requireElement("selected-file-card");
@@ -910,18 +908,12 @@ function planDeltaLabel(deltaBytes: number): string {
 }
 
 function resetVerificationPanel(): void {
-  verificationDetails.open = false;
-  verificationSummary.innerHTML =
-    '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>누락 리소스 및 품질 기준 검증 결과를 확인합니다.</span>';
   verificationBody.textContent = "최적화 후 문서 구조, 누락 리소스, 이미지 품질 기준을 자동으로 확인합니다.";
 }
 
 function renderAnalysisVerification(report: OptimizationReport): void {
   const warningCount = report.warnings.length;
   const diagnosticCount = (report.resourceDiagnostics ?? []).length + (report.riskyResources?.length ?? 0);
-  verificationDetails.open = false;
-  verificationSummary.innerHTML =
-    '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>분석 점검 완료 · 최적화 후 품질 검증</span>';
   verificationBody.textContent = [
     "분석 단계 사전 점검을 완료했습니다.",
     warningCount > 0 ? `주의 ${warningCount}개` : "주의 없음",
@@ -934,9 +926,9 @@ function renderVerificationResult(report: OptimizationReport): void {
   const appliedCount = report.actions.applied.length;
   const skippedCount = report.actions.skipped.length;
   const warningCount = report.warnings.length;
-  verificationDetails.open = true;
-  verificationSummary.innerHTML =
-    '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>검증 완료</span>';
+  analysisDetails.open = true;
+  analysisDetailSummary.innerHTML =
+    '<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>검증 완료</span>';
   verificationBody.textContent = [
     "문서 구조와 누락 리소스 검증을 통과했습니다.",
     `적용 ${appliedCount}개`,
@@ -946,9 +938,9 @@ function renderVerificationResult(report: OptimizationReport): void {
 }
 
 function renderVerificationFailure(error: unknown): void {
-  verificationDetails.open = true;
-  verificationSummary.innerHTML =
-    '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>검증 실패</span>';
+  analysisDetails.open = true;
+  analysisDetailSummary.innerHTML =
+    '<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>검증 실패</span>';
   verificationBody.textContent = errorMessage(error);
 }
 
@@ -994,15 +986,15 @@ async function reverifyCurrentResult(): Promise<void> {
   try {
     const response = await window.hwpxOptimizer.verify(state.result.outputPath);
     setStatus(response.ok ? "결과 파일이 유효합니다." : "검증 결과를 받지 못했습니다.");
-    verificationSummary.innerHTML =
-      '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>재검증 완료</span>';
+    analysisDetailSummary.innerHTML =
+      '<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>재검증 완료</span>';
     verificationBody.textContent = response.ok
       ? "결과 파일 재검증을 통과했습니다."
       : "재검증 응답을 받았지만 통과 여부를 확인하지 못했습니다.";
   } catch (error) {
     setStatus(`검증 실패: ${errorMessage(error)}`);
-    verificationSummary.innerHTML =
-      '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>검증 실패</span>';
+    analysisDetailSummary.innerHTML =
+      '<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>검증 실패</span>';
     verificationBody.textContent = errorMessage(error);
   } finally {
     reverifyButton.disabled = !state.result;

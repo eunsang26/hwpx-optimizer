@@ -64,9 +64,13 @@ describe("repository runtime and cleanup configuration", () => {
 
     expect(html).not.toContain('id="choose-many-button"');
     expect(html).not.toContain("이번 실행 결과");
-    expect(html).toContain('id="verification-details"');
+    expect(html).not.toContain('id="verification-details"');
+    expect(html).not.toContain('id="verification-summary"');
+    expect(html).toContain('class="analysis-verification"');
     expect(html).toContain('id="verification-body"');
     expect(renderer).not.toContain("chooseManyButton");
+    expect(renderer).not.toContain("verificationDetails");
+    expect(renderer).not.toContain("verificationSummary");
     expect(renderer).toContain("selectHwpxMany");
     expect(renderer).toContain("verificationBody.textContent");
     expect(renderer).toContain("renderAnalysisVerification(report);");

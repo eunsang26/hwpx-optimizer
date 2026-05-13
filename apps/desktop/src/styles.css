@@ -1376,6 +1376,18 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
   padding: 8px 10px;
 }
 .two-column.compact { gap: 14px; }
+.analysis-verification {
+  padding: 0 18px 18px;
+}
+.analysis-verification h2 {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.analysis-verification .detail-placeholder {
+  margin: 0;
+}
 
 /* ---------------- Progress panel ---------------- */
 .progress-panel {
