@@ -34,14 +34,15 @@ if (isSmokeTest) {
 async function createWindow(): Promise<BrowserWindow> {
   Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindowClass({
-    width: 1080,
-    height: 590,
+    width: 1180,
+    height: 820,
     minWidth: 1000,
-    minHeight: 560,
+    minHeight: 720,
     useContentSize: true,
     show: !isSmokeTest,
     title: "HWPX 보고서 용량 최적화",
     autoHideMenuBar: true,
+    backgroundColor: "#f6f8fb",
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,

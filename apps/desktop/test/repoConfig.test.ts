@@ -44,6 +44,23 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("outputDirectoryLine.textContent");
   });
 
+  it("opens the desktop window at a size that fits the primary workflow", async () => {
+    const main = await readFile("apps/desktop/src/main.ts", "utf8");
+    const styles = await readFile("apps/desktop/src/styles.css", "utf8");
+
+    expect(main).toContain("width: 1180");
+    expect(main).toContain("height: 820");
+    expect(main).toContain("minWidth: 1000");
+    expect(main).toContain("minHeight: 720");
+    expect(main).toContain('backgroundColor: "#f6f8fb"');
+    expect(styles).toMatch(/\.shell\s*{[^}]*padding:\s*0 12px 80px/s);
+    expect(styles).toMatch(/body\[data-view="empty"\] \.drop-zone\s*{[^}]*padding:\s*10px 14px/s);
+    expect(styles).toMatch(/body\[data-view="empty"\] \.summary-panel\s*{[^}]*padding-bottom:\s*8px/s);
+    expect(styles).toMatch(/body\[data-view="empty"\] \.bottom-row\s*{[^}]*gap:\s*6px/s);
+    expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*minmax\(112px, 0\.85fr\) minmax\(148px, 1\.25fr\) minmax\(132px, 1fr\)/s);
+    expect(styles).toMatch(/\.option-grid select,\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
+  });
+
   it("keeps automatic optimization plan cards horizontally readable", async () => {
     const styles = await readFile("apps/desktop/src/styles.css", "utf8");
 
