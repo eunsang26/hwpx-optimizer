@@ -791,6 +791,7 @@ async function optimizeCurrentFile(): Promise<void> {
     setStatus("최적화가 완료되었습니다. 파일을 열어 제출 전 상태를 확인하세요.");
     succeeded = true;
   } catch (error) {
+    renderVerificationFailure(error);
     setStatus(errorMessage(error));
   } finally {
     setIdle();
@@ -852,6 +853,7 @@ function renderAnalysis(report: OptimizationReport): void {
           .join("");
 
   warningList.innerHTML = renderWarningList(view.warnings);
+  renderAnalysisVerification(report);
 }
 
 function renderWarningList(warnings: readonly string[]): string {
@@ -914,6 +916,20 @@ function resetVerificationPanel(): void {
   verificationBody.textContent = "최적화 후 문서 구조, 누락 리소스, 이미지 품질 기준을 자동으로 확인합니다.";
 }
 
+function renderAnalysisVerification(report: OptimizationReport): void {
+  const warningCount = report.warnings.length;
+  const diagnosticCount = (report.resourceDiagnostics ?? []).length + (report.riskyResources?.length ?? 0);
+  verificationDetails.open = false;
+  verificationSummary.innerHTML =
+    '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>분석 점검 완료 · 최적화 후 품질 검증</span>';
+  verificationBody.textContent = [
+    "분석 단계 사전 점검을 완료했습니다.",
+    warningCount > 0 ? `주의 ${warningCount}개` : "주의 없음",
+    diagnosticCount > 0 ? `리소스 진단 ${diagnosticCount}개` : "리소스 진단 없음",
+    "이미지 품질 검증은 최적화 실행 시 자동 수행됩니다."
+  ].join(" · ");
+}
+
 function renderVerificationResult(report: OptimizationReport): void {
   const appliedCount = report.actions.applied.length;
   const skippedCount = report.actions.skipped.length;
@@ -927,6 +943,13 @@ function renderVerificationResult(report: OptimizationReport): void {
     `보류 ${skippedCount}개`,
     warningCount > 0 ? `주의 ${warningCount}개` : "추가 주의 없음"
   ].join(" · ");
+}
+
+function renderVerificationFailure(error: unknown): void {
+  verificationDetails.open = true;
+  verificationSummary.innerHTML =
+    '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>검증 실패</span>';
+  verificationBody.textContent = errorMessage(error);
 }
 
 function targetStatusText(status: OptimizationReport["targetStatus"]): string {

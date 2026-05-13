@@ -69,7 +69,11 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).not.toContain("chooseManyButton");
     expect(renderer).toContain("selectHwpxMany");
     expect(renderer).toContain("verificationBody.textContent");
+    expect(renderer).toContain("renderAnalysisVerification(report);");
+    expect(renderer).toContain("renderVerificationFailure(error);");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
+    expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
+    expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);
 
     const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');
     const resultPanel = html.indexOf('id="result-panel"');

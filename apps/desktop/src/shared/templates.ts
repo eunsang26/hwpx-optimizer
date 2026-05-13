@@ -21,7 +21,7 @@ export function metricHtml(label: string, value: string): string {
 
 export function categoryBarHtml(slice: CategorySlice): string {
   const percent = slice.ratio * 100;
-  return `<div class="bar kind-${escapeHtml(slice.kind)}"><span>${escapeHtml(slice.label)}</span><span class="track"><span class="fill" style="width:${percent.toFixed(1)}%"></span></span><span class="value">${escapeHtml(formatBytes(slice.bytes))} (${percent.toFixed(1)}%)</span></div>`;
+  return `<div class="bar kind-${escapeHtml(slice.kind)}"><span class="name">${escapeHtml(slice.label)}</span><span class="track"><span class="fill" style="width:${percent.toFixed(1)}%"></span></span><span class="value">${escapeHtml(formatBytes(slice.bytes))} (${percent.toFixed(1)}%)</span></div>`;
 }
 
 export function riskBadgeHtml(risk: RiskLevel): string {

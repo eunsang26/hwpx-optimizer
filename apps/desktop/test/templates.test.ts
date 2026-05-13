@@ -24,6 +24,9 @@ describe("template HTML builders", () => {
     const slice: CategorySlice = { kind: "image", bytes: 2_097_152, ratio: 0.5, label: "이미지" };
     const html = categoryBarHtml(slice);
     expect(html).toContain('class="bar kind-image"');
+    expect(html).toContain('class="name"');
+    expect(html).toContain('class="track"');
+    expect(html).toContain('class="value"');
     expect(html).toContain('width:50.0%');
     expect(html).toContain("이미지");
     expect(html).toContain("2.00 MiB");
