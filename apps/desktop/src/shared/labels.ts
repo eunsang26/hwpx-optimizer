@@ -39,6 +39,24 @@ const ERROR_PATTERNS: Array<{ regex: RegExp; label: (match: RegExpMatchArray) =>
   {
     regex: /\b(EACCES|EPERM)\b|permission denied/i,
     label: () => "파일 또는 폴더 권한이 없어 처리할 수 없습니다. 다른 저장 위치를 선택하거나 문서를 닫은 뒤 다시 시도하세요."
+  },
+  {
+    regex: /^Verification failed: missing references (.+)$/i,
+    label: (match) =>
+      `결과 문서에서 참조 리소스가 누락되었습니다. 최적화를 보류하고 원본 문서로 다시 시도하세요. (${match[1]})`
+  },
+  {
+    regex:
+      /^Verification failed: (safe|balanced|aggressive) mode image quality too low \(PSNR ([^;]+); SSIM ([^)]+)\) for (.+)$/i,
+    label: (match) =>
+      `이미지 품질 검증 기준을 통과하지 못했습니다. 더 보수적인 보존 기준으로 다시 실행하세요. (${match[1]}, ${match[4]}, PSNR ${qualityMetricValue(
+        match[2]
+      )}, SSIM ${qualityMetricValue(match[3])})`
+  },
+  {
+    regex: /^Verification failed: referenced resource removed (.+)$/i,
+    label: (match) =>
+      `결과 문서에서 필요한 리소스가 제거되었습니다. 해당 최적화는 적용하지 않고 다시 실행하세요. (${match[1]})`
   }
 ];
 
@@ -58,6 +76,10 @@ export function errorLabel(message: string): string {
     if (match) return pattern.label(match);
   }
   return message;
+}
+
+function qualityMetricValue(metric: string): string {
+  return metric.split(",")[0]?.trim() ?? metric.trim();
 }
 
 type WarningCategory =

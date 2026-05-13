@@ -39,6 +39,19 @@ describe("shared labels", () => {
     expect(errorLabel("EACCES: permission denied, open '/locked/file.hwpx'")).toBe(
       "파일 또는 폴더 권한이 없어 처리할 수 없습니다. 다른 저장 위치를 선택하거나 문서를 닫은 뒤 다시 시도하세요."
     );
+    expect(errorLabel("Verification failed: missing references BinData/image2.png")).toBe(
+      "결과 문서에서 참조 리소스가 누락되었습니다. 최적화를 보류하고 원본 문서로 다시 시도하세요. (BinData/image2.png)"
+    );
+    expect(
+      errorLabel(
+        "Verification failed: balanced mode image quality too low (PSNR 12.34 dB, minimum 18 dB; SSIM 0.321, minimum 0.720) for BinData/image1.jpg"
+      )
+    ).toBe(
+      "이미지 품질 검증 기준을 통과하지 못했습니다. 더 보수적인 보존 기준으로 다시 실행하세요. (balanced, BinData/image1.jpg, PSNR 12.34 dB, SSIM 0.321)"
+    );
+    expect(errorLabel("Verification failed: referenced resource removed BinData/ole1.bin")).toBe(
+      "결과 문서에서 필요한 리소스가 제거되었습니다. 해당 최적화는 적용하지 않고 다시 실행하세요. (BinData/ole1.bin)"
+    );
     expect(errorLabel("Unknown failure")).toBe("Unknown failure");
   });
 
