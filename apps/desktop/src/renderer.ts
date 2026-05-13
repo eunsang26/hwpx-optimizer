@@ -533,11 +533,12 @@ function renderPlanActions(plan?: SubmissionPlan): void {
     checked?: boolean;
     action?: SubmissionActionId;
     actions?: SubmissionActionId[];
+    priority?: number;
   };
   const fallbackRows: DisplayPlanRow[] = [
-    { label: "이미지 용량 최적화", savingLabel: "분석 후 표시", kind: "image" },
-    { label: "불필요한 이미지 정보 제거", savingLabel: "분석 후 표시", kind: "metadata" },
-    { label: "작성자·편집 흔적 정리", savingLabel: "분석 후 표시", kind: "author" }
+    { priority: 1, label: "중복 이미지 참조 정리", savingLabel: "분석 후 표시", kind: "image" },
+    { priority: 2, label: "불필요한 이미지 정보 제거", savingLabel: "분석 후 표시", kind: "metadata" },
+    { priority: 3, label: "작성자·편집 흔적 정리", savingLabel: "분석 후 표시", kind: "author" }
   ];
   const displayRows: DisplayPlanRow[] =
     rows.length > 0
@@ -548,7 +549,8 @@ function renderPlanActions(plan?: SubmissionPlan): void {
             kind: row.bucket,
             checked: row.checked,
             action: row.action,
-            actions: row.actions
+            actions: row.actions,
+            priority: row.priority
           })),
           ...(plan?.planNotes ?? []).map((note) => ({
             label: note.label,
@@ -563,17 +565,23 @@ function renderPlanActions(plan?: SubmissionPlan): void {
       if (row.action && row.actions) {
         const checkedAttr = row.checked ? " checked" : "";
         const actionsAttr = escapeHtml(row.actions.join(","));
+        const priorityLabel = row.priority ? `#${row.priority}` : "-";
         return `<li class="plan-card plan-${escapeHtml(row.kind)}"><label><input type="checkbox" value="${escapeHtml(
           row.action
-        )}" data-actions="${actionsAttr}"${checkedAttr} /><span class="plan-icon" aria-hidden="true"></span><span class="plan-copy"><strong>${escapeHtml(
+        )}" data-actions="${actionsAttr}"${checkedAttr} /><span class="plan-priority" aria-label="우선순위 ${escapeHtml(
+          priorityLabel
+        )}">${escapeHtml(priorityLabel)}</span><span class="plan-icon" aria-hidden="true"></span><span class="plan-copy"><strong>${escapeHtml(
           row.label
-        )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>예상 절감</small><strong>${escapeHtml(
+        )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>중복 제외 예상</small><strong>${escapeHtml(
           row.savingLabel
         )}</strong></span></label></li>`;
       }
-      return `<li class="plan-card plan-${escapeHtml(row.kind)} is-placeholder"><span class="plan-icon" aria-hidden="true"></span><span class="plan-copy"><strong>${escapeHtml(
+      const priorityLabel = row.priority ? `#${row.priority}` : "-";
+      return `<li class="plan-card plan-${escapeHtml(row.kind)} is-placeholder"><span class="plan-priority" aria-label="우선순위 ${escapeHtml(
+        priorityLabel
+      )}">${escapeHtml(priorityLabel)}</span><span class="plan-icon" aria-hidden="true"></span><span class="plan-copy"><strong>${escapeHtml(
         row.label
-      )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>예상 절감</small><strong>${escapeHtml(
+      )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>중복 제외 예상</small><strong>${escapeHtml(
         row.savingLabel
       )}</strong></span></li>`;
     })

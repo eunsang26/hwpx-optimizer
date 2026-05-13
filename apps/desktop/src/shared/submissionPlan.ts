@@ -21,6 +21,7 @@ export type SubmissionPlanInput = {
 };
 
 export type SubmissionActionRow = {
+  priority: number;
   action: SubmissionActionId;
   actions: SubmissionActionId[];
   selectedActions: SubmissionActionId[];
@@ -84,13 +85,13 @@ export const PRESERVATION_LABELS: Record<PreservationPreference, string> = {
 };
 
 const ACTION_DISPLAY_LABELS: Partial<Record<OptimizationOpportunityGroup["action"], string>> = {
-  "resize-jpeg": "이미지 용량 최적화",
-  "resize-png": "이미지 용량 최적화",
-  "convert-bmp-to-png": "이미지 용량 최적화",
-  "convert-tiff-to-png": "이미지 용량 최적화",
-  "consolidate-duplicate-images": "이미지 용량 최적화",
+  "resize-jpeg": "큰 JPEG 리사이즈",
+  "resize-png": "큰 PNG 리사이즈",
+  "convert-bmp-to-png": "BMP를 PNG로 변환",
+  "convert-tiff-to-png": "TIFF를 PNG로 변환",
+  "consolidate-duplicate-images": "중복 이미지 참조 정리",
   "strip-metadata": "불필요한 이미지 정보 제거",
-  "optimize-png": "불필요한 이미지 정보 제거",
+  "optimize-png": "PNG 무손실 최적화",
   "clean-shape-comment": "작성자·편집 흔적 정리"
 };
 
@@ -105,10 +106,15 @@ const ACTION_BUCKETS: Partial<Record<OptimizationOpportunityGroup["action"], Sub
   "clean-shape-comment": "author"
 };
 
-const ACTION_BUCKET_ORDER: Record<SubmissionActionBucket, number> = {
-  image: 0,
-  metadata: 1,
-  author: 2
+const ACTION_PRIORITY_ORDER: Partial<Record<SubmissionActionId, number>> = {
+  "consolidate-duplicate-images": 10,
+  "strip-metadata": 20,
+  "optimize-png": 30,
+  "clean-shape-comment": 40,
+  "convert-bmp-to-png": 50,
+  "convert-tiff-to-png": 60,
+  "resize-jpeg": 70,
+  "resize-png": 80
 };
 
 const SUMMARY_SAVING_GRANULARITY_BYTES = 1024 * 1024;
@@ -146,6 +152,7 @@ export function createSubmissionPlan(
     const savingBytes = group?.estimatedSavingBytes ?? 0;
     const bucket = actionBucket(toggle.action);
     return {
+      priority: 0,
       action: toggle.action,
       actions: [toggle.action],
       selectedActions: checked ? [toggle.action] : [],
@@ -161,12 +168,12 @@ export function createSubmissionPlan(
       group
     };
   });
-  const actionRows = aggregateActionRows(rawActionRows);
+  const actionRows = createPriorityActionRows(rawActionRows);
   const changed = toggles.some((toggle) => {
     const override = input.actionOverrides.get(toggle.action);
     return override !== undefined && override !== toggle.defaultEnabledForMode;
   });
-  const selectedActions = rawActionRows.filter((row) => row.checked).map((row) => row.action);
+  const selectedActions = actionRows.filter((row) => row.checked).map((row) => row.action);
   const rawExpectedSavingBytes = estimateNonOverlappingSavingBytes(
     rawActionRows.flatMap((row) => (row.checked && row.group ? [row.group] : []))
   );
@@ -250,76 +257,29 @@ type RawSubmissionActionRow = SubmissionActionRow & {
   group?: OptimizationOpportunityGroup;
 };
 
-function aggregateActionRows(actionRows: RawSubmissionActionRow[]): SubmissionActionRow[] {
-  const rowsByBucket = new Map<
-    SubmissionActionBucket,
-    RawSubmissionActionRow & {
-      groups: OptimizationOpportunityGroup[];
-      selectedGroups: OptimizationOpportunityGroup[];
-    }
-  >();
-  for (const row of actionRows) {
-    const existing = rowsByBucket.get(row.bucket);
-    if (!existing) {
-      rowsByBucket.set(row.bucket, {
-        ...row,
-        actions: [...row.actions],
-        groups: row.group ? [row.group] : [],
-        selectedGroups: row.checked && row.group ? [row.group] : []
-      });
-      continue;
-    }
-    existing.actions.push(...row.actions);
-    existing.selectedActions.push(...row.selectedActions);
-    existing.count += row.count;
-    existing.checked = existing.checked && row.checked;
-    existing.risk = highestRisk(existing.risk, row.risk);
-    existing.visualImpact = highestVisualImpact(existing.visualImpact, row.visualImpact);
-    if (row.group) existing.groups.push(row.group);
-    if (row.checked && row.group) existing.selectedGroups.push(row.group);
-  }
-
-  return [...rowsByBucket.values()]
-    .sort((left, right) => ACTION_BUCKET_ORDER[left.bucket] - ACTION_BUCKET_ORDER[right.bucket])
-    .map((row) => {
-    const partiallyChecked = row.selectedActions.length > 0 && row.selectedActions.length < row.actions.length;
-    const estimatedGroups = row.selectedGroups.length > 0 ? row.selectedGroups : row.groups;
-    const savingBytes = estimateNonOverlappingSavingBytes(estimatedGroups);
-    const { group: _group, groups: _groups, selectedGroups: _selectedGroups, ...publicRow } = row;
-    if (row.selectedActions.length === 0) return { ...publicRow, partiallyChecked, savingBytes, savingLabel: formatBytes(savingBytes) };
-    return {
-      ...publicRow,
-      action: row.selectedActions[0],
-      partiallyChecked,
-      savingBytes,
-      savingLabel: formatBytes(savingBytes)
-    };
-  });
+function createPriorityActionRows(actionRows: RawSubmissionActionRow[]): SubmissionActionRow[] {
+  return [...actionRows]
+    .sort((left, right) => actionPriority(left.action) - actionPriority(right.action) || left.label.localeCompare(right.label))
+    .map((row, index) => {
+      const { group: _group, ...publicRow } = row;
+      return {
+        ...publicRow,
+        priority: index + 1,
+        actions: [row.action],
+        selectedActions: row.checked ? [row.action] : [],
+        partiallyChecked: false,
+        savingBytes: row.group?.estimatedSavingBytes ?? row.savingBytes,
+        savingLabel: formatBytes(row.group?.estimatedSavingBytes ?? row.savingBytes)
+      };
+    });
 }
 
 function actionBucket(action: OptimizationOpportunityGroup["action"]): SubmissionActionBucket {
   return ACTION_BUCKETS[action] ?? "image";
 }
 
-function highestRisk(
-  left: OptimizationOpportunityGroup["risk"],
-  right: OptimizationOpportunityGroup["risk"]
-): OptimizationOpportunityGroup["risk"] {
-  const order: Record<OptimizationOpportunityGroup["risk"], number> = { safe: 0, medium: 1, high: 2 };
-  return order[left] >= order[right] ? left : right;
-}
-
-function highestVisualImpact(
-  left: OptimizationOpportunityGroup["visualImpact"],
-  right: OptimizationOpportunityGroup["visualImpact"]
-): OptimizationOpportunityGroup["visualImpact"] {
-  const order: Record<OptimizationOpportunityGroup["visualImpact"], number> = {
-    none: 0,
-    low: 1,
-    medium: 2,
-    high: 3
-  };
-  return order[left] >= order[right] ? left : right;
+function actionPriority(action: SubmissionActionId): number {
+  return ACTION_PRIORITY_ORDER[action] ?? 100;
 }
 
 function floorToGranularity(value: number, granularity: number): number {

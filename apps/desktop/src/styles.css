@@ -1095,13 +1095,30 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
   min-width: 0;
 }
 .plan-card.is-placeholder { /* no label wrapper */ }
-.plan-card.is-placeholder { display: flex; gap: 9px; align-items: center; }
+.plan-card.is-placeholder {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .plan-card > label > input[type="checkbox"] {
   margin: 0;
   width: 14px;
   height: 14px;
   accent-color: var(--blue);
   cursor: pointer;
+}
+.plan-priority {
+  min-width: 30px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--muted);
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
 }
 .plan-card .plan-icon {
   width: 28px; height: 28px;
@@ -1162,9 +1179,28 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
   margin-top: 1px;
   line-height: 1.35;
 }
-/* In the horizontal 3-up plan layout the saving column is hidden — the four
-   summary metrics already convey expected savings. */
-.plan-card .plan-saving { display: none; }
+.plan-card .plan-saving {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  min-width: 76px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--muted);
+}
+.plan-card .plan-saving small {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+.plan-card .plan-saving strong {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--text);
+  font-weight: 800;
+  white-space: nowrap;
+}
 
 .plan-card.is-placeholder { opacity: 0.85; }
 .plan-card.is-placeholder .plan-saving .value,

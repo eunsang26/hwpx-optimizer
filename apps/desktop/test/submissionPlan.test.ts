@@ -39,7 +39,12 @@ describe("submission optimization plan", () => {
     expect(plan.targetStatus).toBe("target-met");
     expect(plan.targetStatusLabel).toBe("목표 달성 가능");
     expect(plan.actionRows.every((row) => row.checked)).toBe(true);
-    expect(plan.actionRows.map((row) => row.savingLabel)).toEqual(["11.00 MiB", "500.0 KiB", "500.0 KiB"]);
+    expect(plan.actionRows.map((row) => [row.priority, row.action, row.savingLabel])).toEqual([
+      [1, "consolidate-duplicate-images", "3.00 MiB"],
+      [2, "strip-metadata", "500.0 KiB"],
+      [3, "clean-shape-comment", "500.0 KiB"],
+      [4, "resize-jpeg", "8.00 MiB"]
+    ]);
   });
 
   it("creates a custom submission plan when action overrides change defaults", () => {
@@ -117,7 +122,7 @@ describe("submission optimization plan", () => {
     expect(plan.targetStatusLabel).toBe("목표 미달 가능");
   });
 
-  it("aggregates action rows by non-technical display label", () => {
+  it("renders individual priority rows instead of hiding work inside broad buckets", () => {
     const plan = createSubmissionPlan({
       report: {
         ...reportFixture,
@@ -155,20 +160,22 @@ describe("submission optimization plan", () => {
       actionOverrides: { "resize-png": true }
     });
 
-    expect(plan.actionRows).toHaveLength(1);
+    expect(plan.actionRows).toHaveLength(2);
+    expect(plan.actionRows.map((row) => row.action)).toEqual(["resize-jpeg", "resize-png"]);
     expect(plan.actionRows[0]).toEqual(
       expect.objectContaining({
-        label: "이미지 용량 최적화",
-        count: 3,
+        priority: 1,
+        label: "큰 JPEG 리사이즈",
+        count: 2,
         checked: true,
-        savingBytes: 3 * MIB,
-        savingLabel: "3.00 MiB"
+        savingBytes: 2 * MIB,
+        savingLabel: "2.00 MiB"
       })
     );
     expect(plan.selectedActions).toEqual(["resize-jpeg", "resize-png"]);
   });
 
-  it("shows selected savings for aggregated rows with mixed default actions", () => {
+  it("keeps unchecked priority row savings visible while excluding them from the live total", () => {
     const plan = createSubmissionPlan({
       report: {
         ...reportFixture,
@@ -206,23 +213,30 @@ describe("submission optimization plan", () => {
       actionOverrides: {}
     });
 
-    expect(plan.actionRows).toHaveLength(1);
+    expect(plan.actionRows).toHaveLength(2);
     expect(plan.actionRows[0]).toEqual(
       expect.objectContaining({
-        label: "이미지 용량 최적화",
         action: "resize-jpeg",
-        checked: false,
-        partiallyChecked: true,
+        checked: true,
         selectedActions: ["resize-jpeg"],
         savingBytes: 2 * MIB,
         savingLabel: "2.00 MiB"
+      })
+    );
+    expect(plan.actionRows[1]).toEqual(
+      expect.objectContaining({
+        action: "resize-png",
+        checked: false,
+        selectedActions: [],
+        savingBytes: MIB,
+        savingLabel: "1.00 MiB"
       })
     );
     expect(plan.expectedSavingBytes).toBe(2 * MIB);
     expect(plan.selectedActions).toEqual(["resize-jpeg"]);
   });
 
-  it("uses a selected primary action for partial aggregated rows", () => {
+  it("orders priority rows deterministically when input opportunities are not sorted", () => {
     const plan = createSubmissionPlan({
       report: {
         ...reportFixture,
@@ -260,19 +274,11 @@ describe("submission optimization plan", () => {
       actionOverrides: {}
     });
 
-    expect(plan.actionRows[0]).toEqual(
-      expect.objectContaining({
-        action: "resize-jpeg",
-        actions: ["resize-png", "resize-jpeg"],
-        selectedActions: ["resize-jpeg"],
-        checked: false,
-        partiallyChecked: true
-      })
-    );
+    expect(plan.actionRows.map((row) => row.action)).toEqual(["resize-jpeg", "resize-png"]);
     expect(plan.selectedActions).toEqual(["resize-jpeg"]);
   });
 
-  it("uses canonical mockup buckets for the automatic plan cards", () => {
+  it("uses user-facing labels for the automatic priority table", () => {
     const plan = createSubmissionPlan({
       report: reportFixture,
       limit: { id: "mb20" },
@@ -281,11 +287,12 @@ describe("submission optimization plan", () => {
     });
 
     expect(plan.actionRows.map((row) => row.label)).toEqual([
-      "이미지 용량 최적화",
+      "중복 이미지 참조 정리",
       "불필요한 이미지 정보 제거",
-      "작성자·편집 흔적 정리"
+      "작성자·편집 흔적 정리",
+      "큰 JPEG 리사이즈"
     ]);
-    expect(plan.actionRows.map((row) => row.savingLabel)).toEqual(["11.00 MiB", "500.0 KiB", "500.0 KiB"]);
+    expect(plan.actionRows.map((row) => row.savingLabel)).toEqual(["3.00 MiB", "500.0 KiB", "500.0 KiB", "8.00 MiB"]);
   });
 
   it("does not double-count overlapping targets when estimating whether the target will pass", () => {

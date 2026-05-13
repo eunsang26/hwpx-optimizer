@@ -85,6 +85,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
     expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);
+    expect(renderer).toContain("plan-priority");
+    expect(renderer).toContain("중복 제외 예상");
+    expect(css).not.toContain(".plan-card .plan-saving { display: none; }");
 
     const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');
     const resultPanel = html.indexOf('id="result-panel"');
