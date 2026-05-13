@@ -44,7 +44,8 @@ describe("repository runtime and cleanup configuration", () => {
     const styles = await readFile("apps/desktop/src/styles.css", "utf8");
 
     expect(styles).not.toContain(".plan-actions > li,\n.plan-actions .plan-card");
-    expect(styles).toContain("grid-template-columns: auto 28px minmax(0, 1fr);");
+    expect(styles).toMatch(/\.plan-card > label\s*{[^}]*display:\s*flex/s);
+    expect(styles).toContain("flex: 1 1 auto;");
   });
 
   it("keeps analysis state stable while submission options are changed during analysis", async () => {
@@ -53,5 +54,30 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("function renderPendingAnalysisSummary()");
     expect(renderer).toContain("state.analysisRunning && state.filePath");
     expect(renderer).toContain("function setSubmissionInputsDisabled(disabled: boolean)");
+    expect(renderer).toContain("if (state.report) refreshSubmissionPlan();");
+  });
+
+  it("keeps desktop workflow controls stable during analysis and result review", async () => {
+    const html = await readFile("apps/desktop/src/index.html", "utf8");
+    const renderer = await readFile("apps/desktop/src/renderer.ts", "utf8");
+    const css = await readFile("apps/desktop/src/styles.css", "utf8");
+
+    expect(html).not.toContain('id="choose-many-button"');
+    expect(html).not.toContain("이번 실행 결과");
+    expect(html).toContain('id="verification-details"');
+    expect(html).toContain('id="verification-body"');
+    expect(renderer).not.toContain("chooseManyButton");
+    expect(renderer).toContain("selectHwpxMany");
+    expect(renderer).toContain("verificationBody.textContent");
+    expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
+
+    const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');
+    const resultPanel = html.indexOf('id="result-panel"');
+    const bottomRow = html.indexOf("<!-- ③ BOTTOM ROW");
+    const bottomAccordions = html.indexOf('<section class="bottom-accordions">');
+    expect(summaryPanelStart).toBeGreaterThanOrEqual(0);
+    expect(resultPanel).toBeGreaterThan(summaryPanelStart);
+    expect(resultPanel).toBeLessThan(bottomRow);
+    expect(resultPanel).toBeLessThan(bottomAccordions);
   });
 });

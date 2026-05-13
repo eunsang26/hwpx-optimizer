@@ -61,7 +61,6 @@
                 <span class="folder-icon" aria-hidden="true"></span>
                 폴더 추가
               </button>
-              <button id="choose-many-button" type="button" class="ghost compact-action">여러 파일</button>
               <button id="batch-clear" type="button" class="ghost icon-text" disabled>
                 <span class="trash-icon" aria-hidden="true"></span>
                 목록 비우기
@@ -180,6 +179,25 @@
             <button id="output-button" type="button" class="ghost">저장 위치</button>
             <p id="output-directory-line" class="output-directory-line">저장 폴더: 원본 문서 폴더</p>
           </section>
+
+          <section id="result-panel" class="result" hidden>
+            <div class="panel-header">
+              <div>
+                <h2>최적화 결과</h2>
+                <p>계획 대비 실제 결과를 함께 확인합니다.</p>
+              </div>
+              <div class="actions">
+                <button id="open-file-button" class="ghost">파일 열기</button>
+                <button id="open-folder-button" class="ghost">폴더 보기</button>
+                <button id="compare-button" class="ghost" disabled>결과 비교</button>
+                <button id="reverify-button" class="ghost" disabled>다시 검증</button>
+                <button id="open-report-button" class="ghost" disabled>현재 리포트</button>
+              </div>
+            </div>
+            <div id="result-summary" class="metric-grid"></div>
+            <p id="output-path"></p>
+            <p id="report-path"></p>
+          </section>
         </section>
 
         <!-- ③ BOTTOM ROW — options chips + plan strip -->
@@ -271,21 +289,13 @@
             </div>
           </div>
         </details>
-        <details class="analysis-details">
-          <summary>
+        <details id="verification-details" class="analysis-details">
+          <summary id="verification-summary">
             <span class="small-shield-icon" aria-hidden="true"></span>
             <strong>자동 검증 결과</strong>
             <span>누락 리소스 및 품질 기준 검증 결과를 확인합니다.</span>
           </summary>
-          <p class="detail-placeholder">최적화 후 문서 구조, 누락 리소스, 이미지 품질 기준을 자동으로 확인합니다.</p>
-        </details>
-        <details class="analysis-details">
-          <summary>
-            <span class="history-icon" aria-hidden="true"></span>
-            <strong>이번 실행 결과</strong>
-            <span>이전 이력이나 내부 로그를 저장하지 않고 현재 결과만 표시합니다.</span>
-          </summary>
-          <p class="detail-placeholder">처리 완료 후 현재 실행에서 생성된 결과 파일과 선택 리포트만 표시됩니다.</p>
+          <p id="verification-body" class="detail-placeholder">최적화 후 문서 구조, 누락 리소스, 이미지 품질 기준을 자동으로 확인합니다.</p>
         </details>
       </section>
 
@@ -300,25 +310,6 @@
         <label><input type="radio" name="mode" value="balanced" /> 균형</label>
         <label><input type="radio" name="mode" value="aggressive" /> 최대 압축</label>
       </div>
-
-      <section id="result-panel" class="panel result" hidden>
-        <div class="panel-header">
-          <div>
-            <h2>최적화 결과</h2>
-            <p>원본은 그대로 보존됩니다.</p>
-          </div>
-          <div class="actions">
-            <button id="open-file-button" class="ghost">파일 열기</button>
-            <button id="open-folder-button" class="ghost">폴더 보기</button>
-            <button id="compare-button" class="ghost" disabled>결과 비교</button>
-            <button id="reverify-button" class="ghost" disabled>다시 검증</button>
-            <button id="open-report-button" class="ghost" disabled>현재 리포트</button>
-          </div>
-        </div>
-        <div id="result-summary" class="metric-grid"></div>
-        <p id="output-path"></p>
-        <p id="report-path"></p>
-      </section>
 
       <div id="compare-modal" class="modal" hidden>
         <div class="modal-card">

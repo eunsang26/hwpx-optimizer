@@ -1061,13 +1061,13 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
 .plan-strip {
   align-self: stretch;
 }
-/* Plan list as a horizontal 3-up grid (06-tool tone) */
+/* Plan list stays single-column so action copy cannot collapse vertically. */
 .plan-actions {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 .plan-card {
@@ -1087,8 +1087,7 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
 
 .plan-card { width: 100%; }
 .plan-card > label {
-  display: grid;
-  grid-template-columns: auto 28px minmax(0, 1fr);
+  display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
@@ -1096,7 +1095,7 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
   min-width: 0;
 }
 .plan-card.is-placeholder { /* no label wrapper */ }
-.plan-card.is-placeholder { display: grid; grid-template-columns: 28px 1fr; gap: 9px; align-items: center; }
+.plan-card.is-placeholder { display: flex; gap: 9px; align-items: center; }
 .plan-card > label > input[type="checkbox"] {
   margin: 0;
   width: 14px;
@@ -1133,6 +1132,7 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
 .plan-card .plan-copy {
   display: grid;
   gap: 1px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .plan-card .plan-copy strong,
@@ -1152,6 +1152,9 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
   font-size: 11px;
   line-height: 1.35;
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .plan-card .plan-copy p {
   color: var(--muted);
@@ -1357,6 +1360,12 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
 
 /* ---------------- Progress panel ---------------- */
 .progress-panel {
+  position: fixed;
+  top: 76px;
+  left: 50%;
+  z-index: 80;
+  width: min(760px, calc(100vw - 80px));
+  transform: translateX(-50%);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-lg);
   padding: 16px 18px 18px;
@@ -1409,8 +1418,10 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
 .result {
   border: 1px solid var(--green-border);
   border-radius: var(--radius-lg);
+  margin-top: 10px;
   padding: 18px 20px;
   background: linear-gradient(180deg, #f8fef9 0%, #f1fcf5 100%);
+  box-shadow: none;
 }
 .result .panel-header {
   display: flex;

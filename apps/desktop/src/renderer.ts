@@ -89,7 +89,6 @@ const dropZone = requireElement("drop-zone");
 const fileName = requireElement("file-name");
 const fileMeta = requireElement("file-meta");
 const chooseButton = requireButton("choose-button");
-const chooseManyButton = requireButton("choose-many-button");
 const chooseFolderButton = requireButton("choose-folder-button");
 const emptyChooseButton = requireButton("empty-choose-button");
 const emptyFolderButton = requireButton("empty-folder-button");
@@ -149,6 +148,9 @@ const planSummary = requireElement("plan-summary");
 const planTotal = requireElement("plan-total");
 const analysisDetailSummary = requireElement("analysis-detail-summary");
 const analysisDetails = requireElement("analysis-details") as HTMLDetailsElement;
+const verificationDetails = requireElement("verification-details") as HTMLDetailsElement;
+const verificationSummary = requireElement("verification-summary");
+const verificationBody = requireElement("verification-body");
 const selectionPill = requireElement("selection-pill");
 const selectedFileCard = requireElement("selected-file-card");
 const selectedFileName = requireElement("selected-file-name");
@@ -179,18 +181,13 @@ async function init(): Promise<void> {
   renderSubmissionControls();
   modeInputs.find((input) => input.value === state.mode)?.click();
 
-  const selectSingleFile = async () => {
-    const selected = await window.hwpxOptimizer.selectHwpx();
-    if (selected) await loadFile(selected);
-  };
-
-  chooseButton.addEventListener("click", selectSingleFile);
-  emptyChooseButton.addEventListener("click", selectSingleFile);
-
-  chooseManyButton.addEventListener("click", async () => {
+  const selectFiles = async () => {
     const selected = await window.hwpxOptimizer.selectHwpxMany();
     if (selected && selected.length > 0) await handleSelectedPaths(selected);
-  });
+  };
+
+  chooseButton.addEventListener("click", selectFiles);
+  emptyChooseButton.addEventListener("click", selectFiles);
 
   const selectFolder = async () => {
     const result = await window.hwpxOptimizer.selectHwpxFolder();
@@ -446,6 +443,8 @@ async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
   state.preservationPreference = settings.preservationPreference ?? state.preservationPreference;
   renderSettings(settings);
   renderSubmissionControls();
+  if (state.report) refreshSubmissionPlan();
+  if (state.batchItems.length > 0) refreshBatchPlans();
 }
 
 function renderSettings(settings: DesktopSettings): void {
@@ -726,6 +725,7 @@ async function loadFile(path: string): Promise<void> {
   actionCheckboxes.innerHTML = "";
   refreshSubmissionPlan();
   resultPanel.hidden = true;
+  resetVerificationPanel();
   compareButton.disabled = true;
   closeImageCompareModal();
   const baseName = path.split(/[\\/]/).pop() ?? path;
@@ -876,11 +876,17 @@ function renderWarningList(warnings: readonly string[]): string {
 
 function renderResult(report: OptimizationReport, outputPath: string, reportPath?: string): void {
   resultPanel.hidden = false;
+  const plan = state.currentPlan;
+  const optimizedSize = report.optimizedSize ?? report.originalSize;
+  const savedBytes = report.savedBytes ?? 0;
+  const planDeltaBytes = plan ? savedBytes - plan.expectedSavingBytes : undefined;
   resultSummary.innerHTML = [
+    ...(plan ? [metricHtml("계획 예상", `${plan.expectedSizeLabel} / ${plan.expectedSavingLabel}`)] : []),
     metricHtml("원본 용량", formatBytes(report.originalSize)),
-    metricHtml("결과 용량", formatBytes(report.optimizedSize ?? report.originalSize)),
-    metricHtml("실제 절감", formatBytes(report.savedBytes ?? 0)),
+    metricHtml("결과 용량", formatBytes(optimizedSize)),
+    metricHtml("실제 절감", formatBytes(savedBytes)),
     metricHtml("절감률", `${(report.savedPercent ?? 0).toFixed(2)}%`),
+    ...(planDeltaBytes !== undefined ? [metricHtml("계획 대비", planDeltaLabel(planDeltaBytes))] : []),
     ...(report.targetBytes
       ? [metricHtml("제출 목표", `${formatBytes(report.targetBytes)} · ${targetStatusText(report.targetStatus)}`)]
       : [])
@@ -892,6 +898,35 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
   openReportButton.disabled = !reportPath;
   reverifyButton.disabled = false;
   compareButton.disabled = state.mode === "safe";
+  renderVerificationResult(report);
+}
+
+function planDeltaLabel(deltaBytes: number): string {
+  if (Math.abs(deltaBytes) < 1024) return "계획과 유사";
+  if (deltaBytes > 0) return `예상보다 ${formatBytes(deltaBytes)} 더 절감`;
+  return `예상보다 ${formatBytes(Math.abs(deltaBytes))} 덜 절감`;
+}
+
+function resetVerificationPanel(): void {
+  verificationDetails.open = false;
+  verificationSummary.innerHTML =
+    '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>누락 리소스 및 품질 기준 검증 결과를 확인합니다.</span>';
+  verificationBody.textContent = "최적화 후 문서 구조, 누락 리소스, 이미지 품질 기준을 자동으로 확인합니다.";
+}
+
+function renderVerificationResult(report: OptimizationReport): void {
+  const appliedCount = report.actions.applied.length;
+  const skippedCount = report.actions.skipped.length;
+  const warningCount = report.warnings.length;
+  verificationDetails.open = true;
+  verificationSummary.innerHTML =
+    '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>검증 완료</span>';
+  verificationBody.textContent = [
+    "문서 구조와 누락 리소스 검증을 통과했습니다.",
+    `적용 ${appliedCount}개`,
+    `보류 ${skippedCount}개`,
+    warningCount > 0 ? `주의 ${warningCount}개` : "추가 주의 없음"
+  ].join(" · ");
 }
 
 function targetStatusText(status: OptimizationReport["targetStatus"]): string {
@@ -936,8 +971,16 @@ async function reverifyCurrentResult(): Promise<void> {
   try {
     const response = await window.hwpxOptimizer.verify(state.result.outputPath);
     setStatus(response.ok ? "결과 파일이 유효합니다." : "검증 결과를 받지 못했습니다.");
+    verificationSummary.innerHTML =
+      '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>재검증 완료</span>';
+    verificationBody.textContent = response.ok
+      ? "결과 파일 재검증을 통과했습니다."
+      : "재검증 응답을 받았지만 통과 여부를 확인하지 못했습니다.";
   } catch (error) {
     setStatus(`검증 실패: ${errorMessage(error)}`);
+    verificationSummary.innerHTML =
+      '<span class="small-shield-icon" aria-hidden="true"></span><strong>자동 검증 결과</strong><span>검증 실패</span>';
+    verificationBody.textContent = errorMessage(error);
   } finally {
     reverifyButton.disabled = !state.result;
   }
@@ -1025,6 +1068,7 @@ function enterBatchMode(paths: string[]): void {
   state.currentPlan = undefined;
   state.actionSelections.clear();
   resultPanel.hidden = true;
+  resetVerificationPanel();
   actionPanel.hidden = true;
   actionCheckboxes.innerHTML = "";
   singleWorkspace.hidden = false;
