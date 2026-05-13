@@ -148,6 +148,8 @@ const privacyToggle = requireInput("privacy-toggle");
 const planTitle = requireElement("plan-title");
 const planSummary = requireElement("plan-summary");
 const planTotal = requireElement("plan-total");
+const planCountPill = requireElement("plan-count-pill");
+const optionPlanSummary = requireElement("option-plan-summary");
 const analysisDetailSummary = requireElement("analysis-detail-summary");
 const analysisDetails = requireElement("analysis-details") as HTMLDetailsElement;
 const verificationBody = requireElement("verification-body");
@@ -168,6 +170,10 @@ const summaryStatus = requireElement("summary-status");
 const summaryResultLine = requireElement("summary-result-line");
 const summaryTargetLine = requireElement("summary-target-line");
 const targetTrackFill = requireElement("target-track-fill");
+const runDock = requireElement("run-dock");
+const runDockStatus = requireElement("run-dock-status");
+const runDockSummary = requireElement("run-dock-summary");
+const runDockButton = requireButton("run-dock-button");
 
 void init();
 
@@ -238,6 +244,7 @@ async function init(): Promise<void> {
     }
     void optimizeCurrentFile();
   });
+  runDockButton.addEventListener("click", () => optimizeButton.click());
   cancelButton.addEventListener("click", async () => {
     if (state.analysisRunning || state.batchAnalyzing) {
       state.batchCancelled = state.batchAnalyzing;
@@ -462,6 +469,7 @@ function renderSettings(settings: DesktopSettings): void {
     : `저장 폴더: ${state.outputDirectory}`;
   settingOutputButton.disabled = settings.saveNextToOriginal;
   settingOutputResetButton.disabled = settings.saveNextToOriginal && !state.outputDirectory;
+  renderRunDock(state.currentPlan);
 }
 
 function applySessionOutputDirectory(outputDirectory: string): void {
@@ -492,8 +500,11 @@ function refreshSubmissionPlan(): void {
     planTitle.textContent = "자동 최적화 계획";
     planSummary.textContent = "파일을 분석하면 예상 절감량을 표시합니다.";
     planTotal.textContent = "예상 절감 0 B";
+    planCountPill.textContent = "작업 3개";
+    optionPlanSummary.textContent = "파일을 분석하면 선택한 작업의 예상 절감량이 표시됩니다.";
     actionPanelHint.textContent = "옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.";
     renderPlanActions();
+    renderRunDock();
     if (state.analysisRunning && state.filePath) {
       renderPendingAnalysisSummary();
     } else if (!state.batchItems.length) {
@@ -510,17 +521,24 @@ function refreshSubmissionPlan(): void {
   state.currentPlan = plan;
   state.mode = plan.mode;
   planTitle.textContent = plan.kind === "custom" ? "사용자 지정 계획" : "자동 최적화 계획";
-  planSummary.textContent = `${plan.targetStatusLabel} · 예상 결과 ${plan.expectedSizeLabel}`;
-  planTotal.textContent = `예상 절감 ${plan.expectedSavingLabel}`;
+  const reviewNoteCount = plan.planNotes.filter((note) => note.kind === "review").length;
+  planCountPill.textContent =
+    reviewNoteCount > 0
+      ? `선택 ${plan.selectedActions.length}/${plan.actionRows.length} · 확인 ${reviewNoteCount}`
+      : `선택 ${plan.selectedActions.length}/${plan.actionRows.length}`;
+  planSummary.textContent = "절감량은 중복 제외 기준으로 계산합니다.";
+  planTotal.textContent = `선택 예상 ${plan.expectedSavingLabel} · 결과 ${plan.expectedSizeLabel}`;
+  optionPlanSummary.textContent = `${plan.targetStatusLabel} · 선택 ${plan.selectedActions.length}개 · 중복 제외 절감 ${plan.expectedSavingLabel}`;
   actionPanelHint.textContent =
     plan.mode === "safe"
       ? "외형 보존 우선에서는 안전한 항목만 적용합니다."
       : "옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.";
   renderPlanActions(plan);
   syncActionCheckboxIndeterminateState();
-  renderSingleSummary(plan);
-  renderModeWarning();
   optimizeButton.disabled = false;
+  renderSingleSummary(plan);
+  renderRunDock(plan);
+  renderModeWarning();
 }
 
 function renderPlanActions(plan?: SubmissionPlan): void {
@@ -572,7 +590,7 @@ function renderPlanActions(plan?: SubmissionPlan): void {
           priorityLabel
         )}">${escapeHtml(priorityLabel)}</span><span class="plan-icon" aria-hidden="true"></span><span class="plan-copy"><strong>${escapeHtml(
           row.label
-        )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>중복 제외 예상</small><strong>${escapeHtml(
+        )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>예상</small><strong>${escapeHtml(
           row.savingLabel
         )}</strong></span></label></li>`;
       }
@@ -581,7 +599,7 @@ function renderPlanActions(plan?: SubmissionPlan): void {
         priorityLabel
       )}">${escapeHtml(priorityLabel)}</span><span class="plan-icon" aria-hidden="true"></span><span class="plan-copy"><strong>${escapeHtml(
         row.label
-      )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>중복 제외 예상</small><strong>${escapeHtml(
+      )}</strong><em>${escapeHtml(row.detail ?? planActionDescription(row.kind))}</em></span><span class="plan-saving"><small>예상</small><strong>${escapeHtml(
         row.savingLabel
       )}</strong></span></li>`;
     })
@@ -611,6 +629,7 @@ function renderEmptySummary(): void {
   targetTrackFill.style.width = "0%";
   optimizeButton.textContent = "파일을 선택해 시작하세요";
   optimizeButton.disabled = true;
+  renderRunDock();
 }
 
 function renderPendingAnalysisSummary(): void {
@@ -625,6 +644,7 @@ function renderPendingAnalysisSummary(): void {
   targetTrackFill.style.width = "0%";
   optimizeButton.textContent = "분석 중입니다";
   optimizeButton.disabled = true;
+  renderRunDock();
 }
 
 function renderSingleSummary(plan: SubmissionPlan): void {
@@ -649,6 +669,7 @@ function renderSingleSummary(plan: SubmissionPlan): void {
   summaryTargetLine.textContent = `제출 기준: ${targetLabelForDisplay()}`;
   targetTrackFill.style.width = `${progressForPlan(plan)}%`;
   optimizeButton.textContent = "제출 기준에 맞게 줄이기";
+  renderRunDock(plan);
 }
 
 function renderBatchSummary(): void {
@@ -679,6 +700,29 @@ function renderBatchSummary(): void {
   targetTrackFill.style.width = `${Math.min(100, Math.max(0, savingPercent))}%`;
   optimizeButton.textContent = "제출 기준에 맞게 일괄 최적화";
   optimizeButton.disabled = state.batchAnalyzing || !state.batchItems.some((item) => item.status === "pending");
+  renderRunDock();
+}
+
+function renderRunDock(plan?: SubmissionPlan): void {
+  const shouldShow = Boolean(plan && state.report && document.body.dataset.view === "single");
+  runDock.hidden = !shouldShow;
+  if (!shouldShow || !plan) {
+    runDockStatus.textContent = state.analysisRunning ? "분석 중" : "분석 결과 대기 중";
+    runDockSummary.textContent = state.analysisRunning
+      ? `제출 기준 ${targetLabelForDisplay()} · 결과 계산 중`
+      : "파일을 선택하면 실행 요약이 표시됩니다.";
+    runDockButton.textContent = optimizeButton.textContent;
+    runDockButton.disabled = true;
+    return;
+  }
+  runDockStatus.textContent = plan.targetStatusLabel;
+  runDockSummary.textContent = `예상 결과 ${plan.expectedSizeLabel} · 중복 제외 절감 ${plan.expectedSavingLabel} · 저장 ${outputDirectoryLabel()}`;
+  runDockButton.textContent = optimizeButton.textContent;
+  runDockButton.disabled = optimizeButton.disabled;
+}
+
+function outputDirectoryLabel(): string {
+  return state.outputDirectory ? state.outputDirectory : "원본 폴더";
 }
 
 function targetLabelForDisplay(): string {
@@ -766,6 +810,7 @@ async function analyzeFile(path: string): Promise<void> {
     state.actionSelections.clear();
     renderAnalysis(response.report);
     refreshSubmissionPlan();
+    renderRunDock(state.currentPlan);
     renderProgress(100, "분석 완료");
     setStatus("분석이 완료되었습니다. 최적화 방식을 선택하세요.");
   } catch (error) {
@@ -911,6 +956,7 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
   reverifyButton.disabled = false;
   compareButton.disabled = state.mode === "safe";
   renderVerificationResult(report);
+  renderRunDock(plan);
 }
 
 function planDeltaLabel(deltaBytes: number): string {
@@ -1028,12 +1074,14 @@ function setBusy(message: string, options: { cancelable: boolean; kind?: "analys
   progressPanel.classList.add("is-loading");
   optimizeButton.disabled = true;
   setSubmissionInputsDisabled(true);
+  renderRunDock(state.currentPlan);
   cancelButton.disabled = !options.cancelable;
 }
 
 function setIdle(): void {
   optimizeButton.disabled = !state.currentPlan;
   setSubmissionInputsDisabled(false);
+  renderRunDock(state.currentPlan);
   cancelButton.disabled = true;
 }
 
@@ -1045,6 +1093,7 @@ function setSubmissionInputsDisabled(disabled: boolean): void {
   actionCheckboxes.querySelectorAll<HTMLInputElement>("input[type='checkbox']").forEach((input) => {
     input.disabled = disabled;
   });
+  runDockButton.disabled = disabled || optimizeButton.disabled;
 }
 
 function setStatus(message: string): void {

@@ -47,6 +47,8 @@ describe("repository runtime and cleanup configuration", () => {
   it("keeps automatic optimization plan cards horizontally readable", async () => {
     const styles = await readFile("apps/desktop/src/styles.css", "utf8");
 
+    expect(styles).not.toContain("min-width: 1080px;");
+    expect(styles).toMatch(/html,\s*body\s*{[^}]*overflow-x:\s*hidden/s);
     expect(styles).not.toContain(".plan-actions > li,\n.plan-actions .plan-card");
     expect(styles).toMatch(/\.plan-card > label\s*{[^}]*display:\s*flex/s);
     expect(styles).toContain("flex: 1 1 auto;");
@@ -73,6 +75,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('class="analysis-verification"');
     expect(html).toContain('id="verification-body"');
     expect(html).toContain('id="result-guidance"');
+    expect(html).toContain('id="plan-count-pill"');
+    expect(html).toContain('id="option-plan-summary"');
+    expect(html).toContain('id="run-dock"');
     expect(renderer).not.toContain("chooseManyButton");
     expect(renderer).not.toContain("verificationDetails");
     expect(renderer).not.toContain("verificationSummary");
@@ -80,13 +85,16 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("verificationBody.textContent");
     expect(renderer).toContain("renderAnalysisVerification(report);");
     expect(renderer).toContain("renderVerificationFailure(error);");
+    expect(renderer).toContain("planCountPill.textContent");
+    expect(renderer).toContain("optionPlanSummary.textContent");
+    expect(renderer).toContain("runDock.hidden");
     expect(renderer).toContain('from "./shared/resultGuidance.js"');
     expect(renderer).toContain("resultGuidanceText(report, plan)");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
     expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);
     expect(renderer).toContain("plan-priority");
-    expect(renderer).toContain("중복 제외 예상");
+    expect(renderer).toContain("중복 제외 기준");
     expect(css).not.toContain(".plan-card .plan-saving { display: none; }");
 
     const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');

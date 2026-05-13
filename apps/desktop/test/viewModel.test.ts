@@ -20,8 +20,8 @@ describe("desktop view model", () => {
         { action: "optimize-png", count: 1, savingLabel: "1.00 MiB", risk: "safe" }
       ],
       categoryBreakdown: [
-        { kind: "image", bytes: 200, ratio: 200 / 300, label: "이미지" },
-        { kind: "xml", bytes: 100, ratio: 100 / 300, label: "문서 XML" }
+        { kind: "image", bytes: 200, ratio: 200 / 300, label: "이미지 리소스" },
+        { kind: "xml", bytes: 100, ratio: 100 / 300, label: "문서 XML 리소스" }
       ],
       warnings: [
         "OLE objects can be user-visible.",

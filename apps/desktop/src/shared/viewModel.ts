@@ -42,11 +42,11 @@ export type AnalysisViewModel = {
 };
 
 const CATEGORY_LABELS: Record<HwpxEntryKind, string> = {
-  xml: "문서 XML",
-  image: "이미지",
-  font: "폰트",
-  ole: "OLE 객체",
-  bindata: "바이너리",
+  xml: "문서 XML 리소스",
+  image: "이미지 리소스",
+  font: "폰트 리소스",
+  ole: "OLE 객체 리소스",
+  bindata: "바이너리 리소스",
   other: "기타"
 };
 
