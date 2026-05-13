@@ -495,7 +495,11 @@ function refreshSubmissionPlan(): void {
     planTotal.textContent = "예상 절감 0 B";
     actionPanelHint.textContent = "옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.";
     renderPlanActions();
-    if (!state.batchItems.length) renderEmptySummary();
+    if (state.analysisRunning && state.filePath) {
+      renderPendingAnalysisSummary();
+    } else if (!state.batchItems.length) {
+      renderEmptySummary();
+    }
     optimizeButton.disabled = true;
     return;
   }
@@ -602,6 +606,20 @@ function renderEmptySummary(): void {
   optimizeButton.disabled = true;
 }
 
+function renderPendingAnalysisSummary(): void {
+  selectionPill.textContent = "단일 파일";
+  summaryOriginal.textContent = "-";
+  summaryExpected.textContent = "-";
+  summarySaving.textContent = "-";
+  summaryPercent.textContent = "-";
+  summaryStatus.innerHTML = '<span class="success-dot" aria-hidden="true"></span>파일을 분석하는 중입니다.';
+  summaryResultLine.textContent = "예상 결과: 계산 중";
+  summaryTargetLine.textContent = `제출 기준: ${targetLabelForDisplay()}`;
+  targetTrackFill.style.width = "0%";
+  optimizeButton.textContent = "분석 중입니다";
+  optimizeButton.disabled = true;
+}
+
 function renderSingleSummary(plan: SubmissionPlan): void {
   if (!state.report) return;
   document.body.dataset.view = "single";
@@ -701,6 +719,7 @@ async function loadFile(path: string): Promise<void> {
   state.report = undefined;
   state.result = undefined;
   state.currentPlan = undefined;
+  state.analysisRunning = true;
   state.actionSelections.clear();
   singleWorkspace.hidden = false;
   actionPanel.hidden = true;
@@ -741,7 +760,10 @@ async function analyzeFile(path: string): Promise<void> {
     renderProgress(100, "분석 완료");
     setStatus("분석이 완료되었습니다. 최적화 방식을 선택하세요.");
   } catch (error) {
-    if (runId === analysisSequence) setStatus(errorMessage(error));
+    if (runId === analysisSequence) {
+      setStatus(errorMessage(error));
+      renderEmptySummary();
+    }
   } finally {
     if (runId === analysisSequence) {
       state.analysisRunning = false;
@@ -787,6 +809,9 @@ function hideProgressPanel(): void {
   document.body.dataset.busy = "";
   progressPanel.classList.remove("is-loading");
   progressPanel.hidden = true;
+  if (!state.analysisRunning && !state.batchAnalyzing && !state.batchRunning) {
+    setSubmissionInputsDisabled(false);
+  }
 }
 
 function renderAnalysis(report: OptimizationReport): void {
@@ -932,12 +957,24 @@ function setBusy(message: string, options: { cancelable: boolean; kind?: "analys
   progressPanel.hidden = false;
   progressPanel.classList.add("is-loading");
   optimizeButton.disabled = true;
+  setSubmissionInputsDisabled(true);
   cancelButton.disabled = !options.cancelable;
 }
 
 function setIdle(): void {
   optimizeButton.disabled = !state.currentPlan;
+  setSubmissionInputsDisabled(false);
   cancelButton.disabled = true;
+}
+
+function setSubmissionInputsDisabled(disabled: boolean): void {
+  submissionLimitSelect.disabled = disabled;
+  customLimitInput.disabled = disabled;
+  preservationSelect.disabled = disabled;
+  privacyToggle.disabled = disabled;
+  actionCheckboxes.querySelectorAll<HTMLInputElement>("input[type='checkbox']").forEach((input) => {
+    input.disabled = disabled;
+  });
 }
 
 function setStatus(message: string): void {

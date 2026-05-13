@@ -39,4 +39,19 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).not.toContain('requireButton("analyze-button")');
     expect(renderer).toContain("outputDirectoryLine.textContent");
   });
+
+  it("keeps automatic optimization plan cards horizontally readable", async () => {
+    const styles = await readFile("apps/desktop/src/styles.css", "utf8");
+
+    expect(styles).not.toContain(".plan-actions > li,\n.plan-actions .plan-card");
+    expect(styles).toContain("grid-template-columns: auto 28px minmax(0, 1fr);");
+  });
+
+  it("keeps analysis state stable while submission options are changed during analysis", async () => {
+    const renderer = await readFile("apps/desktop/src/renderer.ts", "utf8");
+
+    expect(renderer).toContain("function renderPendingAnalysisSummary()");
+    expect(renderer).toContain("state.analysisRunning && state.filePath");
+    expect(renderer).toContain("function setSubmissionInputsDisabled(disabled: boolean)");
+  });
 });

@@ -1070,10 +1070,8 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 6px;
 }
-.plan-actions > li,
-.plan-actions .plan-card {
-  display: grid;
-  grid-template-columns: 28px 1fr;
+.plan-card {
+  display: block;
   gap: 9px;
   padding: 8px 10px;
   border: 1px solid var(--hairline);
@@ -1090,11 +1088,12 @@ body[data-view="empty"] .primary-run-panel #optimize-button {
 .plan-card { width: 100%; }
 .plan-card > label {
   display: grid;
-  grid-template-columns: auto 28px 1fr;
+  grid-template-columns: auto 28px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   cursor: pointer;
   width: 100%;
+  min-width: 0;
 }
 .plan-card.is-placeholder { /* no label wrapper */ }
 .plan-card.is-placeholder { display: grid; grid-template-columns: 28px 1fr; gap: 9px; align-items: center; }
