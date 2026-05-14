@@ -555,7 +555,7 @@ function renderPlanActions(plan?: SubmissionPlan): void {
   };
   const fallbackRows: DisplayPlanRow[] = [
     { priority: 1, label: "중복 이미지 참조 정리", savingLabel: "분석 후 표시", kind: "image" },
-    { priority: 2, label: "불필요한 이미지 정보 제거", savingLabel: "분석 후 표시", kind: "metadata" },
+    { priority: 2, label: "EXIF 제외 이미지 정보 제거", savingLabel: "분석 후 표시", kind: "metadata" },
     { priority: 3, label: "작성자·편집 흔적 정리", savingLabel: "분석 후 표시", kind: "author" }
   ];
   const displayRows: DisplayPlanRow[] =

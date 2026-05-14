@@ -4,7 +4,24 @@ import type { HwpxEntry, HwpxEntryKind, HwpxPackage } from "./types.js";
 const PROTECTED_DOCUMENT_ERROR =
   "보안 처리된 문서는 최적화 대상이 아닙니다. 암호화, DRM, 전자서명, 권한 제한을 해제하거나 우회하지 않습니다.";
 
-export async function readHwpxPackage(input: Buffer): Promise<HwpxPackage> {
+export type HwpxPackageReadLimits = {
+  maxEntries?: number;
+  maxEntryBytes?: number;
+  maxExpandedBytes?: number;
+};
+
+export type ReadHwpxPackageOptions = {
+  limits?: HwpxPackageReadLimits;
+};
+
+const DEFAULT_READ_LIMITS: Required<HwpxPackageReadLimits> = {
+  maxEntries: 20_000,
+  maxEntryBytes: 512 * 1024 * 1024,
+  maxExpandedBytes: 2 * 1024 * 1024 * 1024
+};
+
+export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOptions = {}): Promise<HwpxPackage> {
+  const limits = normalizeReadLimits(options.limits);
   if (isHwpBinary(input)) {
     throw new Error("Unsupported HWP binary file: save or export the document as .hwpx before optimizing");
   }
@@ -22,12 +39,33 @@ export async function readHwpxPackage(input: Buffer): Promise<HwpxPackage> {
   }
 
   const entries: HwpxEntry[] = [];
-  for (const [path, file] of Object.entries(zip.files)) {
-    if (file.dir) continue;
+  const files = Object.entries(zip.files).filter(([, file]) => !file.dir);
+  if (files.length > limits.maxEntries) {
+    throw new Error(`Invalid HWPX package: too many entries (${files.length}; limit ${limits.maxEntries})`);
+  }
+
+  let expandedBytes = 0;
+  for (const [path, file] of files) {
     if (!isSafePackagePath(path)) {
       throw new Error(`Invalid HWPX package: unsafe entry path ${path}`);
     }
+    const declaredSize = getDeclaredUncompressedSize(file);
+    if (declaredSize !== undefined) {
+      assertEntrySizeWithinLimit(path, declaredSize, limits.maxEntryBytes);
+      if (expandedBytes + declaredSize > limits.maxExpandedBytes) {
+        throw new Error(
+          `Invalid HWPX package: expanded contents exceed supported size (${expandedBytes + declaredSize} bytes; limit ${limits.maxExpandedBytes} bytes)`
+        );
+      }
+    }
     const data = Buffer.from(await file.async("nodebuffer"));
+    assertEntrySizeWithinLimit(path, data.byteLength, limits.maxEntryBytes);
+    expandedBytes += data.byteLength;
+    if (expandedBytes > limits.maxExpandedBytes) {
+      throw new Error(
+        `Invalid HWPX package: expanded contents exceed supported size (${expandedBytes} bytes; limit ${limits.maxExpandedBytes} bytes)`
+      );
+    }
     entries.push({
       path,
       data,
@@ -39,6 +77,39 @@ export async function readHwpxPackage(input: Buffer): Promise<HwpxPackage> {
   rejectProtectedHwpxEntries(entries);
   validateHwpxStructure(entries);
   return { entries };
+}
+
+function normalizeReadLimits(limits: HwpxPackageReadLimits | undefined): Required<HwpxPackageReadLimits> {
+  return {
+    maxEntries: normalizePositiveInteger(limits?.maxEntries, DEFAULT_READ_LIMITS.maxEntries, "maxEntries"),
+    maxEntryBytes: normalizePositiveInteger(limits?.maxEntryBytes, DEFAULT_READ_LIMITS.maxEntryBytes, "maxEntryBytes"),
+    maxExpandedBytes: normalizePositiveInteger(
+      limits?.maxExpandedBytes,
+      DEFAULT_READ_LIMITS.maxExpandedBytes,
+      "maxExpandedBytes"
+    )
+  };
+}
+
+function normalizePositiveInteger(value: number | undefined, fallback: number, name: string): number {
+  if (value === undefined) return fallback;
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Invalid HWPX read limit: ${name} must be a positive number.`);
+  }
+  return Math.floor(value);
+}
+
+function assertEntrySizeWithinLimit(path: string, size: number, limit: number): void {
+  if (size > limit) {
+    throw new Error(`Invalid HWPX package: entry exceeds supported size ${path} (${size} bytes; limit ${limit} bytes)`);
+  }
+}
+
+function getDeclaredUncompressedSize(file: JSZip.JSZipObject): number | undefined {
+  const data = (file as unknown as { _data?: { uncompressedSize?: unknown } })._data;
+  return typeof data?.uncompressedSize === "number" && Number.isFinite(data.uncompressedSize)
+    ? data.uncompressedSize
+    : undefined;
 }
 
 export function isSafePackagePath(path: string): boolean {

@@ -36,6 +36,7 @@ describe("runCli", () => {
     const text = logs.join("\n");
     expect(text).toContain("Available --actions keys");
     expect(text).toContain("strip-metadata");
+    expect(text).toContain("Remove JPEG XMP/IPTC/comment segments while preserving EXIF orientation");
     expect(text).toContain("convert-bmp-to-png");
     expect(text).toContain("clean-shape-comment");
     expect(text).toContain("consolidate-duplicate-images");

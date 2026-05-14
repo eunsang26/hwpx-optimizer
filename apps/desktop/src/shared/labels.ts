@@ -41,6 +41,21 @@ const ERROR_PATTERNS: Array<{ regex: RegExp; label: (match: RegExpMatchArray) =>
       `이미지 비교 미리보기 한도를 초과했습니다. 최적화 결과 파일은 생성되었으니 파일/폴더 열기로 확인하세요. (${match[1]} / 한도 ${match[2]})`
   },
   {
+    regex: /^Invalid HWPX package: too many entries \((\d+); limit (\d+)\)$/i,
+    label: (match) =>
+      `HWPX 내부 항목 수가 로컬 처리 한도를 초과했습니다. 문서를 나누거나 불필요한 첨부 리소스를 정리하세요. (${match[1]} / 한도 ${match[2]})`
+  },
+  {
+    regex: /^Invalid HWPX package: entry exceeds supported size (.+) \((\d+ bytes); limit (\d+ bytes)\)$/i,
+    label: (match) =>
+      `HWPX 내부 리소스가 로컬 처리 한도를 초과했습니다. 큰 이미지나 첨부 파일을 먼저 정리하세요. (${match[1]}, ${match[2]} / 한도 ${match[3]})`
+  },
+  {
+    regex: /^Invalid HWPX package: expanded contents exceed supported size \((\d+ bytes); limit (\d+ bytes)\)$/i,
+    label: (match) =>
+      `HWPX 압축 해제 후 크기가 로컬 처리 한도를 초과했습니다. 문서를 나누거나 큰 리소스를 정리하세요. (${match[1]} / 한도 ${match[2]})`
+  },
+  {
     regex: /\b(EACCES|EPERM)\b|permission denied/i,
     label: () => "파일 또는 폴더 권한이 없어 처리할 수 없습니다. 다른 저장 위치를 선택하거나 문서를 닫은 뒤 다시 시도하세요."
   },
@@ -56,6 +71,11 @@ const ERROR_PATTERNS: Array<{ regex: RegExp; label: (match: RegExpMatchArray) =>
       `이미지 품질 검증 기준을 통과하지 못했습니다. 더 보수적인 보존 기준으로 다시 실행하세요. (${match[1]}, ${match[4]}, PSNR ${qualityMetricValue(
         match[2]
       )}, SSIM ${qualityMetricValue(match[3])})`
+  },
+  {
+    regex: /^Verification failed: (safe|balanced|aggressive) mode image quality could not be measured for (.+)$/i,
+    label: (match) =>
+      `이미지 품질을 측정할 수 없어 최적화를 보류했습니다. 더 보수적인 보존 기준으로 다시 실행하세요. (${match[1]}, ${match[2]})`
   },
   {
     regex: /^Verification failed: referenced resource removed (.+)$/i,

@@ -230,7 +230,7 @@ const ACTION_CATALOG: Array<{
 }> = [
   {
     action: "strip-metadata",
-    description: "Remove JPEG EXIF/IPTC/comment segments without recompressing the image",
+    description: "Remove JPEG XMP/IPTC/comment segments while preserving EXIF orientation",
     modes: "safe, balanced, aggressive",
     risk: "safe",
     visualImpact: "none"

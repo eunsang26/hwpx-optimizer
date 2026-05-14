@@ -62,6 +62,24 @@ describe("balanced optimization", () => {
     );
   });
 
+  it("updates direct XML package-path attributes when image conversion changes the file path", async () => {
+    const bmp = createBmp24(640, 360, [0xcc, 0xcc, 0xcc]);
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.bmp" media-type="image/bmp" isEmbeded="1"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hp:pic><hc:img binaryItemIDRef="image1" xlink:href="BinData/image1.bmp" /></hp:pic></root>`,
+        "BinData/image1.bmp": bmp
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture);
+    const output = await readHwpxPackage(result.output);
+    const section = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+
+    expect(section).toContain('xlink:href="BinData/image1.png"');
+    expect(section).not.toContain("BinData/image1.bmp");
+  });
+
   it("updates manifest media types structurally regardless of attribute order", async () => {
     const bmp = createBmp24(320, 180, [0xaa, 0xbb, 0xcc]);
     const fixture = await createHwpxFixture({

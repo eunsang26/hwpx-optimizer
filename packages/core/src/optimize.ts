@@ -294,7 +294,7 @@ function createOptimizationOpportunityFromAppliedAction(
       id: `${action.type}:${action.target}`,
       label:
         action.type === "strip-metadata"
-          ? "Strip JPEG metadata"
+          ? "Strip JPEG XMP/IPTC/comment metadata"
           : profile.pngPalette
             ? "Optimize PNG with aggressive palette reduction"
             : "Optimize PNG losslessly",

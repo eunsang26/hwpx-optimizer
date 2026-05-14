@@ -1,11 +1,21 @@
 export const BIN_DATA_PREFIX = "BinData/";
 
 export function decodePackagePath(value: string): string {
+  const unescaped = decodeXmlEntities(value);
   try {
-    return decodeURIComponent(value);
+    return decodeURIComponent(unescaped);
   } catch {
-    return value;
+    return unescaped;
   }
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
 }
 
 function cleanPackagePath(value: string): string {

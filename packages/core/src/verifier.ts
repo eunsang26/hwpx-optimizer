@@ -118,11 +118,18 @@ async function verifyVisualSimilarityPairs(
   });
 
   for (const pair of uniquePairs) {
+    if (pair.original.data.equals(pair.output.data)) continue;
     const [psnr, ssim] = await Promise.all([
       computePsnr(pair.original.data, pair.output.data),
       computeSsim(pair.original.data, pair.output.data)
     ]);
-    if (psnr === null && ssim === null) continue;
+    if (psnr === null && ssim === null) {
+      const diff = await describeImagePairDiff(pair.original, pair.output);
+      const suffix = diff ? ` ${diff}` : "";
+      throw new Error(
+        `Verification failed: ${mode} mode image quality could not be measured for ${pair.original.path}${suffix}`
+      );
+    }
     const ssimMinimum = SSIM_MINIMUM[mode];
     if ((psnr !== null && psnr < minimum) || (ssim !== null && ssim < ssimMinimum)) {
       const diff = await describeImagePairDiff(pair.original, pair.output);

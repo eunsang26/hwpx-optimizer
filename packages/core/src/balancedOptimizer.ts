@@ -261,13 +261,16 @@ function updateHrefAttributes(
     if (!isXmlNode(node)) continue;
     const attrs = getXmlAttributes(node);
     if (attrs) {
-      const href = getStringAttribute(attrs, "href");
-      if (href) {
-        const updatedPath = pathUpdates.get(href);
+      for (const key of findPackagePathAttributeKeys(attrs)) {
+        const value = attrs[key];
+        if (typeof value !== "string") continue;
+        const updatedPath = findUpdatedPackagePath(value, pathUpdates);
         if (updatedPath) {
-          setAttribute(attrs, "href", updatedPath);
+          setAttribute(attrs, key, updatedPath);
           const updatedMediaType = mediaTypeUpdates.get(updatedPath);
-          if (updatedMediaType) setAttribute(attrs, "media-type", updatedMediaType);
+          if (updatedMediaType && key.toLowerCase() === "href" && Object.hasOwn(attrs, "media-type")) {
+            setAttribute(attrs, "media-type", updatedMediaType);
+          }
           changed = true;
         }
       }
@@ -392,4 +395,3 @@ function findUpdatedPackagePath(value: string, pathUpdates: Map<string, string>)
   const normalized = normalizePackagePath(value);
   return normalized ? pathUpdates.get(normalized) ?? null : null;
 }
-

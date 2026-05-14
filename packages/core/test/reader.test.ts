@@ -77,6 +77,44 @@ describe("readHwpxPackage", () => {
     await expect(readHwpxPackage(fixture)).rejects.toThrow(/missing required files/i);
   });
 
+  it("rejects packages with too many entries before trusting package contents", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "BinData/a.bin": "a",
+        "BinData/b.bin": "b"
+      }
+    });
+
+    await expect(readHwpxPackage(fixture, { limits: { maxEntries: 3 } })).rejects.toThrow(
+      /too many entries/i
+    );
+  });
+
+  it("rejects packages with an oversized expanded entry", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "BinData/large.bin": Buffer.alloc(16)
+      }
+    });
+
+    await expect(readHwpxPackage(fixture, { limits: { maxEntryBytes: 8 } })).rejects.toThrow(
+      /entry exceeds supported size/i
+    );
+  });
+
+  it("rejects packages whose expanded contents exceed the total limit", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "BinData/a.bin": Buffer.alloc(8),
+        "BinData/b.bin": Buffer.alloc(8)
+      }
+    });
+
+    await expect(readHwpxPackage(fixture, { limits: { maxExpandedBytes: 12 } })).rejects.toThrow(
+      /expanded contents exceed supported size/i
+    );
+  });
+
   it("isSafePackagePath flags traversal and absolute segments", () => {
     expect(isSafePackagePath("BinData/foo.png")).toBe(true);
     expect(isSafePackagePath("Contents/section0.xml")).toBe(true);
