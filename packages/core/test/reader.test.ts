@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { isSafePackagePath, readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture } from "./fixtures.js";
@@ -113,6 +114,13 @@ describe("readHwpxPackage", () => {
     await expect(readHwpxPackage(fixture, { limits: { maxExpandedBytes: 12 } })).rejects.toThrow(
       /expanded contents exceed supported size/i
     );
+  });
+
+  it("does not depend on JSZip private fields for declared size checks", async () => {
+    const source = await readFile("packages/core/src/reader.ts", "utf8");
+
+    expect(source).not.toContain("._data");
+    expect(source).not.toContain("_data?");
   });
 
   it("isSafePackagePath flags traversal and absolute segments", () => {

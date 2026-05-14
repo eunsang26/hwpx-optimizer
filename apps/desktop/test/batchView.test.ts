@@ -100,15 +100,17 @@ describe("batchView helpers", () => {
 
   it("merges optimize response fields into the batch item", () => {
     const item: BatchItemLike = { path: "/x/a.hwpx", fileName: "a.hwpx", status: "running" };
+    const report = { optimizedSize: 8192, savedBytes: 4096, savedPercent: 12.5 } as OptimizationReport;
     const updated = applyOptimizationResultToBatchItem(item, {
       outputPath: "/x/a.optimized.hwpx",
       reportPath: "/x/a.optimized.hwpx.report.json",
-      report: { savedBytes: 4096, savedPercent: 12.5 } as OptimizationReport
+      report
     });
     expect(updated).toMatchObject({
       status: "done",
       outputPath: "/x/a.optimized.hwpx",
       reportPath: "/x/a.optimized.hwpx.report.json",
+      report,
       savedBytes: 4096,
       savedPercent: 12.5
     });

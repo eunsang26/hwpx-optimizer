@@ -33,6 +33,7 @@ export const defaultDesktopSettings: DesktopSettings = {
 
 const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
 const DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES = 200 * 1024 * 1024;
+const MAX_BATCH_REPORT_ITEMS = 10_000;
 
 export type DesktopAnalysisResult = {
   filePath: string;
@@ -141,6 +142,7 @@ export async function optimizeDesktopFile(
 }
 
 export async function writeDesktopBatchReport(input: DesktopBatchReportInput): Promise<{ reportPath: string }> {
+  assertValidBatchReportInput(input);
   await mkdir(input.reportDirectory, { recursive: true });
   const requestedReportPath = join(input.reportDirectory, "batch-report.json");
   const reportPath = input.settings.preventOverwrite ? await nextAvailableReportPath(requestedReportPath) : requestedReportPath;
@@ -157,6 +159,26 @@ export async function writeDesktopBatchReport(input: DesktopBatchReportInput): P
   };
   await writeJsonArtifact(reportPath, JSON.stringify(report, null, 2));
   return { reportPath };
+}
+
+function assertValidBatchReportInput(input: DesktopBatchReportInput): void {
+  if (!isOptimizationMode(input.mode)) {
+    throw new Error(`Invalid batch report mode: ${String(input.mode)}`);
+  }
+  if (!Array.isArray(input.items) || input.items.length > MAX_BATCH_REPORT_ITEMS) {
+    throw new Error(`Invalid batch report items: expected at most ${MAX_BATCH_REPORT_ITEMS} items.`);
+  }
+  for (const item of input.items) {
+    if (item.status !== "done" && item.status !== "failed" && item.status !== "cancelled") {
+      throw new Error(`Invalid batch report item status: ${String(item.status)}`);
+    }
+    for (const key of ["originalSize", "optimizedSize", "savedBytes", "savedPercent"] as const) {
+      const value = item[key];
+      if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
+        throw new Error(`Invalid batch report number: ${key}`);
+      }
+    }
+  }
 }
 
 export async function verifyDesktopFile(

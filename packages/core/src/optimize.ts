@@ -119,7 +119,11 @@ async function optimizeHwpxBufferAdvanced(
   output: Buffer;
   report: OptimizationReport;
 }> {
-  const options = { ...settings.options, targetBytes: normalizeTargetBytes(settings.options.targetBytes) };
+  const options = {
+    ...settings.options,
+    targetBytes: normalizeTargetBytes(settings.options.targetBytes),
+    onProgress: createMonotonicProgressCallback(settings.options.onProgress)
+  };
   const profiles = createTargetProfileLadder(settings.mode, settings.profile, options.targetBytes);
   let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
   const verificationWarnings: string[] = [];
@@ -154,6 +158,16 @@ function normalizeTargetBytes(value: number | undefined): number | undefined {
 
 function emitProgress(options: { onProgress?: OptimizeProgressCallback }, percent: number, item: string): void {
   options.onProgress?.({ percent, item });
+}
+
+function createMonotonicProgressCallback(callback: OptimizeProgressCallback | undefined): OptimizeProgressCallback | undefined {
+  if (!callback) return undefined;
+  let lastPercent = 0;
+  return (progress) => {
+    const percent = Math.max(lastPercent, progress.percent);
+    lastPercent = percent;
+    callback({ ...progress, percent });
+  };
 }
 
 async function optimizeHwpxBufferWithProfile(

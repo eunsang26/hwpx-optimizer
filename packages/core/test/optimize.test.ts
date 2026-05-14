@@ -101,6 +101,31 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(withTarget.output.byteLength).toBeLessThan(input.byteLength);
   });
 
+  it("keeps progress monotonic across target profile retries", async () => {
+    const jpeg = await sharp({
+      create: { width: 640, height: 480, channels: 3, background: "#99aabb" }
+    })
+      .jpeg({ quality: 100 })
+      .toBuffer();
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.jpg" media-type="image/jpeg"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hc:img binaryItemIDRef="image1" /></root>`,
+        "BinData/image1.jpg": jpeg
+      }
+    });
+    const progress: Array<{ percent: number; item: string }> = [];
+
+    await optimizeHwpxBufferBalanced(input, {
+      targetBytes: 1,
+      onProgress: (item) => progress.push(item)
+    });
+
+    for (let index = 1; index < progress.length; index += 1) {
+      expect(progress[index]!.percent).toBeGreaterThanOrEqual(progress[index - 1]!.percent);
+    }
+  });
+
   it("removes unreferenced BinData and writes a verified package", async () => {
     const input = await createHwpxFixture({
       entries: {

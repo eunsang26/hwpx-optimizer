@@ -20,6 +20,13 @@ const DEFAULT_READ_LIMITS: Required<HwpxPackageReadLimits> = {
   maxExpandedBytes: 2 * 1024 * 1024 * 1024
 };
 
+type CentralDirectoryEntry = {
+  path: string;
+  isDirectory: boolean;
+  generalPurposeBitFlag: number;
+  uncompressedSize?: number;
+};
+
 export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOptions = {}): Promise<HwpxPackage> {
   const limits = normalizeReadLimits(options.limits);
   if (isHwpBinary(input)) {
@@ -28,6 +35,8 @@ export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOpt
   if (hasEncryptedZipFlag(input)) {
     throw new Error(PROTECTED_DOCUMENT_ERROR);
   }
+  const declaredEntries = readCentralDirectoryEntries(input);
+  if (declaredEntries) assertDeclaredEntriesWithinLimits(declaredEntries, limits);
 
   let zip: JSZip;
   try {
@@ -48,15 +57,6 @@ export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOpt
   for (const [path, file] of files) {
     if (!isSafePackagePath(path)) {
       throw new Error(`Invalid HWPX package: unsafe entry path ${path}`);
-    }
-    const declaredSize = getDeclaredUncompressedSize(file);
-    if (declaredSize !== undefined) {
-      assertEntrySizeWithinLimit(path, declaredSize, limits.maxEntryBytes);
-      if (expandedBytes + declaredSize > limits.maxExpandedBytes) {
-        throw new Error(
-          `Invalid HWPX package: expanded contents exceed supported size (${expandedBytes + declaredSize} bytes; limit ${limits.maxExpandedBytes} bytes)`
-        );
-      }
     }
     const data = Buffer.from(await file.async("nodebuffer"));
     assertEntrySizeWithinLimit(path, data.byteLength, limits.maxEntryBytes);
@@ -105,11 +105,28 @@ function assertEntrySizeWithinLimit(path: string, size: number, limit: number): 
   }
 }
 
-function getDeclaredUncompressedSize(file: JSZip.JSZipObject): number | undefined {
-  const data = (file as unknown as { _data?: { uncompressedSize?: unknown } })._data;
-  return typeof data?.uncompressedSize === "number" && Number.isFinite(data.uncompressedSize)
-    ? data.uncompressedSize
-    : undefined;
+function assertDeclaredEntriesWithinLimits(
+  entries: CentralDirectoryEntry[],
+  limits: Required<HwpxPackageReadLimits>
+): void {
+  const files = entries.filter((entry) => !entry.isDirectory);
+  if (files.length > limits.maxEntries) {
+    throw new Error(`Invalid HWPX package: too many entries (${files.length}; limit ${limits.maxEntries})`);
+  }
+  let expandedBytes = 0;
+  for (const entry of files) {
+    if (!isSafePackagePath(entry.path)) {
+      throw new Error(`Invalid HWPX package: unsafe entry path ${entry.path}`);
+    }
+    if (entry.uncompressedSize === undefined) continue;
+    assertEntrySizeWithinLimit(entry.path, entry.uncompressedSize, limits.maxEntryBytes);
+    expandedBytes += entry.uncompressedSize;
+    if (expandedBytes > limits.maxExpandedBytes) {
+      throw new Error(
+        `Invalid HWPX package: expanded contents exceed supported size (${expandedBytes} bytes; limit ${limits.maxExpandedBytes} bytes)`
+      );
+    }
+  }
 }
 
 export function isSafePackagePath(path: string): boolean {
@@ -129,19 +146,7 @@ function isHwpBinary(input: Buffer): boolean {
 }
 
 function hasEncryptedZipFlag(input: Buffer): boolean {
-  const centralDirectory = findCentralDirectory(input);
-  if (!centralDirectory) return false;
-  let offset = centralDirectory.offset;
-  const end = Math.min(input.length, centralDirectory.offset + centralDirectory.size);
-  while (offset + 46 <= end) {
-    if (input.readUInt32LE(offset) !== 0x02014b50) return false;
-    if ((input.readUInt16LE(offset + 8) & 1) === 1) return true;
-    const fileNameLength = input.readUInt16LE(offset + 28);
-    const extraLength = input.readUInt16LE(offset + 30);
-    const commentLength = input.readUInt16LE(offset + 32);
-    offset += 46 + fileNameLength + extraLength + commentLength;
-  }
-  return false;
+  return readCentralDirectoryEntries(input)?.some((entry) => (entry.generalPurposeBitFlag & 1) === 1) ?? false;
 }
 
 function findCentralDirectory(input: Buffer): { offset: number; size: number } | undefined {
@@ -158,6 +163,37 @@ function findCentralDirectory(input: Buffer): { offset: number; size: number } |
     };
   }
   return undefined;
+}
+
+function readCentralDirectoryEntries(input: Buffer): CentralDirectoryEntry[] | undefined {
+  const centralDirectory = findCentralDirectory(input);
+  if (!centralDirectory) return undefined;
+  const end = centralDirectory.offset + centralDirectory.size;
+  if (centralDirectory.offset < 0 || end > input.length) return undefined;
+
+  const entries: CentralDirectoryEntry[] = [];
+  let offset = centralDirectory.offset;
+  while (offset < end) {
+    if (offset + 46 > end || input.readUInt32LE(offset) !== 0x02014b50) return undefined;
+    const generalPurposeBitFlag = input.readUInt16LE(offset + 8);
+    const uncompressedSize32 = input.readUInt32LE(offset + 24);
+    const fileNameLength = input.readUInt16LE(offset + 28);
+    const extraLength = input.readUInt16LE(offset + 30);
+    const commentLength = input.readUInt16LE(offset + 32);
+    const pathStart = offset + 46;
+    const pathEnd = pathStart + fileNameLength;
+    const nextOffset = pathEnd + extraLength + commentLength;
+    if (pathEnd > end || nextOffset > end) return undefined;
+    const path = input.subarray(pathStart, pathEnd).toString("utf8");
+    entries.push({
+      path,
+      isDirectory: path.endsWith("/"),
+      generalPurposeBitFlag,
+      ...(uncompressedSize32 === 0xffffffff ? {} : { uncompressedSize: uncompressedSize32 })
+    });
+    offset = nextOffset;
+  }
+  return offset === end ? entries : undefined;
 }
 
 export function classifyEntry(path: string): HwpxEntryKind {

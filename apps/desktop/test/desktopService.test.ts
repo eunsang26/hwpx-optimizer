@@ -232,6 +232,37 @@ describe("desktop service", () => {
     expect(await readFile(join(dir, "batch-report.json"), "utf8")).toBe("existing");
   });
 
+  it("rejects invalid batch report payload values at runtime", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-batch-"));
+
+    await expect(
+      writeDesktopBatchReport({
+        reportDirectory: dir,
+        mode: "maximum" as never,
+        settings: defaultDesktopSettings,
+        items: []
+      })
+    ).rejects.toThrow(/invalid batch report mode/i);
+
+    await expect(
+      writeDesktopBatchReport({
+        reportDirectory: dir,
+        mode: "balanced",
+        settings: defaultDesktopSettings,
+        items: [{ input: "a.hwpx", status: "complete" as never }]
+      })
+    ).rejects.toThrow(/invalid batch report item status/i);
+
+    await expect(
+      writeDesktopBatchReport({
+        reportDirectory: dir,
+        mode: "balanced",
+        settings: defaultDesktopSettings,
+        items: [{ input: "a.hwpx", status: "done", savedBytes: Number.POSITIVE_INFINITY }]
+      })
+    ).rejects.toThrow(/invalid batch report number/i);
+  });
+
   it("rejects image preview requests that would require loading too many bytes at once", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const originalPath = join(dir, "original.hwpx");
