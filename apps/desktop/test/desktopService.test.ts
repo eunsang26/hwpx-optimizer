@@ -11,7 +11,8 @@ import {
   optimizeDesktopFile,
   previewImageDiffs,
   persistentDesktopSettingsPatch,
-  verifyDesktopFile
+  verifyDesktopFile,
+  writeDesktopBatchReport
 } from "../src/main/desktopService.js";
 import type { DesktopSettings } from "../src/main/desktopService.js";
 
@@ -71,7 +72,7 @@ describe("desktop service", () => {
     expect(JSON.parse(await readFile(result.reportPath!, "utf8")).originalSize).toBe(original.byteLength);
   });
 
-  it("reports staged optimization progress", async () => {
+  it("reports granular optimization progress", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
     await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
@@ -88,11 +89,13 @@ describe("desktop service", () => {
 
     expect(progress.map((item) => item.item)).toEqual([
       "Reading HWPX package",
-      "Optimizing document in safe mode",
+      "Analyzing document structure",
+      "Planning safe changes",
+      "Verifying optimized document",
       "Writing optimized document",
       "Finalizing optimized document"
     ]);
-    expect(progress.map((item) => item.percent)).toEqual([10, 35, 70, 92]);
+    expect(progress.map((item) => item.percent)).toEqual([10, 25, 40, 82, 90, 98]);
   });
 
   it("redacts persisted settings that would store local paths or unknown keys", () => {
@@ -191,6 +194,73 @@ describe("desktop service", () => {
     });
 
     expect(result.outputPath).toBe(join(outputDirectory, "output", "input_optimized.hwpx"));
+  });
+
+  it("writes a non-overwriting desktop batch report", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-batch-"));
+    await writeFile(join(dir, "batch-report.json"), "existing");
+
+    const result = await writeDesktopBatchReport({
+      reportDirectory: dir,
+      mode: "balanced",
+      settings: defaultDesktopSettings,
+      items: [
+        {
+          input: "input.hwpx",
+          status: "done",
+          output: join(dir, "input_optimized.hwpx"),
+          savedBytes: 1024,
+          savedPercent: 12.5
+        },
+        {
+          input: "broken.hwpx",
+          status: "failed",
+          error: "Invalid HWPX package"
+        }
+      ]
+    });
+
+    expect(result.reportPath).toBe(join(dir, "batch-report-2.json"));
+    const report = JSON.parse(await readFile(result.reportPath, "utf8")) as {
+      mode: string;
+      totals: { done: number; failed: number; savedBytes: number };
+      items: Array<{ input: string; status: string }>;
+    };
+    expect(report.mode).toBe("balanced");
+    expect(report.totals).toEqual({ done: 1, failed: 1, cancelled: 0, savedBytes: 1024 });
+    expect(report.items).toHaveLength(2);
+    expect(await readFile(join(dir, "batch-report.json"), "utf8")).toBe("existing");
+  });
+
+  it("rejects invalid batch report payload values at runtime", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-batch-"));
+
+    await expect(
+      writeDesktopBatchReport({
+        reportDirectory: dir,
+        mode: "maximum" as never,
+        settings: defaultDesktopSettings,
+        items: []
+      })
+    ).rejects.toThrow(/invalid batch report mode/i);
+
+    await expect(
+      writeDesktopBatchReport({
+        reportDirectory: dir,
+        mode: "balanced",
+        settings: defaultDesktopSettings,
+        items: [{ input: "a.hwpx", status: "complete" as never }]
+      })
+    ).rejects.toThrow(/invalid batch report item status/i);
+
+    await expect(
+      writeDesktopBatchReport({
+        reportDirectory: dir,
+        mode: "balanced",
+        settings: defaultDesktopSettings,
+        items: [{ input: "a.hwpx", status: "done", savedBytes: Number.POSITIVE_INFINITY }]
+      })
+    ).rejects.toThrow(/invalid batch report number/i);
   });
 
   it("rejects image preview requests that would require loading too many bytes at once", async () => {

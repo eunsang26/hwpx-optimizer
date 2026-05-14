@@ -175,6 +175,7 @@ const api: HwpxOptimizerApi = {
     return () => progressListeners.delete(callback);
   },
   verify: async () => ({ ok: true, report: sampleReport }),
+  saveBatchReport: async () => ({ reportPath: "preview-output/batch-report.json" }),
   previewImageDiffs: async () => [],
   showItem: async () => undefined,
   openPath: async () => undefined

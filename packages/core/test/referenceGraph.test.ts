@@ -81,4 +81,19 @@ describe("buildReferenceGraph", () => {
 
     expect(graph.resources.get("BinData/image1.png")?.referenced).toBe(true);
   });
+
+  it("resolves XML-escaped direct package paths through parsed attributes", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": `<root><draw:image xlink:href="BinData/image&amp;1.png" /></root>`,
+        "BinData/image&1.png": Buffer.from("used")
+      }
+    });
+
+    const pkg = await readHwpxPackage(fixture);
+    const graph = buildReferenceGraph(pkg);
+
+    expect(graph.resources.get("BinData/image&1.png")?.referenced).toBe(true);
+    expect(graph.missingReferences).toEqual([]);
+  });
 });

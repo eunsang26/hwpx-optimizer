@@ -63,10 +63,14 @@ async function verifyAgainstOriginal(input: { original: HwpxPackage; output: Hwp
   const outputGraph = buildReferenceGraph(input.output);
   const outputPaths = new Set(input.output.entries.map((entry) => entry.path));
   const originalImages = new Map(
-    (await analyzeHwpxPackage(input.original, { graph: originalGraph })).images.map((image) => [image.path, image])
+    (
+      await analyzeHwpxPackage(input.original, { graph: originalGraph, includeNearDuplicateImages: false })
+    ).images.map((image) => [image.path, image])
   );
   const outputImages = new Map(
-    (await analyzeHwpxPackage(input.output, { graph: outputGraph })).images.map((image) => [image.path, image])
+    (
+      await analyzeHwpxPackage(input.output, { graph: outputGraph, includeNearDuplicateImages: false })
+    ).images.map((image) => [image.path, image])
   );
   const originalDuplicatePathsByPath = await duplicateImagePathsByPath(input.original);
   const visualPairs: Array<{ original: HwpxEntry; output: HwpxEntry }> = [];
@@ -118,11 +122,18 @@ async function verifyVisualSimilarityPairs(
   });
 
   for (const pair of uniquePairs) {
+    if (pair.original.data.equals(pair.output.data)) continue;
     const [psnr, ssim] = await Promise.all([
       computePsnr(pair.original.data, pair.output.data),
       computeSsim(pair.original.data, pair.output.data)
     ]);
-    if (psnr === null && ssim === null) continue;
+    if (psnr === null && ssim === null) {
+      const diff = await describeImagePairDiff(pair.original, pair.output);
+      const suffix = diff ? ` ${diff}` : "";
+      throw new Error(
+        `Verification failed: ${mode} mode image quality could not be measured for ${pair.original.path}${suffix}`
+      );
+    }
     const ssimMinimum = SSIM_MINIMUM[mode];
     if ((psnr !== null && psnr < minimum) || (ssim !== null && ssim < ssimMinimum)) {
       const diff = await describeImagePairDiff(pair.original, pair.output);

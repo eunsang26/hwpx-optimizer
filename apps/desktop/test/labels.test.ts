@@ -17,6 +17,11 @@ import {
 describe("shared labels", () => {
   it("translates progress strings, including dynamic mode-specific phrasing", () => {
     expect(progressLabel("Reading HWPX package")).toBe("HWPX 문서 구조를 읽는 중입니다");
+    expect(progressLabel("Analyzing document structure")).toBe("문서 리소스를 분석하는 중입니다");
+    expect(progressLabel("Planning safe changes")).toBe("안전 변경 계획을 만드는 중입니다");
+    expect(progressLabel("Planning balanced changes")).toBe("균형 모드 변경 계획을 만드는 중입니다");
+    expect(progressLabel("Planning aggressive changes")).toBe("최대 압축 모드 변경 계획을 만드는 중입니다");
+    expect(progressLabel("Transforming images 2/7")).toBe("이미지를 최적화하는 중입니다 (2/7)");
     expect(progressLabel("Optimization complete")).toBe("최적화가 완료되었습니다");
     expect(progressLabel("Optimizing document in safe mode")).toBe("안전 모드로 문서를 최적화하는 중입니다");
     expect(progressLabel("Optimizing document in balanced mode")).toBe("균형 모드로 문서를 최적화하는 중입니다");
@@ -48,6 +53,22 @@ describe("shared labels", () => {
       )
     ).toBe(
       "이미지 품질 검증 기준을 통과하지 못했습니다. 더 보수적인 보존 기준으로 다시 실행하세요. (balanced, BinData/image1.jpg, PSNR 12.34 dB, SSIM 0.321)"
+    );
+    expect(errorLabel("Verification failed: balanced mode image quality could not be measured for BinData/image1.jpg")).toBe(
+      "이미지 품질을 측정할 수 없어 최적화를 보류했습니다. 더 보수적인 보존 기준으로 다시 실행하세요. (balanced, BinData/image1.jpg)"
+    );
+    expect(errorLabel("Invalid HWPX package: too many entries (20001; limit 20000)")).toBe(
+      "HWPX 내부 항목 수가 로컬 처리 한도를 초과했습니다. 문서를 나누거나 불필요한 첨부 리소스를 정리하세요. (20001 / 한도 20000)"
+    );
+    expect(
+      errorLabel("Invalid HWPX package: entry exceeds supported size BinData/large.bin (600 bytes; limit 10 bytes)")
+    ).toBe(
+      "HWPX 내부 리소스가 로컬 처리 한도를 초과했습니다. 큰 이미지나 첨부 파일을 먼저 정리하세요. (BinData/large.bin, 600 bytes / 한도 10 bytes)"
+    );
+    expect(
+      errorLabel("Invalid HWPX package: expanded contents exceed supported size (600 bytes; limit 10 bytes)")
+    ).toBe(
+      "HWPX 압축 해제 후 크기가 로컬 처리 한도를 초과했습니다. 문서를 나누거나 큰 리소스를 정리하세요. (600 bytes / 한도 10 bytes)"
     );
     expect(errorLabel("Verification failed: referenced resource removed BinData/ole1.bin")).toBe(
       "결과 문서에서 필요한 리소스가 제거되었습니다. 해당 최적화는 적용하지 않고 다시 실행하세요. (BinData/ole1.bin)"
@@ -86,7 +107,7 @@ describe("shared labels", () => {
   });
 
   it("provides Korean labels for every supported action and mode", () => {
-    expect(actionLabel("strip-metadata")).toBe("이미지 메타데이터 제거");
+    expect(actionLabel("strip-metadata")).toBe("EXIF 제외 이미지 메타데이터 제거");
     expect(actionLabel("convert-bmp-to-png")).toBe("BMP를 PNG로 변환");
     expect(actionLabel("clean-shape-comment")).toBe("이미지 설명 메타데이터 정리");
     expect(actionLabel("custom-action")).toBe("custom-action");

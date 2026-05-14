@@ -271,7 +271,7 @@ function addJpegMetadataOpportunity(
   }
   addOpportunityIfSmaller(opportunities, {
     id: `strip-metadata:${path}`,
-    label: "Strip JPEG metadata",
+    label: "Strip JPEG XMP/IPTC/comment metadata",
     action: "strip-metadata",
     target: path,
     beforeSize: size,

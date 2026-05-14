@@ -105,6 +105,15 @@ describe("verifyHwpxOutput", () => {
     await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(/SSIM/);
   });
 
+  it("rejects changed advanced-mode images when visual quality cannot be measured", async () => {
+    const original = await createReferencedImageFixture("BinData/image1.jpg", Buffer.from("not a decodable jpeg"));
+    const output = await createReferencedImageFixture("BinData/image1.jpg", Buffer.from("changed but still not decodable"));
+
+    await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(
+      /image quality could not be measured/
+    );
+  });
+
   it("allows aggressive-mode outputs that stay above the PSNR minimum", async () => {
     const gradient = await createGradientPng(192, 128);
     const originalJpeg = await sharp(gradient).jpeg({ quality: 95 }).toBuffer();

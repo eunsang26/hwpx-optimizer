@@ -98,6 +98,7 @@ export function applyOptimizationResultToBatchItem(
     status: "done",
     outputPath: response.outputPath,
     reportPath: response.reportPath,
+    report: response.report,
     savedBytes: response.report.savedBytes,
     savedPercent: response.report.savedPercent
   };

@@ -33,6 +33,7 @@ export const defaultDesktopSettings: DesktopSettings = {
 
 const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
 const DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES = 200 * 1024 * 1024;
+const MAX_BATCH_REPORT_ITEMS = 10_000;
 
 export type DesktopAnalysisResult = {
   filePath: string;
@@ -53,6 +54,25 @@ export type DesktopOptimizeResult = {
   outputPath: string;
   reportPath?: string;
   report: OptimizationReport;
+};
+
+export type DesktopBatchReportItem = {
+  input: string;
+  status: "done" | "failed" | "cancelled";
+  output?: string;
+  report?: string;
+  error?: string;
+  originalSize?: number;
+  optimizedSize?: number;
+  savedBytes?: number;
+  savedPercent?: number;
+};
+
+export type DesktopBatchReportInput = {
+  reportDirectory: string;
+  mode: OptimizationMode;
+  settings: Pick<DesktopSettings, "preventOverwrite">;
+  items: DesktopBatchReportItem[];
 };
 
 export type DesktopProgress = {
@@ -90,11 +110,16 @@ export async function optimizeDesktopFile(
   await assertSupportedLocalInput(input.filePath, { maxInputBytes: input.maxInputBytes });
   let source: Buffer | undefined = await readFile(input.filePath);
 
-  onProgress?.({ percent: 35, item: `Optimizing document in ${input.mode} mode` });
-  const result = await optimizeByMode(source, input.mode, input.actions, resolveSubmissionLimitBytes(input.settings.submissionLimit));
+  const result = await optimizeByMode(
+    source,
+    input.mode,
+    input.actions,
+    resolveSubmissionLimitBytes(input.settings.submissionLimit),
+    onProgress
+  );
   source = undefined;
 
-  onProgress?.({ percent: 70, item: "Writing optimized document" });
+  onProgress?.({ percent: 90, item: "Writing optimized document" });
   const outputPath = await nextOutputPath(
     input.filePath,
     input.outputDirectory,
@@ -106,14 +131,54 @@ export async function optimizeDesktopFile(
   let reportPath: string | undefined;
   let reportContent: string | undefined;
   if (input.settings.saveReport) {
-    onProgress?.({ percent: 82, item: "Writing JSON report" });
+    onProgress?.({ percent: 94, item: "Writing JSON report" });
     reportPath = `${outputPath}.report.json`;
     reportContent = JSON.stringify(result.report, null, 2);
   }
   await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent);
 
-  onProgress?.({ percent: 92, item: "Finalizing optimized document" });
+  onProgress?.({ percent: 98, item: "Finalizing optimized document" });
   return { outputPath, reportPath, report: result.report };
+}
+
+export async function writeDesktopBatchReport(input: DesktopBatchReportInput): Promise<{ reportPath: string }> {
+  assertValidBatchReportInput(input);
+  await mkdir(input.reportDirectory, { recursive: true });
+  const requestedReportPath = join(input.reportDirectory, "batch-report.json");
+  const reportPath = input.settings.preventOverwrite ? await nextAvailableReportPath(requestedReportPath) : requestedReportPath;
+  const report = {
+    mode: input.mode,
+    generatedAt: new Date().toISOString(),
+    totals: {
+      done: input.items.filter((item) => item.status === "done").length,
+      failed: input.items.filter((item) => item.status === "failed").length,
+      cancelled: input.items.filter((item) => item.status === "cancelled").length,
+      savedBytes: input.items.reduce((sum, item) => sum + (item.savedBytes ?? 0), 0)
+    },
+    items: input.items
+  };
+  await writeJsonArtifact(reportPath, JSON.stringify(report, null, 2));
+  return { reportPath };
+}
+
+function assertValidBatchReportInput(input: DesktopBatchReportInput): void {
+  if (!isOptimizationMode(input.mode)) {
+    throw new Error(`Invalid batch report mode: ${String(input.mode)}`);
+  }
+  if (!Array.isArray(input.items) || input.items.length > MAX_BATCH_REPORT_ITEMS) {
+    throw new Error(`Invalid batch report items: expected at most ${MAX_BATCH_REPORT_ITEMS} items.`);
+  }
+  for (const item of input.items) {
+    if (item.status !== "done" && item.status !== "failed" && item.status !== "cancelled") {
+      throw new Error(`Invalid batch report item status: ${String(item.status)}`);
+    }
+    for (const key of ["originalSize", "optimizedSize", "savedBytes", "savedPercent"] as const) {
+      const value = item[key];
+      if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
+        throw new Error(`Invalid batch report number: ${key}`);
+      }
+    }
+  }
 }
 
 export async function verifyDesktopFile(
@@ -147,11 +212,12 @@ export async function optimizeByMode(
   input: Buffer,
   mode: OptimizationMode,
   actions?: string[],
-  targetBytes?: number
+  targetBytes?: number,
+  onProgress?: (progress: DesktopProgress) => void
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
   const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
-  if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes });
-  const advanced = { ...(actions ? { actions } : {}), targetBytes };
+  if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes, onProgress });
+  const advanced = { ...(actions ? { actions } : {}), targetBytes, onProgress };
   if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advanced);
   return optimizeHwpxBufferBalanced(input, advanced);
 }
@@ -248,6 +314,29 @@ async function writeOptimizationArtifacts(
     ]);
     throw error;
   }
+}
+
+async function writeJsonArtifact(path: string, content: string): Promise<void> {
+  const tmpPath = temporaryPath(path);
+  try {
+    await assertArtifactTargetIsWritable(path);
+    await writeFile(tmpPath, content);
+    await rename(tmpPath, path);
+  } catch (error) {
+    await rm(tmpPath, { force: true });
+    throw error;
+  }
+}
+
+async function nextAvailableReportPath(path: string): Promise<string> {
+  if (!(await pathExists(path))) return path;
+  const ext = extname(path);
+  const base = path.slice(0, path.length - ext.length);
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${base}-${index}${ext}`;
+    if (!(await pathExists(candidate))) return candidate;
+  }
+  throw new Error("Could not create a non-overwriting batch report path.");
 }
 
 async function assertArtifactTargetIsWritable(path: string): Promise<void> {

@@ -15,7 +15,8 @@ import {
   normalizeDesktopSettings,
   persistentDesktopSettingsPatch,
   previewImageDiffs,
-  verifyDesktopFile
+  verifyDesktopFile,
+  writeDesktopBatchReport
 } from "./main/desktopService.js";
 import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
 import type { DesktopSettings, DesktopSettingsPatch, OptimizationMode } from "./main/desktopService.js";
@@ -212,6 +213,49 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("hwpx:verify", async (_event, filePath: string) => verifyDesktopFile(await requireKnownDocumentPath(filePath)));
+
+  ipcMain.handle(
+    "hwpx:save-batch-report",
+    async (
+      _event,
+      input: {
+        firstInputPath: string;
+        outputDirectory?: string;
+        mode: OptimizationMode;
+        items: Array<{
+          input: string;
+          status: "done" | "failed" | "cancelled";
+          output?: string;
+          report?: string;
+          error?: string;
+          originalSize?: number;
+          optimizedSize?: number;
+          savedBytes?: number;
+          savedPercent?: number;
+        }>;
+      }
+    ) => {
+      const firstInputPath = await requireAllowedInputPath(input.firstInputPath);
+      const outputDirectory = input.outputDirectory
+        ? await requireAllowedOutputDirectory(input.outputDirectory)
+        : dirname(firstInputPath);
+      const settings = await loadSettings();
+      const items = [];
+      for (const item of input.items) {
+        const output = item.output ? await requireGeneratedPath(item.output) : undefined;
+        const report = item.report ? await requireGeneratedPath(item.report) : undefined;
+        items.push({ ...item, output, report });
+      }
+      const result = await writeDesktopBatchReport({
+        reportDirectory: join(outputDirectory, "output"),
+        mode: input.mode,
+        settings,
+        items
+      });
+      await registerGeneratedPath(result.reportPath);
+      return result;
+    }
+  );
 
   ipcMain.handle(
     "hwpx:image-preview",

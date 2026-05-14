@@ -15,7 +15,16 @@ import { verifyHwpxOutput } from "./verifier.js";
 import { writeHwpxPackage } from "./writer.js";
 import type { AppliedAction, OptimizationOpportunity, OptimizationReport } from "./types.js";
 
-type OptimizeOptions = { actions?: string[]; allowLarger?: boolean; targetBytes?: number };
+export type OptimizeProgress = { percent: number; item: string };
+
+type OptimizeProgressCallback = (progress: OptimizeProgress) => void;
+type OptimizeOptions = {
+  actions?: string[];
+  allowLarger?: boolean;
+  targetBytes?: number;
+  onProgress?: OptimizeProgressCallback;
+};
+type SafeOptimizeOptions = { targetBytes?: number; onProgress?: OptimizeProgressCallback };
 
 export async function analyzeHwpxBuffer(input: Buffer, options: { targetBytes?: number } = {}): Promise<OptimizationReport> {
   const targetBytes = normalizeTargetBytes(options.targetBytes);
@@ -25,18 +34,21 @@ export async function analyzeHwpxBuffer(input: Buffer, options: { targetBytes?: 
   return createAnalysisReport(analysis, input.byteLength, opportunities, { targetBytes });
 }
 
-export async function optimizeHwpxBufferSafe(input: Buffer, options: { targetBytes?: number } = {}): Promise<{
+export async function optimizeHwpxBufferSafe(input: Buffer, options: SafeOptimizeOptions = {}): Promise<{
   output: Buffer;
   report: OptimizationReport;
 }> {
   const targetBytes = normalizeTargetBytes(options.targetBytes);
+  emitProgress(options, 25, "Analyzing document structure");
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
   const graph = analysis.referenceGraph ?? buildReferenceGraph(pkg);
+  emitProgress(options, 40, "Planning safe changes");
   const plan = createSafeOptimizationPlan({ pkg, analysis, graph });
   const optimized = await applySafeOptimizationPlan({ pkg, plan });
   const opportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied);
   const output = await writeHwpxPackage(optimized.pkg);
+  emitProgress(options, 82, "Verifying optimized document");
   await verifyHwpxOutput(output, { original: input, mode: "safe" });
 
   if (output.byteLength >= input.byteLength) {
@@ -107,7 +119,11 @@ async function optimizeHwpxBufferAdvanced(
   output: Buffer;
   report: OptimizationReport;
 }> {
-  const options = { ...settings.options, targetBytes: normalizeTargetBytes(settings.options.targetBytes) };
+  const options = {
+    ...settings.options,
+    targetBytes: normalizeTargetBytes(settings.options.targetBytes),
+    onProgress: createMonotonicProgressCallback(settings.options.onProgress)
+  };
   const profiles = createTargetProfileLadder(settings.mode, settings.profile, options.targetBytes);
   let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
   const verificationWarnings: string[] = [];
@@ -140,6 +156,20 @@ function normalizeTargetBytes(value: number | undefined): number | undefined {
   return Math.floor(value);
 }
 
+function emitProgress(options: { onProgress?: OptimizeProgressCallback }, percent: number, item: string): void {
+  options.onProgress?.({ percent, item });
+}
+
+function createMonotonicProgressCallback(callback: OptimizeProgressCallback | undefined): OptimizeProgressCallback | undefined {
+  if (!callback) return undefined;
+  let lastPercent = 0;
+  return (progress) => {
+    const percent = Math.max(lastPercent, progress.percent);
+    lastPercent = percent;
+    callback({ ...progress, percent });
+  };
+}
+
 async function optimizeHwpxBufferWithProfile(
   input: Buffer,
   settings: {
@@ -153,6 +183,7 @@ async function optimizeHwpxBufferWithProfile(
   output: Buffer;
   report: OptimizationReport;
 }> {
+  emitProgress(settings.options, 25, "Analyzing document structure");
   const pkg = await readHwpxPackage(input);
   const analysis = await analyzeHwpxPackage(pkg);
   const opportunities = await detectEstimatedOptimizationOpportunities(pkg, settings.profile);
@@ -160,6 +191,7 @@ async function optimizeHwpxBufferWithProfile(
     settings.options.actions !== undefined
       ? opportunities.filter((opportunity) => settings.options.actions?.includes(opportunity.action))
       : opportunities;
+  emitProgress(settings.options, 40, `Planning ${settings.mode} changes`);
   const actions = selectedOpportunities.map((opportunity) => {
     if (opportunity.action === "convert-bmp-to-png") {
       return {
@@ -192,9 +224,18 @@ async function optimizeHwpxBufferWithProfile(
     mode: settings.mode,
     actions: [...actions, { type: "repack-zip" as const, target: "*" as const, risk: "safe" as const }]
   };
-  const optimized = await applyBalancedOptimizationPlan({ pkg, plan, profile: settings.profile });
+  const optimized = await applyBalancedOptimizationPlan({
+    pkg,
+    plan,
+    profile: settings.profile,
+    onTransformProgress: (progress) => {
+      const percent = 45 + Math.round((progress.completed / progress.total) * 30);
+      emitProgress(settings.options, percent, `Transforming images ${progress.completed}/${progress.total}`);
+    }
+  });
   const exactOpportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied, settings.profile);
   const output = await writeHwpxPackage(optimized.pkg);
+  emitProgress(settings.options, 82, "Verifying optimized document");
   await verifyHwpxOutput(output, { original: input, mode: settings.mode });
 
   if (!settings.options.allowLarger && output.byteLength >= input.byteLength) {
@@ -294,7 +335,7 @@ function createOptimizationOpportunityFromAppliedAction(
       id: `${action.type}:${action.target}`,
       label:
         action.type === "strip-metadata"
-          ? "Strip JPEG metadata"
+          ? "Strip JPEG XMP/IPTC/comment metadata"
           : profile.pngPalette
             ? "Optimize PNG with aggressive palette reduction"
             : "Optimize PNG losslessly",

@@ -95,7 +95,7 @@ Windows에서 실행 시작이 빠른 배포 방식은 ZIP입니다. `release/HW
 
 - ZIP 재압축
 - XML minify
-- JPEG 메타데이터 제거
+- JPEG XMP/IPTC/comment 메타데이터 제거. EXIF 방향 정보는 회전 안정성을 위해 보존합니다.
 - PNG 무손실 최적화
 - 참조되지 않는 BinData 제거
 - 이미지 리사이즈 없음

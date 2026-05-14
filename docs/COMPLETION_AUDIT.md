@@ -49,7 +49,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
 | Korean desktop UX | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts`; `npm run desktop:smoke` | Implemented and verified with Korean title/start/settings smoke assertions |
 | Desktop mode selection | renderer radio controls | Implemented |
-| Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with stage-based progress |
+| Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with analysis/planning/verification stages plus per-image transform progress |
 | Desktop result details | `apps/desktop/src/index.html`, `apps/desktop/src/renderer.ts` | Implemented with output file, output folder, and JSON report open actions |
 | Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts` local settings | Implemented with default mode, session-only output folder controls, opt-in report saving, overwrite prevention, and aggressive warning preferences |
 | Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
@@ -294,39 +294,35 @@ Latest Windows startup packaging update:
 - Latest fast-start ZIP SHA256: `09787b6677e498abe2bce8a1d53fe15eb71c2720006fbd78fe52425d713433c2`.
 - Windows build now excludes Linux sharp optional packages from the packaged Windows app. Verified unpacked native runtime contains only the Windows sharp runtime files under `@img/sharp-win32-x64`.
 
-Latest real sample E2E after reference graph update:
+Latest real sample E2E after release hardening:
 
-- `npm run cli -- analyze sample2.hwpx --report .tmp/real-sample-after-refgraph/sample2.analysis.json`: passed.
-- `npm run cli -- optimize sample2.hwpx --mode safe --out .tmp/real-sample-after-refgraph/sample2.safe.hwpx --report .tmp/real-sample-after-refgraph/sample2.safe.report.json`: passed.
-- `npm run cli -- verify .tmp/real-sample-after-refgraph/sample2.safe.hwpx`: passed.
+- `npm run cli -- analyze sample2.hwpx --report .tmp/release-hardening-samples/sample2.analysis.json`: passed.
+- `npm run cli -- optimize sample2.hwpx --mode safe --out .tmp/release-hardening-samples/sample2.safe.hwpx --report .tmp/release-hardening-samples/sample2.safe.report.json`: passed.
+- `npm run cli -- verify .tmp/release-hardening-samples/sample2.safe.hwpx`: passed.
 - Safe mode produced no smaller output and returned original bytes as designed; verifier passed.
-- `npm run cli -- optimize sample2.hwpx --mode balanced --out .tmp/real-sample-after-refgraph/sample2.balanced.hwpx --report .tmp/real-sample-after-refgraph/sample2.balanced.report.json`: passed.
-- `npm run cli -- verify .tmp/real-sample-after-refgraph/sample2.balanced.hwpx`: passed.
-- Observed saving remained 79.63 MiB / 88.75%.
-- Applied actions: `convert-bmp-to-png` 18, `resize-jpeg` 6, `optimize-png` 4, `clean-shape-comment` 1.
-- `npm run cli -- optimize sample2.hwpx --mode aggressive --out .tmp/real-sample-after-refgraph/sample2.aggressive.hwpx --report .tmp/real-sample-after-refgraph/sample2.aggressive.report.json`: passed.
-- `npm run cli -- verify .tmp/real-sample-after-refgraph/sample2.aggressive.hwpx`: passed.
-- Aggressive mode observed saving: 86.43 MiB / 96.33%; applied `convert-bmp-to-png` 18, `resize-jpeg` 7, `optimize-png` 4, `clean-shape-comment` 1.
+- `npm run cli -- optimize sample2.hwpx --mode balanced --out .tmp/release-hardening-samples/sample2.balanced.hwpx --report .tmp/release-hardening-samples/sample2.balanced.report.json`: passed.
+- `npm run cli -- verify .tmp/release-hardening-samples/sample2.balanced.hwpx`: passed.
+- Observed saving: 82.83 MiB / 92.32%.
+- Applied actions: `convert-bmp-to-png` 18, `resize-jpeg` 6, `optimize-png` 2, `resize-png` 2, `clean-shape-comment` 1, `repack-zip` 1.
+- `npm run cli -- optimize sample2.hwpx --mode aggressive --out .tmp/release-hardening-samples/sample2.aggressive.hwpx --report .tmp/release-hardening-samples/sample2.aggressive.report.json`: passed.
+- `npm run cli -- verify .tmp/release-hardening-samples/sample2.aggressive.hwpx`: passed.
+- Aggressive mode observed saving: 88.17 MiB / 98.27%; applied `convert-bmp-to-png` 18, `resize-jpeg` 7, `resize-png` 3, `optimize-png` 1, `clean-shape-comment` 1, `repack-zip` 1.
 
 Additional local sample validation:
 
-- `npm run cli -- analyze sample3.hwpx --report .tmp/real-sample-matrix/sample3.analysis.json`: passed.
-- `npm run cli -- optimize sample3.hwpx --mode safe --out .tmp/real-sample-matrix/sample3.safe.hwpx --report .tmp/real-sample-matrix/sample3.safe.report.json`: passed.
-- `npm run cli -- verify .tmp/real-sample-matrix/sample3.safe.hwpx`: passed.
-- `sample3.hwpx` safe-mode observed saving: 110.2 KiB / 0.49%; applied `optimize-png` 8 and `minify-xml` 7.
-- `npm run cli -- optimize sample3.hwpx --mode balanced --out .tmp/real-sample-matrix/sample3.balanced.hwpx --report .tmp/real-sample-matrix/sample3.balanced.report.json`: passed.
-- `npm run cli -- verify .tmp/real-sample-matrix/sample3.balanced.hwpx`: passed.
-- `sample3.hwpx` observed saving: 4.73 MiB / 21.50%; applied `optimize-png` 8, `resize-jpeg` 6, `clean-shape-comment` 1.
-- `npm run cli -- optimize sample3.hwpx --mode aggressive --out .tmp/real-sample-matrix/sample3.aggressive.hwpx --report .tmp/real-sample-matrix/sample3.aggressive.report.json`: passed.
-- `npm run cli -- verify .tmp/real-sample-matrix/sample3.aggressive.hwpx`: passed.
-- `sample3.hwpx` aggressive-mode observed saving: 14.73 MiB / 66.98%; applied `optimize-png` 22, `resize-jpeg` 7, `clean-shape-comment` 1.
-- `npm run cli -- analyze sample.hwp --report .tmp/real-sample-matrix/sample-hwp.analysis.json`: failed as expected with `Unsupported HWP binary file: save or export the document as .hwpx before optimizing`.
+- `npm run cli -- optimize sample3.hwpx --mode balanced --out .tmp/release-hardening-samples/sample3.balanced.hwpx --report .tmp/release-hardening-samples/sample3.balanced.report.json`: passed.
+- `npm run cli -- verify .tmp/release-hardening-samples/sample3.balanced.hwpx`: passed.
+- `sample3.hwpx` balanced-mode observed saving: 15.19 MiB / 69.09%; applied `resize-png` 9, `resize-jpeg` 6, `optimize-png` 6, `clean-shape-comment` 1, `repack-zip` 1.
+- `npm run cli -- optimize sample3.hwpx --mode aggressive --out .tmp/release-hardening-samples/sample3.aggressive.hwpx --report .tmp/release-hardening-samples/sample3.aggressive.report.json`: passed.
+- `npm run cli -- verify .tmp/release-hardening-samples/sample3.aggressive.hwpx`: passed.
+- `sample3.hwpx` aggressive-mode observed saving: 20.47 MiB / 93.10%; applied `resize-png` 20, `resize-jpeg` 7, `optimize-png` 2, `clean-shape-comment` 1, `repack-zip` 1.
+- `npm run cli -- analyze sample.hwp --report .tmp/release-hardening-samples/sample-hwp.analysis.json`: failed as expected with `Unsupported HWP binary file: save or export the document as .hwpx before optimizing`.
 
 Sample2 evidence from the latest local run:
 
 - Original: 89.72 MiB
-- Balanced optimized saving: 79.63 MiB, 88.75%
-- Applied: `convert-bmp-to-png` 18, `resize-jpeg` 6, `optimize-png` 4, `clean-shape-comment` 1
+- Balanced optimized saving: 82.83 MiB, 92.32%
+- Applied: `convert-bmp-to-png` 18, `resize-jpeg` 6, `optimize-png` 2, `resize-png` 2, `clean-shape-comment` 1, `repack-zip` 1
 - Output verifier: passed
 - Built CLI E2E path: passed with the same balanced optimization result
 - Sample inputs and generated outputs remain ignored by git.
@@ -346,8 +342,8 @@ Desktop smoke evidence:
 
 Windows artifact evidence:
 
-- Portable Windows artifact: `release/HWPX Optimizer-0.1.0-x64.exe`, 95 MiB.
-- Fast-start Windows ZIP artifact: `release/HWPX Optimizer-0.1.0-x64.zip`, 142 MiB.
+- Portable Windows artifact: `release/HWPX Optimizer-0.1.0-x64.exe`, 98,542,325 bytes, SHA256 `701d982bb40b6f1f868ca3c5e0e0ddf6799d18c56dd1068ab7008a28700574d7`.
+- Fast-start Windows ZIP artifact: `release/HWPX Optimizer-0.1.0-x64.zip`, 148,003,722 bytes, SHA256 `f2a80c1e36c51a7872a1977d058f4bc321a6a97a407825d3e24c07301c514b5a`.
 - Windows unpacked directory: `release/win-unpacked`.
 - Checksum files: `release/release-manifest.json`, `release/SHA256SUMS.txt`; verified by `npm run release:verify-manifest`.
 - Desktop icon resources are generated under ignored `build/`.
@@ -364,13 +360,14 @@ Observed blocker:
 wine is required, please see https://electron.build/multi-platform-build#linux
 ```
 
-## Blockers To Completion
+## Manual QA Boundary
 
-- Windows portable smoke across safe, balanced, and aggressive is complete; broader clean-Windows manual QA for drag/drop, settings persistence, repeated files, very large packages, and representative real-world documents is not complete.
+- Automated Linux/WSL release gates, Windows portable/ZIP packaging, artifact hygiene, manifest verification, and local real-sample smoke are complete.
+- Broader clean-Windows manual QA for drag/drop, settings persistence, repeated files, very large packages, and representative real-world documents still needs to be run on the target Windows desktop environment before a public production release.
 
 ## Non-Blocking Follow-Ups
 
-- Progress updates are stage-based. Per-image/action progress would improve UX.
+- Progress updates now include analysis, planning, per-image transform counts, verification, and file-write stages. They remain estimates rather than byte-accurate package progress.
 - Desktop UI is functional, but final visual QA should happen on the target Windows desktop environment.
 - Future reference graph additions should be driven by real HWPX samples that expose new forms beyond relative, percent-encoded, direct, and id-valued XML references.
 - Balanced and aggressive mode verification now includes PSNR quality gating plus package integrity, references, image dimensions, and image format invariants. Decoded pixel hash based same-visual duplicate detection is implemented for exact decoded-pixel matches across lossless encodings. SSIM scoring remains a future enhancement, not a current release blocker.

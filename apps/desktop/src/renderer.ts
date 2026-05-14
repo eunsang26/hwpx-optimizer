@@ -555,7 +555,7 @@ function renderPlanActions(plan?: SubmissionPlan): void {
   };
   const fallbackRows: DisplayPlanRow[] = [
     { priority: 1, label: "중복 이미지 참조 정리", savingLabel: "분석 후 표시", kind: "image" },
-    { priority: 2, label: "불필요한 이미지 정보 제거", savingLabel: "분석 후 표시", kind: "metadata" },
+    { priority: 2, label: "EXIF 제외 이미지 정보 제거", savingLabel: "분석 후 표시", kind: "metadata" },
     { priority: 3, label: "작성자·편집 흔적 정리", savingLabel: "분석 후 표시", kind: "author" }
   ];
   const displayRows: DisplayPlanRow[] =
@@ -1344,10 +1344,45 @@ async function runBatch(): Promise<void> {
   state.batchRunning = false;
   cancelButton.disabled = true;
   hideProgressPanel();
+  const batchReportPath = await saveBatchSummaryReport();
   renderBatchList();
   const completed = state.batchItems.filter((item) => item.status === "done").length;
   const failed = state.batchItems.filter((item) => item.status === "failed").length;
-  setStatus(`일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}.`);
+  setStatus(
+    batchReportPath
+      ? `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}. 리포트: ${fileNameFromPath(batchReportPath)}`
+      : `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}.`
+  );
+}
+
+async function saveBatchSummaryReport(): Promise<string | undefined> {
+  if (!state.settings?.saveReport || state.batchItems.length === 0) return undefined;
+  const firstInputPath = state.batchItems[0]?.path;
+  if (!firstInputPath) return undefined;
+  try {
+    const result = await window.hwpxOptimizer.saveBatchReport({
+      firstInputPath,
+      outputDirectory: state.outputDirectory,
+      mode: modeForPreservation(state.preservationPreference),
+      items: state.batchItems
+        .filter((item) => item.status === "done" || item.status === "failed" || item.status === "cancelled")
+        .map((item) => ({
+          input: item.fileName,
+          status: item.status as "done" | "failed" | "cancelled",
+          output: item.outputPath,
+          report: item.reportPath,
+          error: item.error,
+          originalSize: item.report?.originalSize,
+          optimizedSize: item.report?.optimizedSize,
+          savedBytes: item.savedBytes,
+          savedPercent: item.savedPercent
+        }))
+    });
+    return result.reportPath;
+  } catch (error) {
+    setStatus(`일괄 처리는 끝났지만 리포트를 저장하지 못했습니다. ${errorMessage(error)}`);
+    return undefined;
+  }
 }
 
 function selectedActionsForPlan(plan: SubmissionPlan | undefined): string[] | undefined {

@@ -25,11 +25,11 @@ This file separates release blockers from non-blockers so the project does not o
 - PSNR and SSIM thresholds are conservative quality gates, not perceptual proof that every image is visually identical. Manual review is still appropriate for high-stakes documents.
 - Embedded fonts and OLE objects are reported as risky resources but not optimized.
 - Display-size based image budgets depend on detectable HWPX picture size fields. If those fields are missing, fallback mode profile limits are used.
-- EXIF removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size.
+- JPEG XMP/IPTC/comment metadata removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size. EXIF orientation is preserved to avoid rotation regressions.
 - Safe-mode optimization can still take time on image-heavy documents because it performs lossless image metadata/PNG processing and ZIP verification even when final savings are zero.
 - Some safe-mode rewrites can make an individual entry slightly larger. The optimizer records skipped or applied actions so this can be audited.
 - Desktop settings controls are functional. Output folder selection is session-only by policy, and final visual QA on the target Windows desktop environment is still required.
-- Desktop analysis and optimization run off the main UI path, but progress is still stage-based rather than per-image/action.
+- Desktop analysis and optimization run off the main UI path. Progress includes analysis, planning, per-image transform counts, verification, and file-write stages, but it is still estimated progress rather than byte-accurate package progress.
 - `npm audit` currently reports 0 vulnerabilities after dependency updates on 2026-05-08.
 
 ## Safe Mode Caveats

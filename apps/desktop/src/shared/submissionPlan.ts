@@ -90,7 +90,7 @@ const ACTION_DISPLAY_LABELS: Partial<Record<OptimizationOpportunityGroup["action
   "convert-bmp-to-png": "BMP를 PNG로 변환",
   "convert-tiff-to-png": "TIFF를 PNG로 변환",
   "consolidate-duplicate-images": "중복 이미지 참조 정리",
-  "strip-metadata": "불필요한 이미지 정보 제거",
+  "strip-metadata": "EXIF 제외 이미지 정보 제거",
   "optimize-png": "PNG 무손실 최적화",
   "clean-shape-comment": "작성자·편집 흔적 정리"
 };
