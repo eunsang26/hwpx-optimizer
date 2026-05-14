@@ -179,6 +179,37 @@ describe("analyzeHwpxPackage", () => {
       })
     ]);
   });
+
+  it("can skip near-duplicate diagnostics for latency-sensitive callers", async () => {
+    const raw = Buffer.alloc(96 * 96 * 3);
+    for (let y = 0; y < 96; y += 1) {
+      for (let x = 0; x < 96; x += 1) {
+        const offset = (y * 96 + x) * 3;
+        raw[offset] = (x * 2) % 256;
+        raw[offset + 1] = (y * 2) % 256;
+        raw[offset + 2] = 128;
+      }
+    }
+    const base = await sharp(raw, { raw: { width: 96, height: 96, channels: 3 } })
+      .png()
+      .toBuffer();
+    const similar = await sharp(base).modulate({ brightness: 1.03 }).jpeg({ quality: 92 }).toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "BinData/image1.png": base,
+        "BinData/image2.jpg": similar
+      }
+    });
+
+    const pkg = await readHwpxPackage(fixture);
+    const defaultAnalysis = await analyzeHwpxPackage(pkg);
+    const analysis = await analyzeHwpxPackage(pkg, { includeNearDuplicateImages: false });
+
+    expect(defaultAnalysis.nearDuplicateImages).toEqual([
+      expect.objectContaining({ paths: ["BinData/image1.png", "BinData/image2.jpg"], count: 2 })
+    ]);
+    expect(analysis.nearDuplicateImages).toEqual([]);
+  });
 });
 
 function createBmp24(width: number, height: number): Buffer {

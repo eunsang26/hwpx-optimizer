@@ -21,7 +21,10 @@ const LARGE_FONT_BYTES = 1 * 1024 * 1024;
 const LARGE_OLE_BYTES = 5 * 1024 * 1024;
 const OLE_SIZE_SHARE = 0.2;
 
-export async function analyzeHwpxPackage(pkg: HwpxPackage, options: { graph?: ReferenceGraph } = {}): Promise<PackageAnalysis> {
+export async function analyzeHwpxPackage(
+  pkg: HwpxPackage,
+  options: { graph?: ReferenceGraph; includeNearDuplicateImages?: boolean } = {}
+): Promise<PackageAnalysis> {
   const entriesByKind: Record<HwpxEntryKind, number> = {
     xml: 0,
     image: 0,
@@ -68,7 +71,7 @@ export async function analyzeHwpxPackage(pkg: HwpxPackage, options: { graph?: Re
     images,
     duplicateImages: findByteIdenticalImageGroups(pkg),
     sameVisualDuplicateImages: await findSameVisualImageGroups(pkg),
-    nearDuplicateImages: await findNearDuplicateImageGroups(pkg),
+    nearDuplicateImages: options.includeNearDuplicateImages === false ? [] : await findNearDuplicateImageGroups(pkg),
     unusedBinData: findUnusedBinData(pkg, graph),
     riskyResources: findRiskyResources(pkg),
     resourceDiagnostics: findResourceDiagnostics(pkg, categorySizes, totalSize),
