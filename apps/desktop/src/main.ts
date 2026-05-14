@@ -34,9 +34,9 @@ if (isSmokeTest) {
 async function createWindow(): Promise<BrowserWindow> {
   Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindowClass({
-    width: 1180,
+    width: 1120,
     height: 820,
-    minWidth: 1000,
+    minWidth: 960,
     minHeight: 720,
     useContentSize: true,
     show: !isSmokeTest,
