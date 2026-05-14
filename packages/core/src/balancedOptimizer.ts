@@ -15,6 +15,7 @@ export async function applyBalancedOptimizationPlan(input: {
   pkg: HwpxPackage;
   plan: OptimizationPlan;
   profile?: ImageOptimizationProfile;
+  onTransformProgress?: (progress: { completed: number; total: number; target: string; action: TransformImageAction }) => void;
 }): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[] }> {
   const profile = input.profile ?? balancedImageProfile;
   const duplicateTargets = new Set(
@@ -71,6 +72,7 @@ export async function applyBalancedOptimizationPlan(input: {
     tasks.push({ index, entry, action: action.type });
   }
 
+  let completedTransforms = 0;
   const outcomes = await mapLimit(tasks, IMAGE_TRANSFORM_CONCURRENCY, async (task): Promise<TransformOutcome> => {
     try {
       const transformed = await transformImageActionWithBudget(
@@ -88,6 +90,14 @@ export async function applyBalancedOptimizationPlan(input: {
       const reason = error instanceof Error ? error.message : String(error);
       warnings.push(`${task.action} skipped for ${task.entry.path}: ${reason}`);
       return { ...task, status: "skipped" };
+    } finally {
+      completedTransforms += 1;
+      input.onTransformProgress?.({
+        completed: completedTransforms,
+        total: tasks.length,
+        target: task.entry.path,
+        action: task.action
+      });
     }
   });
 

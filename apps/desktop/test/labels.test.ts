@@ -17,6 +17,11 @@ import {
 describe("shared labels", () => {
   it("translates progress strings, including dynamic mode-specific phrasing", () => {
     expect(progressLabel("Reading HWPX package")).toBe("HWPX 문서 구조를 읽는 중입니다");
+    expect(progressLabel("Analyzing document structure")).toBe("문서 리소스를 분석하는 중입니다");
+    expect(progressLabel("Planning safe changes")).toBe("안전 변경 계획을 만드는 중입니다");
+    expect(progressLabel("Planning balanced changes")).toBe("균형 모드 변경 계획을 만드는 중입니다");
+    expect(progressLabel("Planning aggressive changes")).toBe("최대 압축 모드 변경 계획을 만드는 중입니다");
+    expect(progressLabel("Transforming images 2/7")).toBe("이미지를 최적화하는 중입니다 (2/7)");
     expect(progressLabel("Optimization complete")).toBe("최적화가 완료되었습니다");
     expect(progressLabel("Optimizing document in safe mode")).toBe("안전 모드로 문서를 최적화하는 중입니다");
     expect(progressLabel("Optimizing document in balanced mode")).toBe("균형 모드로 문서를 최적화하는 중입니다");

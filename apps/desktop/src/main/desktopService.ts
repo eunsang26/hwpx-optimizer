@@ -109,11 +109,16 @@ export async function optimizeDesktopFile(
   await assertSupportedLocalInput(input.filePath, { maxInputBytes: input.maxInputBytes });
   let source: Buffer | undefined = await readFile(input.filePath);
 
-  onProgress?.({ percent: 35, item: `Optimizing document in ${input.mode} mode` });
-  const result = await optimizeByMode(source, input.mode, input.actions, resolveSubmissionLimitBytes(input.settings.submissionLimit));
+  const result = await optimizeByMode(
+    source,
+    input.mode,
+    input.actions,
+    resolveSubmissionLimitBytes(input.settings.submissionLimit),
+    onProgress
+  );
   source = undefined;
 
-  onProgress?.({ percent: 70, item: "Writing optimized document" });
+  onProgress?.({ percent: 90, item: "Writing optimized document" });
   const outputPath = await nextOutputPath(
     input.filePath,
     input.outputDirectory,
@@ -125,13 +130,13 @@ export async function optimizeDesktopFile(
   let reportPath: string | undefined;
   let reportContent: string | undefined;
   if (input.settings.saveReport) {
-    onProgress?.({ percent: 82, item: "Writing JSON report" });
+    onProgress?.({ percent: 94, item: "Writing JSON report" });
     reportPath = `${outputPath}.report.json`;
     reportContent = JSON.stringify(result.report, null, 2);
   }
   await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent);
 
-  onProgress?.({ percent: 92, item: "Finalizing optimized document" });
+  onProgress?.({ percent: 98, item: "Finalizing optimized document" });
   return { outputPath, reportPath, report: result.report };
 }
 
@@ -185,11 +190,12 @@ export async function optimizeByMode(
   input: Buffer,
   mode: OptimizationMode,
   actions?: string[],
-  targetBytes?: number
+  targetBytes?: number,
+  onProgress?: (progress: DesktopProgress) => void
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
   const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
-  if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes });
-  const advanced = { ...(actions ? { actions } : {}), targetBytes };
+  if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes, onProgress });
+  const advanced = { ...(actions ? { actions } : {}), targetBytes, onProgress };
   if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advanced);
   return optimizeHwpxBufferBalanced(input, advanced);
 }

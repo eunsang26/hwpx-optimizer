@@ -9,6 +9,10 @@ export type VisualImpactLevel = OptimizationOpportunityGroup["visualImpact"];
 
 const PROGRESS_LABELS: Record<string, string> = {
   "Reading HWPX package": "HWPX 문서 구조를 읽는 중입니다",
+  "Analyzing document structure": "문서 리소스를 분석하는 중입니다",
+  "Planning safe changes": "안전 변경 계획을 만드는 중입니다",
+  "Planning balanced changes": "균형 모드 변경 계획을 만드는 중입니다",
+  "Planning aggressive changes": "최대 압축 모드 변경 계획을 만드는 중입니다",
   "Writing optimized document": "최적화된 문서를 저장하는 중입니다",
   "Writing JSON report": "JSON 리포트를 저장하는 중입니다",
   "Verifying optimized document": "결과 문서를 검증하는 중입니다",
@@ -103,6 +107,10 @@ export function progressLabel(item: string): string {
   if (item.startsWith("Optimizing document in ")) {
     const mode = item.includes("aggressive") ? "최대 압축" : item.includes("balanced") ? "균형" : "안전";
     return `${mode} 모드로 문서를 최적화하는 중입니다`;
+  }
+  const transformMatch = item.match(/^Transforming images (\d+)\/(\d+)$/);
+  if (transformMatch) {
+    return `이미지를 최적화하는 중입니다 (${transformMatch[1]}/${transformMatch[2]})`;
   }
   return PROGRESS_LABELS[item] ?? item;
 }

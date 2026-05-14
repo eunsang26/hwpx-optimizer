@@ -72,7 +72,7 @@ describe("desktop service", () => {
     expect(JSON.parse(await readFile(result.reportPath!, "utf8")).originalSize).toBe(original.byteLength);
   });
 
-  it("reports staged optimization progress", async () => {
+  it("reports granular optimization progress", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
     await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
@@ -89,11 +89,13 @@ describe("desktop service", () => {
 
     expect(progress.map((item) => item.item)).toEqual([
       "Reading HWPX package",
-      "Optimizing document in safe mode",
+      "Analyzing document structure",
+      "Planning safe changes",
+      "Verifying optimized document",
       "Writing optimized document",
       "Finalizing optimized document"
     ]);
-    expect(progress.map((item) => item.percent)).toEqual([10, 35, 70, 92]);
+    expect(progress.map((item) => item.percent)).toEqual([10, 25, 40, 82, 90, 98]);
   });
 
   it("redacts persisted settings that would store local paths or unknown keys", () => {

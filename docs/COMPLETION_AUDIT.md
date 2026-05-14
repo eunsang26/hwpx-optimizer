@@ -49,7 +49,7 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
 | Korean desktop UX | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts`; `npm run desktop:smoke` | Implemented and verified with Korean title/start/settings smoke assertions |
 | Desktop mode selection | renderer radio controls | Implemented |
-| Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with stage-based progress |
+| Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with analysis/planning/verification stages plus per-image transform progress |
 | Desktop result details | `apps/desktop/src/index.html`, `apps/desktop/src/renderer.ts` | Implemented with output file, output folder, and JSON report open actions |
 | Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts` local settings | Implemented with default mode, session-only output folder controls, opt-in report saving, overwrite prevention, and aggressive warning preferences |
 | Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
@@ -370,7 +370,7 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 
 ## Non-Blocking Follow-Ups
 
-- Progress updates are stage-based. Per-image/action progress would improve UX.
+- Progress updates now include analysis, planning, per-image transform counts, verification, and file-write stages. They remain estimates rather than byte-accurate package progress.
 - Desktop UI is functional, but final visual QA should happen on the target Windows desktop environment.
 - Future reference graph additions should be driven by real HWPX samples that expose new forms beyond relative, percent-encoded, direct, and id-valued XML references.
 - Balanced and aggressive mode verification now includes PSNR quality gating plus package integrity, references, image dimensions, and image format invariants. Decoded pixel hash based same-visual duplicate detection is implemented for exact decoded-pixel matches across lossless encodings. SSIM scoring remains a future enhancement, not a current release blocker.
