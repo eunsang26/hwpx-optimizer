@@ -30,6 +30,22 @@ const api = {
     return () => ipcRenderer.off("hwpx:optimize-progress", listener);
   },
   verify: (filePath: string) => ipcRenderer.invoke("hwpx:verify", filePath),
+  saveBatchReport: (input: {
+    firstInputPath: string;
+    outputDirectory?: string;
+    mode: "safe" | "balanced" | "aggressive";
+    items: Array<{
+      input: string;
+      status: "done" | "failed" | "cancelled";
+      output?: string;
+      report?: string;
+      error?: string;
+      originalSize?: number;
+      optimizedSize?: number;
+      savedBytes?: number;
+      savedPercent?: number;
+    }>;
+  }): Promise<{ reportPath: string }> => ipcRenderer.invoke("hwpx:save-batch-report", input),
   previewImageDiffs: (input: { originalPath: string; optimizedPath: string; maxItems?: number; maxInputBytes?: number }) =>
     ipcRenderer.invoke("hwpx:image-preview", input),
   showItem: (filePath: string) => ipcRenderer.invoke("shell:show-item", filePath),

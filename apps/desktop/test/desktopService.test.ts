@@ -11,7 +11,8 @@ import {
   optimizeDesktopFile,
   previewImageDiffs,
   persistentDesktopSettingsPatch,
-  verifyDesktopFile
+  verifyDesktopFile,
+  writeDesktopBatchReport
 } from "../src/main/desktopService.js";
 import type { DesktopSettings } from "../src/main/desktopService.js";
 
@@ -191,6 +192,42 @@ describe("desktop service", () => {
     });
 
     expect(result.outputPath).toBe(join(outputDirectory, "output", "input_optimized.hwpx"));
+  });
+
+  it("writes a non-overwriting desktop batch report", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-batch-"));
+    await writeFile(join(dir, "batch-report.json"), "existing");
+
+    const result = await writeDesktopBatchReport({
+      reportDirectory: dir,
+      mode: "balanced",
+      settings: defaultDesktopSettings,
+      items: [
+        {
+          input: "input.hwpx",
+          status: "done",
+          output: join(dir, "input_optimized.hwpx"),
+          savedBytes: 1024,
+          savedPercent: 12.5
+        },
+        {
+          input: "broken.hwpx",
+          status: "failed",
+          error: "Invalid HWPX package"
+        }
+      ]
+    });
+
+    expect(result.reportPath).toBe(join(dir, "batch-report-2.json"));
+    const report = JSON.parse(await readFile(result.reportPath, "utf8")) as {
+      mode: string;
+      totals: { done: number; failed: number; savedBytes: number };
+      items: Array<{ input: string; status: string }>;
+    };
+    expect(report.mode).toBe("balanced");
+    expect(report.totals).toEqual({ done: 1, failed: 1, cancelled: 0, savedBytes: 1024 });
+    expect(report.items).toHaveLength(2);
+    expect(await readFile(join(dir, "batch-report.json"), "utf8")).toBe("existing");
   });
 
   it("rejects image preview requests that would require loading too many bytes at once", async () => {

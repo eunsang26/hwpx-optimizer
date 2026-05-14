@@ -55,6 +55,25 @@ export type DesktopOptimizeResult = {
   report: OptimizationReport;
 };
 
+export type DesktopBatchReportItem = {
+  input: string;
+  status: "done" | "failed" | "cancelled";
+  output?: string;
+  report?: string;
+  error?: string;
+  originalSize?: number;
+  optimizedSize?: number;
+  savedBytes?: number;
+  savedPercent?: number;
+};
+
+export type DesktopBatchReportInput = {
+  reportDirectory: string;
+  mode: OptimizationMode;
+  settings: Pick<DesktopSettings, "preventOverwrite">;
+  items: DesktopBatchReportItem[];
+};
+
 export type DesktopProgress = {
   percent: number;
   item: string;
@@ -114,6 +133,25 @@ export async function optimizeDesktopFile(
 
   onProgress?.({ percent: 92, item: "Finalizing optimized document" });
   return { outputPath, reportPath, report: result.report };
+}
+
+export async function writeDesktopBatchReport(input: DesktopBatchReportInput): Promise<{ reportPath: string }> {
+  await mkdir(input.reportDirectory, { recursive: true });
+  const requestedReportPath = join(input.reportDirectory, "batch-report.json");
+  const reportPath = input.settings.preventOverwrite ? await nextAvailableReportPath(requestedReportPath) : requestedReportPath;
+  const report = {
+    mode: input.mode,
+    generatedAt: new Date().toISOString(),
+    totals: {
+      done: input.items.filter((item) => item.status === "done").length,
+      failed: input.items.filter((item) => item.status === "failed").length,
+      cancelled: input.items.filter((item) => item.status === "cancelled").length,
+      savedBytes: input.items.reduce((sum, item) => sum + (item.savedBytes ?? 0), 0)
+    },
+    items: input.items
+  };
+  await writeJsonArtifact(reportPath, JSON.stringify(report, null, 2));
+  return { reportPath };
 }
 
 export async function verifyDesktopFile(
@@ -248,6 +286,29 @@ async function writeOptimizationArtifacts(
     ]);
     throw error;
   }
+}
+
+async function writeJsonArtifact(path: string, content: string): Promise<void> {
+  const tmpPath = temporaryPath(path);
+  try {
+    await assertArtifactTargetIsWritable(path);
+    await writeFile(tmpPath, content);
+    await rename(tmpPath, path);
+  } catch (error) {
+    await rm(tmpPath, { force: true });
+    throw error;
+  }
+}
+
+async function nextAvailableReportPath(path: string): Promise<string> {
+  if (!(await pathExists(path))) return path;
+  const ext = extname(path);
+  const base = path.slice(0, path.length - ext.length);
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${base}-${index}${ext}`;
+    if (!(await pathExists(candidate))) return candidate;
+  }
+  throw new Error("Could not create a non-overwriting batch report path.");
 }
 
 async function assertArtifactTargetIsWritable(path: string): Promise<void> {
