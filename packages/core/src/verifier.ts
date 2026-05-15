@@ -2,7 +2,7 @@ import { XMLParser } from "fast-xml-parser";
 import sharp from "sharp";
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
-import { computePsnr, computeSsim } from "./imagePreview.js";
+import { computeVisualMetrics } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
 import type { HwpxEntry, HwpxPackage, ImageInventoryItem } from "./types.js";
@@ -133,10 +133,7 @@ async function verifyVisualSimilarityPairs(
 
   for (const pair of uniquePairs) {
     if (pair.original.data.equals(pair.output.data)) continue;
-    const [psnr, ssim] = await Promise.all([
-      computePsnr(pair.original.data, pair.output.data),
-      computeSsim(pair.original.data, pair.output.data)
-    ]);
+    const { psnr, ssim } = await computeVisualMetrics(pair.original.data, pair.output.data);
     if (psnr === null && ssim === null) {
       const diff = await describeImagePairDiff(pair.original, pair.output);
       const suffix = diff ? ` ${diff}` : "";

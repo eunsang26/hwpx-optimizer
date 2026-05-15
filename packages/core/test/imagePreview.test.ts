@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { computePsnr, extractImageDiffPreviews } from "../src/imagePreview.js";
+import { computePsnr, computeVisualMetrics, extractImageDiffPreviews } from "../src/imagePreview.js";
 import { optimizeHwpxBufferBalanced } from "../src/optimize.js";
 import { createHwpxFixture } from "./fixtures.js";
 
@@ -194,6 +194,23 @@ describe("computePsnr", () => {
     const psnr = await computePsnr(tagged, physicallyRotated);
     expect(psnr).not.toBeNull();
     expect(psnr).toBeGreaterThan(20);
+  });
+});
+
+describe("computeVisualMetrics", () => {
+  it("computes PSNR and SSIM from shared decoded samples", async () => {
+    const original = await sharp({
+      create: { width: 96, height: 64, channels: 3, background: "#446688" }
+    })
+      .png()
+      .toBuffer();
+    const optimized = await sharp(original).jpeg({ quality: 88 }).toBuffer();
+
+    const metrics = await computeVisualMetrics(original, optimized);
+
+    expect(metrics.psnr).not.toBeNull();
+    expect(metrics.ssim).not.toBeNull();
+    expect(metrics.ssim).toBeGreaterThan(0.9);
   });
 });
 

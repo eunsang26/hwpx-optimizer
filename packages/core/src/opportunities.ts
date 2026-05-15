@@ -25,6 +25,7 @@ export type ImageOptimizationProfile = {
   maxEdge: number;
   displayScale: number;
   jpegQuality: number;
+  pngCompressionLevel: number;
   pngPalette: boolean;
   forceJpegRecompress?: boolean;
   opportunityLabel: string;
@@ -34,6 +35,7 @@ export const balancedImageProfile: ImageOptimizationProfile = {
   maxEdge: BALANCED_MAX_EDGE,
   displayScale: 2,
   jpegQuality: BALANCED_JPEG_QUALITY,
+  pngCompressionLevel: 6,
   pngPalette: false,
   opportunityLabel: "Resize JPEG to document display budget"
 };
@@ -42,6 +44,7 @@ export const aggressiveImageProfile: ImageOptimizationProfile = {
   maxEdge: AGGRESSIVE_MAX_EDGE,
   displayScale: 1,
   jpegQuality: AGGRESSIVE_JPEG_QUALITY,
+  pngCompressionLevel: 6,
   pngPalette: true,
   opportunityLabel: "Resize JPEG to aggressive document display budget"
 };
@@ -454,7 +457,7 @@ async function convertBmpToPng(
           kernel: "lanczos3"
         })
       : image;
-  return resized.png({ compressionLevel: 9, adaptiveFiltering: true, palette: profile.pngPalette }).toBuffer();
+  return resized.png(pngOptions(profile)).toBuffer();
 }
 
 async function convertTiffToPng(
@@ -476,7 +479,7 @@ async function convertTiffToPng(
           kernel: "lanczos3"
         })
       : image;
-  return resized.png({ compressionLevel: 9, adaptiveFiltering: true, palette: profile.pngPalette }).toBuffer();
+  return resized.png(pngOptions(profile)).toBuffer();
 }
 
 async function resizeJpeg(
@@ -513,12 +516,20 @@ async function resizePng(
       withoutEnlargement: true,
       kernel: "lanczos3"
     })
-    .png({ compressionLevel: 9, adaptiveFiltering: true, palette: profile.pngPalette })
+    .png(pngOptions(profile))
     .toBuffer();
 }
 
 async function optimizePng(data: Buffer, profile: ImageOptimizationProfile = balancedImageProfile): Promise<Buffer> {
-  return sharp(data).png({ compressionLevel: 9, adaptiveFiltering: true, palette: profile.pngPalette }).toBuffer();
+  return sharp(data).png(pngOptions(profile)).toBuffer();
+}
+
+function pngOptions(profile: ImageOptimizationProfile): sharp.PngOptions {
+  return {
+    compressionLevel: Math.max(1, Math.min(9, Math.floor(profile.pngCompressionLevel))),
+    adaptiveFiltering: true,
+    palette: profile.pngPalette
+  };
 }
 
 async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number }> {

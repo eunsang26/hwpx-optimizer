@@ -153,10 +153,11 @@ async function optimizeHwpxBufferAdvanced(
   emitProgress(options, 25, "Analyzing document structure");
   const pkg = await timer.measure("read", () => readHwpxPackage(input));
   const analysis = await timer.measure("analyze", () => analyzeHwpxPackage(pkg));
-  const profiles = createTargetProfileLadder(settings.mode, settings.profile, options.targetBytes);
+  const profiles = createTargetProfileLadder(settings.mode, settings.profile, options.targetBytes, input.byteLength);
   let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
   const verificationWarnings: string[] = [];
-  for (const profile of profiles) {
+  const strongestProfileFirst = options.targetBytes !== undefined && profiles[0] !== settings.profile;
+  for (const [profileIndex, profile] of profiles.entries()) {
     try {
       const candidate = await optimizeHwpxBufferWithProfile(input, {
         ...settings,
@@ -169,6 +170,9 @@ async function optimizeHwpxBufferAdvanced(
       });
       best = chooseBestCandidate(best, candidate);
       if (!options.targetBytes || candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target") {
+        return candidate;
+      }
+      if (strongestProfileFirst && profileIndex === 0 && candidate.report.targetStatus === "missed") {
         return candidate;
       }
     } catch (error) {
@@ -366,23 +370,27 @@ function chooseBestCandidate(
 function createTargetProfileLadder(
   mode: "balanced" | "aggressive",
   base: ImageOptimizationProfile,
-  targetBytes?: number
+  targetBytes?: number,
+  originalBytes?: number
 ): ImageOptimizationProfile[] {
   if (!targetBytes) return [base];
+  const strongestFirst = originalBytes !== undefined && targetBytes / originalBytes <= 0.25;
   if (mode === "balanced") {
-    return [
+    const profiles = [
       base,
-      { ...base, maxEdge: 1600, jpegQuality: 84, forceJpegRecompress: true },
-      { ...base, maxEdge: 1440, jpegQuality: 80, forceJpegRecompress: true },
-      { ...base, maxEdge: 1280, jpegQuality: 76, forceJpegRecompress: true }
+      { ...base, maxEdge: 1600, jpegQuality: 84, pngCompressionLevel: 9, forceJpegRecompress: true },
+      { ...base, maxEdge: 1440, jpegQuality: 80, pngCompressionLevel: 9, forceJpegRecompress: true },
+      { ...base, maxEdge: 1280, jpegQuality: 76, pngCompressionLevel: 9, forceJpegRecompress: true }
     ];
+    return strongestFirst ? profiles.reverse() : profiles;
   }
-  return [
+  const profiles = [
     base,
-    { ...base, maxEdge: 1120, jpegQuality: 74, forceJpegRecompress: true, pngPalette: true },
-    { ...base, maxEdge: 960, jpegQuality: 68, forceJpegRecompress: true, pngPalette: true },
-    { ...base, maxEdge: 800, jpegQuality: 62, forceJpegRecompress: true, pngPalette: true }
+    { ...base, maxEdge: 1120, jpegQuality: 74, pngCompressionLevel: 9, forceJpegRecompress: true, pngPalette: true },
+    { ...base, maxEdge: 960, jpegQuality: 68, pngCompressionLevel: 9, forceJpegRecompress: true, pngPalette: true },
+    { ...base, maxEdge: 800, jpegQuality: 62, pngCompressionLevel: 9, forceJpegRecompress: true, pngPalette: true }
   ];
+  return strongestFirst ? profiles.reverse() : profiles;
 }
 
 function createOptimizationOpportunitiesFromAppliedActions(

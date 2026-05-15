@@ -21,6 +21,7 @@ describe("runCli", () => {
     const usage = errors.join("\n");
     expect(usage).toContain("analyze <file.hwpx> [--report report.json] [--target-bytes bytes|--target-mb mb]");
     expect(usage).toContain("batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb]");
+    expect(usage).toContain("[--jobs count]");
   });
 
   it("prints the action catalog with list-actions", async () => {
@@ -534,6 +535,36 @@ describe("runCli", () => {
         })
       ])
     );
+  });
+
+  it("records the configured batch worker limit", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    const outDir = join(dir, "optimized");
+    await mkdir(inputDir);
+    await writeFile(join(inputDir, "one.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(join(inputDir, "two.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const code = await runCli(["batch", inputDir, "--mode", "safe", "--out", outDir, "--jobs", "2"]);
+
+    expect(code).toBe(0);
+    const summary = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8")) as {
+      jobs: number;
+      results: Array<{ input: string; status: "optimized" | "failed" }>;
+    };
+    expect(summary.jobs).toBe(2);
+    expect(summary.results).toHaveLength(2);
+    expect(summary.results.every((result) => result.status === "optimized")).toBe(true);
+  });
+
+  it("rejects invalid batch worker limits", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    await mkdir(inputDir);
+
+    const code = await runCli(["batch", inputDir, "--mode", "safe", "--jobs", "0"]);
+
+    expect(code).toBe(1);
   });
 
   it("propagates --allow-larger through batch into each file's report", async () => {

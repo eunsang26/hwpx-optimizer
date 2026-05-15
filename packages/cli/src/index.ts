@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   analyzeHwpxBuffer,
   estimateNonOverlappingSavingBytes,
+  mapLimit,
   optimizeHwpxBufferAggressive,
   optimizeHwpxBufferBalanced,
   optimizeHwpxBufferSafe,
@@ -217,7 +218,7 @@ function printUsage(): void {
   console.error("  hwpx-opt report <file.hwpx> [--report report.txt|--out report.txt] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
   console.error("  hwpx-opt verify <file.hwpx> [--max-input-bytes bytes]");
   console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json] [--max-input-bytes bytes]");
-  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--jobs count] [--max-input-bytes bytes]");
   console.error("  hwpx-opt list-actions");
 }
 
@@ -383,9 +384,10 @@ async function runBatch(
     .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name))
     .map((entry) => entry.name)
     .sort();
-  const results: BatchFileResult[] = [];
+  const jobs = parseBatchJobs(options.jobs);
+  const results = new Array<BatchFileResult>(files.length);
 
-  for (const [index, file] of files.entries()) {
+  await mapLimit([...files.entries()], jobs, async ([index, file]) => {
     const sourcePath = join(inputDir, file);
     const progressPrefix = `[${index + 1}/${files.length}] ${file}`;
     let stage: BatchFailureStage = "read-input";
@@ -400,16 +402,17 @@ async function runBatch(
       const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       stage = "write-output";
       await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2));
-      results.push({ input: file, status: "optimized", output: outputPath, report: reportPath });
+      results[index] = { input: file, status: "optimized", output: outputPath, report: reportPath };
       const savedBytes = result.report.savedBytes ?? 0;
       const savedPercent = result.report.savedPercent ?? 0;
       console.log(`${progressPrefix} optimized -${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      results.push({ input: file, status: "failed", stage, error: message });
+      results[index] = { input: file, status: "failed", stage, error: message };
       console.error(`${progressPrefix} failed at ${stage}: ${message}`);
     }
-  }
+  });
+  const completedResults = results.filter((result): result is BatchFileResult => Boolean(result));
 
   const requestedBatchReportPath = join(outputDir, "batch-report.json");
   const reportPath = overwrite ? requestedBatchReportPath : await nextAvailablePath(requestedBatchReportPath);
@@ -420,17 +423,27 @@ async function runBatch(
         mode,
         inputDir,
         outputDir,
-        results
+        jobs,
+        results: completedResults
       },
       null,
       2
     )
   );
   return {
-    optimized: results.filter((result) => result.status === "optimized").length,
-    failed: results.filter((result) => result.status === "failed").length,
+    optimized: completedResults.filter((result) => result.status === "optimized").length,
+    failed: completedResults.filter((result) => result.status === "failed").length,
     reportPath
   };
+}
+
+function parseBatchJobs(value: string | undefined): number {
+  if (value === undefined) return 1;
+  const jobs = Number(value);
+  if (!Number.isInteger(jobs) || jobs <= 0) {
+    throw new Error("--jobs must be a positive integer.");
+  }
+  return Math.min(jobs, 4);
 }
 
 export function renderHumanReport(inputPath: string, report: OptimizationReport): string {

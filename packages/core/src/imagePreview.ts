@@ -24,6 +24,11 @@ export type ImagePreviewOptions = {
   psnrSampleSize?: number;
 };
 
+export type VisualMetrics = {
+  psnr: number | null;
+  ssim: number | null;
+};
+
 const PSNR_DEFAULT_SAMPLE_SIZE = 256;
 const PSNR_MAX_DB = 80;
 const SSIM_DEFAULT_SAMPLE_SIZE = 256;
@@ -70,7 +75,7 @@ export async function extractImageDiffPreviews(
       const [originalThumbnailDataUrl, outputThumbnailDataUrl, psnrDb] = await Promise.all([
         renderThumbnailDataUrl(original.data, thumbnailMaxEdge, thumbnailQuality),
         renderThumbnailDataUrl(output.data, thumbnailMaxEdge, thumbnailQuality),
-        computePsnr(original.data, output.data, psnrSampleSize)
+        computeVisualMetrics(original.data, output.data, psnrSampleSize).then((metrics) => metrics.psnr)
       ]);
       return {
         originalPath: original.path,
@@ -89,12 +94,26 @@ export async function extractImageDiffPreviews(
 }
 
 export async function computePsnr(original: Buffer, optimized: Buffer, sampleSize = PSNR_DEFAULT_SAMPLE_SIZE): Promise<number | null> {
+  return (await computeVisualMetrics(original, optimized, sampleSize)).psnr;
+}
+
+export async function computeSsim(original: Buffer, optimized: Buffer, sampleSize = SSIM_DEFAULT_SAMPLE_SIZE): Promise<number | null> {
+  return (await computeVisualMetrics(original, optimized, sampleSize)).ssim;
+}
+
+export async function computeVisualMetrics(
+  original: Buffer,
+  optimized: Buffer,
+  sampleSize = PSNR_DEFAULT_SAMPLE_SIZE
+): Promise<VisualMetrics> {
   try {
     const [originalRaw, optimizedRaw] = await Promise.all([
-      decodeForPsnr(original, sampleSize),
-      decodeForPsnr(optimized, sampleSize)
+      decodeForMetrics(original, sampleSize),
+      decodeForMetrics(optimized, sampleSize)
     ]);
-    if (!originalRaw || !optimizedRaw || originalRaw.length !== optimizedRaw.length) return null;
+    if (!originalRaw || !optimizedRaw || originalRaw.length !== optimizedRaw.length) {
+      return { psnr: null, ssim: null };
+    }
 
     let sumSquaredError = 0;
     for (let index = 0; index < originalRaw.length; index += 1) {
@@ -102,75 +121,57 @@ export async function computePsnr(original: Buffer, optimized: Buffer, sampleSiz
       sumSquaredError += diff * diff;
     }
     const mse = sumSquaredError / originalRaw.length;
-    if (mse === 0) return PSNR_MAX_DB;
-    const psnr = 10 * Math.log10((255 * 255) / mse);
-    return Math.min(psnr, PSNR_MAX_DB);
+    const psnr = mse === 0 ? PSNR_MAX_DB : Math.min(10 * Math.log10((255 * 255) / mse), PSNR_MAX_DB);
+    return { psnr, ssim: computeSsimFromRgbSamples(originalRaw, optimizedRaw) };
   } catch {
-    return null;
+    return { psnr: null, ssim: null };
   }
 }
 
-export async function computeSsim(original: Buffer, optimized: Buffer, sampleSize = SSIM_DEFAULT_SAMPLE_SIZE): Promise<number | null> {
-  try {
-    const [originalRaw, optimizedRaw] = await Promise.all([
-      decodeForSsim(original, sampleSize),
-      decodeForSsim(optimized, sampleSize)
-    ]);
-    if (!originalRaw || !optimizedRaw || originalRaw.length !== optimizedRaw.length || originalRaw.length === 0) return null;
+function computeSsimFromRgbSamples(originalRaw: Buffer, optimizedRaw: Buffer): number | null {
+  if (originalRaw.length !== optimizedRaw.length || originalRaw.length === 0 || originalRaw.length % 3 !== 0) return null;
+  const pixelCount = originalRaw.length / 3;
+  const originalGray = new Float64Array(pixelCount);
+  const optimizedGray = new Float64Array(pixelCount);
 
-    let meanOriginal = 0;
-    let meanOptimized = 0;
-    for (let index = 0; index < originalRaw.length; index += 1) {
-      meanOriginal += originalRaw[index]!;
-      meanOptimized += optimizedRaw[index]!;
-    }
-    meanOriginal /= originalRaw.length;
-    meanOptimized /= optimizedRaw.length;
-
-    let varianceOriginal = 0;
-    let varianceOptimized = 0;
-    let covariance = 0;
-    for (let index = 0; index < originalRaw.length; index += 1) {
-      const originalDelta = originalRaw[index]! - meanOriginal;
-      const optimizedDelta = optimizedRaw[index]! - meanOptimized;
-      varianceOriginal += originalDelta * originalDelta;
-      varianceOptimized += optimizedDelta * optimizedDelta;
-      covariance += originalDelta * optimizedDelta;
-    }
-    const denominator = Math.max(1, originalRaw.length - 1);
-    varianceOriginal /= denominator;
-    varianceOptimized /= denominator;
-    covariance /= denominator;
-
-    const c1 = (0.01 * 255) ** 2;
-    const c2 = (0.03 * 255) ** 2;
-    const numerator = (2 * meanOriginal * meanOptimized + c1) * (2 * covariance + c2);
-    const ssimDenominator = (meanOriginal ** 2 + meanOptimized ** 2 + c1) * (varianceOriginal + varianceOptimized + c2);
-    if (ssimDenominator === 0) return 1;
-    return Math.max(-1, Math.min(1, numerator / ssimDenominator));
-  } catch {
-    return null;
+  let meanOriginal = 0;
+  let meanOptimized = 0;
+  for (let pixel = 0; pixel < pixelCount; pixel += 1) {
+    const offset = pixel * 3;
+    const originalValue = 0.299 * originalRaw[offset]! + 0.587 * originalRaw[offset + 1]! + 0.114 * originalRaw[offset + 2]!;
+    const optimizedValue = 0.299 * optimizedRaw[offset]! + 0.587 * optimizedRaw[offset + 1]! + 0.114 * optimizedRaw[offset + 2]!;
+    originalGray[pixel] = originalValue;
+    optimizedGray[pixel] = optimizedValue;
+    meanOriginal += originalValue;
+    meanOptimized += optimizedValue;
   }
+  meanOriginal /= pixelCount;
+  meanOptimized /= pixelCount;
+
+  let varianceOriginal = 0;
+  let varianceOptimized = 0;
+  let covariance = 0;
+  for (let index = 0; index < pixelCount; index += 1) {
+    const originalDelta = originalGray[index]! - meanOriginal;
+    const optimizedDelta = optimizedGray[index]! - meanOptimized;
+    varianceOriginal += originalDelta * originalDelta;
+    varianceOptimized += optimizedDelta * optimizedDelta;
+    covariance += originalDelta * optimizedDelta;
+  }
+  const denominator = Math.max(1, pixelCount - 1);
+  varianceOriginal /= denominator;
+  varianceOptimized /= denominator;
+  covariance /= denominator;
+
+  const c1 = (0.01 * 255) ** 2;
+  const c2 = (0.03 * 255) ** 2;
+  const numerator = (2 * meanOriginal * meanOptimized + c1) * (2 * covariance + c2);
+  const ssimDenominator = (meanOriginal ** 2 + meanOptimized ** 2 + c1) * (varianceOriginal + varianceOptimized + c2);
+  if (ssimDenominator === 0) return 1;
+  return Math.max(-1, Math.min(1, numerator / ssimDenominator));
 }
 
-async function decodeForPsnr(data: Buffer, sampleSize: number): Promise<Buffer | null> {
-  try {
-    const bmp = decodeBmp(data);
-    const pipeline = bmp
-      ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } })
-      : sharp(data);
-    return await pipeline
-      .rotate()
-      .removeAlpha()
-      .resize(sampleSize, sampleSize, { fit: "fill", kernel: "lanczos3" })
-      .raw()
-      .toBuffer();
-  } catch {
-    return null;
-  }
-}
-
-async function decodeForSsim(data: Buffer, sampleSize: number): Promise<Buffer | null> {
+async function decodeForMetrics(data: Buffer, sampleSize: number): Promise<Buffer | null> {
   try {
     const bmp = decodeBmp(data);
     const pipeline = bmp
@@ -179,7 +180,6 @@ async function decodeForSsim(data: Buffer, sampleSize: number): Promise<Buffer |
     return await pipeline
       .rotate()
       .removeAlpha()
-      .grayscale()
       .resize(sampleSize, sampleSize, { fit: "fill", kernel: "lanczos3" })
       .raw()
       .toBuffer();

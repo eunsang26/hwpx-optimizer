@@ -3,10 +3,16 @@ import { randomBytes } from "node:crypto";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
+import { aggressiveImageProfile, balancedImageProfile } from "../src/opportunities.js";
 import { readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture } from "./fixtures.js";
 
 describe("balanced optimization", () => {
+  it("uses faster PNG compression by default while preserving max compression for target profiles", () => {
+    expect(balancedImageProfile.pngCompressionLevel).toBe(6);
+    expect(aggressiveImageProfile.pngCompressionLevel).toBe(6);
+  });
+
   it("reports dry-run opportunities for oversized JPEG and BMP resources", async () => {
     const jpg = await sharp({
       create: {
