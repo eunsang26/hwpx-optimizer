@@ -1,15 +1,18 @@
-import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = resolve(root, "..", "..");
-const assets = ["index.html", "styles.css", "preload.cjs", "main.cjs"];
+const assets = ["index.html", "styles.css", "preload.cjs", "main.cjs", "app-icon.svg"];
 
 await mkdir(join(root, "dist"), { recursive: true });
 for (const asset of assets) {
   await copyFile(join(root, "src", asset), join(root, "dist", asset));
 }
+const iconSvg = await readFile(join(root, "src", "app-icon.svg"));
+await writeFile(join(root, "dist", "app-icon.png"), await sharp(iconSvg).resize(256, 256).png().toBuffer());
 
 const bundledCoreRoot = join(root, "dist", "node_modules", "@hwpx-optimizer", "core");
 await rm(bundledCoreRoot, { recursive: true, force: true });

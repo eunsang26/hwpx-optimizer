@@ -64,6 +64,8 @@
       "apps/desktop/dist/**/*.cjs",
       "apps/desktop/dist/**/*.html",
       "apps/desktop/dist/**/*.css",
+      "apps/desktop/dist/**/*.png",
+      "apps/desktop/dist/**/*.svg",
       "apps/desktop/dist/node_modules/@hwpx-optimizer/core/package.json",
       "packages/core/dist/**/*.js",
       {

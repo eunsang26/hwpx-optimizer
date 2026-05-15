@@ -42,6 +42,9 @@ const isSmokeTest = process.argv.includes("--smoke-test");
 if (isSmokeTest) {
   app.setPath("userData", join(process.cwd(), ".tmp", "electron-smoke"));
 }
+if (process.platform === "win32") {
+  app.setAppUserModelId("local.hwpxoptimizer.app");
+}
 
 async function createWindow(): Promise<BrowserWindow> {
   Menu.setApplicationMenu(null);
@@ -53,6 +56,7 @@ async function createWindow(): Promise<BrowserWindow> {
     useContentSize: true,
     show: !isSmokeTest,
     title: "HWPX 보고서 용량 최적화",
+    icon: join(import.meta.dirname, "app-icon.png"),
     autoHideMenuBar: true,
     backgroundColor: "#f6f8fb",
     webPreferences: {

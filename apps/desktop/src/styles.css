@@ -193,20 +193,20 @@ body[data-view="empty"] .shell {
 .brand-mark {
   position: relative;
   width: 30px; height: 30px;
-  border-radius: 9px;
-  background: linear-gradient(180deg, #eaf2ff 0%, #d8e6ff 100%);
+  border-radius: 10px;
+  background: transparent;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
 }
-.brand-mark::before {
-  content: "";
-  width: 16px; height: 16px;
-  background-color: var(--blue);
-  -webkit-mask: var(--ic-doc-text) center/contain no-repeat;
-          mask: var(--ic-doc-text) center/contain no-repeat;
+.brand-mark img {
+  width: 30px;
+  height: 30px;
+  display: block;
+  border-radius: inherit;
 }
+.brand-mark::before { content: none; }
 .brand-mark::after { content: none; }
 
 .app-title {

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import sharp from "sharp";
 
@@ -6,21 +6,10 @@ const buildDir = "build";
 const iconPngPath = join(buildDir, "icon.png");
 const iconIcoPath = join(buildDir, "icon.ico");
 
-const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <rect width="256" height="256" rx="48" fill="#1f6f64"/>
-  <path d="M72 56h82l30 30v114H72z" fill="#f7faf9"/>
-  <path d="M154 56v32h30z" fill="#c9e7e1"/>
-  <rect x="92" y="112" width="72" height="12" rx="6" fill="#1f6f64"/>
-  <rect x="92" y="140" width="72" height="12" rx="6" fill="#1f6f64"/>
-  <rect x="92" y="168" width="46" height="12" rx="6" fill="#1f6f64"/>
-  <circle cx="181" cy="181" r="35" fill="#e7b84b"/>
-  <path d="M167 181h28M181 167v28" stroke="#263238" stroke-width="10" stroke-linecap="round"/>
-</svg>
-`;
+const iconSourcePath = join("apps", "desktop", "src", "app-icon.svg");
 
 await mkdir(buildDir, { recursive: true });
-const png = await sharp(Buffer.from(svg)).png().toBuffer();
+const png = await sharp(await readFile(iconSourcePath)).resize(256, 256).png().toBuffer();
 await writeFile(iconPngPath, png);
 await writeFile(iconIcoPath, createIcoFromPng(png));
 

@@ -15,6 +15,7 @@ describe("repository runtime and cleanup configuration", () => {
   it("keeps release packaging and local artifact cleanup explicit", async () => {
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
       scripts?: Record<string, string>;
+      build?: { files?: string[] };
     };
 
     expect(packageJson.scripts?.["release:clean"]).toBe("node scripts/clean-release-artifacts.mjs");
@@ -29,6 +30,8 @@ describe("repository runtime and cleanup configuration", () => {
       "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit --audit-level=moderate && npm run desktop:smoke:built"
     );
     expect(packageJson.scripts?.["desktop:smoke:built"]).toBe("node scripts/run-electron-app.mjs --smoke-test");
+    expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.png");
+    expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.svg");
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
   });
@@ -48,6 +51,8 @@ describe("repository runtime and cleanup configuration", () => {
     const main = await readFile("apps/desktop/src/main.ts", "utf8");
     const styles = await readFile("apps/desktop/src/styles.css", "utf8");
 
+    expect(main).toContain('app.setAppUserModelId("local.hwpxoptimizer.app")');
+    expect(main).toContain('icon: join(import.meta.dirname, "app-icon.png")');
     expect(main).toContain("width: 1120");
     expect(main).toContain("height: 820");
     expect(main).toContain("minWidth: 960");
@@ -58,8 +63,23 @@ describe("repository runtime and cleanup configuration", () => {
     expect(styles).toMatch(/body\[data-view="empty"\] \.summary-panel\s*{[^}]*padding-bottom:\s*8px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.bottom-row\s*{[^}]*gap:\s*6px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*max-width:\s*1120px/s);
+    expect(styles).toMatch(/\.brand-mark img\s*{[^}]*width:\s*30px/s);
     expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(118px, 1fr\)\)/s);
     expect(styles).toMatch(/\.option-grid select,\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
+  });
+
+  it("generates desktop and in-app icons from the same source asset", async () => {
+    const html = await readFile("apps/desktop/src/index.html", "utf8");
+    const copyAssets = await readFile("apps/desktop/scripts/copy-assets.mjs", "utf8");
+    const generateIcons = await readFile("scripts/generate-desktop-icons.mjs", "utf8");
+    const iconSvg = await readFile("apps/desktop/src/app-icon.svg", "utf8");
+
+    expect(html).toContain('<img src="./app-icon.svg" alt="" />');
+    expect(copyAssets).toContain('"app-icon.svg"');
+    expect(copyAssets).toContain('join(root, "dist", "app-icon.png")');
+    expect(generateIcons).toContain('join("apps", "desktop", "src", "app-icon.svg")');
+    expect(iconSvg).toContain('aria-label="HWPX Optimizer"');
+    expect(iconSvg).toContain("#16a34a");
   });
 
   it("keeps automatic optimization plan cards horizontally readable", async () => {
