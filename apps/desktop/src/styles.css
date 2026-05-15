@@ -309,9 +309,9 @@ body[data-view="empty"] .panel {
 /* ---------------- Bottom row: options + plan side by side ---------------- */
 .bottom-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(320px, 0.82fr) minmax(420px, 1.18fr);
   gap: 8px;
-  align-items: stretch;
+  align-items: start;
   min-width: 0;
 }
 body[data-view="empty"] .bottom-row {
@@ -373,7 +373,7 @@ body[data-view="empty"] .bottom-row {
 .options-panel .section-title,
 .summary-panel .section-title { margin-bottom: 4px; }
 .options-panel,
-.summary-panel { padding-bottom: 10px; }
+.summary-panel { padding-bottom: 8px; }
 body[data-view="empty"] .summary-panel {
   padding-bottom: 8px;
 }
@@ -649,8 +649,8 @@ body[data-view="empty"] .drop-copy h3 {
 /* ---------------- Options panel ---------------- */
 .option-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(148px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(118px, 1fr));
+  gap: 7px;
 }
 @media (max-width: 980px) {
   .option-grid { grid-template-columns: repeat(2, minmax(128px, 1fr)); }
@@ -660,7 +660,7 @@ body[data-view="empty"] .drop-copy h3 {
 }
 .option-grid label {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 .option-grid label > span {
@@ -677,7 +677,7 @@ body[data-view="empty"] .drop-copy h3 {
 }
 .option-grid select,
 .option-grid input[type="number"] {
-  height: 38px;
+  height: 34px;
   min-width: 0;
   width: 100%;
   background: var(--surface);
@@ -711,7 +711,7 @@ body[data-view="empty"] .drop-copy h3 {
 .toggle-field {
   display: grid;
   grid-template-columns: auto 1fr;
-  grid-template-rows: auto 38px;
+  grid-template-rows: auto 34px;
   column-gap: 10px;
   row-gap: 5px;
   align-items: center;
@@ -766,7 +766,7 @@ body[data-view="empty"] .drop-copy h3 {
 }
 
 .option-hint {
-  margin-top: 6px;
+  margin-top: 5px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -774,8 +774,8 @@ body[data-view="empty"] .drop-copy h3 {
   font-size: 11.5px;
 }
 .option-plan-summary {
-  margin-top: 8px;
-  padding: 8px 10px;
+  margin-top: 6px;
+  padding: 7px 9px;
   border: 1px solid var(--hairline);
   border-radius: 10px;
   background: var(--surface-2);
@@ -876,11 +876,11 @@ body[data-view="empty"] .summary-card > div > strong {
 
 /* ---------------- Target row / progress ---------------- */
 .target-row {
-  margin-top: 8px;
+  margin-top: 7px;
   border-radius: 10px;
   border: 1px solid var(--green-border);
   background: linear-gradient(180deg, #f4fcf6 0%, #ecfdf3 100%);
-  padding: 8px 12px 4px;
+  padding: 7px 10px 4px;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
@@ -969,10 +969,14 @@ body[data-view="empty"] .target-track > span { display: none; }
 
 /* ---------------- Primary run panel ---------------- */
 .primary-run-panel {
-  margin-top: 8px;
+  margin-top: 7px;
   display: grid;
   grid-template-columns: minmax(128px, 160px) minmax(0, 1fr);
   gap: 8px;
+}
+body[data-view="single"][data-result="visible"] .primary-run-panel,
+body[data-view="single"][data-result="visible"] .target-track {
+  display: none;
 }
 .primary-run-panel #optimize-button {
   grid-column: 1 / -1;
@@ -1179,7 +1183,7 @@ body[data-view="batch"][data-batch-result="visible"] .primary-run-panel {
 /* ---------------- Sidebar (plan + safe) ---------------- */
 /* Plan strip: lives in the bottom row, alongside the options card */
 .plan-strip {
-  align-self: stretch;
+  align-self: start;
 }
 .plan-summary,
 .plan-total {
@@ -1204,7 +1208,7 @@ body[data-view="batch"][data-batch-result="visible"] .primary-run-panel {
 .plan-card {
   display: block;
   gap: 9px;
-  padding: 8px 10px;
+  padding: 7px 9px;
   border: 1px solid var(--hairline);
   border-radius: 9px;
   background: var(--surface-2);
@@ -1396,6 +1400,7 @@ body[data-view="single"] .plan-card:last-child { border-bottom: none; }
 }
 
 .run-dock {
+  display: none !important;
   position: fixed;
   left: 50%;
   bottom: 14px;
@@ -1458,7 +1463,7 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
 /* ---------------- Bottom accordions ---------------- */
 .bottom-accordions {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   border: none;
   background: transparent;
   box-shadow: none;
@@ -1474,7 +1479,7 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
 .analysis-details > summary {
   list-style: none;
   cursor: pointer;
-  padding: 14px 18px;
+  padding: 11px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1533,6 +1538,14 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
   font-weight: 800;
   color: var(--text);
   margin-top: 2px;
+}
+.result .metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  padding: 0;
+}
+.result .metric-grid .metric {
+  padding: 8px 10px;
 }
 
 .category-chart {
@@ -1675,8 +1688,8 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
 .result {
   border: 1px solid var(--green-border);
   border-radius: var(--radius-lg);
-  margin-top: 10px;
-  padding: 18px 20px;
+  margin-top: 8px;
+  padding: 14px 16px;
   background: linear-gradient(180deg, #f8fef9 0%, #f1fcf5 100%);
   box-shadow: none;
 }
@@ -1685,10 +1698,10 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
   justify-content: space-between;
   align-items: start;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .result .panel-header h2 {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--green-2);
 }
@@ -1702,10 +1715,10 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
   gap: 6px;
   flex-wrap: wrap;
 }
-.result .actions button { min-height: 32px; padding: 0 12px; font-size: 12.5px; }
+.result .actions button { min-height: 30px; padding: 0 10px; font-size: 12px; }
 .result-guidance {
-  margin-top: 10px;
-  padding: 10px 12px;
+  margin-top: 8px;
+  padding: 9px 10px;
   border: 1px solid var(--green-border);
   border-radius: 10px;
   background: rgba(236, 253, 243, 0.7);
@@ -1801,23 +1814,10 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
   border-radius: 10px;
   position: relative;
 }
-.settings-close::before {
-  content: "";
-  position: absolute;
-  width: 16px;
-  height: 2px;
-  border-radius: 999px;
-  background-color: currentColor;
-  transform: rotate(45deg);
-}
-.settings-close::after {
-  content: "";
-  position: absolute;
-  width: 16px;
-  height: 2px;
-  border-radius: 999px;
-  background-color: currentColor;
-  transform: rotate(-45deg);
+.settings-close span {
+  font-size: 22px;
+  line-height: 1;
+  transform: translateY(-1px);
 }
 .settings-field {
   display: grid;

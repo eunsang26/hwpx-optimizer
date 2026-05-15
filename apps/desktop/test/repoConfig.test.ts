@@ -58,7 +58,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(styles).toMatch(/body\[data-view="empty"\] \.summary-panel\s*{[^}]*padding-bottom:\s*8px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.bottom-row\s*{[^}]*gap:\s*6px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*max-width:\s*1120px/s);
-    expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(148px, 1fr\)\)/s);
+    expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(118px, 1fr\)\)/s);
     expect(styles).toMatch(/\.option-grid select,\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
   });
 
@@ -96,6 +96,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="plan-count-pill"');
     expect(html).toContain('id="option-plan-summary"');
     expect(html).toContain('id="run-dock"');
+    expect(html).toContain('id="settings-close-button"');
+    expect(html).toContain('<span aria-hidden="true">×</span>');
     expect(renderer).not.toContain("chooseManyButton");
     expect(renderer).not.toContain("verificationDetails");
     expect(renderer).not.toContain("verificationSummary");
@@ -109,6 +111,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain('from "./shared/resultGuidance.js"');
     expect(renderer).toContain("resultGuidanceText(report, plan)");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
+    expect(css).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
+    expect(css).toMatch(/\.settings-check\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
     expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);
     expect(renderer).toContain("plan-priority");

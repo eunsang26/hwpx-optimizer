@@ -132,7 +132,7 @@ export async function optimizeDesktopFile(
   );
   source = undefined;
 
-  onProgress?.({ percent: 90, item: "Writing optimized document" });
+  onProgress?.({ percent: 88, item: "Preparing output file" });
   const outputPath = await nextOutputPath(
     input.filePath,
     input.outputDirectory,
@@ -144,13 +144,14 @@ export async function optimizeDesktopFile(
   let reportPath: string | undefined;
   let reportContent: string | undefined;
   if (input.settings.saveReport) {
-    onProgress?.({ percent: 94, item: "Writing JSON report" });
+    onProgress?.({ percent: 92, item: "Preparing JSON report" });
     reportPath = `${outputPath}.report.json`;
     reportContent = JSON.stringify(result.report, null, 2);
   }
+  onProgress?.({ percent: 95, item: "Writing optimized document" });
   await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent);
 
-  onProgress?.({ percent: 98, item: "Finalizing optimized document" });
+  onProgress?.({ percent: 99, item: "Finalizing optimized document" });
   return { outputPath, reportPath, report: result.report };
 }
 

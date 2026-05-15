@@ -155,12 +155,20 @@ const api: HwpxOptimizerApi = {
   },
   analyze: async (filePath) => delay({ filePath, report: sampleReport }, 350),
   optimize: async (input) => {
-    emitProgress(12, "Reading HWPX package");
-    await wait(180);
-    emitProgress(48, `Optimizing document in ${input.mode} mode`);
-    await wait(260);
-    emitProgress(82, "Verifying optimized document");
-    await wait(220);
+    const steps = [
+      [10, "Reading HWPX package", 120],
+      [25, "Analyzing document structure", 150],
+      [40, `Planning ${input.mode} changes`, 120],
+      [55, "Transforming images 2/6", 140],
+      [70, "Transforming images 6/6", 140],
+      [76, "Packing optimized document", 150],
+      [84, "Verifying optimized document", 160],
+      [95, "Writing optimized document", 120]
+    ] as const;
+    for (const [percent, item, delayMs] of steps) {
+      emitProgress(percent, item);
+      await wait(delayMs);
+    }
     emitProgress(100, "Optimization complete");
     return {
       outputPath: `preview-output/${input.filePath.replace(/\.hwpx$/u, ".optimized.hwpx")}`,

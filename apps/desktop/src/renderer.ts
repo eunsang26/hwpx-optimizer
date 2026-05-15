@@ -101,6 +101,9 @@ const state: AppState = {
 
 let settingsSaveSequence = 0;
 let analysisSequence = 0;
+let progressAnimationTimer: number | undefined;
+let displayedProgressPercent = 0;
+let targetProgressPercent = 0;
 
 type DesktopSettings = {
   defaultMode: AppState["mode"];
@@ -740,6 +743,7 @@ function renderPendingAnalysisSummary(): void {
 function renderSingleSummary(plan: SubmissionPlan): void {
   if (!state.report) return;
   document.body.dataset.batchResult = "";
+  document.body.dataset.result = "";
   batchResultPanel.hidden = true;
   document.body.dataset.view = "single";
   selectionPill.textContent = "단일 파일";
@@ -880,7 +884,7 @@ function batchPlanDescription(kind: string): string {
 }
 
 function renderRunDock(plan?: SubmissionPlan): void {
-  const shouldShow = Boolean(plan && state.report && document.body.dataset.view === "single");
+  const shouldShow = false;
   runDock.hidden = !shouldShow;
   if (!shouldShow || !plan) {
     runDockStatus.textContent = state.analysisRunning ? "분석 중" : "분석 결과 대기 중";
@@ -940,6 +944,7 @@ async function loadFile(path: string): Promise<void> {
     return;
   }
   document.body.dataset.view = "single";
+  document.body.dataset.result = "";
   state.batchItems = [];
   state.batchRunCompleted = false;
   batchPanel.hidden = true;
@@ -1027,23 +1032,52 @@ async function optimizeCurrentFile(): Promise<void> {
     setStatus(errorMessage(error));
   } finally {
     setIdle();
+    if (!succeeded) resetProgressAnimation();
     hideProgressPanel();
-    if (!succeeded) renderProgress(0, "");
   }
 }
 
 function renderProgress(percent: number, item: string): void {
   progressPanel.hidden = false;
-  progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
-  progressItem.textContent = progressLabel(item);
+  targetProgressPercent = Math.max(targetProgressPercent, Math.max(0, Math.min(100, percent)));
+  progressItem.textContent = `${progressLabel(item)} · ${Math.round(targetProgressPercent)}%`;
+  startProgressAnimation();
 }
 
 function hideProgressPanel(): void {
   document.body.dataset.busy = "";
   progressPanel.classList.remove("is-loading");
   progressPanel.hidden = true;
+  stopProgressAnimation();
   if (!state.analysisRunning && !state.batchAnalyzing && !state.batchRunning) {
     setSubmissionInputsDisabled(false);
+  }
+}
+
+function resetProgressAnimation(): void {
+  stopProgressAnimation();
+  displayedProgressPercent = 0;
+  targetProgressPercent = 0;
+  progressBar.style.width = "0%";
+}
+
+function startProgressAnimation(): void {
+  progressAnimationTimer ??= window.setInterval(() => {
+    const delta = targetProgressPercent - displayedProgressPercent;
+    if (delta <= 0.3) {
+      displayedProgressPercent = targetProgressPercent;
+    } else {
+      displayedProgressPercent += Math.max(0.4, delta * 0.18);
+    }
+    progressBar.style.width = `${Math.max(0, Math.min(100, displayedProgressPercent))}%`;
+    if (displayedProgressPercent >= 100) stopProgressAnimation();
+  }, 60);
+}
+
+function stopProgressAnimation(): void {
+  if (progressAnimationTimer !== undefined) {
+    window.clearInterval(progressAnimationTimer);
+    progressAnimationTimer = undefined;
   }
 }
 
@@ -1110,6 +1144,7 @@ function renderWarningList(warnings: readonly string[]): string {
 
 function renderResult(report: OptimizationReport, outputPath: string, reportPath?: string): void {
   batchResultPanel.hidden = true;
+  document.body.dataset.result = "visible";
   resultPanel.hidden = false;
   const plan = state.currentPlan;
   const optimizedSize = report.optimizedSize ?? report.originalSize;
@@ -1299,6 +1334,7 @@ function renderModeWarning(): void {
 function setBusy(message: string, options: { cancelable: boolean; kind?: "analysis" | "optimization" }): void {
   setStatus(message);
   document.body.dataset.busy = options.kind ?? (options.cancelable ? "optimization" : "analysis");
+  resetProgressAnimation();
   progressPanel.hidden = false;
   progressPanel.classList.add("is-loading");
   optimizeButton.disabled = true;

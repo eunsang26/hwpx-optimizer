@@ -129,11 +129,14 @@ describe("desktop service", () => {
       "Reading HWPX package",
       "Analyzing document structure",
       "Planning safe changes",
+      "Applying safe document cleanup",
+      "Packing optimized document",
       "Verifying optimized document",
+      "Preparing output file",
       "Writing optimized document",
       "Finalizing optimized document"
     ]);
-    expect(progress.map((item) => item.percent)).toEqual([10, 25, 40, 82, 90, 98]);
+    expect(progress.map((item) => item.percent)).toEqual([10, 25, 40, 52, 72, 82, 88, 95, 99]);
   });
 
   it("redacts persisted settings that would store local paths or unknown keys", () => {

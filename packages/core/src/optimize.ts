@@ -60,8 +60,10 @@ export async function optimizeHwpxBufferSafe(input: Buffer, options: SafeOptimiz
   const graph = analysis.referenceGraph ?? buildReferenceGraph(pkg);
   emitProgress(options, 40, "Planning safe changes");
   const plan = measureSync(timer, "plan", () => createSafeOptimizationPlan({ pkg, analysis, graph }));
+  emitProgress(options, 52, "Applying safe document cleanup");
   const optimized = await timer.measure("apply", () => applySafeOptimizationPlan({ pkg, plan }));
   const opportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied);
+  emitProgress(options, 72, "Packing optimized document");
   const output = await timer.measure("write", () =>
     writeHwpxPackage(optimized.pkg, { compressionLevel: writeCompressionLevel(targetBytes) })
   );
@@ -263,6 +265,7 @@ async function optimizeHwpxBufferWithProfile(
     mode: settings.mode,
     actions: [...actions, { type: "repack-zip" as const, target: "*" as const, risk: "safe" as const }]
   };
+  emitProgress(settings.options, 45, `Applying ${settings.mode} changes`);
   const optimized = await settings.timer.measure("apply", () => applyBalancedOptimizationPlan({
     pkg,
     plan,
@@ -273,6 +276,7 @@ async function optimizeHwpxBufferWithProfile(
     }
   }));
   const exactOpportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied, settings.profile);
+  emitProgress(settings.options, 76, "Packing optimized document");
   const output = await settings.timer.measure("write", () =>
     writeHwpxPackage(optimized.pkg, { compressionLevel: writeCompressionLevel(settings.options.targetBytes) })
   );
