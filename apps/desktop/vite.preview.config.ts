@@ -20,6 +20,7 @@ function desktopPreviewHtml(): Plugin {
         const html = readFileSync(sourceIndex, "utf8")
           .replace(/<meta\s+http-equiv="Content-Security-Policy"[\s\S]*?\/>\n\s*/u, "")
           .replace('href="./styles.css"', 'href="/apps/desktop/src/styles.css"')
+          .replace('src="./app-icon.svg"', 'src="/apps/desktop/src/app-icon.svg"')
           .replace('src="./renderer.js"', 'src="/apps/desktop/src/browserPreview.ts"');
         const transformed = await server.transformIndexHtml(request.url, html);
 

@@ -250,10 +250,19 @@
                   <option value="size">용량 우선</option>
                 </select>
               </label>
-              <label class="toggle-field">
-                <span>작성자·편집 흔적 정리</span>
-                <input id="privacy-toggle" type="checkbox" checked />
-                <strong>켜짐</strong>
+            </div>
+            <div class="cleanup-settings" aria-label="개인정보·숨은 정보 정리">
+              <div>
+                <strong>개인정보·숨은 정보 정리</strong>
+                <span>문서 흔적과 이미지 메타데이터를 별도로 선택합니다.</span>
+              </div>
+              <label>
+                <input id="cleanup-document-toggle" type="checkbox" checked />
+                <span>문서 작성자·편집 흔적 정리</span>
+              </label>
+              <label>
+                <input id="cleanup-image-toggle" type="checkbox" checked />
+                <span>이미지 EXIF/메타데이터 제거</span>
               </label>
             </div>
             <p class="option-hint">

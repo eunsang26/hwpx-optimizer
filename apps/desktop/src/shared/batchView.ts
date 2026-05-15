@@ -34,6 +34,17 @@ export function selectionModeForPaths(paths: readonly string[]): SelectedPathMod
   return paths.length === 1 ? "single" : "batch";
 }
 
+export function appendUniquePaths(existing: readonly string[], incoming: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const path of [...existing, ...incoming]) {
+    if (seen.has(path)) continue;
+    seen.add(path);
+    merged.push(path);
+  }
+  return merged;
+}
+
 export function summarizeBatchItems(items: BatchItemLike[], options: { running: boolean } = { running: false }): BatchSummary {
   if (items.length === 0) {
     return {

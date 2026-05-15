@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendUniquePaths,
   applyOptimizationResultToBatchItem,
   batchItemMetaText,
   selectionModeForPaths,
@@ -38,6 +39,14 @@ describe("batchView helpers", () => {
     expect(selectionModeForPaths([])).toBe("empty");
     expect(selectionModeForPaths(["/x/a.hwpx"])).toBe("single");
     expect(selectionModeForPaths(["/x/a.hwpx", "/x/b.hwpx"])).toBe("batch");
+  });
+
+  it("appends new paths while preserving order and skipping duplicates", () => {
+    expect(appendUniquePaths(["/x/a.hwpx"], ["/x/b.hwpx", "/x/a.hwpx", "/x/c.hwpx"])).toEqual([
+      "/x/a.hwpx",
+      "/x/b.hwpx",
+      "/x/c.hwpx"
+    ]);
   });
 
   it("renders target status in pending row meta", () => {

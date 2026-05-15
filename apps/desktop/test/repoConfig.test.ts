@@ -64,20 +64,23 @@ describe("repository runtime and cleanup configuration", () => {
     expect(styles).toMatch(/body\[data-view="empty"\] \.bottom-row\s*{[^}]*gap:\s*6px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*max-width:\s*1120px/s);
     expect(styles).toMatch(/\.brand-mark img\s*{[^}]*width:\s*30px/s);
-    expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(118px, 1fr\)\)/s);
+    expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(150px, 1fr\)\)/s);
     expect(styles).toMatch(/\.option-grid select,\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
+    expect(styles).toMatch(/\.cleanup-settings\s*{[^}]*grid-template-columns:\s*1fr/s);
   });
 
   it("generates desktop and in-app icons from the same source asset", async () => {
     const html = await readFile("apps/desktop/src/index.html", "utf8");
     const copyAssets = await readFile("apps/desktop/scripts/copy-assets.mjs", "utf8");
     const generateIcons = await readFile("scripts/generate-desktop-icons.mjs", "utf8");
+    const previewConfig = await readFile("apps/desktop/vite.preview.config.ts", "utf8");
     const iconSvg = await readFile("apps/desktop/src/app-icon.svg", "utf8");
 
     expect(html).toContain('<img src="./app-icon.svg" alt="" />');
     expect(copyAssets).toContain('"app-icon.svg"');
     expect(copyAssets).toContain('join(root, "dist", "app-icon.png")');
     expect(generateIcons).toContain('join("apps", "desktop", "src", "app-icon.svg")');
+    expect(previewConfig).toContain('src="/apps/desktop/src/app-icon.svg"');
     expect(iconSvg).toContain('aria-label="HWPX Optimizer"');
     expect(iconSvg).toContain("#16a34a");
   });
@@ -99,6 +102,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("state.analysisRunning && state.filePath");
     expect(renderer).toContain("function setSubmissionInputsDisabled(disabled: boolean)");
     expect(renderer).toContain("if (state.report) refreshSubmissionPlan();");
+    expect(renderer).not.toContain("privacyToggle");
   });
 
   it("keeps desktop workflow controls stable during analysis and result review", async () => {
@@ -118,21 +122,32 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="run-dock"');
     expect(html).toContain('id="settings-close-button"');
     expect(html).toContain('<span aria-hidden="true">×</span>');
+    expect(html).toContain('id="cleanup-document-toggle"');
+    expect(html).toContain('id="cleanup-image-toggle"');
     expect(renderer).not.toContain("chooseManyButton");
     expect(renderer).not.toContain("verificationDetails");
     expect(renderer).not.toContain("verificationSummary");
     expect(renderer).toContain("selectHwpxMany");
+    expect(renderer).toContain("handleAdditionalPaths(selected)");
+    expect(renderer).toContain('document.addEventListener("dragover"');
+    expect(renderer).toContain('document.addEventListener("drop"');
+    expect(renderer).toContain("function clearSelectedFiles");
+    expect(renderer).toContain('isSingle ? "파일 제거" : "목록 비우기"');
     expect(renderer).toContain("verificationBody.textContent");
     expect(renderer).toContain("renderAnalysisVerification(report);");
     expect(renderer).toContain("renderVerificationFailure(error);");
     expect(renderer).toContain("planCountPill.textContent");
     expect(renderer).toContain("optionPlanSummary.textContent");
+    expect(renderer).toContain('const CLEANUP_ACTIONS = ["clean-shape-comment", "strip-metadata"]');
+    expect(renderer).toContain("visiblePlanRows(plan)");
+    expect(renderer).toContain("renderCleanupSettings(plan)");
     expect(renderer).toContain("runDock.hidden");
     expect(renderer).toContain('from "./shared/resultGuidance.js"');
     expect(renderer).toContain("resultGuidanceText(report, plan)");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
     expect(css).toMatch(/\.settings-check\s*{[^}]*display:\s*flex/s);
+    expect(css).toMatch(/body\[data-drag-over="true"\] \.file-panel\s*{[^}]*border-color:\s*var\(--blue\)/s);
     expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
     expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);
     expect(renderer).toContain("plan-priority");

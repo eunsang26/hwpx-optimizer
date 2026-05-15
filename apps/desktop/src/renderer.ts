@@ -1,4 +1,9 @@
-import { applyOptimizationResultToBatchItem, selectionModeForPaths, summarizeBatchItems } from "./shared/batchView.js";
+import {
+  appendUniquePaths,
+  applyOptimizationResultToBatchItem,
+  selectionModeForPaths,
+  summarizeBatchItems
+} from "./shared/batchView.js";
 import { escapeHtml, fileNameFromPath, looksLikeOptimizedFileName } from "./shared/format.js";
 import { actionLabel, errorLabel, groupWarnings, modeLabel, modeWarningMessage, progressLabel } from "./shared/labels.js";
 import {
@@ -104,6 +109,7 @@ let analysisSequence = 0;
 let progressAnimationTimer: number | undefined;
 let displayedProgressPercent = 0;
 let targetProgressPercent = 0;
+const CLEANUP_ACTIONS = ["clean-shape-comment", "strip-metadata"] as const satisfies readonly SubmissionActionId[];
 
 type DesktopSettings = {
   defaultMode: AppState["mode"];
@@ -182,7 +188,8 @@ const submissionLimitSelect = requireSelect("submission-limit-select");
 const customLimitField = requireElement("custom-limit-field");
 const customLimitInput = requireInput("custom-limit-input");
 const preservationSelect = requireSelect("preservation-select");
-const privacyToggle = requireInput("privacy-toggle");
+const cleanupDocumentToggle = requireInput("cleanup-document-toggle");
+const cleanupImageToggle = requireInput("cleanup-image-toggle");
 const planTitle = requireElement("plan-title");
 const planSummary = requireElement("plan-summary");
 const planTotal = requireElement("plan-total");
@@ -227,7 +234,7 @@ async function init(): Promise<void> {
 
   const selectFiles = async () => {
     const selected = await window.hwpxOptimizer.selectHwpxMany();
-    if (selected && selected.length > 0) await handleSelectedPaths(selected);
+    if (selected && selected.length > 0) await handleAdditionalPaths(selected);
   };
 
   chooseButton.addEventListener("click", selectFiles);
@@ -240,7 +247,7 @@ async function init(): Promise<void> {
       setStatus(`${result.directory} 안에 HWPX 파일이 없습니다.`);
       return;
     }
-    await handleSelectedPaths(result.files);
+    await handleAdditionalPaths(result.files);
   };
 
   chooseFolderButton.addEventListener("click", selectFolder);
@@ -248,18 +255,7 @@ async function init(): Promise<void> {
 
   batchClearButton.addEventListener("click", () => {
     if (state.batchRunning || state.batchAnalyzing) return;
-    state.batchItems = [];
-    state.batchReportPath = undefined;
-    state.batchRunCompleted = false;
-    renderBatchList();
-    batchPanel.hidden = true;
-    batchResultPanel.hidden = true;
-    selectedFileCard.hidden = true;
-    dropZone.hidden = false;
-    singleWorkspace.hidden = false;
-    document.body.dataset.view = "empty";
-    renderEmptySummary();
-    setStatus("배치 목록을 비웠습니다.");
+    clearSelectedFiles(document.body.dataset.view === "batch" ? "배치 목록을 비웠습니다." : "선택한 파일을 제거했습니다.");
   });
 
   batchRunButton.addEventListener("click", () => {
@@ -389,8 +385,13 @@ async function init(): Promise<void> {
     void saveSettings({ preservationPreference: state.preservationPreference });
   });
 
-  privacyToggle.addEventListener("change", () => {
-    state.actionSelections.set("clean-shape-comment", privacyToggle.checked);
+  cleanupDocumentToggle.addEventListener("change", () => {
+    state.actionSelections.set("clean-shape-comment", cleanupDocumentToggle.checked);
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+  });
+  cleanupImageToggle.addEventListener("change", () => {
+    state.actionSelections.set("strip-metadata", cleanupImageToggle.checked);
     refreshSubmissionPlan();
     refreshBatchPlans();
   });
@@ -437,14 +438,16 @@ async function init(): Promise<void> {
     setStatus("원본 문서 폴더에 저장하도록 변경했습니다.");
   });
 
-  dropZone.addEventListener("dragover", (event) => {
+  document.addEventListener("dragover", (event) => {
     event.preventDefault();
-    dropZone.classList.add("is-over");
+    setDragOver(true);
   });
-  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("is-over"));
-  dropZone.addEventListener("drop", async (event) => {
+  document.addEventListener("dragleave", (event) => {
+    if (!event.relatedTarget) setDragOver(false);
+  });
+  document.addEventListener("drop", async (event) => {
     event.preventDefault();
-    dropZone.classList.remove("is-over");
+    setDragOver(false);
     const dropped = event.dataTransfer?.files;
     if (!dropped || dropped.length === 0) {
       setStatus("HWPX 파일만 선택할 수 있습니다.");
@@ -471,7 +474,7 @@ async function init(): Promise<void> {
       }
       return;
     }
-    await handleSelectedPaths(paths);
+    await handleAdditionalPaths(paths);
   });
 
   renderModeWarning();
@@ -493,6 +496,24 @@ async function handleSelectedPaths(paths: string[]): Promise<void> {
     return;
   }
   enterBatchMode(paths);
+}
+
+async function handleAdditionalPaths(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  if (state.batchRunning || state.batchAnalyzing || state.analysisRunning) {
+    setStatus("처리 중에는 새 파일을 추가할 수 없습니다. 완료 후 다시 시도하세요.");
+    return;
+  }
+  if (document.body.dataset.view === "single" && state.filePath) {
+    const merged = appendUniquePaths([state.filePath], paths);
+    if (merged.length === 1) {
+      setStatus("이미 선택한 파일입니다.");
+      return;
+    }
+    enterBatchMode(merged);
+    return;
+  }
+  await handleSelectedPaths(paths);
 }
 
 async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
@@ -551,7 +572,7 @@ function renderSubmissionControls(): void {
     ? String(Math.round(state.submissionLimit.customBytes / 1024 / 1024))
     : "";
   preservationSelect.value = state.preservationPreference;
-  privacyToggle.checked = state.actionSelections.get("clean-shape-comment") ?? true;
+  renderCleanupSettings();
 }
 
 function refreshSubmissionPlan(): void {
@@ -580,18 +601,22 @@ function refreshSubmissionPlan(): void {
   state.mode = plan.mode;
   planTitle.textContent = plan.kind === "custom" ? "사용자 지정 계획" : "자동 최적화 계획";
   const reviewNoteCount = plan.planNotes.filter((note) => note.kind === "review").length;
+  const visibleRows = visiblePlanRows(plan);
+  const visibleSelectedCount = visibleRows.filter((row) => row.checked).length;
+  const cleanupSelectedCount = cleanupRows(plan).filter((row) => row.checked).length;
   planCountPill.textContent =
     reviewNoteCount > 0
-      ? `선택 ${plan.selectedActions.length}/${plan.actionRows.length} · 확인 ${reviewNoteCount}`
-      : `선택 ${plan.selectedActions.length}/${plan.actionRows.length}`;
+      ? `용량 ${visibleSelectedCount}/${visibleRows.length} · 정리 ${cleanupSelectedCount}/2 · 확인 ${reviewNoteCount}`
+      : `용량 ${visibleSelectedCount}/${visibleRows.length} · 정리 ${cleanupSelectedCount}/2`;
   planSummary.textContent = "절감량은 중복 제외 기준으로 계산합니다.";
   planTotal.textContent = `선택 예상 ${plan.expectedSavingLabel} · 결과 ${plan.expectedSizeLabel}`;
-  optionPlanSummary.textContent = `${plan.targetStatusLabel} · 선택 ${plan.selectedActions.length}개 · 중복 제외 절감 ${plan.expectedSavingLabel}`;
+  optionPlanSummary.textContent = `${plan.targetStatusLabel} · 용량 작업 ${visibleSelectedCount}개 · 정리 ${cleanupSelectedCount}개`;
   actionPanelHint.textContent =
     plan.mode === "safe"
       ? "외형 보존 우선에서는 안전한 항목만 적용합니다."
       : "옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.";
   renderPlanActions(plan);
+  renderCleanupSettings(plan);
   syncActionCheckboxIndeterminateState();
   optimizeButton.disabled = false;
   renderSingleSummary(plan);
@@ -607,26 +632,27 @@ function renderDefaultPlan(): void {
   optionPlanSummary.textContent = "파일을 분석하면 선택한 작업의 예상 절감량이 표시됩니다.";
   actionPanelHint.textContent = "옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.";
   renderPlanActions();
+  renderCleanupSettings();
 }
 
 function renderPlanActions(plan?: SubmissionPlan): void {
-  const rows = plan?.actionRows ?? [];
   const fallbackRows: DisplayPlanRow[] = [
     { priority: 1, label: "중복 이미지 참조 정리", savingLabel: "분석 후 표시", kind: "image" },
-    { priority: 2, label: "EXIF 제외 이미지 정보 제거", savingLabel: "분석 후 표시", kind: "metadata" },
-    { priority: 3, label: "작성자·편집 흔적 정리", savingLabel: "분석 후 표시", kind: "author" }
+    { priority: 2, label: "이미지 무손실 최적화", savingLabel: "분석 후 표시", kind: "image" },
+    { priority: 3, label: "큰 이미지 변환·리사이즈", savingLabel: "분석 후 표시", kind: "image" }
   ];
+  const visibleRows = plan ? visiblePlanRows(plan) : [];
   const displayRows: DisplayPlanRow[] =
-    rows.length > 0
+    visibleRows.length > 0
       ? [
-          ...rows.map((row) => ({
+          ...visibleRows.map((row, index) => ({
             label: row.label,
             savingLabel: row.savingLabel,
             kind: row.bucket,
             checked: row.checked,
             action: row.action,
             actions: row.actions,
-            priority: row.priority
+            priority: index + 1
           })),
           ...(plan?.planNotes ?? []).map((note) => ({
             label: note.label,
@@ -637,6 +663,30 @@ function renderPlanActions(plan?: SubmissionPlan): void {
         ]
       : fallbackRows;
   renderDisplayPlanRows(displayRows);
+}
+
+function renderCleanupSettings(plan?: SubmissionPlan): void {
+  cleanupDocumentToggle.checked = cleanupActionChecked("clean-shape-comment", plan);
+  cleanupImageToggle.checked = cleanupActionChecked("strip-metadata", plan);
+}
+
+function cleanupActionChecked(action: (typeof CLEANUP_ACTIONS)[number], plan?: SubmissionPlan): boolean {
+  const override = state.actionSelections.get(action);
+  if (override !== undefined) return override;
+  const row = plan?.actionRows.find((item) => item.action === action);
+  return row?.checked ?? true;
+}
+
+function visiblePlanRows(plan: SubmissionPlan): SubmissionPlan["actionRows"] {
+  return plan.actionRows.filter((row) => !isCleanupAction(row.action));
+}
+
+function cleanupRows(plan: SubmissionPlan): SubmissionPlan["actionRows"] {
+  return plan.actionRows.filter((row) => isCleanupAction(row.action));
+}
+
+function isCleanupAction(action: SubmissionActionId): action is (typeof CLEANUP_ACTIONS)[number] {
+  return CLEANUP_ACTIONS.includes(action as (typeof CLEANUP_ACTIONS)[number]);
 }
 
 function renderDisplayPlanRows(displayRows: DisplayPlanRow[]): void {
@@ -678,6 +728,7 @@ function renderBatchPlanSummary(): void {
     optionPlanSummary.textContent = "파일별 분석이 끝나면 선택한 작업의 예상 절감량이 표시됩니다.";
     actionPanelHint.textContent = "일괄 계획은 분석된 파일들의 최적화 후보를 합산해 표시합니다.";
     renderPlanActions();
+    renderCleanupSettings();
     return;
   }
   planTitle.textContent = state.actionSelections.size > 0 ? "사용자 지정 일괄 계획" : "일괄 최적화 계획";
@@ -708,6 +759,7 @@ function planActionDescription(kind: string): string {
 
 function renderEmptySummary(): void {
   document.body.dataset.batchResult = "";
+  document.body.dataset.result = "";
   batchResultPanel.hidden = true;
   selectionPill.textContent = "단일 파일";
   selectedFileCard.hidden = true;
@@ -722,6 +774,7 @@ function renderEmptySummary(): void {
   targetTrackFill.style.width = "0%";
   optimizeButton.textContent = "파일을 선택해 시작하세요";
   optimizeButton.disabled = true;
+  renderSelectionClearButton();
   renderRunDock();
 }
 
@@ -737,6 +790,7 @@ function renderPendingAnalysisSummary(): void {
   targetTrackFill.style.width = "0%";
   optimizeButton.textContent = "분석 중입니다";
   optimizeButton.disabled = true;
+  renderSelectionClearButton();
   renderRunDock();
 }
 
@@ -765,6 +819,7 @@ function renderSingleSummary(plan: SubmissionPlan): void {
   summaryTargetLine.textContent = `제출 기준: ${targetLabelForDisplay()}`;
   targetTrackFill.style.width = `${progressForPlan(plan)}%`;
   optimizeButton.textContent = "제출 기준에 맞게 줄이기";
+  renderSelectionClearButton();
   renderRunDock(plan);
 }
 
@@ -826,7 +881,7 @@ function createBatchPlanSummary(): BatchPlanSummary | undefined {
       metCount += 1;
     }
     reviewCount += plan.planNotes.filter((note) => note.kind === "review").reduce((sum, note) => sum + note.count, 0);
-    for (const row of plan.actionRows) {
+    for (const row of visiblePlanRows(plan)) {
       const existing = rowMap.get(row.action);
       if (existing) {
         existing.savingBytes += row.savingBytes;
@@ -1338,6 +1393,7 @@ function setBusy(message: string, options: { cancelable: boolean; kind?: "analys
   progressPanel.hidden = false;
   progressPanel.classList.add("is-loading");
   optimizeButton.disabled = true;
+  renderSelectionClearButton();
   setSubmissionInputsDisabled(true);
   renderRunDock(state.currentPlan);
   cancelButton.disabled = !options.cancelable;
@@ -1346,6 +1402,7 @@ function setBusy(message: string, options: { cancelable: boolean; kind?: "analys
 function setIdle(): void {
   optimizeButton.disabled = !state.currentPlan;
   setSubmissionInputsDisabled(false);
+  renderSelectionClearButton();
   renderRunDock(state.currentPlan);
   cancelButton.disabled = true;
 }
@@ -1354,7 +1411,8 @@ function setSubmissionInputsDisabled(disabled: boolean): void {
   submissionLimitSelect.disabled = disabled;
   customLimitInput.disabled = disabled;
   preservationSelect.disabled = disabled;
-  privacyToggle.disabled = disabled;
+  cleanupDocumentToggle.disabled = disabled;
+  cleanupImageToggle.disabled = disabled;
   actionCheckboxes.querySelectorAll<HTMLInputElement>("input[type='checkbox']").forEach((input) => {
     input.disabled = disabled;
   });
@@ -1379,7 +1437,7 @@ function currentPlanActions(): SubmissionActionId[] {
   if (document.body.dataset.view === "batch") {
     return createBatchPlanSummary()?.rows.flatMap((row) => row.actions ?? []) ?? [];
   }
-  return state.currentPlan?.actionRows.flatMap((row) => row.actions) ?? [];
+  return state.currentPlan ? visiblePlanRows(state.currentPlan).flatMap((row) => row.actions) : [];
 }
 
 function selectedActionsForOptimize(): string[] | undefined {
@@ -1453,9 +1511,54 @@ function renderBatchList(): void {
     .join("");
   batchRunButton.disabled =
     state.batchAnalyzing || state.batchRunning || !state.batchItems.some((item) => item.status === "pending");
-  batchClearButton.disabled = state.batchAnalyzing || state.batchRunning;
+  renderSelectionClearButton();
   batchRunButton.textContent = state.batchAnalyzing ? "분석 중..." : state.batchRunning ? "처리 중..." : "일괄 최적화";
   renderBatchSummary();
+}
+
+function renderSelectionClearButton(): void {
+  const busy = state.batchAnalyzing || state.batchRunning || state.analysisRunning;
+  const isBatch = document.body.dataset.view === "batch" && state.batchItems.length > 0;
+  const isSingle = document.body.dataset.view === "single" && Boolean(state.filePath);
+  batchClearButton.disabled = busy || (!isBatch && !isSingle);
+  batchClearButton.innerHTML = `<span class="trash-icon" aria-hidden="true"></span>${isSingle ? "파일 제거" : "목록 비우기"}`;
+}
+
+function clearSelectedFiles(message: string): void {
+  analysisSequence += 1;
+  document.body.dataset.view = "empty";
+  document.body.dataset.result = "";
+  document.body.dataset.batchResult = "";
+  state.filePath = undefined;
+  state.report = undefined;
+  state.result = undefined;
+  state.currentPlan = undefined;
+  state.batchItems = [];
+  state.batchReportPath = undefined;
+  state.batchRunCompleted = false;
+  state.actionSelections.clear();
+  batchList.innerHTML = "";
+  batchPanel.hidden = true;
+  batchResultPanel.hidden = true;
+  selectedFileCard.hidden = true;
+  dropZone.hidden = false;
+  singleWorkspace.hidden = false;
+  actionPanel.hidden = true;
+  actionCheckboxes.innerHTML = "";
+  resultPanel.hidden = true;
+  resultGuidance.textContent = "";
+  fileName.textContent = "HWPX 파일 가져오기";
+  fileMeta.innerHTML = "<strong>창 어디에든</strong> 끌어다 놓거나, 아래 버튼으로 선택하세요.";
+  resetVerificationPanel();
+  renderSubmissionControls();
+  renderDefaultPlan();
+  renderEmptySummary();
+  setStatus(message);
+}
+
+function setDragOver(active: boolean): void {
+  document.body.dataset.dragOver = active ? "true" : "";
+  dropZone.classList.toggle("is-over", active && !dropZone.hidden);
 }
 
 async function analyzeBatchItems(): Promise<void> {
@@ -1519,6 +1622,7 @@ async function analyzeBatchItems(): Promise<void> {
 }
 
 function refreshBatchPlans(): void {
+  if (state.batchItems.length === 0) return;
   for (const item of state.batchItems) {
     if (!item.report) continue;
     const plan = createSubmissionPlan(item.report, {
