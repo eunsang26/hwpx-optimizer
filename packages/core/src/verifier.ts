@@ -13,7 +13,6 @@ export type VerifyHwpxOutputOptions = {
   original?: Buffer;
   mode?: VerifyMode;
   originalPackage?: HwpxPackage;
-  outputPackage?: HwpxPackage;
   originalAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
   outputAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
 };
@@ -35,7 +34,7 @@ export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutput
       "verifyHwpxOutput requires both `original` and `mode` for cross-package verification, or neither."
     );
   }
-  const pkg = options.outputPackage ?? await readHwpxPackage(output);
+  const pkg = await readHwpxPackage(output);
   verifyParsedXml(pkg);
   const graph = buildReferenceGraph(pkg);
   if (graph.missingReferences.length > 0) {

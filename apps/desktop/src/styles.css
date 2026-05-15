@@ -1041,6 +1041,61 @@ body[data-view="empty"] .output-directory-line {
   height: 36px;
   min-height: 36px;
 }
+body[data-view="batch"][data-batch-result="visible"] .primary-run-panel {
+  display: none;
+}
+
+.batch-result {
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, #f8fef9 0%, #f0fbf4 100%);
+}
+.batch-result-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.batch-result-head .success-dot {
+  margin-top: 5px;
+  flex: 0 0 auto;
+}
+.batch-result h2 {
+  margin: 0;
+  color: var(--green-2);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+.batch-result p {
+  margin: 2px 0 0;
+  color: #2f5d3f;
+  font-size: 12.5px;
+}
+.batch-result-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.batch-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.batch-result-actions button {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.batch-result-actions button:first-child {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
 
 /* ---------------- Batch table ---------------- */
 .batch-table-panel {
@@ -1704,6 +1759,13 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
 }
 
 /* ---------------- Settings panel ---------------- */
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.34);
+  backdrop-filter: blur(1px);
+}
 .settings {
   position: fixed;
   top: 0; right: 0; bottom: 0;
@@ -1720,15 +1782,51 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
   align-content: start;
 }
 .settings.is-open { transform: translateX(0); }
-.settings h2 { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
-.settings label {
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+.settings h2 { font-size: 16px; font-weight: 800; margin: 0; }
+.settings-close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  position: relative;
+}
+.settings-close::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background-color: currentColor;
+  transform: rotate(45deg);
+}
+.settings-close::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background-color: currentColor;
+  transform: rotate(-45deg);
+}
+.settings-field {
   display: grid;
   gap: 6px;
   font-size: 13px;
   color: var(--text-2);
   font-weight: 600;
 }
-.settings label select {
+.settings-field select {
   height: 38px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1737,9 +1835,29 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
   font: inherit;
   font-weight: 600;
 }
-.settings label input[type="checkbox"] {
-  margin-right: 6px;
-  vertical-align: middle;
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  background: var(--surface-2);
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 700;
+}
+.settings-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--blue);
+  flex: 0 0 auto;
+}
+.settings-check span {
+  min-width: 0;
+  line-height: 1.35;
 }
 .settings-actions { display: flex; gap: 6px; }
 .settings-actions button { min-height: 34px; font-size: 12.5px; padding: 0 12px; }

@@ -15,7 +15,7 @@
     "packages/cli"
   ],
   "scripts": {
-    "build": "tsc -b packages/core packages/cli apps/desktop && npm run desktop:assets",
+    "build": "npm run clean:build && tsc -b packages/core packages/cli apps/desktop && npm run desktop:assets",
     "desktop:assets": "node apps/desktop/scripts/copy-assets.mjs",
     "desktop:icons": "node scripts/generate-desktop-icons.mjs",
     "desktop:dev": "node scripts/run-electron-dev.mjs",
@@ -32,6 +32,7 @@
     "test": "vitest run",
     "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
     "release:clean": "node scripts/clean-release-artifacts.mjs",
+    "clean:build": "node scripts/clean-build-artifacts.mjs",
     "clean:local-artifacts": "node scripts/clean-local-artifacts.mjs",
     "release:hygiene": "node scripts/check-release-hygiene.mjs",
     "release:verify-artifacts": "node scripts/check-release-artifacts.mjs",

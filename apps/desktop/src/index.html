@@ -180,6 +180,22 @@
             <p id="output-directory-line" class="output-directory-line">저장 폴더: 원본 문서 폴더</p>
           </section>
 
+          <section id="batch-result-panel" class="batch-result" hidden>
+            <div class="batch-result-head">
+              <span class="success-dot" aria-hidden="true"></span>
+              <div>
+                <h2 id="batch-result-title">일괄 최적화 완료</h2>
+                <p id="batch-result-line">완료된 파일과 절감량을 확인하세요.</p>
+              </div>
+            </div>
+            <div id="batch-result-stats" class="batch-result-stats"></div>
+            <div class="batch-result-actions">
+              <button id="batch-open-folder-button" type="button">폴더 보기</button>
+              <button id="batch-open-report-button" type="button" class="ghost" disabled>결과 리포트 (JSON)</button>
+              <button id="batch-retry-button" type="button" class="ghost">다시 최적화</button>
+            </div>
+          </section>
+
           <section id="result-panel" class="result" hidden>
             <div class="panel-header">
               <div>
@@ -329,9 +345,13 @@
         </div>
       </div>
 
-      <aside id="settings-panel" class="settings">
-        <h2>설정</h2>
-        <label>
+      <div id="settings-backdrop" class="settings-backdrop" hidden></div>
+      <aside id="settings-panel" class="settings" aria-hidden="true" aria-labelledby="settings-title">
+        <div class="settings-header">
+          <h2 id="settings-title">설정</h2>
+          <button id="settings-close-button" class="ghost settings-close" type="button" aria-label="설정 닫기"></button>
+        </div>
+        <label class="settings-field">
           기본 모드
           <select id="setting-default-mode">
             <option value="safe">안전</option>
@@ -339,10 +359,10 @@
             <option value="aggressive">최대 압축</option>
           </select>
         </label>
-        <label><input id="setting-save-next" type="checkbox" /> 원본 파일 옆에 저장</label>
-        <label><input id="setting-save-report" type="checkbox" /> JSON 리포트 저장(선택)</label>
-        <label><input id="setting-prevent-overwrite" type="checkbox" /> 같은 이름 덮어쓰기 방지</label>
-        <label><input id="setting-aggressive-warning" type="checkbox" /> 최대 압축 경고 표시</label>
+        <label class="settings-check"><input id="setting-save-next" type="checkbox" /><span>원본 파일 옆에 저장</span></label>
+        <label class="settings-check"><input id="setting-save-report" type="checkbox" /><span>JSON 리포트 저장(선택)</span></label>
+        <label class="settings-check"><input id="setting-prevent-overwrite" type="checkbox" /><span>같은 이름 덮어쓰기 방지</span></label>
+        <label class="settings-check"><input id="setting-aggressive-warning" type="checkbox" /><span>최대 압축 경고 표시</span></label>
         <p id="setting-output-directory">저장 위치: 원본 문서 폴더</p>
         <div class="settings-actions">
           <button id="setting-output-button" class="ghost">폴더 선택</button>

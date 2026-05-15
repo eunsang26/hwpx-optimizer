@@ -1,6 +1,8 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
+import { analyzeHwpxPackage } from "../src/analyzer.js";
 import { computeSsim } from "../src/imagePreview.js";
+import { readHwpxPackage } from "../src/reader.js";
 import { verifyHwpxOutput } from "../src/verifier.js";
 import { createHwpxFixture } from "./fixtures.js";
 
@@ -20,6 +22,25 @@ describe("verifyHwpxOutput", () => {
     });
 
     await expect(verifyHwpxOutput(output)).rejects.toThrow(/missing required files/i);
+  });
+
+  it("parses the serialized output even when original analysis is supplied", async () => {
+    const original = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": "<root />"
+      }
+    });
+    const originalPackage = await readHwpxPackage(original);
+    const originalAnalysis = await analyzeHwpxPackage(originalPackage);
+
+    await expect(
+      verifyHwpxOutput(Buffer.from("not a zip"), {
+        original,
+        mode: "safe",
+        originalPackage,
+        originalAnalysis
+      })
+    ).rejects.toThrow(/not a readable ZIP archive/);
   });
 
   it("rejects safe-mode outputs that change image dimensions", async () => {

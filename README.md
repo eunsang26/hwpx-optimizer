@@ -186,10 +186,10 @@ npm run cli -- verify output.hwpx
 폴더 안의 `.hwpx` 파일 일괄 최적화:
 
 ```bash
-npm run cli -- batch ./docs --mode safe --out ./optimized
+npm run cli -- batch ./docs --mode safe --out ./optimized --jobs 2
 ```
 
-batch 모드는 파일 하나가 실패해도 전체 처리를 중단하지 않고, 출력 폴더에 `batch-report.json`을 저장합니다.
+batch 모드는 파일 하나가 실패해도 전체 처리를 중단하지 않고, 출력 폴더에 `batch-report.json`을 저장합니다. `--jobs`는 동시에 처리할 파일 수이며 최대 4개까지 사용합니다.
 
 ## 개발
 

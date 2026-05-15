@@ -17,8 +17,13 @@ function post(message: WorkerResponse): void {
   parentPort?.postMessage(message);
 }
 
+let requestQueue: Promise<void> = Promise.resolve();
+
 parentPort?.on("message", (message: WorkerRequest) => {
-  void handleRequest(message);
+  requestQueue = requestQueue.then(
+    () => handleRequest(message),
+    () => handleRequest(message)
+  );
 });
 
 async function handleRequest(message: WorkerRequest): Promise<void> {

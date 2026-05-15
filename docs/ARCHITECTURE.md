@@ -175,7 +175,7 @@ The desktop file service is the testable boundary for:
 
 The runtime preload script is copied from `apps/desktop/src/preload.cjs` so Electron loads a CommonJS preload file reliably under the app's ESM package settings. `apps/desktop/src/preload.ts` remains the TypeScript API shape used by renderer code.
 
-Optimization runs through `apps/desktop/src/main/optimizeWorker.ts`, which uses Node worker threads so large HWPX optimization work does not block the Electron main process. The main process relays coarse progress messages to the renderer and can terminate the active worker when the user cancels.
+Analysis and optimization run through `apps/desktop/src/main/documentWorker.ts`, a persistent Node worker thread that keeps large HWPX processing off the Electron main process. The main process relays coarse progress messages to the renderer and can terminate the active document operation when the user cancels.
 
 ## Safety Rules
 

@@ -25,6 +25,7 @@ let mainWindow: BrowserWindow | null = null;
 let documentWorker: Worker | null = null;
 let activeAnalyzeWorker: Worker | null = null;
 let activeOptimizeWorker: Worker | null = null;
+let pendingDocumentOperation: "analyze" | "optimize" | null = null;
 let nextWorkerRequestId = 1;
 const pendingWorkerRequests = new Map<
   number,
@@ -176,11 +177,16 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("hwpx:analyze", async (_event, filePath: string) => {
-    if (activeAnalyzeWorker || activeOptimizeWorker) {
+    if (pendingDocumentOperation || activeAnalyzeWorker || activeOptimizeWorker) {
       throw new Error("Another analysis is already running.");
     }
-    const allowedPath = await requireAllowedInputPath(filePath);
-    return runAnalyzeWorker(allowedPath);
+    pendingDocumentOperation = "analyze";
+    try {
+      const allowedPath = await requireAllowedInputPath(filePath);
+      return await runAnalyzeWorker(allowedPath);
+    } finally {
+      if (pendingDocumentOperation === "analyze") pendingDocumentOperation = null;
+    }
   });
 
   ipcMain.handle(
@@ -195,21 +201,26 @@ function registerIpc(): void {
         actions?: string[];
       }
     ) => {
-      if (activeAnalyzeWorker || activeOptimizeWorker) {
+      if (pendingDocumentOperation || activeAnalyzeWorker || activeOptimizeWorker) {
         throw new Error("Another optimization is already running.");
       }
-      const filePath = await requireAllowedInputPath(input.filePath);
-      const outputDirectory = input.outputDirectory
-        ? await requireAllowedOutputDirectory(input.outputDirectory)
-        : undefined;
-      const settings = await loadSettings();
-      const effectiveSettings = outputDirectory ? { ...settings, saveNextToOriginal: false } : settings;
-      const result = await runOptimizeWorker({ ...input, filePath, outputDirectory, settings: effectiveSettings }, (progress) => {
-        mainWindow?.webContents.send("hwpx:optimize-progress", progress);
-      });
-      await registerGeneratedPath(result.outputPath);
-      if (result.reportPath) await registerGeneratedPath(result.reportPath);
-      return result;
+      pendingDocumentOperation = "optimize";
+      try {
+        const filePath = await requireAllowedInputPath(input.filePath);
+        const outputDirectory = input.outputDirectory
+          ? await requireAllowedOutputDirectory(input.outputDirectory)
+          : undefined;
+        const settings = await loadSettings();
+        const effectiveSettings = outputDirectory ? { ...settings, saveNextToOriginal: false } : settings;
+        const result = await runOptimizeWorker({ ...input, filePath, outputDirectory, settings: effectiveSettings }, (progress) => {
+          mainWindow?.webContents.send("hwpx:optimize-progress", progress);
+        });
+        await registerGeneratedPath(result.outputPath);
+        if (result.reportPath) await registerGeneratedPath(result.reportPath);
+        return result;
+      } finally {
+        if (pendingDocumentOperation === "optimize") pendingDocumentOperation = null;
+      }
     }
   );
 
@@ -624,6 +635,7 @@ function rejectPendingWorkerRequests(error: Error): void {
     pending.reject(error);
   }
   pendingWorkerRequests.clear();
+  pendingDocumentOperation = null;
   activeAnalyzeWorker = null;
   activeOptimizeWorker = null;
 }

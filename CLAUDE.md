@@ -58,7 +58,7 @@ Reader ([reader.ts](packages/core/src/reader.ts)) hardens against zip-slip: reje
 - [packages/cli/src/index.ts](packages/cli/src/index.ts) is a thin filesystem + stdout wrapper.
 - [apps/desktop/src/main/desktopService.ts](apps/desktop/src/main/desktopService.ts) is the testable boundary for desktop file operations (analysis call, output path selection, no-overwrite naming, report saving).
 - [apps/desktop/src/main.ts](apps/desktop/src/main.ts) owns Electron main + IPC. [apps/desktop/src/preload.cjs](apps/desktop/src/preload.cjs) is the runtime preload (ESM package, so a CJS preload is required); [apps/desktop/src/preload.ts](apps/desktop/src/preload.ts) defines the API shape.
-- Optimization runs in a Node worker thread via [apps/desktop/src/main/optimizeWorker.ts](apps/desktop/src/main/optimizeWorker.ts) so the Electron main process stays responsive; main relays progress and can terminate the worker on cancel.
+- Analysis and optimization run in a persistent Node worker thread via [apps/desktop/src/main/documentWorker.ts](apps/desktop/src/main/documentWorker.ts) so the Electron main process stays responsive; main relays progress and can terminate the active document operation on cancel.
 
 ## Safety rules (do not violate)
 

@@ -71,7 +71,6 @@ export async function optimizeHwpxBufferSafe(input: Buffer, options: SafeOptimiz
       original: input,
       mode: "safe",
       originalPackage: pkg,
-      outputPackage: optimized.pkg,
       originalAnalysis: analysis
     })
   );
@@ -283,7 +282,6 @@ async function optimizeHwpxBufferWithProfile(
       original: input,
       mode: settings.mode,
       originalPackage: pkg,
-      outputPackage: optimized.pkg,
       originalAnalysis: analysis
     })
   );

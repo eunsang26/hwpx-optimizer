@@ -49,10 +49,10 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop analysis screen | `apps/desktop/src/shared/viewModel.ts`, renderer | Implemented |
 | Korean desktop UX | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts`; `npm run desktop:smoke` | Implemented and verified with Korean title/start/settings smoke assertions |
 | Desktop mode selection | renderer radio controls | Implemented |
-| Desktop progress and cancel | `optimizeWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with analysis/planning/verification stages plus per-image transform progress |
+| Desktop progress and cancel | `documentWorker.ts`, `desktopService.ts`, `main.ts`, `renderer.ts`, `apps/desktop/test/desktopService.test.ts` | Implemented with analysis/planning/verification stages plus per-image transform progress |
 | Desktop result details | `apps/desktop/src/index.html`, `apps/desktop/src/renderer.ts` | Implemented with output file, output folder, and JSON report open actions |
 | Desktop settings | `apps/desktop/src/index.html`, `renderer.ts`, `styles.css`, `main.ts` local settings | Implemented with default mode, session-only output folder controls, opt-in report saving, overwrite prevention, and aggressive warning preferences |
-| Worker/process separation | `apps/desktop/src/main/optimizeWorker.ts` with Node worker thread | Implemented |
+| Worker/process separation | `apps/desktop/src/main/documentWorker.ts` with persistent Node worker thread | Implemented |
 | Local-only operation | no network/server code in app path; filesystem-only APIs | Implemented |
 | Zero-history Desktop policy | `apps/desktop/src/main.ts`, `desktopService.ts`, `renderer.ts`, `index.html`, `apps/desktop/test/desktopService.test.ts` | Implemented: no recent files, processing history, persisted output folder, result path, report path, or internal log records are stored by the app |
 | Protected document policy | `packages/core/src/reader.ts`, `packages/core/test/reader.test.ts`, `packages/cli/test/cli.test.ts`, `apps/desktop/src/index.html`, `apps/desktop/src/main.ts` | Implemented: encrypted ZIP flags, signature/security paths, and protection metadata are rejected with a no-bypass message |
@@ -279,7 +279,7 @@ Latest runtime performance update after worker and duplicate-transform cleanup:
 - `node packages/cli/dist/index.js analyze sample2.hwpx --report .tmp/perf-sample2-analysis-speed2.json --overwrite`: passed in `elapsed=0:01.65`, `maxrss=401808KB`.
 - `node packages/cli/dist/index.js optimize sample2.hwpx --mode balanced --out .tmp/perf-sample2-balanced-speed2.hwpx --report .tmp/perf-sample2-balanced-speed2.json --overwrite`: passed in `elapsed=0:08.42`, down from the previous measured `elapsed=0:12.85`, with the same `79.63 MiB` saved.
 - `node packages/cli/dist/index.js optimize sample2.hwpx --mode aggressive --out .tmp/perf-sample2-aggressive-speed2.hwpx --report .tmp/perf-sample2-aggressive-speed2.json --overwrite`: passed in `elapsed=0:10.70`, down from the previous measured `elapsed=0:18.01`, with the same `86.43 MiB` saved.
-- `npm run desktop:smoke`: passed with analysis worker path.
+- `npm run desktop:smoke`: passed with document worker path.
 - `npm run release:check:win-portable`: passed.
 - Latest portable artifact: `release/HWPX Optimizer-0.1.0-x64.exe`.
 - Latest portable artifact SHA256: `01552fbdceed089731997e7b48511abf23c0292ee0e07881b74725e7a0306a17`.
