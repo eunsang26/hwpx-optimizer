@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
-import { findImageConsolidationGroups } from "./imageDuplicates.js";
+import { findByteIdenticalImageGroups, findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { stripJpegMetadataSegments } from "./optimizer.js";
 import type { HwpxPackage, OptimizationOpportunity } from "./types.js";
@@ -57,26 +57,29 @@ export type TransformImageAction =
 
 export async function detectOptimizationOpportunities(
   pkg: HwpxPackage,
-  profile: ImageOptimizationProfile = balancedImageProfile
+  profile: ImageOptimizationProfile = balancedImageProfile,
+  options: { duplicateMode?: "byte" | "visual" } = {}
 ): Promise<OptimizationOpportunity[]> {
-  return collectOpportunities(pkg, profile, "exact");
+  return collectOpportunities(pkg, profile, "exact", options);
 }
 
 export async function detectEstimatedOptimizationOpportunities(
   pkg: HwpxPackage,
-  profile: ImageOptimizationProfile = balancedImageProfile
+  profile: ImageOptimizationProfile = balancedImageProfile,
+  options: { duplicateMode?: "byte" | "visual" } = {}
 ): Promise<OptimizationOpportunity[]> {
-  return collectOpportunities(pkg, profile, "estimated");
+  return collectOpportunities(pkg, profile, "estimated", options);
 }
 
 async function collectOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile,
-  confidence: OpportunityConfidence
+  confidence: OpportunityConfidence,
+  options: { duplicateMode?: "byte" | "visual" }
 ): Promise<OptimizationOpportunity[]> {
   const opportunities: OptimizationOpportunity[] = [];
   const resizeBudgets = getRecommendedImagePixelBudgets(pkg, profile.displayScale);
-  await addDuplicateImageOpportunities(pkg, opportunities);
+  await addDuplicateImageOpportunities(pkg, opportunities, options.duplicateMode ?? "visual");
 
   for (const entry of pkg.entries) {
     if (entry.kind !== "image") continue;
@@ -231,10 +234,16 @@ async function measureOrEstimateImageSize(input: {
   return candidate ? candidate.byteLength : null;
 }
 
-async function addDuplicateImageOpportunities(pkg: HwpxPackage, opportunities: OptimizationOpportunity[]): Promise<void> {
+async function addDuplicateImageOpportunities(
+  pkg: HwpxPackage,
+  opportunities: OptimizationOpportunity[],
+  duplicateMode: "byte" | "visual"
+): Promise<void> {
   const seenTargets = new Set<string>();
   const sizesByPath = new Map(pkg.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry.size]));
-  for (const group of await findImageConsolidationGroups(pkg)) {
+  const groups =
+    duplicateMode === "byte" ? findByteIdenticalImageGroups(pkg) : await findImageConsolidationGroups(pkg);
+  for (const group of groups) {
     for (const duplicatePath of group.paths) {
       if (duplicatePath === group.canonicalPath || seenTargets.has(duplicatePath)) continue;
       const size = sizesByPath.get(duplicatePath);

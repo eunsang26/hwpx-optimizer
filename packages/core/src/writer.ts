@@ -1,7 +1,12 @@
 import JSZip from "jszip";
 import type { HwpxPackage } from "./types.js";
 
-export async function writeHwpxPackage(pkg: HwpxPackage): Promise<Buffer> {
+export type WriteHwpxPackageOptions = {
+  compressionLevel?: number;
+};
+
+export async function writeHwpxPackage(pkg: HwpxPackage, options: WriteHwpxPackageOptions = {}): Promise<Buffer> {
+  const compressionLevel = normalizeCompressionLevel(options.compressionLevel);
   const zip = new JSZip();
   for (const entry of pkg.entries) {
     zip.file(entry.path, entry.data);
@@ -10,7 +15,13 @@ export async function writeHwpxPackage(pkg: HwpxPackage): Promise<Buffer> {
     await zip.generateAsync({
       type: "nodebuffer",
       compression: "DEFLATE",
-      compressionOptions: { level: 9 }
+      compressionOptions: { level: compressionLevel }
     })
   );
+}
+
+function normalizeCompressionLevel(value: number | undefined): number {
+  if (value === undefined) return 9;
+  if (!Number.isFinite(value)) return 9;
+  return Math.max(1, Math.min(9, Math.floor(value)));
 }

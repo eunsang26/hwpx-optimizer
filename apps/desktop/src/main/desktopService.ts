@@ -34,6 +34,8 @@ export const defaultDesktopSettings: DesktopSettings = {
 const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
 const DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES = 200 * 1024 * 1024;
 const MAX_BATCH_REPORT_ITEMS = 10_000;
+const MAX_CACHED_INPUTS = 16;
+const MAX_CACHED_INPUT_BYTES = 256 * 1024 * 1024;
 
 export type DesktopAnalysisResult = {
   filePath: string;
@@ -81,8 +83,15 @@ export type DesktopProgress = {
 };
 
 type CoreModule = typeof import("@hwpx-optimizer/core");
+type CachedInput = {
+  filePath: string;
+  size: number;
+  mtimeMs: number;
+  data: Buffer;
+};
 
 let coreModulePromise: Promise<CoreModule> | undefined;
+const cachedInputs = new Map<string, CachedInput>();
 
 async function loadCoreModule(): Promise<CoreModule> {
   coreModulePromise ??= import("@hwpx-optimizer/core").catch((error: unknown) => {
@@ -92,13 +101,18 @@ async function loadCoreModule(): Promise<CoreModule> {
   return coreModulePromise;
 }
 
+export async function warmDesktopCore(): Promise<{ ok: true }> {
+  await loadCoreModule();
+  return { ok: true };
+}
+
 export async function analyzeDesktopFile(
   filePath: string,
-  options: { maxInputBytes?: number } = {}
+  options: { maxInputBytes?: number; analysisMode?: "quick" | "deep" } = {}
 ): Promise<DesktopAnalysisResult> {
-  await assertSupportedLocalInput(filePath, options);
+  const input = await readSupportedInput(filePath, options);
   const { analyzeHwpxBuffer } = await loadCoreModule();
-  const report = await analyzeHwpxBuffer(await readFile(filePath));
+  const report = await analyzeHwpxBuffer(input.data, { analysisMode: options.analysisMode ?? "quick" });
   return { filePath, report };
 }
 
@@ -107,8 +121,7 @@ export async function optimizeDesktopFile(
   onProgress?: (progress: DesktopProgress) => void
 ): Promise<DesktopOptimizeResult> {
   onProgress?.({ percent: 10, item: "Reading HWPX package" });
-  await assertSupportedLocalInput(input.filePath, { maxInputBytes: input.maxInputBytes });
-  let source: Buffer | undefined = await readFile(input.filePath);
+  let source: Buffer | undefined = (await readSupportedInput(input.filePath, { maxInputBytes: input.maxInputBytes })).data;
 
   const result = await optimizeByMode(
     source,
@@ -278,13 +291,47 @@ export async function assertSupportedLocalInput(
   filePath: string,
   options: { maxInputBytes?: number } = {}
 ): Promise<void> {
+  await statSupportedLocalInput(filePath, options);
+}
+
+async function readSupportedInput(filePath: string, options: { maxInputBytes?: number } = {}): Promise<CachedInput> {
+  const snapshot = await statSupportedLocalInput(filePath, options);
+  const cached = cachedInputs.get(filePath);
+  if (cached && cached.size === snapshot.size && cached.mtimeMs === snapshot.mtimeMs) {
+    cachedInputs.delete(filePath);
+    cachedInputs.set(filePath, cached);
+    return cached;
+  }
+  const data = await readFile(filePath);
+  const input = { filePath, size: snapshot.size, mtimeMs: snapshot.mtimeMs, data };
+  cachedInputs.set(filePath, input);
+  pruneCachedInputs();
+  return input;
+}
+
+function pruneCachedInputs(): void {
+  let totalBytes = [...cachedInputs.values()].reduce((sum, input) => sum + input.size, 0);
+  while (cachedInputs.size > MAX_CACHED_INPUTS || totalBytes > MAX_CACHED_INPUT_BYTES) {
+    const oldestKey = cachedInputs.keys().next().value;
+    if (!oldestKey) return;
+    const oldest = cachedInputs.get(oldestKey);
+    cachedInputs.delete(oldestKey);
+    totalBytes -= oldest?.size ?? 0;
+  }
+}
+
+async function statSupportedLocalInput(
+  filePath: string,
+  options: { maxInputBytes?: number } = {}
+): Promise<{ size: number; mtimeMs: number }> {
   const maxInputBytes = options.maxInputBytes ?? DEFAULT_MAX_HWPX_INPUT_BYTES;
-  const { size } = await stat(filePath);
+  const { size, mtimeMs } = await stat(filePath);
   if (size > maxInputBytes) {
     throw new Error(
       `${filePath} exceeds the supported local processing limit (${size} bytes; limit ${maxInputBytes} bytes).`
     );
   }
+  return { size, mtimeMs };
 }
 
 async function writeOptimizationArtifacts(

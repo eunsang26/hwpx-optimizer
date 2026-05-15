@@ -4,7 +4,8 @@ import type {
   OptimizationOpportunity,
   OptimizationOpportunityGroup,
   OptimizationReport,
-  PackageAnalysis
+  PackageAnalysis,
+  PerformanceSummary
 } from "./types.js";
 import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
 
@@ -12,7 +13,7 @@ export function createAnalysisReport(
   analysis: PackageAnalysis,
   originalSize = analysis.totalSize,
   opportunities: OptimizationOpportunity[] = [],
-  options: { targetBytes?: number } = {}
+  options: { targetBytes?: number; performance?: PerformanceSummary } = {}
 ): OptimizationReport {
   const projectedOptimizedSize = Math.max(0, originalSize - estimateNonOverlappingSavingBytes(groupOpportunities(opportunities)));
   return {
@@ -34,7 +35,8 @@ export function createAnalysisReport(
     actions: { planned: [], applied: [], skipped: [] },
     opportunities,
     opportunityGroups: groupOpportunities(opportunities),
-    warnings: createWarnings(analysis)
+    warnings: createWarnings(analysis),
+    ...(options.performance ? { performance: options.performance } : {})
   };
 }
 
@@ -49,6 +51,7 @@ export function createOptimizationReport(input: {
   warnings?: string[];
   targetBytes?: number;
   targetMissReason?: string;
+  performance?: PerformanceSummary;
 }): OptimizationReport {
   const savedBytes = input.originalSize - input.optimizedSize;
   return {
@@ -77,7 +80,8 @@ export function createOptimizationReport(input: {
     },
     opportunities: input.opportunities ?? [],
     opportunityGroups: groupOpportunities(input.opportunities ?? []),
-    warnings: [...createWarnings(input.analysis), ...(input.warnings ?? [])]
+    warnings: [...createWarnings(input.analysis), ...(input.warnings ?? [])],
+    ...(input.performance ? { performance: input.performance } : {})
   };
 }
 

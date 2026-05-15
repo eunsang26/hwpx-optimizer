@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { createHash } from "node:crypto";
 import { decodeBmp } from "./bmp.js";
-import { mapLimit } from "./concurrency.js";
+import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
 import { findByteIdenticalImageGroups, findNearDuplicateImageGroups, findSameVisualImageGroups } from "./imageDuplicates.js";
 import { extractImageDisplayReferences } from "./imageDisplay.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
@@ -23,7 +23,11 @@ const OLE_SIZE_SHARE = 0.2;
 
 export async function analyzeHwpxPackage(
   pkg: HwpxPackage,
-  options: { graph?: ReferenceGraph; includeNearDuplicateImages?: boolean } = {}
+  options: {
+    graph?: ReferenceGraph;
+    includeSameVisualDuplicateImages?: boolean;
+    includeNearDuplicateImages?: boolean;
+  } = {}
 ): Promise<PackageAnalysis> {
   const entriesByKind: Record<HwpxEntryKind, number> = {
     xml: 0,
@@ -59,18 +63,20 @@ export async function analyzeHwpxPackage(
       });
     }
   }
-  const images = await mapLimit(imageInputs, 4, (image) =>
+  const images = await mapLimit(imageInputs, defaultImageConcurrency(), (image) =>
     inspectImage(image.path, image.data, image.size, image.displayRefs)
   );
 
   const graph = options.graph ?? buildReferenceGraph(pkg);
+  const sameVisualDuplicateImages =
+    options.includeSameVisualDuplicateImages === false ? [] : await findSameVisualImageGroups(pkg);
   return {
     totalSize,
     entriesByKind,
     categorySizes,
     images,
     duplicateImages: findByteIdenticalImageGroups(pkg),
-    sameVisualDuplicateImages: await findSameVisualImageGroups(pkg),
+    sameVisualDuplicateImages,
     nearDuplicateImages: options.includeNearDuplicateImages === false ? [] : await findNearDuplicateImageGroups(pkg),
     unusedBinData: findUnusedBinData(pkg, graph),
     riskyResources: findRiskyResources(pkg),

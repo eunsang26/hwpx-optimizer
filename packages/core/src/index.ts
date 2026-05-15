@@ -9,6 +9,7 @@ export * from "./manifest.js";
 export * from "./optimize.js";
 export * from "./optimizer.js";
 export * from "./opportunities.js";
+export * from "./performance.js";
 export * from "./planner.js";
 export * from "./reader.js";
 export * from "./referenceGraph.js";

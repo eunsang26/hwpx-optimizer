@@ -22,8 +22,18 @@ import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/deskto
 import type { DesktopSettings, DesktopSettingsPatch, OptimizationMode } from "./main/desktopService.js";
 
 let mainWindow: BrowserWindow | null = null;
+let documentWorker: Worker | null = null;
 let activeAnalyzeWorker: Worker | null = null;
 let activeOptimizeWorker: Worker | null = null;
+let nextWorkerRequestId = 1;
+const pendingWorkerRequests = new Map<
+  number,
+  {
+    resolve: (value: unknown) => void;
+    reject: (reason?: unknown) => void;
+    onProgress?: (progress: { percent: number; item: string }) => void;
+  }
+>();
 const allowedInputPaths = new Set<string>();
 const allowedOutputDirectories = new Set<string>();
 const allowedGeneratedPaths = new Set<string>();
@@ -68,6 +78,7 @@ app.whenReady()
     blockExternalNetworkRequests();
     registerIpc();
     const window = await createWindow();
+    if (!isSmokeTest) void warmDocumentWorker();
 
     if (isSmokeTest) {
       await runSmokeAssertions(window);
@@ -88,6 +99,11 @@ app.whenReady()
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  void documentWorker?.terminate();
+  documentWorker = null;
 });
 
 function registerIpc(): void {
@@ -160,7 +176,7 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("hwpx:analyze", async (_event, filePath: string) => {
-    if (activeAnalyzeWorker) {
+    if (activeAnalyzeWorker || activeOptimizeWorker) {
       throw new Error("Another analysis is already running.");
     }
     const allowedPath = await requireAllowedInputPath(filePath);
@@ -179,7 +195,7 @@ function registerIpc(): void {
         actions?: string[];
       }
     ) => {
-      if (activeOptimizeWorker) {
+      if (activeAnalyzeWorker || activeOptimizeWorker) {
         throw new Error("Another optimization is already running.");
       }
       const filePath = await requireAllowedInputPath(input.filePath);
@@ -521,33 +537,10 @@ async function createSmokeHwpxFixture(): Promise<Buffer> {
 }
 
 function runAnalyzeWorker(filePath: string): Promise<DesktopAnalysisResult> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(join(import.meta.dirname, "main", "analyzeWorker.js"), { workerData: filePath });
-    activeAnalyzeWorker = worker;
-    let settled = false;
-    const settle = (action: () => void) => {
-      if (settled) return;
-      settled = true;
-      if (activeAnalyzeWorker === worker) activeAnalyzeWorker = null;
-      action();
-    };
-
-    worker.on("message", (message: AnalyzeWorkerMessage) => {
-      if (message.type === "complete") {
-        settle(() => resolve(message.result));
-      } else if (message.type === "error") {
-        settle(() => reject(new Error(message.message)));
-      }
-    });
-    worker.on("error", (error) => {
-      settle(() => reject(error));
-    });
-    worker.on("exit", (code) => {
-      settle(() => {
-        if (code === 0) reject(new Error("Analysis worker exited unexpectedly."));
-        else reject(new Error("Analysis cancelled."));
-      });
-    });
+  const worker = ensureDocumentWorker();
+  activeAnalyzeWorker = worker;
+  return postWorkerRequest<DesktopAnalysisResult>({ type: "analyze", filePath }).finally(() => {
+    if (activeAnalyzeWorker === worker) activeAnalyzeWorker = null;
   });
 }
 
@@ -562,44 +555,112 @@ function runOptimizeWorker(
   },
   onProgress: (progress: { percent: number; item: string }) => void
 ): Promise<DesktopOptimizeResult> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(join(import.meta.dirname, "main", "optimizeWorker.js"), { workerData: input });
-    activeOptimizeWorker = worker;
-    let settled = false;
-    const settle = (action: () => void) => {
-      if (settled) return;
-      settled = true;
+  const worker = ensureDocumentWorker();
+  activeOptimizeWorker = worker;
+  return postWorkerRequest<DesktopOptimizeResult>({ type: "optimize", input }, onProgress)
+    .then((result) => {
+      onProgress({ percent: 100, item: "Optimization complete" });
+      return result;
+    })
+    .finally(() => {
       if (activeOptimizeWorker === worker) activeOptimizeWorker = null;
-      action();
-    };
+    });
+}
 
-    worker.on("message", (message: WorkerMessage) => {
-      if (message.type === "progress") {
-        onProgress({ percent: message.percent, item: message.item });
-      } else if (message.type === "complete") {
-        onProgress({ percent: 100, item: "Optimization complete" });
-        settle(() => resolve(message.result));
-      } else if (message.type === "error") {
-        settle(() => reject(new Error(message.message)));
-      }
+async function warmDocumentWorker(): Promise<void> {
+  try {
+    await postWorkerRequest({ type: "warm" });
+  } catch {
+    // Warm-up is opportunistic; the next real request will recreate the worker.
+  }
+}
+
+function ensureDocumentWorker(): Worker {
+  if (documentWorker) return documentWorker;
+  const worker = new Worker(join(import.meta.dirname, "main", "documentWorker.js"));
+  documentWorker = worker;
+  worker.on("message", (message: DocumentWorkerMessage) => {
+    const pending = pendingWorkerRequests.get(message.id);
+    if (!pending) return;
+    if (message.type === "progress") {
+      pending.onProgress?.({ percent: message.percent, item: message.item });
+      return;
+    }
+    pendingWorkerRequests.delete(message.id);
+    if (message.type === "error") {
+      pending.reject(new Error(message.message));
+      return;
+    }
+    pending.resolve(message.type === "warm-complete" ? { ok: true } : message.result);
+  });
+  worker.on("error", (error) => rejectPendingWorkerRequests(error));
+  worker.on("exit", (code) => {
+    if (documentWorker === worker) documentWorker = null;
+    const error = code === 0 ? new Error("Document worker exited unexpectedly.") : new Error("Operation cancelled.");
+    rejectPendingWorkerRequests(error);
+  });
+  return worker;
+}
+
+function postWorkerRequest<T = { ok: true }>(
+  request: DocumentWorkerRequestInput,
+  onProgress?: (progress: { percent: number; item: string }) => void
+): Promise<T> {
+  const worker = ensureDocumentWorker();
+  const id = nextWorkerRequestId;
+  nextWorkerRequestId += 1;
+  return new Promise<T>((resolve, reject) => {
+    pendingWorkerRequests.set(id, {
+      resolve: (value) => resolve(value as T),
+      reject,
+      onProgress
     });
-    worker.on("error", (error) => {
-      settle(() => reject(error));
-    });
-    worker.on("exit", (code) => {
-      settle(() => {
-        if (code === 0) reject(new Error("Optimization worker exited unexpectedly."));
-        else reject(new Error("Optimization cancelled."));
-      });
-    });
+    worker.postMessage({ id, ...request });
   });
 }
 
-type WorkerMessage =
-  | { type: "progress"; percent: number; item: string }
-  | { type: "complete"; result: DesktopOptimizeResult }
-  | { type: "error"; message: string };
+function rejectPendingWorkerRequests(error: Error): void {
+  for (const pending of pendingWorkerRequests.values()) {
+    pending.reject(error);
+  }
+  pendingWorkerRequests.clear();
+  activeAnalyzeWorker = null;
+  activeOptimizeWorker = null;
+}
 
-type AnalyzeWorkerMessage =
-  | { type: "complete"; result: DesktopAnalysisResult }
-  | { type: "error"; message: string };
+type DocumentWorkerRequest =
+  | { id: number; type: "warm" }
+  | { id: number; type: "analyze"; filePath: string }
+  | {
+      id: number;
+      type: "optimize";
+      input: {
+        filePath: string;
+        mode: OptimizationMode;
+        outputDirectory?: string;
+        outputMode?: "single" | "batch";
+        actions?: string[];
+        settings: DesktopSettings;
+      };
+    };
+
+type DocumentWorkerRequestInput =
+  | { type: "warm" }
+  | { type: "analyze"; filePath: string }
+  | {
+      type: "optimize";
+      input: {
+        filePath: string;
+        mode: OptimizationMode;
+        outputDirectory?: string;
+        outputMode?: "single" | "batch";
+        actions?: string[];
+        settings: DesktopSettings;
+      };
+    };
+
+type DocumentWorkerMessage =
+  | { id: number; type: "warm-complete" }
+  | { id: number; type: "progress"; percent: number; item: string }
+  | { id: number; type: "complete"; result: DesktopAnalysisResult | DesktopOptimizeResult }
+  | { id: number; type: "error"; message: string };

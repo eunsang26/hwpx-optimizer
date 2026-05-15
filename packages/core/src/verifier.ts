@@ -12,6 +12,10 @@ export type VerifyMode = "safe" | "balanced" | "aggressive";
 export type VerifyHwpxOutputOptions = {
   original?: Buffer;
   mode?: VerifyMode;
+  originalPackage?: HwpxPackage;
+  outputPackage?: HwpxPackage;
+  originalAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
+  outputAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
 };
 
 const PSNR_MINIMUM_DB: Record<Exclude<VerifyMode, "safe">, number> = {
@@ -31,7 +35,7 @@ export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutput
       "verifyHwpxOutput requires both `original` and `mode` for cross-package verification, or neither."
     );
   }
-  const pkg = await readHwpxPackage(output);
+  const pkg = options.outputPackage ?? await readHwpxPackage(output);
   verifyParsedXml(pkg);
   const graph = buildReferenceGraph(pkg);
   if (graph.missingReferences.length > 0) {
@@ -39,9 +43,11 @@ export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutput
   }
   if (options.original && options.mode) {
     await verifyAgainstOriginal({
-      original: await readHwpxPackage(options.original),
+      original: options.originalPackage ?? await readHwpxPackage(options.original),
       output: pkg,
-      mode: options.mode
+      mode: options.mode,
+      originalAnalysis: options.originalAnalysis,
+      outputAnalysis: options.outputAnalysis
     });
   }
 }
@@ -58,20 +64,24 @@ function verifyParsedXml(pkg: HwpxPackage): void {
   }
 }
 
-async function verifyAgainstOriginal(input: { original: HwpxPackage; output: HwpxPackage; mode: VerifyMode }): Promise<void> {
+async function verifyAgainstOriginal(input: {
+  original: HwpxPackage;
+  output: HwpxPackage;
+  mode: VerifyMode;
+  originalAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
+  outputAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
+}): Promise<void> {
   const originalGraph = buildReferenceGraph(input.original);
   const outputGraph = buildReferenceGraph(input.output);
   const outputPaths = new Set(input.output.entries.map((entry) => entry.path));
-  const originalImages = new Map(
-    (
-      await analyzeHwpxPackage(input.original, { graph: originalGraph, includeNearDuplicateImages: false })
-    ).images.map((image) => [image.path, image])
-  );
-  const outputImages = new Map(
-    (
-      await analyzeHwpxPackage(input.output, { graph: outputGraph, includeNearDuplicateImages: false })
-    ).images.map((image) => [image.path, image])
-  );
+  const originalAnalysis =
+    input.originalAnalysis ??
+    (await analyzeHwpxPackage(input.original, { graph: originalGraph, includeNearDuplicateImages: false }));
+  const outputAnalysis =
+    input.outputAnalysis ??
+    (await analyzeHwpxPackage(input.output, { graph: outputGraph, includeNearDuplicateImages: false }));
+  const originalImages = new Map(originalAnalysis.images.map((image) => [image.path, image]));
+  const outputImages = new Map(outputAnalysis.images.map((image) => [image.path, image]));
   const originalDuplicatePathsByPath = await duplicateImagePathsByPath(input.original);
   const visualPairs: Array<{ original: HwpxEntry; output: HwpxEntry }> = [];
   const originalImageEntries = new Map(input.original.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));

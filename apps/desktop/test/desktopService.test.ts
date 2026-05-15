@@ -12,6 +12,7 @@ import {
   previewImageDiffs,
   persistentDesktopSettingsPatch,
   verifyDesktopFile,
+  warmDesktopCore,
   writeDesktopBatchReport
 } from "../src/main/desktopService.js";
 import type { DesktopSettings } from "../src/main/desktopService.js";
@@ -54,6 +55,43 @@ describe("desktop service", () => {
     expect(result.reportPath).toBeUndefined();
     expect((await readFile(result.outputPath)).byteLength).toBeGreaterThan(0);
     await expect(verifyDesktopFile(result.outputPath)).resolves.toEqual({ ok: true });
+  });
+
+  it("uses quick analysis by default for lower-latency desktop planning", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "input.hwpx");
+    const png = await import("sharp").then(({ default: sharp }) =>
+      sharp({
+        create: {
+          width: 16,
+          height: 10,
+          channels: 3,
+          background: "#000000"
+        }
+      })
+        .png()
+        .toBuffer()
+    );
+    await writeFile(
+      inputPath,
+      await createHwpxFixture({
+        entries: {
+          "Contents/section0.xml": '<root><img href="BinData/image1.png" /><img href="BinData/image2.png" /></root>',
+          "BinData/image1.png": png,
+          "BinData/image2.png": png
+        }
+      })
+    );
+
+    const analysis = await analyzeDesktopFile(inputPath);
+
+    expect(analysis.report.performance?.stages.map((stage) => stage.name)).toContain("analyze");
+    expect(analysis.report.sameVisualDuplicateImages).toEqual([]);
+    expect(analysis.report.nearDuplicateImages).toEqual([]);
+  });
+
+  it("can warm the desktop core module before the first document operation", async () => {
+    await expect(warmDesktopCore()).resolves.toEqual({ ok: true });
   });
 
   it("writes a report only when explicitly enabled", async () => {

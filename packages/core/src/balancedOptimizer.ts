@@ -1,5 +1,5 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
-import { mapLimit } from "./concurrency.js";
+import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageActionWithBudget } from "./opportunities.js";
@@ -8,8 +8,6 @@ import { normalizePackagePath } from "./packagePath.js";
 import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan } from "./types.js";
 import { getStringAttribute, getXmlAttributes, isXmlNode, setAttribute } from "./xmlNode.js";
 import type { XmlNode } from "./xmlNode.js";
-
-const IMAGE_TRANSFORM_CONCURRENCY = 4;
 
 export async function applyBalancedOptimizationPlan(input: {
   pkg: HwpxPackage;
@@ -73,7 +71,7 @@ export async function applyBalancedOptimizationPlan(input: {
   }
 
   let completedTransforms = 0;
-  const outcomes = await mapLimit(tasks, IMAGE_TRANSFORM_CONCURRENCY, async (task): Promise<TransformOutcome> => {
+  const outcomes = await mapLimit(tasks, defaultImageConcurrency(), async (task): Promise<TransformOutcome> => {
     try {
       const transformed = await transformImageActionWithBudget(
         task.entry.path,

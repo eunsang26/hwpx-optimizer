@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mapLimit } from "./concurrency.js";
+import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
 import { computeAverageHash, computeDecodedPixelHash, hammingDistance } from "./visualSimilarity.js";
 import type { DuplicateImageGroup, HwpxEntry, HwpxPackage, NearDuplicateImageGroup } from "./types.js";
 
@@ -52,7 +52,7 @@ export async function findSameVisualImageGroups(pkg: HwpxPackage): Promise<Image
 
 async function collectSameVisualImageGroups(pkg: HwpxPackage): Promise<ImageConsolidationGroup[]> {
   const imageEntries = pkg.entries.filter((entry): entry is HwpxEntry & { kind: "image" } => entry.kind === "image");
-  const decoded = await mapLimit(imageEntries, 4, async (entry) => {
+  const decoded = await mapLimit(imageEntries, defaultImageConcurrency(), async (entry) => {
     const decodedHash = await computeDecodedPixelHash(entry.data);
     if (!decodedHash) return null;
     return {
@@ -100,7 +100,7 @@ async function collectNearDuplicateImageGroups(pkg: HwpxPackage): Promise<NearDu
   const exactPaths = new Set(exactGroups.flatMap((group) => group.paths));
   const imageEntries = pkg.entries.filter((entry): entry is HwpxEntry & { kind: "image" } => entry.kind === "image");
   const hashed = (
-    await mapLimit(imageEntries, 4, async (entry) => {
+    await mapLimit(imageEntries, defaultImageConcurrency(), async (entry) => {
       const averageHash = await computeAverageHash(entry.data);
       if (!averageHash) return null;
       if (averageHash.standardDeviation < NEAR_DUPLICATE_MIN_HASH_STDDEV) return null;

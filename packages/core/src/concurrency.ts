@@ -1,6 +1,13 @@
+import { availableParallelism } from "node:os";
+
 export type MapLimitOptions = {
   signal?: AbortSignal;
 };
+
+export function defaultImageConcurrency(): number {
+  const cpuCount = availableParallelism();
+  return Math.max(1, Math.min(6, Math.floor(cpuCount || 4)));
+}
 
 export async function mapLimit<T, R>(
   items: T[],

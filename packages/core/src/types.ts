@@ -182,4 +182,15 @@ export type OptimizationReport = {
   opportunities: OptimizationOpportunity[];
   opportunityGroups: OptimizationOpportunityGroup[];
   warnings: string[];
+  performance?: PerformanceSummary;
+};
+
+export type PerformanceStage = {
+  name: string;
+  durationMs: number;
+};
+
+export type PerformanceSummary = {
+  totalMs: number;
+  stages: PerformanceStage[];
 };

@@ -163,6 +163,41 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(report.images).toEqual([]);
   });
 
+  it("records local performance timings in analysis reports", async () => {
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": "<root />"
+      }
+    });
+
+    const report = await analyzeHwpxBuffer(input, { analysisMode: "quick" });
+
+    expect(report.performance?.totalMs).toBeGreaterThanOrEqual(0);
+    expect(report.performance?.stages.map((stage) => stage.name)).toEqual([
+      "read",
+      "analyze",
+      "opportunities",
+      "report"
+    ]);
+  });
+
+  it("records local performance timings in optimization reports", async () => {
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": '<root> <img href="BinData/used.bin" /> </root>',
+        "BinData/used.bin": Buffer.from("used"),
+        "BinData/unused.bin": Buffer.from("unused")
+      }
+    });
+
+    const result = await optimizeHwpxBufferSafe(input);
+
+    expect(result.report.performance?.totalMs).toBeGreaterThanOrEqual(0);
+    expect(result.report.performance?.stages.map((stage) => stage.name)).toEqual(
+      expect.arrayContaining(["read", "analyze", "plan", "apply", "write", "verify", "report"])
+    );
+  });
+
   it("preserves EXIF orientation while stripping JPEG metadata in safe mode", async () => {
     const baseline = await sharp({
       create: { width: 320, height: 240, channels: 3, background: "#445566" }
