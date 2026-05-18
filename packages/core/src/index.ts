@@ -13,6 +13,7 @@ export * from "./performance.js";
 export * from "./planner.js";
 export * from "./reader.js";
 export * from "./referenceGraph.js";
+export * from "./regressionCorpus.js";
 export * from "./report.js";
 export * from "./types.js";
 export * from "./verifier.js";

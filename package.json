@@ -11,18 +11,19 @@
   },
   "workspaces": [
     "apps/desktop",
+    "apps/tauri-desktop",
     "packages/core",
     "packages/cli"
   ],
   "scripts": {
-    "build": "npm run clean:build && tsc -b packages/core packages/cli apps/desktop && npm run desktop:assets",
+    "build": "npm run clean:build && tsc -b packages/core packages/cli apps/desktop apps/tauri-desktop && npm run desktop:assets",
     "desktop:assets": "node apps/desktop/scripts/copy-assets.mjs",
     "desktop:icons": "node scripts/generate-desktop-icons.mjs",
     "desktop:dev": "node scripts/run-electron-dev.mjs",
     "desktop:preview": "vite --config apps/desktop/vite.preview.config.ts --host 0.0.0.0",
     "desktop:start": "npm run build && node scripts/run-electron-app.mjs",
     "desktop:smoke": "npm run build && npm run desktop:smoke:built",
-    "desktop:smoke:built": "node scripts/run-electron-app.mjs --smoke-test",
+    "desktop:smoke:built": "node scripts/run-electron-smoke.mjs",
     "desktop:pack": "npm run build && npm run desktop:icons && node scripts/run-electron-builder.mjs --dir",
     "desktop:pack:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win --x64 --dir -c.win.signAndEditExecutable=false",
     "desktop:portable:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win portable --x64 -c.win.signAndEditExecutable=false",
@@ -30,7 +31,11 @@
     "desktop:local:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win portable zip --x64 -c.win.signAndEditExecutable=false",
     "desktop:dist:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win --x64",
     "test": "vitest run",
-    "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
+    "typecheck": "tsc -b packages/core packages/cli apps/desktop apps/tauri-desktop --pretty false",
+    "tauri:dev": "npm run dev -w @hwpx-optimizer/tauri-desktop",
+    "tauri:build": "npm run build:tauri -w @hwpx-optimizer/tauri-desktop",
+    "tauri:sidecar": "npm run sidecar -w @hwpx-optimizer/tauri-desktop",
+    "tauri:sidecar:prepare": "node scripts/prepare-tauri-sidecar.mjs",
     "release:clean": "node scripts/clean-release-artifacts.mjs",
     "clean:build": "node scripts/clean-build-artifacts.mjs",
     "clean:local-artifacts": "node scripts/clean-local-artifacts.mjs",
@@ -39,16 +44,27 @@
     "release:manifest": "node scripts/write-release-manifest.mjs",
     "release:verify-manifest": "node scripts/verify-release-manifest.mjs",
     "release:verify-win-native": "node scripts/verify-win-native-runtime.mjs",
-    "release:preflight": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit --audit-level=moderate && npm run desktop:smoke:built",
-    "release:check": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win && npm run release:verify-artifacts && npm run release:verify-win-native",
-    "release:check:win-portable": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:local:win && npm run release:verify-artifacts && npm run release:verify-win-native && npm run release:manifest && npm run release:verify-manifest",
-    "release:check:win": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run desktop:smoke && npm run desktop:dist:win && npm run release:verify-artifacts && npm run release:verify-win-native",
-    "cli": "tsx --conditions=development packages/cli/src/index.ts"
+    "release:preflight": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit --audit-level=moderate && npm run desktop:smoke:built",
+    "release:check": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win && npm run release:verify-artifacts && npm run release:verify-win-native",
+    "release:check:win-portable": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit && npm run desktop:smoke && npm run desktop:local:win && npm run release:verify-artifacts && npm run release:verify-win-native && npm run release:manifest && npm run release:verify-manifest && npm run release:verify-win-portable-smoke",
+    "release:check:win": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit && npm run desktop:smoke && npm run desktop:dist:win && npm run release:verify-artifacts && npm run release:verify-win-native",
+    "release:electron:check:win-portable": "npm run release:check:win-portable",
+    "release:tauri:build": "npm run tauri:build",
+    "cli": "tsx --conditions=development packages/cli/src/index.ts",
+    "quality:corpus": "tsx --conditions=development scripts/run-regression-corpus.ts",
+    "quality:corpus:release": "tsx --conditions=development scripts/run-regression-corpus.ts --require-local-samples",
+    "release:verify-win-portable-smoke": "node scripts/run-windows-portable-smoke.mjs"
   },
   "build": {
     "appId": "local.hwpxoptimizer.app",
     "productName": "HWPX Optimizer",
-    "asar": true,
+    "asar": {
+      "smartUnpack": false
+    },
+    "afterPack": "scripts/prune-electron-locales.cjs",
+    "electronLanguages": [
+      "ko"
+    ],
     "asarUnpack": [
       "node_modules/@img/sharp-win32-x64/**/*"
     ],
@@ -83,6 +99,13 @@
       "!**/*.test.*",
       "!**/test/**",
       "!**/__tests__/**",
+      "!node_modules/**/README*",
+      "!node_modules/**/CHANGELOG*",
+      "!node_modules/**/CHANGES*",
+      "!node_modules/**/CONTRIBUTING*",
+      "!node_modules/**/GOVERNANCE*",
+      "!node_modules/**/test.*",
+      "!node_modules/sharp/src/**",
       "!docs/**",
       "!**/docs/**",
       "!sample*.hwp",

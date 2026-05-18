@@ -12,6 +12,15 @@ export async function applySafeOptimizationPlan(input: {
   const removeTargets = new Set(
     input.plan.actions.filter((action) => action.type === "remove-unused").map((action) => action.target)
   );
+  const stripMetadataTargets = new Set(
+    input.plan.actions.filter((action) => action.type === "strip-metadata").map((action) => action.target)
+  );
+  const optimizePngTargets = new Set(
+    input.plan.actions.filter((action) => action.type === "optimize-png").map((action) => action.target)
+  );
+  const minifyXmlTargets = new Set(
+    input.plan.actions.filter((action) => action.type === "minify-xml").map((action) => action.target)
+  );
 
   const entries = [];
   for (const entry of input.pkg.entries) {
@@ -20,10 +29,7 @@ export async function applySafeOptimizationPlan(input: {
       continue;
     }
 
-    const strip = input.plan.actions.find(
-      (action) => action.type === "strip-metadata" && action.target === entry.path
-    );
-    if (strip) {
+    if (stripMetadataTargets.has(entry.path)) {
       try {
         const optimized = stripImageMetadataLossless(entry.path, entry.data);
         if (optimized.byteLength < entry.data.byteLength) {
@@ -43,10 +49,7 @@ export async function applySafeOptimizationPlan(input: {
       }
     }
 
-    const optimizePng = input.plan.actions.find(
-      (action) => action.type === "optimize-png" && action.target === entry.path
-    );
-    if (optimizePng) {
+    if (optimizePngTargets.has(entry.path)) {
       try {
         const optimized = await optimizePngLosslessly(entry.data);
         if (optimized.byteLength < entry.data.byteLength) {
@@ -66,10 +69,7 @@ export async function applySafeOptimizationPlan(input: {
       }
     }
 
-    const minify = input.plan.actions.find(
-      (action) => action.type === "minify-xml" && action.target === entry.path
-    );
-    if (minify) {
+    if (minifyXmlTargets.has(entry.path)) {
       try {
         const minified = minifyXml(entry.data.toString("utf8"));
         const data = Buffer.from(minified);

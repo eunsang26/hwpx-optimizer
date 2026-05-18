@@ -1,0 +1,210 @@
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { createHwpxFixture } from "../../../packages/core/test/fixtures.js";
+
+describe("Tauri Node sidecar protocol", () => {
+  it("responds to a health request over newline-delimited JSON", async () => {
+    await expect(runSidecarRequests([{ id: 1, method: "health" }])).resolves.toEqual([{
+      id: 1,
+      ok: true,
+      result: {
+        service: "hwpx-tauri-sidecar",
+        status: "ok"
+      }
+    }]);
+  });
+
+  it("runs analyze, optimize, and verify through the existing core", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-"));
+    try {
+      const inputPath = join(dir, "input.hwpx");
+      const outputDirectory = join(dir, "out");
+      await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+      const responses = await runSidecarRequests([
+        { id: 1, method: "analyze", params: { filePath: inputPath } },
+        { id: 2, method: "optimize", params: { filePath: inputPath, mode: "safe", outputDirectory } }
+      ]);
+
+      expect(responses[0]).toMatchObject({ id: 1, ok: true });
+      expect(responses[1]).toMatchObject({ id: 2, ok: true });
+      const optimizeResult = responses[1]?.result as { outputPath?: string };
+      expect(optimizeResult.outputPath).toBe(join(outputDirectory, "input_tauri_optimized.hwpx"));
+      await expect(readFile(optimizeResult.outputPath)).resolves.toBeInstanceOf(Buffer);
+
+      await expect(runSidecarRequests([
+        { id: 3, method: "verify", params: { filePath: optimizeResult.outputPath } }
+      ])).resolves.toEqual([{ id: 3, ok: true, result: { ok: true } }]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not overwrite an existing Tauri output and supports batch output folders", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-output-"));
+    try {
+      const inputPath = join(dir, "input.hwpx");
+      const outputDirectory = join(dir, "out");
+      await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+      await writeFile(join(dir, "input_tauri_optimized.hwpx"), "existing");
+
+      const responses = await runSidecarRequests([
+        { id: 1, method: "optimize", params: { filePath: inputPath, mode: "safe" } },
+        { id: 2, method: "optimize", params: { filePath: inputPath, mode: "safe", outputDirectory, outputMode: "batch" } }
+      ]);
+
+      expect(responses[0]).toMatchObject({
+        id: 1,
+        ok: true,
+        result: { outputPath: join(dir, "input_tauri_optimized-2.hwpx") }
+      });
+      expect(responses[1]).toMatchObject({
+        id: 2,
+        ok: true,
+        result: { outputPath: join(outputDirectory, "output", "input_tauri_optimized.hwpx") }
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes batch reports through the packaged sidecar core", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-report-"));
+    try {
+      const reportDirectory = join(dir, "output");
+      const responses = await runSidecarRequests([
+        {
+          id: 1,
+          method: "saveBatchReport",
+          params: {
+            reportDirectory,
+            mode: "balanced",
+            settings: { preventOverwrite: true },
+            items: [
+              {
+                input: join(dir, "a.hwpx"),
+                status: "done",
+                output: join(dir, "a_optimized.hwpx"),
+                originalSize: 2048,
+                optimizedSize: 1024,
+                savedBytes: 1024,
+                savedPercent: 50
+              },
+              {
+                input: join(dir, "b.hwpx"),
+                status: "failed",
+                error: "Unsupported content"
+              }
+            ]
+          }
+        }
+      ]);
+
+      expect(responses).toMatchObject([{ id: 1, ok: true }]);
+      const result = responses[0]?.result as { reportPath?: string };
+      expect(result.reportPath).toBe(join(reportDirectory, "batch-report.json"));
+      const report = JSON.parse(await readFile(result.reportPath, "utf8")) as {
+        mode: string;
+        totals: { done: number; failed: number; cancelled: number; savedBytes: number };
+      };
+      expect(report.mode).toBe("balanced");
+      expect(report.totals).toEqual({ done: 1, failed: 1, cancelled: 0, savedBytes: 1024 });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("emits optimization progress events before the final optimize response", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-progress-"));
+    try {
+      const inputPath = join(dir, "input.hwpx");
+      await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+      const messages = await runSidecarProcess(`${JSON.stringify({
+        id: 1,
+        method: "optimize",
+        params: { filePath: inputPath, mode: "safe" }
+      })}\n`);
+
+      expect(messages.some((message) => message.ok === undefined && message.event === "progress")).toBe(true);
+      expect(messages.at(-1)).toMatchObject({ id: 1, ok: true });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects invalid protocol ids", async () => {
+    await expect(runRawSidecarLine(JSON.stringify({ id: -1, method: "health" }))).resolves.toEqual({
+      id: 0,
+      ok: false,
+      error: "Invalid sidecar request: id must be a non-negative safe integer."
+    });
+  });
+});
+
+async function runSidecarRequests(requests: Array<{ id: number; method: string; params?: unknown }>): Promise<Array<{
+  id: number;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+}>> {
+  return runSidecarProcess(requests.map((request) => JSON.stringify(request)).join("\n") + "\n")
+    .then((messages) => messages.filter((message): message is {
+      id: number;
+      ok: boolean;
+      result?: unknown;
+      error?: string;
+    } => typeof message.ok === "boolean"));
+}
+
+async function runRawSidecarLine(line: string): Promise<{ id: number; ok: boolean; result?: unknown; error?: string }> {
+  const [response] = await runSidecarProcess(`${line}\n`);
+  return response;
+}
+
+async function runSidecarProcess(input: string): Promise<Array<{
+  id: number;
+  ok?: boolean;
+  event?: string;
+  progress?: unknown;
+  result?: unknown;
+  error?: string;
+}>> {
+  const child = spawn(process.execPath, [
+    "--conditions=development",
+    "--import",
+    "tsx",
+    "apps/tauri-desktop/sidecar/index.ts"
+  ], {
+    cwd: process.cwd(),
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  child.stdin.write(input);
+  child.stdin.end();
+
+  const [code] = await once(child, "exit");
+  if (code !== 0) {
+    throw new Error(`sidecar exited with ${code}: ${stderr}`);
+  }
+  return stdout
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((outputLine) => JSON.parse(outputLine) as { id: number; ok: boolean; result?: unknown; error?: string });
+}

@@ -86,6 +86,17 @@ describe("batchView helpers", () => {
     expect(busy.text).not.toContain("대기 1");
   });
 
+  it("marks mixed batch results as needing review while preserving total saving", () => {
+    const summary = summarizeBatchItems([
+      { path: "a.hwpx", fileName: "a.hwpx", status: "done", savedBytes: 1024 * 1024, savedPercent: 10 },
+      { path: "b.hwpx", fileName: "b.hwpx", status: "failed", error: "Invalid HWPX package" }
+    ]);
+
+    expect(summary.text).toContain("확인 필요");
+    expect(summary.text).toContain("실패 1");
+    expect(summary.text).toContain("총 절감 1.00 MiB");
+  });
+
   it("describes each item according to its terminal status", () => {
     expect(
       batchItemMetaText({

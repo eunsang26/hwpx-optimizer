@@ -4,7 +4,10 @@ param(
   [ValidateSet("safe", "balanced", "aggressive")]
   [string]$Mode = "safe",
   [switch]$AllModes,
-  [string]$Sha256Sums = ""
+  [string]$Sha256Sums = "",
+  [switch]$RequireChecksumEntry,
+  [string]$ExpectedSha256 = "",
+  [long]$MinArtifactBytes = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,9 +29,22 @@ if (-not (Test-Path -LiteralPath $Artifact)) {
 $artifactPath = (Resolve-Path -LiteralPath $Artifact).Path
 $artifactName = Split-Path -Path $artifactPath -Leaf
 $artifactDir = Split-Path -Path $artifactPath -Parent
+$artifactSize = (Get-Item -LiteralPath $artifactPath).Length
+if ($MinArtifactBytes -gt 0 -and $artifactSize -lt $MinArtifactBytes) {
+  throw "Portable artifact is smaller than required minimum. Got $artifactSize bytes; minimum $MinArtifactBytes bytes."
+}
 $artifactHash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Host "Artifact: $artifactPath"
+Write-Host "Size:       $artifactSize bytes"
 Write-Host "SHA256:   $artifactHash"
+
+if ($ExpectedSha256 -ne "") {
+  $normalizedExpectedSha256 = $ExpectedSha256.ToLowerInvariant()
+  if ($normalizedExpectedSha256 -ne $artifactHash) {
+    throw "ExpectedSha256 mismatch. Expected $normalizedExpectedSha256 but got $artifactHash."
+  }
+  Write-Host "Expected: matched explicit SHA256"
+}
 
 if ($Sha256Sums -eq "") {
   $localSums = Join-Path $artifactDir "SHA256SUMS.txt"
@@ -48,9 +64,15 @@ if (Test-Path -LiteralPath $Sha256Sums) {
     }
     Write-Host "Checksum: matched $Sha256Sums"
   } else {
+    if ($RequireChecksumEntry) {
+      throw "No checksum entry found for $artifactName in $Sha256Sums"
+    }
     Write-Warning "No checksum entry found for $artifactName in $Sha256Sums"
   }
 } else {
+  if ($RequireChecksumEntry) {
+    throw "Checksum file not found: $Sha256Sums"
+  }
   Write-Warning "Checksum file not found: $Sha256Sums"
 }
 
@@ -76,6 +98,8 @@ try {
       throw "Desktop smoke failed with exit code $($process.ExitCode) for mode $currentMode"
     }
     Write-Host "Desktop smoke passed: $artifactPath ($currentMode)"
+    Write-Host "  - Includes full-window drag/drop overlay regression"
+    Write-Host "  - Includes analysis-details width and help manual regression"
   }
 } finally {
   if ($null -eq $previousInput) {

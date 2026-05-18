@@ -18,9 +18,13 @@ describe("submission optimization plan", () => {
 
   it("resolves submission limits to bytes", () => {
     expect(resolveSubmissionLimitBytes({ id: "none" })).toBeUndefined();
+    expect(resolveSubmissionLimitBytes({ id: "mb5" })).toBe(5 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "mb10" })).toBe(10 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "mb20" })).toBe(20 * MIB);
+    expect(resolveSubmissionLimitBytes({ id: "mb30" })).toBe(30 * MIB);
+    expect(resolveSubmissionLimitBytes({ id: "mb41" })).toBe(41 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "mb50" })).toBe(50 * MIB);
+    expect(resolveSubmissionLimitBytes({ id: "mb100" })).toBe(100 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "custom", customBytes: 12_345 })).toBe(12_345);
   });
 

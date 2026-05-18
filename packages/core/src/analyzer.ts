@@ -1,9 +1,8 @@
-import sharp from "sharp";
 import { createHash } from "node:crypto";
-import { decodeBmp } from "./bmp.js";
 import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
 import { findByteIdenticalImageGroups, findNearDuplicateImageGroups, findSameVisualImageGroups } from "./imageDuplicates.js";
 import { extractImageDisplayReferences } from "./imageDisplay.js";
+import { readImageMetadata } from "./imageMetadata.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import type {
   HwpxEntryKind,
@@ -92,43 +91,17 @@ async function inspectImage(
   displayRefs: ImageDisplayReference[]
 ): Promise<ImageInventoryItem> {
   const extension = extensionFormat(path);
-  const bmp = decodeBmp(data);
-  if (bmp) {
-    return {
-      path,
-      size,
-      format: "bmp",
-      width: bmp.width,
-      height: bmp.height,
-      hasMetadata: false,
-      isBmpCandidate: true,
-      ...createDisplayFields(displayRefs, bmp.width, bmp.height)
-    };
-  }
-
-  try {
-    const metadata = await sharp(data).rotate().metadata();
-    const metadataFormat = metadata.format ? String(metadata.format) : undefined;
-    return {
-      path,
-      size,
-      format: metadataFormat ?? extension,
-      width: metadata.width,
-      height: metadata.height,
-      hasMetadata: Boolean(metadata.exif || metadata.icc || metadata.iptc || metadata.xmp),
-      isBmpCandidate: extension === "bmp" || metadataFormat === "bmp",
-      ...createDisplayFields(displayRefs, metadata.width, metadata.height)
-    };
-  } catch {
-    return {
-      path,
-      size,
-      format: extension,
-      hasMetadata: false,
-      isBmpCandidate: extension === "bmp",
-      ...createDisplayFields(displayRefs)
-    };
-  }
+  const metadata = await readImageMetadata(path, data, { rotate: true });
+  return {
+    path,
+    size,
+    format: metadata.format ?? extension,
+    width: metadata.width,
+    height: metadata.height,
+    hasMetadata: metadata.hasMetadata,
+    isBmpCandidate: extension === "bmp" || metadata.isBmp,
+    ...createDisplayFields(displayRefs, metadata.width, metadata.height)
+  };
 }
 
 function extensionFormat(path: string): string {

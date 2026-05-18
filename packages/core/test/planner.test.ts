@@ -8,10 +8,15 @@ import { createHwpxFixture } from "./fixtures.js";
 
 describe("createSafeOptimizationPlan", () => {
   it("plans XML minify, ZIP repack, and unreferenced BinData removal", async () => {
+    const tinyPng = await sharp({
+      create: { width: 1, height: 1, channels: 4, background: { r: 1, g: 2, b: 3, alpha: 1 } }
+    })
+      .png()
+      .toBuffer();
     const fixture = await createHwpxFixture({
       entries: {
         "Contents/section0.xml": '<root><img href="BinData/used.png" /></root>',
-        "BinData/used.png": Buffer.from("used"),
+        "BinData/used.png": tinyPng,
         "BinData/unused.bin": Buffer.from("unused")
       }
     });
@@ -21,14 +26,29 @@ describe("createSafeOptimizationPlan", () => {
 
     const plan = createSafeOptimizationPlan({ pkg, analysis, graph });
 
-    expect(plan.actions.map((action) => action.type)).toEqual([
-      "minify-xml",
-      "minify-xml",
-      "optimize-png",
-      "remove-unused",
-      "repack-zip"
-    ]);
+    expect(plan.actions.map((action) => action.type)).toEqual(["minify-xml", "minify-xml", "remove-unused", "repack-zip"]);
     expect(plan.actions).not.toContainEqual(expect.objectContaining({ type: "convert-bmp" }));
+  });
+
+  it("skips tiny PNG optimization candidates in safe mode", async () => {
+    const tinyPng = await sharp({
+      create: { width: 1, height: 1, channels: 4, background: { r: 1, g: 2, b: 3, alpha: 1 } }
+    })
+      .png()
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": '<root><img href="BinData/tiny.png" /></root>',
+        "BinData/tiny.png": tinyPng
+      }
+    });
+    const pkg = await readHwpxPackage(fixture);
+    const analysis = await analyzeHwpxPackage(pkg);
+    const graph = buildReferenceGraph(pkg);
+
+    const plan = createSafeOptimizationPlan({ pkg, analysis, graph });
+
+    expect(plan.actions).not.toContainEqual(expect.objectContaining({ type: "optimize-png", target: "BinData/tiny.png" }));
   });
 
   it("does not remove unreferenced non-BinData package images in safe mode", async () => {

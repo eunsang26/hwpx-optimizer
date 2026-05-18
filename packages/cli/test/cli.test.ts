@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 import { createHwpxFixture } from "../../core/test/fixtures.js";
 import { isCliEntrypoint, printAnalysisSummaryForTest, renderHumanReport, runCli } from "../src/index.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
@@ -19,7 +20,7 @@ describe("runCli", () => {
 
     expect(code).toBe(1);
     const usage = errors.join("\n");
-    expect(usage).toContain("analyze <file.hwpx> [--report report.json] [--target-bytes bytes|--target-mb mb]");
+    expect(usage).toContain("analyze <file.hwpx> [--report report.json] [--analysis-mode quick|deep]");
     expect(usage).toContain("batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb]");
     expect(usage).toContain("[--jobs count]");
   });
@@ -89,6 +90,35 @@ describe("runCli", () => {
     expect(logs.join("\n")).toContain("Opportunities:");
     expect(logs.join("\n")).toContain("clean-shape-comment: 1 target");
     expect(logs.join("\n")).toContain("Suggested: hwpx-opt optimize");
+  });
+
+  it("accepts deep analysis mode for precision diagnostics", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const reportPath = join(dir, "report.json");
+    const png = await sharp({
+      create: { width: 16, height: 10, channels: 3, background: "#000000" }
+    })
+      .png()
+      .toBuffer();
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": "<root />",
+        "BinData/a.png": png,
+        "BinData/b.bmp": createBmp24(16, 10)
+      }
+    });
+    await writeFile(inputPath, input);
+
+    const code = await runCli(["analyze", inputPath, "--report", reportPath, "--analysis-mode", "deep"]);
+
+    expect(code).toBe(0);
+    const report = JSON.parse(await readFile(reportPath, "utf8")) as {
+      sameVisualDuplicateImages: Array<{ paths: string[] }>;
+    };
+    expect(report.sameVisualDuplicateImages).toEqual([
+      expect.objectContaining({ paths: ["BinData/a.png", "BinData/b.bmp"] })
+    ]);
   });
 
   it("prints non-overlapping total potential savings in human reports", () => {
@@ -437,6 +467,29 @@ describe("runCli", () => {
     expect(text).toContain("Images:");
   });
 
+  it("includes result insights in human-readable report command output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "shape.hwpx");
+    const reportPath = join(dir, "report.txt");
+    await writeFile(
+      inputPath,
+      await createHwpxFixture({
+        entries: {
+          "Contents/section0.xml": `<root><hp:shapeComment>그림입니다.
+원본 그림의 이름: IMG_1234.JPG
+원본 그림의 크기: 가로 5712pixel, 세로 4284pixel</hp:shapeComment></root>`
+        }
+      })
+    );
+
+    const code = await runCli(["report", inputPath, "--out", reportPath]);
+
+    expect(code).toBe(0);
+    const text = await readFile(reportPath, "utf8");
+    expect(text).toContain("결과 해석:");
+    expect(text).toContain("가장 큰 절감 후보: clean-shape-comment");
+  });
+
   it("accepts --report as an alias for human-readable report output", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
@@ -483,6 +536,50 @@ describe("runCli", () => {
     expect(text).toContain("Resource diagnostics: 1");
   });
 
+  it("adds concise result insights to human reports", () => {
+    const text = renderHumanReport("/x/input.hwpx", {
+      ...minimalReport,
+      originalSize: 20 * 1024 * 1024,
+      targetBytes: 10 * 1024 * 1024,
+      targetStatus: "missed",
+      targetMissReason: "No quality-preserving candidate reached the target.",
+      opportunityGroups: [
+        {
+          action: "resize-jpeg",
+          label: "Resize JPEG",
+          count: 2,
+          estimatedSavingBytes: 8 * 1024 * 1024,
+          beforeSize: 12,
+          afterSize: 4,
+          confidence: "estimated",
+          risk: "medium",
+          visualImpact: "medium",
+          defaultEnabledIn: ["balanced", "aggressive"],
+          targets: ["BinData/a.jpg", "BinData/b.jpg"]
+        }
+      ],
+      actions: {
+        planned: [],
+        applied: [],
+        skipped: [{ type: "resize-png", target: "BinData/c.png", beforeSize: 10, afterSize: 12 }]
+      },
+      performance: {
+        totalMs: 1234,
+        stages: [
+          { name: "read", durationMs: 10 },
+          { name: "analyze", durationMs: 900 },
+          { name: "write", durationMs: 324 }
+        ]
+      }
+    });
+
+    expect(text).toContain("결과 해석:");
+    expect(text).toContain("- 목표 미달: No quality-preserving candidate reached the target.");
+    expect(text).toContain("- 가장 큰 절감 후보: resize-jpeg 2개, 약 8.00 MiB");
+    expect(text).toContain("- 보류된 작업: resize-png 1개");
+    expect(text).toContain("- 처리 시간: 총 1.23s, 최장 단계 analyze 900.0ms");
+  });
+
   it("does not overwrite existing human-readable reports by default", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
@@ -522,8 +619,11 @@ describe("runCli", () => {
     expect(code).toBe(1);
     expect((await readFile(join(outDir, "good.optimized.hwpx"))).byteLength).toBeGreaterThan(0);
     const summary = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8")) as {
+      totals: { optimized: number; failed: number; totalSavedBytes: number };
       results: Array<{ input: string; status: "optimized" | "failed"; error?: string }>;
     };
+    expect(summary.totals).toMatchObject({ optimized: 1, failed: 1 });
+    expect(summary.totals.totalSavedBytes).toBeGreaterThanOrEqual(0);
     expect(summary.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ input: "good.hwpx", status: "optimized" }),
@@ -649,3 +749,20 @@ const minimalReport: OptimizationReport = {
   opportunityGroups: [],
   warnings: []
 };
+
+function createBmp24(width: number, height: number): Buffer {
+  const rowSize = Math.ceil((width * 3) / 4) * 4;
+  const pixelDataSize = rowSize * height;
+  const fileSize = 54 + pixelDataSize;
+  const buffer = Buffer.alloc(fileSize);
+  buffer.write("BM", 0, "ascii");
+  buffer.writeUInt32LE(fileSize, 2);
+  buffer.writeUInt32LE(54, 10);
+  buffer.writeUInt32LE(40, 14);
+  buffer.writeInt32LE(width, 18);
+  buffer.writeInt32LE(height, 22);
+  buffer.writeUInt16LE(1, 26);
+  buffer.writeUInt16LE(24, 28);
+  buffer.writeUInt32LE(pixelDataSize, 34);
+  return buffer;
+}

@@ -475,6 +475,91 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     throw new Error("Desktop smoke failed: settings output folder controls did not render");
   }
 
+  const layout = (await window.webContents.executeJavaScript(`
+    (() => {
+      document.getElementById("settings-close-button")?.click();
+      document.getElementById("help-button")?.click();
+      const workspace = document.getElementById("single-workspace");
+      const details = document.getElementById("analysis-details");
+      const safeLine = document.querySelector(".safe-line");
+      const helpPanel = document.getElementById("help-panel");
+      const detailsWidth = details?.getBoundingClientRect().width ?? 0;
+      const safeLineWidth = safeLine?.getBoundingClientRect().width ?? 0;
+      return {
+        detailsInsideWorkspace: workspace?.contains(details) ?? false,
+        detailsWidth,
+        safeLineWidth,
+        widthDelta: Math.abs(detailsWidth - safeLineWidth),
+        helpOpen: helpPanel?.classList.contains("is-open") ?? false,
+        helpTitle: document.getElementById("help-title")?.textContent,
+        manualStepCount: document.querySelectorAll(".manual-steps li").length
+      };
+    })()
+  `)) as {
+    detailsInsideWorkspace?: boolean;
+    detailsWidth?: number;
+    safeLineWidth?: number;
+    widthDelta?: number;
+    helpOpen?: boolean;
+    helpTitle?: string;
+    manualStepCount?: number;
+  };
+
+  if (layout.detailsInsideWorkspace !== true) {
+    throw new Error("Desktop smoke failed: analysis details are outside the primary workspace");
+  }
+  if (!layout.detailsWidth || !layout.safeLineWidth || (layout.widthDelta ?? Number.POSITIVE_INFINITY) > 1) {
+    throw new Error(
+      `Desktop smoke failed: analysis details width ${String(layout.detailsWidth)} does not match workspace width ${String(layout.safeLineWidth)}`
+    );
+  }
+  if (layout.helpOpen !== true || layout.helpTitle !== "사용 매뉴얼" || layout.manualStepCount !== 9) {
+    throw new Error("Desktop smoke failed: manual-style help panel did not render");
+  }
+
+  const dragUi = (await window.webContents.executeJavaScript(`
+    (() => {
+      document.getElementById("help-close-button")?.click();
+      const dragEnter = new DragEvent("dragenter", { bubbles: true, cancelable: true });
+      document.dispatchEvent(dragEnter);
+      const overlay = document.getElementById("drop-overlay");
+      const active = document.body.dataset.dragOver === "true";
+      const overlayVisible = overlay?.hidden === false;
+      const overlayText = overlay?.textContent ?? "";
+      const drop = new DragEvent("drop", { bubbles: true, cancelable: true });
+      document.dispatchEvent(drop);
+      return {
+        active,
+        overlayVisible,
+        overlayText,
+        statusBannerExists: Boolean(document.getElementById("status-banner")),
+        hasSubmission41Preset: Boolean(document.querySelector("#submission-limit-select option[value='mb41']")),
+        batchResultDetailsExists: Boolean(document.getElementById("batch-result-details")),
+        cleared: document.body.dataset.dragOver !== "true" && overlay?.hidden === true
+      };
+    })()
+  `)) as {
+    active?: boolean;
+    overlayVisible?: boolean;
+    overlayText?: string;
+    statusBannerExists?: boolean;
+    hasSubmission41Preset?: boolean;
+    batchResultDetailsExists?: boolean;
+    cleared?: boolean;
+  };
+
+  if (
+    dragUi.active !== true ||
+    dragUi.overlayVisible !== true ||
+    !dragUi.overlayText?.includes("HWPX 파일을 여기에 놓으세요") ||
+    dragUi.statusBannerExists !== true ||
+    dragUi.hasSubmission41Preset !== true ||
+    dragUi.batchResultDetailsExists !== true ||
+    dragUi.cleared !== true
+  ) {
+    throw new Error("Desktop smoke failed: full-window drag overlay did not respond to drag/drop events");
+  }
+
   const workflow = (await window.webContents.executeJavaScript(`
     (async () => {
       const progress = [];

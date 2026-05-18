@@ -74,6 +74,8 @@ describe("template HTML builders", () => {
     };
     const html = batchItemRowHtml(completed, 0, { running: false });
     expect(html).toContain("a.hwpx");
+    expect(html).toContain('class="batch-status-cell"');
+    expect(html).toContain('class="status-line"');
     expect(html).toContain('class="status done"');
     expect(html).toContain("완료");
     expect(html).toContain("절감 4.0 KiB (12.50%)");
