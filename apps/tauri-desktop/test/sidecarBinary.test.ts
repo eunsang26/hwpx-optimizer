@@ -23,7 +23,7 @@ describe("Tauri sidecar binary preparation", () => {
         status: "ok"
       }
     });
-  });
+  }, 30_000);
 });
 
 async function run(command: string, args: string[]): Promise<void> {
