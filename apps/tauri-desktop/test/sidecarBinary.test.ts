@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 describe("Tauri sidecar binary preparation", () => {
   it("creates a target-triple Node sidecar binary that can run the built sidecar entry", async () => {
-    await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "build", "-w", "@hwpx-optimizer/tauri-desktop"]);
+    await runNpm(["run", "build", "-w", "@hwpx-optimizer/tauri-desktop"]);
     await run(process.execPath, ["scripts/prepare-tauri-sidecar.mjs"]);
     const triple = process.platform === "linux" && process.arch === "x64"
       ? "x86_64-unknown-linux-gnu"
@@ -30,6 +30,12 @@ async function run(command: string, args: string[]): Promise<void> {
   const child = spawn(command, args, { cwd: process.cwd(), stdio: "inherit" });
   const [code] = await once(child, "exit");
   if (code !== 0) throw new Error(`${command} ${args.join(" ")} exited with ${code}`);
+}
+
+async function runNpm(args: string[]): Promise<void> {
+  const npmCli = process.env.npm_execpath;
+  if (!npmCli) throw new Error("npm_execpath is not available.");
+  await run(process.execPath, [npmCli, ...args]);
 }
 
 async function runSidecarBinary(sidecarPath: string, sidecarEntry: string): Promise<unknown> {
