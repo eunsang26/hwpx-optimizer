@@ -16,6 +16,12 @@ export type SidecarResponse =
       error: string;
     };
 
+export type SidecarEvent = {
+  id: number;
+  event: "progress";
+  progress: { percent: number; item: string };
+};
+
 export function parseSidecarRequest(line: string): SidecarRequest {
   const parsed = JSON.parse(line) as Partial<SidecarRequest>;
   if (typeof parsed.id !== "number" || !Number.isSafeInteger(parsed.id) || parsed.id < 0) {
@@ -30,4 +36,8 @@ export function parseSidecarRequest(line: string): SidecarRequest {
 
 export function serializeSidecarResponse(response: SidecarResponse): string {
   return `${JSON.stringify(response)}\n`;
+}
+
+export function serializeSidecarEvent(event: SidecarEvent): string {
+  return `${JSON.stringify(event)}\n`;
 }

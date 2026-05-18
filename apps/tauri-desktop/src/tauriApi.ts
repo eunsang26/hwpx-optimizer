@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 type OptimizationMode = "safe" | "balanced" | "aggressive";
 
@@ -37,8 +38,22 @@ const api = {
   optimize: (input: OptimizeInput) => invoke("optimize_hwpx", { input }),
   cancelAnalyze: () => invoke("cancel_analyze"),
   cancelOptimize: () => invoke("cancel_optimize"),
-  onOptimizeProgress: (_callback: ProgressCallback): (() => void) => {
-    return () => undefined;
+  onOptimizeProgress: (callback: ProgressCallback): (() => void) => {
+    let active = true;
+    let unlisten: (() => void) | undefined;
+    void listen("hwpx:optimize-progress", (event) => {
+      callback(event.payload as { percent: number; item: string });
+    }).then((nextUnlisten) => {
+      if (active) {
+        unlisten = nextUnlisten;
+      } else {
+        nextUnlisten();
+      }
+    });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
   },
   verify: (filePath: string) => invoke("verify_hwpx", { filePath }),
   saveBatchReport: (input: Record<string, unknown>): Promise<{ reportPath: string }> =>

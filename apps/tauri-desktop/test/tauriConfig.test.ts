@@ -92,7 +92,9 @@ describe("Tauri desktop scaffold", () => {
   it("provides a browser adapter shaped like the Electron preload API", async () => {
     const adapter = await readFile("apps/tauri-desktop/src/tauriApi.ts", "utf8");
 
+    expect(adapter).toContain('import { listen } from "@tauri-apps/api/event"');
     expect(adapter).toContain("window.hwpxOptimizer");
+    expect(adapter).toContain('listen("hwpx:optimize-progress"');
     for (const method of [
       "selectHwpx",
       "selectHwpxMany",
@@ -107,5 +109,17 @@ describe("Tauri desktop scaffold", () => {
     ]) {
       expect(adapter).toContain(`${method}:`);
     }
+  });
+
+  it("keeps generated-path actions implemented in the Rust shell instead of as PoC stubs", async () => {
+    const rustMain = await readFile("apps/tauri-desktop/src-tauri/src/main.rs", "utf8");
+
+    expect(rustMain).toContain('app.emit("hwpx:optimize-progress"');
+    expect(rustMain).toContain('"saveBatchReport"');
+    expect(rustMain).toContain('"previewImageDiffs"');
+    expect(rustMain).toContain("Command::new");
+    expect(rustMain).not.toContain("Batch report saving is outside the Tauri PoC scope.");
+    expect(rustMain).not.toContain("showItem is outside the Tauri PoC scope");
+    expect(rustMain).not.toContain("openPath is outside the Tauri PoC scope");
   });
 });

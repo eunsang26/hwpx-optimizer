@@ -72,6 +72,71 @@ describe("Tauri Node sidecar protocol", () => {
     }
   });
 
+  it("writes batch reports through the packaged sidecar core", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-report-"));
+    try {
+      const reportDirectory = join(dir, "output");
+      const responses = await runSidecarRequests([
+        {
+          id: 1,
+          method: "saveBatchReport",
+          params: {
+            reportDirectory,
+            mode: "balanced",
+            settings: { preventOverwrite: true },
+            items: [
+              {
+                input: join(dir, "a.hwpx"),
+                status: "done",
+                output: join(dir, "a_optimized.hwpx"),
+                originalSize: 2048,
+                optimizedSize: 1024,
+                savedBytes: 1024,
+                savedPercent: 50
+              },
+              {
+                input: join(dir, "b.hwpx"),
+                status: "failed",
+                error: "Unsupported content"
+              }
+            ]
+          }
+        }
+      ]);
+
+      expect(responses).toMatchObject([{ id: 1, ok: true }]);
+      const result = responses[0]?.result as { reportPath?: string };
+      expect(result.reportPath).toBe(join(reportDirectory, "batch-report.json"));
+      const report = JSON.parse(await readFile(result.reportPath, "utf8")) as {
+        mode: string;
+        totals: { done: number; failed: number; cancelled: number; savedBytes: number };
+      };
+      expect(report.mode).toBe("balanced");
+      expect(report.totals).toEqual({ done: 1, failed: 1, cancelled: 0, savedBytes: 1024 });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("emits optimization progress events before the final optimize response", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-progress-"));
+    try {
+      const inputPath = join(dir, "input.hwpx");
+      await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+      const messages = await runSidecarProcess(`${JSON.stringify({
+        id: 1,
+        method: "optimize",
+        params: { filePath: inputPath, mode: "safe" }
+      })}\n`);
+
+      expect(messages.some((message) => message.ok === undefined && message.event === "progress")).toBe(true);
+      expect(messages.at(-1)).toMatchObject({ id: 1, ok: true });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects invalid protocol ids", async () => {
     await expect(runRawSidecarLine(JSON.stringify({ id: -1, method: "health" }))).resolves.toEqual({
       id: 0,
@@ -87,7 +152,13 @@ async function runSidecarRequests(requests: Array<{ id: number; method: string; 
   result?: unknown;
   error?: string;
 }>> {
-  return runSidecarProcess(requests.map((request) => JSON.stringify(request)).join("\n") + "\n");
+  return runSidecarProcess(requests.map((request) => JSON.stringify(request)).join("\n") + "\n")
+    .then((messages) => messages.filter((message): message is {
+      id: number;
+      ok: boolean;
+      result?: unknown;
+      error?: string;
+    } => typeof message.ok === "boolean"));
 }
 
 async function runRawSidecarLine(line: string): Promise<{ id: number; ok: boolean; result?: unknown; error?: string }> {
@@ -97,7 +168,9 @@ async function runRawSidecarLine(line: string): Promise<{ id: number; ok: boolea
 
 async function runSidecarProcess(input: string): Promise<Array<{
   id: number;
-  ok: boolean;
+  ok?: boolean;
+  event?: string;
+  progress?: unknown;
   result?: unknown;
   error?: string;
 }>> {
