@@ -144,6 +144,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("handleAdditionalPaths(selected)");
     expect(renderer).toContain('document.addEventListener("dragover"');
     expect(renderer).toContain('document.addEventListener("drop"');
+    expect(renderer).toContain('window.addEventListener("hwpx-tauri-dropped-files"');
     expect(renderer).toContain("function clearSelectedFiles");
     expect(renderer).toContain('isSingle ? "파일 제거" : "목록 비우기"');
     expect(renderer).toContain("verificationBody.textContent");

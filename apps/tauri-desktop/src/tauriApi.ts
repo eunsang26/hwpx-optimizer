@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { Event } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import type { DragDropEvent } from "@tauri-apps/api/webview";
 
 type OptimizationMode = "safe" | "balanced" | "aggressive";
 
@@ -23,15 +26,21 @@ type OptimizeInput = {
 
 type ProgressCallback = (progress: { percent: number; item: string }) => void;
 
+void getCurrentWebview()
+  .onDragDropEvent((event: Event<DragDropEvent>) => {
+    if (event.payload.type === "drop") {
+      window.dispatchEvent(new CustomEvent("hwpx-tauri-dropped-files"));
+    }
+  })
+  .catch(() => undefined);
+
 const api = {
   health: () => invoke("sidecar_health"),
   selectHwpx: (): Promise<string | null> => invoke("select_hwpx"),
   selectHwpxMany: (): Promise<string[] | null> => invoke("select_hwpx_many"),
   selectHwpxFolder: (): Promise<{ directory: string; files: string[] } | null> => invoke("select_hwpx_folder"),
   selectDirectory: (): Promise<string | null> => invoke("select_directory"),
-  registerDroppedHwpxFiles: async (): Promise<string[]> => {
-    throw new Error("Tauri PoC does not trust browser-provided dropped file paths yet.");
-  },
+  registerDroppedHwpxFiles: async (): Promise<string[]> => invoke("consume_dropped_hwpx_files"),
   loadSettings: (): Promise<DesktopSettings> => invoke("load_settings"),
   saveSettings: (patch: Record<string, unknown>): Promise<DesktopSettings> => invoke("save_settings", { patch }),
   analyze: (filePath: string) => invoke("analyze_hwpx", { filePath }),

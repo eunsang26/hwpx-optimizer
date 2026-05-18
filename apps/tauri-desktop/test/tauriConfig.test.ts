@@ -92,9 +92,12 @@ describe("Tauri desktop scaffold", () => {
   it("provides a browser adapter shaped like the Electron preload API", async () => {
     const adapter = await readFile("apps/tauri-desktop/src/tauriApi.ts", "utf8");
 
+    expect(adapter).toContain('import { getCurrentWebview } from "@tauri-apps/api/webview"');
     expect(adapter).toContain('import { listen } from "@tauri-apps/api/event"');
     expect(adapter).toContain("window.hwpxOptimizer");
     expect(adapter).toContain('listen("hwpx:optimize-progress"');
+    expect(adapter).toContain('window.dispatchEvent(new CustomEvent("hwpx-tauri-dropped-files"))');
+    expect(adapter).toContain('invoke("consume_dropped_hwpx_files"');
     for (const method of [
       "selectHwpx",
       "selectHwpxMany",
@@ -114,10 +117,16 @@ describe("Tauri desktop scaffold", () => {
   it("keeps generated-path actions implemented in the Rust shell instead of as PoC stubs", async () => {
     const rustMain = await readFile("apps/tauri-desktop/src-tauri/src/main.rs", "utf8");
 
+    expect(rustMain).toContain("ActiveSidecar");
+    expect(rustMain).toContain("active_child");
+    expect(rustMain).toContain("consume_dropped_hwpx_files");
+    expect(rustMain).toContain("on_webview_event");
+    expect(rustMain).toContain("DragDropEvent::Drop");
     expect(rustMain).toContain('app.emit("hwpx:optimize-progress"');
     expect(rustMain).toContain('"saveBatchReport"');
     expect(rustMain).toContain('"previewImageDiffs"');
     expect(rustMain).toContain("Command::new");
+    expect(rustMain).not.toContain('"not implemented in PoC"');
     expect(rustMain).not.toContain("Batch report saving is outside the Tauri PoC scope.");
     expect(rustMain).not.toContain("showItem is outside the Tauri PoC scope");
     expect(rustMain).not.toContain("openPath is outside the Tauri PoC scope");

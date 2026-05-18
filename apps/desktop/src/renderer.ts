@@ -109,6 +109,7 @@ let analysisSequence = 0;
 let progressAnimationTimer: number | undefined;
 let displayedProgressPercent = 0;
 let targetProgressPercent = 0;
+let lastTauriDropEventAt = 0;
 const CLEANUP_ACTIONS = ["clean-shape-comment", "strip-metadata"] as const satisfies readonly SubmissionActionId[];
 
 type DesktopSettings = {
@@ -448,33 +449,14 @@ async function init(): Promise<void> {
   document.addEventListener("drop", async (event) => {
     event.preventDefault();
     setDragOver(false);
+    if (Date.now() - lastTauriDropEventAt < 500) return;
     const dropped = event.dataTransfer?.files;
-    if (!dropped || dropped.length === 0) {
-      setStatus("HWPX 파일만 선택할 수 있습니다.");
-      return;
-    }
-    const files = Array.from(dropped);
-    const hwpxFiles = files.filter((file) => file.name.toLowerCase().endsWith(".hwpx"));
-    const nonHwpx = files.length - hwpxFiles.length;
-    let paths: string[] = [];
-    try {
-      paths = await window.hwpxOptimizer.registerDroppedHwpxFiles(hwpxFiles);
-    } catch (error) {
-      setStatus(errorMessage(error));
-      return;
-    }
-    const unresolved = Math.max(0, hwpxFiles.length - paths.length);
-    if (paths.length === 0) {
-      if (unresolved > 0) {
-        setStatus("드롭한 파일의 경로를 확인할 수 없습니다. 파일 선택 버튼을 사용하세요.");
-      } else if (nonHwpx > 0) {
-        setStatus("HWPX 파일만 선택할 수 있습니다.");
-      } else {
-        setStatus("처리할 HWPX 파일을 찾지 못했습니다.");
-      }
-      return;
-    }
-    await handleAdditionalPaths(paths);
+    await handleDroppedFiles(dropped ? Array.from(dropped) : []);
+  });
+  window.addEventListener("hwpx-tauri-dropped-files", () => {
+    lastTauriDropEventAt = Date.now();
+    setDragOver(false);
+    void handleDroppedFiles([], { allowEmptyRegistration: true, silentWhenEmpty: true });
   });
 
   renderModeWarning();
@@ -514,6 +496,38 @@ async function handleAdditionalPaths(paths: string[]): Promise<void> {
     return;
   }
   await handleSelectedPaths(paths);
+}
+
+async function handleDroppedFiles(
+  files: File[],
+  options: { allowEmptyRegistration?: boolean; silentWhenEmpty?: boolean } = {}
+): Promise<void> {
+  if (files.length === 0 && !options.allowEmptyRegistration) {
+    setStatus("HWPX 파일만 선택할 수 있습니다.");
+    return;
+  }
+  const hwpxFiles = files.filter((file) => file.name.toLowerCase().endsWith(".hwpx"));
+  const nonHwpx = files.length - hwpxFiles.length;
+  let paths: string[] = [];
+  try {
+    paths = await window.hwpxOptimizer.registerDroppedHwpxFiles(hwpxFiles);
+  } catch (error) {
+    setStatus(errorMessage(error));
+    return;
+  }
+  const unresolved = Math.max(0, hwpxFiles.length - paths.length);
+  if (paths.length === 0) {
+    if (options.silentWhenEmpty) return;
+    if (unresolved > 0) {
+      setStatus("드롭한 파일의 경로를 확인할 수 없습니다. 파일 선택 버튼을 사용하세요.");
+    } else if (nonHwpx > 0) {
+      setStatus("HWPX 파일만 선택할 수 있습니다.");
+    } else {
+      setStatus("처리할 HWPX 파일을 찾지 못했습니다.");
+    }
+    return;
+  }
+  await handleAdditionalPaths(paths);
 }
 
 async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {

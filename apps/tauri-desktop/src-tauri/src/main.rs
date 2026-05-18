@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 #[derive(Debug, Deserialize)]
@@ -26,6 +26,13 @@ struct PathRegistry {
     input_paths: HashSet<String>,
     output_dirs: HashSet<String>,
     generated_paths: HashSet<String>,
+    dropped_input_paths: Vec<String>,
+}
+
+#[derive(Default)]
+struct ActiveSidecar {
+    active_child: Option<(u32, CommandChild)>,
+    cancelled_pids: HashSet<u32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -185,13 +192,21 @@ fn save_settings(app: AppHandle, patch: Value) -> Result<Value, String> {
 }
 
 #[tauri::command]
-fn cancel_analyze() -> Value {
-    json!({ "ok": true, "cancelled": false, "reason": "not implemented in PoC" })
+fn cancel_analyze(active: State<'_, Mutex<ActiveSidecar>>) -> Result<Value, String> {
+    cancel_active_sidecar(active)
 }
 
 #[tauri::command]
-fn cancel_optimize() -> Value {
-    json!({ "ok": true, "cancelled": false, "reason": "not implemented in PoC" })
+fn cancel_optimize(active: State<'_, Mutex<ActiveSidecar>>) -> Result<Value, String> {
+    cancel_active_sidecar(active)
+}
+
+#[tauri::command]
+fn consume_dropped_hwpx_files(
+    registry: State<'_, Mutex<PathRegistry>>,
+) -> Result<Vec<String>, String> {
+    let mut registry = registry.lock().map_err(|error| error.to_string())?;
+    Ok(std::mem::take(&mut registry.dropped_input_paths))
 }
 
 #[tauri::command]
@@ -307,6 +322,7 @@ async fn call_sidecar(app: AppHandle, method: &str, params: Value) -> Result<Val
         .map_err(|error| error.to_string())?
         .args([sidecar_entry_arg]);
     let (mut rx, mut child) = sidecar_command.spawn().map_err(|error| error.to_string())?;
+    let pid = child.pid();
 
     let request = SidecarRequest {
         id: 1,
@@ -320,6 +336,15 @@ async fn call_sidecar(app: AppHandle, method: &str, params: Value) -> Result<Val
     child
         .write(request_line.as_bytes())
         .map_err(|error| error.to_string())?;
+    {
+        let active = app.state::<Mutex<ActiveSidecar>>();
+        let mut active = active.lock().map_err(|error| error.to_string())?;
+        if active.active_child.is_some() {
+            let _ = child.kill();
+            return Err("Another sidecar operation is already running.".into());
+        }
+        active.active_child = Some((pid, child));
+    }
 
     let mut stderr = String::new();
     while let Some(event) = rx.recv().await {
@@ -336,10 +361,10 @@ async fn call_sidecar(app: AppHandle, method: &str, params: Value) -> Result<Val
                     continue;
                 }
                 if response.get("ok").and_then(Value::as_bool) == Some(true) {
-                    let _ = child.kill();
+                    let _ = finish_active_sidecar(&app, pid, true);
                     return Ok(response.get("result").cloned().unwrap_or(Value::Null));
                 }
-                let _ = child.kill();
+                let _ = finish_active_sidecar(&app, pid, true);
                 return Err(response
                     .get("error")
                     .and_then(Value::as_str)
@@ -350,6 +375,10 @@ async fn call_sidecar(app: AppHandle, method: &str, params: Value) -> Result<Val
                 stderr.push_str(&String::from_utf8_lossy(&line_bytes));
             }
             CommandEvent::Terminated(payload) => {
+                let _ = finish_active_sidecar(&app, pid, false);
+                if take_cancelled_pid(&app, pid)? {
+                    return Err("Operation cancelled.".into());
+                }
                 return Err(format!(
                     "Sidecar terminated before response: {:?}; {}",
                     payload, stderr
@@ -357,6 +386,10 @@ async fn call_sidecar(app: AppHandle, method: &str, params: Value) -> Result<Val
             }
             _ => {}
         }
+    }
+    let _ = finish_active_sidecar(&app, pid, false);
+    if take_cancelled_pid(&app, pid)? {
+        return Err("Operation cancelled.".into());
     }
     Err(format!("Sidecar ended without response. {}", stderr))
 }
@@ -401,6 +434,27 @@ fn is_hwpx_path(path: &Path) -> bool {
 fn register_input(registry: &State<'_, Mutex<PathRegistry>>, path: &str) -> Result<(), String> {
     let mut registry = registry.lock().map_err(|error| error.to_string())?;
     registry.input_paths.insert(path.to_string());
+    Ok(())
+}
+
+fn register_dropped_hwpx_paths(
+    registry: &Mutex<PathRegistry>,
+    paths: &[PathBuf],
+) -> Result<(), String> {
+    let mut dropped = Vec::new();
+    for path in paths {
+        if !is_hwpx_path(path) {
+            continue;
+        }
+        if let Ok(normalized) = normalize_existing_file(path.to_path_buf()) {
+            dropped.push(normalized);
+        }
+    }
+    let mut registry = registry.lock().map_err(|error| error.to_string())?;
+    registry.dropped_input_paths = dropped.clone();
+    for path in dropped {
+        registry.input_paths.insert(path);
+    }
     Ok(())
 }
 
@@ -651,9 +705,48 @@ fn open_generated_path(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn cancel_active_sidecar(active: State<'_, Mutex<ActiveSidecar>>) -> Result<Value, String> {
+    let mut active = active.lock().map_err(|error| error.to_string())?;
+    let Some((pid, child)) = active.active_child.take() else {
+        return Ok(json!({ "ok": true, "cancelled": false }));
+    };
+    active.cancelled_pids.insert(pid);
+    child.kill().map_err(|error| error.to_string())?;
+    Ok(json!({ "ok": true, "cancelled": true }))
+}
+
+fn finish_active_sidecar(app: &AppHandle, pid: u32, kill: bool) -> Result<(), String> {
+    let active = app.state::<Mutex<ActiveSidecar>>();
+    let mut active = active.lock().map_err(|error| error.to_string())?;
+    let Some((active_pid, child)) = active.active_child.take() else {
+        return Ok(());
+    };
+    if active_pid == pid {
+        if kill {
+            let _ = child.kill();
+        }
+        return Ok(());
+    }
+    active.active_child = Some((active_pid, child));
+    Ok(())
+}
+
+fn take_cancelled_pid(app: &AppHandle, pid: u32) -> Result<bool, String> {
+    let active = app.state::<Mutex<ActiveSidecar>>();
+    let mut active = active.lock().map_err(|error| error.to_string())?;
+    Ok(active.cancelled_pids.remove(&pid))
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Mutex::new(PathRegistry::default()))
+        .manage(Mutex::new(ActiveSidecar::default()))
+        .on_webview_event(|webview, event| {
+            if let tauri::WebviewEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                let registry = webview.app_handle().state::<Mutex<PathRegistry>>();
+                let _ = register_dropped_hwpx_paths(&registry, paths);
+            }
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -668,6 +761,7 @@ fn main() {
             optimize_hwpx,
             cancel_analyze,
             cancel_optimize,
+            consume_dropped_hwpx_files,
             verify_hwpx,
             save_batch_report,
             preview_image_diffs,
