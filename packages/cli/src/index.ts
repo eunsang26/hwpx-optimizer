@@ -386,6 +386,7 @@ async function runBatch(
     .sort();
   const jobs = parseBatchJobs(options.jobs);
   const results = new Array<BatchFileResult>(files.length);
+  const startedAt = Date.now();
 
   await mapLimit([...files.entries()], jobs, async ([index, file]) => {
     const sourcePath = join(inputDir, file);
@@ -402,9 +403,9 @@ async function runBatch(
       const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       stage = "write-output";
       await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2));
-      results[index] = { input: file, status: "optimized", output: outputPath, report: reportPath };
       const savedBytes = result.report.savedBytes ?? 0;
       const savedPercent = result.report.savedPercent ?? 0;
+      results[index] = { input: file, status: "optimized", output: outputPath, report: reportPath, savedBytes, savedPercent };
       console.log(`${progressPrefix} optimized -${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -416,6 +417,12 @@ async function runBatch(
 
   const requestedBatchReportPath = join(outputDir, "batch-report.json");
   const reportPath = overwrite ? requestedBatchReportPath : await nextAvailablePath(requestedBatchReportPath);
+  const optimizedCount = completedResults.filter((result) => result.status === "optimized").length;
+  const failedCount = completedResults.filter((result) => result.status === "failed").length;
+  const totalSavedBytes = completedResults.reduce(
+    (sum, result) => sum + (result.status === "optimized" ? result.savedBytes : 0),
+    0
+  );
   await writeFile(
     reportPath,
     JSON.stringify(
@@ -424,6 +431,12 @@ async function runBatch(
         inputDir,
         outputDir,
         jobs,
+        elapsedMs: Date.now() - startedAt,
+        totals: {
+          optimized: optimizedCount,
+          failed: failedCount,
+          totalSavedBytes
+        },
         results: completedResults
       },
       null,
@@ -431,8 +444,8 @@ async function runBatch(
     )
   );
   return {
-    optimized: completedResults.filter((result) => result.status === "optimized").length,
-    failed: completedResults.filter((result) => result.status === "failed").length,
+    optimized: optimizedCount,
+    failed: failedCount,
     reportPath
   };
 }
@@ -463,6 +476,11 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
     `Resource diagnostics: ${report.resourceDiagnostics?.length ?? 0}`,
     `Potential saving (non-overlap): ${formatBytes(estimateNonOverlappingSavingBytes(report.opportunityGroups))}`
   ];
+  const insights = createHumanReportInsights(report);
+  if (insights.length > 0) {
+    lines.push("결과 해석:");
+    lines.push(...insights.map((insight) => `- ${insight}`));
+  }
   if (report.opportunityGroups.length > 0) {
     lines.push("Opportunities:");
     for (const group of report.opportunityGroups) {
@@ -493,6 +511,34 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
   return `${lines.join("\n")}\n`;
 }
 
+function createHumanReportInsights(report: OptimizationReport): string[] {
+  const insights: string[] = [];
+  if (report.targetStatus === "missed" && report.targetMissReason) {
+    insights.push(`목표 미달: ${report.targetMissReason}`);
+  }
+  const largestOpportunity = [...report.opportunityGroups].sort(
+    (left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes
+  )[0];
+  if (largestOpportunity) {
+    insights.push(
+      `가장 큰 절감 후보: ${largestOpportunity.action} ${formatKoreanCount(largestOpportunity.count)}, 약 ${formatBytes(largestOpportunity.estimatedSavingBytes)}`
+    );
+  }
+  const skippedCounts = countAppliedActions(report.actions.skipped);
+  if (skippedCounts.length > 0) {
+    insights.push(`보류된 작업: ${skippedCounts.map(([type, count]) => `${type} ${formatKoreanCount(count)}`).join(", ")}`);
+  }
+  if (report.performance) {
+    const longestStage = [...report.performance.stages].sort((left, right) => right.durationMs - left.durationMs)[0];
+    if (longestStage) {
+      insights.push(
+        `처리 시간: 총 ${(report.performance.totalMs / 1000).toFixed(2)}s, 최장 단계 ${longestStage.name} ${longestStage.durationMs.toFixed(1)}ms`
+      );
+    }
+  }
+  return insights;
+}
+
 function printTargetSummary(report: OptimizationReport): void {
   if (!report.targetBytes) return;
   console.log(`Target: ${formatBytes(report.targetBytes)} (${report.targetStatus ?? "unknown"})`);
@@ -509,6 +555,10 @@ function countAppliedActions(actions: AppliedAction[]): Array<[AppliedAction["ty
 
 function formatTargetCount(count: number): string {
   return count === 1 ? "1 target" : `${count} targets`;
+}
+
+function formatKoreanCount(count: number): string {
+  return `${count}개`;
 }
 
 function formatBytes(bytes: number): string {
@@ -584,7 +634,7 @@ type OptimizationMode = "safe" | "balanced" | "aggressive";
 type BatchFailureStage = "read-input" | "optimize" | "resolve-output-path" | "write-output" | "write-report";
 
 type BatchFileResult =
-  | { input: string; status: "optimized"; output: string; report: string }
+  | { input: string; status: "optimized"; output: string; report: string; savedBytes: number; savedPercent: number }
   | { input: string; status: "failed"; stage: BatchFailureStage; error: string };
 
 function isOptimizationMode(value: string): value is OptimizationMode {

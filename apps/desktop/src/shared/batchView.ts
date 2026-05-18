@@ -77,6 +77,7 @@ export function summarizeBatchItems(items: BatchItemLike[], options: { running: 
     };
   }
   const segments: string[] = [`${items.length}개 파일`];
+  if (counts.failed > 0 || counts.cancelled > 0) segments.push("확인 필요");
   if (counts.done > 0) segments.push(`완료 ${counts.done}`);
   if (counts.failed > 0) segments.push(`실패 ${counts.failed}`);
   if (counts.cancelled > 0) segments.push(`취소 ${counts.cancelled}`);

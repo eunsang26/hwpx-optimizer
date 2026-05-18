@@ -483,6 +483,50 @@ describe("runCli", () => {
     expect(text).toContain("Resource diagnostics: 1");
   });
 
+  it("adds concise result insights to human reports", () => {
+    const text = renderHumanReport("/x/input.hwpx", {
+      ...minimalReport,
+      originalSize: 20 * 1024 * 1024,
+      targetBytes: 10 * 1024 * 1024,
+      targetStatus: "missed",
+      targetMissReason: "No quality-preserving candidate reached the target.",
+      opportunityGroups: [
+        {
+          action: "resize-jpeg",
+          label: "Resize JPEG",
+          count: 2,
+          estimatedSavingBytes: 8 * 1024 * 1024,
+          beforeSize: 12,
+          afterSize: 4,
+          confidence: "estimated",
+          risk: "medium",
+          visualImpact: "medium",
+          defaultEnabledIn: ["balanced", "aggressive"],
+          targets: ["BinData/a.jpg", "BinData/b.jpg"]
+        }
+      ],
+      actions: {
+        planned: [],
+        applied: [],
+        skipped: [{ type: "resize-png", target: "BinData/c.png", beforeSize: 10, afterSize: 12 }]
+      },
+      performance: {
+        totalMs: 1234,
+        stages: [
+          { name: "read", durationMs: 10 },
+          { name: "analyze", durationMs: 900 },
+          { name: "write", durationMs: 324 }
+        ]
+      }
+    });
+
+    expect(text).toContain("결과 해석:");
+    expect(text).toContain("- 목표 미달: No quality-preserving candidate reached the target.");
+    expect(text).toContain("- 가장 큰 절감 후보: resize-jpeg 2개, 약 8.00 MiB");
+    expect(text).toContain("- 보류된 작업: resize-png 1개");
+    expect(text).toContain("- 처리 시간: 총 1.23s, 최장 단계 analyze 900.0ms");
+  });
+
   it("does not overwrite existing human-readable reports by default", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
@@ -522,8 +566,11 @@ describe("runCli", () => {
     expect(code).toBe(1);
     expect((await readFile(join(outDir, "good.optimized.hwpx"))).byteLength).toBeGreaterThan(0);
     const summary = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8")) as {
+      totals: { optimized: number; failed: number; totalSavedBytes: number };
       results: Array<{ input: string; status: "optimized" | "failed"; error?: string }>;
     };
+    expect(summary.totals).toMatchObject({ optimized: 1, failed: 1 });
+    expect(summary.totals.totalSavedBytes).toBeGreaterThanOrEqual(0);
     expect(summary.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ input: "good.hwpx", status: "optimized" }),

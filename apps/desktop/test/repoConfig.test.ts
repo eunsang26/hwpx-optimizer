@@ -27,15 +27,18 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:win-portable"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:win"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:preflight"]).toBe(
-      "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit --audit-level=moderate && npm run desktop:smoke:built"
+      "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus && npm audit --audit-level=moderate && npm run desktop:smoke:built"
     );
-    expect(packageJson.scripts?.["desktop:smoke:built"]).toBe("node scripts/run-electron-app.mjs --smoke-test");
+    expect(packageJson.scripts?.["quality:corpus"]).toBe("tsx --conditions=development scripts/run-regression-corpus.ts");
+    await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
+    expect(packageJson.scripts?.["desktop:smoke:built"]).toBe("node scripts/run-electron-smoke.mjs");
     expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.png");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.svg");
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/prune-electron-locales.cjs")).resolves.toBeUndefined();
+    await expect(access("scripts/run-electron-smoke.mjs")).resolves.toBeUndefined();
   });
 
   it("keeps Windows package locale pruning scoped to Korean and English", async () => {
@@ -45,6 +48,17 @@ describe("repository runtime and cleanup configuration", () => {
     expect(script).toContain('"ko.pak"');
     expect(script).toContain('"en-US.pak"');
     expect(script).toContain("Pruned");
+  });
+
+  it("keeps Windows portable smoke strict enough for release artifact verification", async () => {
+    const script = await readFile("scripts/windows-portable-smoke.ps1", "utf8");
+
+    expect(script).toContain("[switch]$RequireChecksumEntry");
+    expect(script).toContain("[string]$ExpectedSha256");
+    expect(script).toContain("[long]$MinArtifactBytes");
+    expect(script).toContain("throw \"No checksum entry found");
+    expect(script).toContain("ExpectedSha256 mismatch");
+    expect(script).toContain("smaller than required minimum");
   });
 
   it("keeps desktop analysis automatic and shows the selected output folder in the run panel", async () => {
