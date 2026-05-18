@@ -1,9 +1,9 @@
 const { readdir, rm } = require("node:fs/promises");
 const { join } = require("node:path");
 
-const keptLocales = new Set(["en-US.pak", "ko.pak"]);
+const keptLocales = new Set(["ko.pak"]);
 
-module.exports = async function pruneElectronLocales(context) {
+exports.default = async function pruneElectronLocales(context) {
   if (context.electronPlatformName !== "win32") return;
 
   const localesDir = join(context.appOutDir, "locales");
@@ -11,7 +11,7 @@ module.exports = async function pruneElectronLocales(context) {
   try {
     entries = await readdir(localesDir, { withFileTypes: true });
   } catch (error) {
-    if (error && error.code === "ENOENT") return;
+    if (error?.code === "ENOENT") return;
     throw error;
   }
 
@@ -22,7 +22,5 @@ module.exports = async function pruneElectronLocales(context) {
     removed += 1;
   }
 
-  if (removed > 0) {
-    console.log(`Pruned ${removed} Electron locale pack(s); kept ${Array.from(keptLocales).join(", ")}.`);
-  }
+  console.log(`Pruned Electron locales: kept ko.pak, removed ${removed} file(s).`);
 };

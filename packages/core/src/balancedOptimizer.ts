@@ -23,18 +23,14 @@ export async function applyBalancedOptimizationPlan(input: {
   const applied: AppliedAction[] = [...consolidated.applied];
   const skipped: AppliedAction[] = [...consolidated.skipped];
   const warnings: string[] = [];
-  const transformTargets = new Set(
-    input.plan.actions
-      .filter(
-        (action) =>
-          action.type === "convert-bmp-to-png" ||
-          action.type === "convert-tiff-to-png" ||
-          action.type === "resize-jpeg" ||
-          action.type === "resize-png" ||
-          action.type === "strip-metadata" ||
-          action.type === "optimize-png"
-      )
-      .map((action) => action.target)
+  const transformActionByTarget = new Map<string, TransformImageAction>();
+  for (const action of input.plan.actions) {
+    if (isTransformImageAction(action.type) && !transformActionByTarget.has(action.target)) {
+      transformActionByTarget.set(action.target, action.type);
+    }
+  }
+  const cleanShapeCommentTargets = new Set(
+    input.plan.actions.filter((action) => action.type === "clean-shape-comment").map((action) => action.target)
   );
   const pathUpdates = new Map<string, string>();
   const mediaTypeUpdates = new Map<string, string>();
@@ -48,26 +44,13 @@ export async function applyBalancedOptimizationPlan(input: {
   const transformedEntries = new Array<HwpxEntry>(consolidated.pkg.entries.length);
   const tasks: TransformTask[] = [];
   for (const [index, entry] of consolidated.pkg.entries.entries()) {
-    if (!transformTargets.has(entry.path)) {
+    const action = transformActionByTarget.get(entry.path);
+    if (!action) {
       transformedEntries[index] = entry;
       continue;
     }
 
-    const action = input.plan.actions.find((item) => item.target === entry.path);
-    if (
-      !action ||
-      (action.type !== "convert-bmp-to-png" &&
-        action.type !== "convert-tiff-to-png" &&
-        action.type !== "resize-jpeg" &&
-        action.type !== "resize-png" &&
-        action.type !== "strip-metadata" &&
-        action.type !== "optimize-png")
-    ) {
-      transformedEntries[index] = entry;
-      continue;
-    }
-
-    tasks.push({ index, entry, action: action.type });
+    tasks.push({ index, entry, action });
   }
 
   let completedTransforms = 0;
@@ -131,9 +114,7 @@ export async function applyBalancedOptimizationPlan(input: {
     if (entry.kind !== "xml") return entry;
     const text = entry.data.toString("utf8");
     const updatedManifest = updateManifestReferences(text, pathUpdates, mediaTypeUpdates);
-    const shouldCleanShapeComment = input.plan.actions.some(
-      (action) => action.type === "clean-shape-comment" && action.target === entry.path
-    );
+    const shouldCleanShapeComment = cleanShapeCommentTargets.has(entry.path);
     const updated = shouldCleanShapeComment ? cleanShapeComments(updatedManifest) : updatedManifest;
     if (updated === text) return entry;
     const data = Buffer.from(updated);
@@ -149,6 +130,17 @@ export async function applyBalancedOptimizationPlan(input: {
   });
 
   return { pkg: { entries }, applied, skipped, warnings };
+}
+
+function isTransformImageAction(action: string): action is TransformImageAction {
+  return (
+    action === "convert-bmp-to-png" ||
+    action === "convert-tiff-to-png" ||
+    action === "resize-jpeg" ||
+    action === "resize-png" ||
+    action === "strip-metadata" ||
+    action === "optimize-png"
+  );
 }
 
 async function consolidateDuplicateImages(

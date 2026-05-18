@@ -34,6 +34,8 @@ describe("repository runtime and cleanup configuration", () => {
       "tsx --conditions=development scripts/run-regression-corpus.ts --require-local-samples"
     );
     expect(packageJson.scripts?.["release:verify-win-portable-smoke"]).toBe("node scripts/run-windows-portable-smoke.mjs");
+    expect(packageJson.scripts?.["release:electron:check:win-portable"]).toBe("npm run release:check:win-portable");
+    expect(packageJson.scripts?.["release:tauri:build"]).toBe("npm run tauri:build");
     expect(packageJson.scripts?.["release:check"]).toContain("npm run quality:corpus:release");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:verify-win-portable-smoke");
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
@@ -42,18 +44,29 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.png");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.svg");
+    expect(packageJson.build?.asar).toEqual({ smartUnpack: false });
+    expect(packageJson.build?.asarUnpack).toEqual(["node_modules/@img/sharp-win32-x64/**/*"]);
+    expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
+    expect(packageJson.build?.electronLanguages).toEqual(["ko"]);
+    expect(packageJson.build?.files).toContain("!node_modules/**/README*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/CHANGELOG*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/CHANGES*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/CONTRIBUTING*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/GOVERNANCE*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/test.*");
+    expect(packageJson.build?.files).toContain("!node_modules/sharp/src/**");
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/prune-electron-locales.cjs")).resolves.toBeUndefined();
     await expect(access("scripts/run-electron-smoke.mjs")).resolves.toBeUndefined();
   });
 
-  it("keeps Windows package locale pruning scoped to Korean and English", async () => {
+  it("keeps Windows package locale pruning scoped to Korean", async () => {
     const script = await readFile("scripts/prune-electron-locales.cjs", "utf8");
 
     expect(script).toContain('context.electronPlatformName !== "win32"');
     expect(script).toContain('"ko.pak"');
-    expect(script).toContain('"en-US.pak"');
+    expect(script).not.toContain('"en-US.pak"');
     expect(script).toContain("Pruned");
   });
 
@@ -96,11 +109,11 @@ describe("repository runtime and cleanup configuration", () => {
     expect(main).toContain("minWidth: 960");
     expect(main).toContain("minHeight: 720");
     expect(main).toContain('backgroundColor: "#f6f8fb"');
-    expect(styles).toMatch(/\.shell\s*{[^}]*padding:\s*0 10px 80px/s);
+    expect(styles).toMatch(/\.shell\s*{[^}]*padding:\s*0 6px 80px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.drop-zone\s*{[^}]*padding:\s*10px 14px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.summary-panel\s*{[^}]*padding-bottom:\s*8px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.bottom-row\s*{[^}]*gap:\s*6px/s);
-    expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*max-width:\s*1120px/s);
+    expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*max-width:\s*1320px/s);
     expect(styles).toMatch(/\.brand-mark img\s*{[^}]*width:\s*30px/s);
     expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(150px, 1fr\)\)/s);
     expect(styles).toMatch(/\.option-grid select,\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
@@ -157,17 +170,34 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('class="analysis-verification"');
     expect(html).toContain('id="verification-body"');
     expect(html).toContain('id="result-guidance"');
+    expect(html).toContain('id="drop-overlay"');
+    expect(html).toContain("HWPX 파일을 여기에 놓으세요");
+    expect(html).toContain('id="status-banner"');
+    expect(html).toContain('id="batch-result-details"');
     expect(html).toContain('id="plan-count-pill"');
     expect(html).toContain('id="option-plan-summary"');
     expect(html).toContain('id="run-dock"');
     expect(html).toContain('id="settings-close-button"');
+    expect(html).toContain('id="help-button"');
+    expect(html).toContain('id="help-panel"');
+    expect(html).toContain('id="help-backdrop"');
+    expect(html).toContain('id="help-close-button"');
+    expect(html).toContain("사용 매뉴얼");
+    expect(html).toContain("1. 파일 선택");
+    expect(html).toContain("9. 보안 문서 제한");
+    expect(html.match(/id="verification-body"/g)?.length).toBe(1);
     expect(html).toContain('<span aria-hidden="true">×</span>');
     expect(html).toContain('id="cleanup-document-toggle"');
     expect(html).toContain('id="cleanup-image-toggle"');
+    expect(html).toContain('<option value="mb41">41MB 이하</option>');
+    expect(html).toContain('<option value="mb100">100MB 이하</option>');
+    expect(html.match(/id="single-saving-ring"/g)?.length).toBe(1);
     expect(renderer).not.toContain("chooseManyButton");
     expect(renderer).not.toContain("verificationDetails");
     expect(renderer).not.toContain("verificationSummary");
     expect(renderer).toContain("selectHwpxMany");
+    expect(renderer).toContain('requireElement("drop-overlay")');
+    expect(renderer).toContain('document.addEventListener("dragenter"');
     expect(renderer).toContain("handleAdditionalPaths(selected)");
     expect(renderer).toContain('document.addEventListener("dragover"');
     expect(renderer).toContain('document.addEventListener("drop"');
@@ -183,12 +213,28 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("visiblePlanRows(plan)");
     expect(renderer).toContain("renderCleanupSettings(plan)");
     expect(renderer).toContain("runDock.hidden");
+    expect(renderer).toContain("function setHelpOpen(open: boolean)");
+    expect(renderer).toContain("helpButton.addEventListener");
+    expect(renderer).toContain("promoteRemainingBatchItemToSingle");
+    expect(renderer).toContain("settingSaveReport.checked = settings.saveReport");
+    expect(renderer).toContain("batchResultDetails.textContent");
+    expect(renderer).toContain("statusBannerText.textContent");
+    expect(renderer).toContain('state.submissionLimit.id === "mb41"');
     expect(renderer).toContain('from "./shared/resultGuidance.js"');
     expect(renderer).toContain("resultGuidanceText(report, plan)");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
+    expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
+    expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, 1320px\)/s);
+    expect(css).toMatch(/\.help-panel\s*{[^}]*position:\s*fixed/s);
+    expect(css).toMatch(/\.help-panel\s*{[^}]*width:\s*min\(520px, calc\(100vw - 28px\)\)/s);
+    expect(css).toMatch(/\.manual-steps\s*{[^}]*display:\s*grid/s);
     expect(css).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
     expect(css).toMatch(/\.settings-check\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/body\[data-drag-over="true"\] \.file-panel\s*{[^}]*border-color:\s*var\(--blue\)/s);
+    expect(css).toMatch(/\.drop-overlay\s*{[^}]*position:\s*fixed/s);
+    expect(css).toMatch(/\.drop-overlay\s*{[^}]*pointer-events:\s*none/s);
+    expect(css).toMatch(/\.status-banner\s*{[^}]*display:\s*flex/s);
+    expect(css).toMatch(/\.batch-result-details\s*{[^}]*background:\s*var\(--surface-2\)/s);
     expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
     expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);
     expect(renderer).toContain("plan-priority");
@@ -199,10 +245,15 @@ describe("repository runtime and cleanup configuration", () => {
     const resultPanel = html.indexOf('id="result-panel"');
     const bottomRow = html.indexOf("<!-- ③ BOTTOM ROW");
     const bottomAccordions = html.indexOf('<section class="bottom-accordions">');
+    const actionPanel = html.indexOf('<div id="action-panel"');
     expect(summaryPanelStart).toBeGreaterThanOrEqual(0);
     expect(resultPanel).toBeGreaterThan(summaryPanelStart);
     expect(resultPanel).toBeLessThan(bottomRow);
     expect(resultPanel).toBeLessThan(bottomAccordions);
+    expect(bottomAccordions).toBeLessThan(actionPanel);
+    expect(html).toMatch(
+      /<section id="single-workspace"[\s\S]*<section class="bottom-accordions">[\s\S]*<\/section>\s*<\/section>\s*<div id="action-panel"/
+    );
   });
 
   it("keeps private sample filenames out of desktop source placeholders", async () => {

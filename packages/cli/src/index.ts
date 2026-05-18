@@ -32,7 +32,8 @@ export async function runCli(argv: string[]): Promise<number> {
   try {
     if (command === "analyze") {
       const report = await analyzeHwpxBuffer(await readSupportedInput(inputPath, options), {
-        targetBytes: parseTargetBytes(options)
+        targetBytes: parseTargetBytes(options),
+        analysisMode: parseAnalysisMode(options["analysis-mode"])
       });
       const requestedReportPath = options.report ?? `${inputPath}.report.json`;
       const reportPath =
@@ -47,7 +48,8 @@ export async function runCli(argv: string[]): Promise<number> {
 
     if (command === "report") {
       const report = await analyzeHwpxBuffer(await readSupportedInput(inputPath, options), {
-        targetBytes: parseTargetBytes(options)
+        targetBytes: parseTargetBytes(options),
+        analysisMode: parseAnalysisMode(options["analysis-mode"])
       });
       const text = renderHumanReport(inputPath, report);
       const requestedReportPath = options.report ?? options.out ?? `${inputPath}.report.txt`;
@@ -189,6 +191,12 @@ function parseTargetBytes(options: Record<string, string>): number | undefined {
   return undefined;
 }
 
+function parseAnalysisMode(value: string | undefined): "quick" | "deep" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "quick" || value === "deep") return value;
+  throw new Error("--analysis-mode must be quick or deep.");
+}
+
 function parsePositiveNumber(value: string | undefined, flag: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -214,8 +222,8 @@ function pathsReferToSameFile(left: string, right: string): boolean {
 
 function printUsage(): void {
   console.error("Usage:");
-  console.error("  hwpx-opt analyze <file.hwpx> [--report report.json] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
-  console.error("  hwpx-opt report <file.hwpx> [--report report.txt|--out report.txt] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt analyze <file.hwpx> [--report report.json] [--analysis-mode quick|deep] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt report <file.hwpx> [--report report.txt|--out report.txt] [--analysis-mode quick|deep] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
   console.error("  hwpx-opt verify <file.hwpx> [--max-input-bytes bytes]");
   console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json] [--max-input-bytes bytes]");
   console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--jobs count] [--max-input-bytes bytes]");

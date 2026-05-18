@@ -184,6 +184,29 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(report.images).toEqual([]);
   });
 
+  it("uses quick analysis by default and keeps deep visual diagnostics opt-in", async () => {
+    const png = await sharp({
+      create: { width: 16, height: 10, channels: 3, background: "#000000" }
+    })
+      .png()
+      .toBuffer();
+    const input = await createHwpxFixture({
+      entries: {
+        "BinData/image1.png": png,
+        "BinData/image2.bmp": createBmp24(16, 10)
+      }
+    });
+
+    const quick = await analyzeHwpxBuffer(input);
+    const deep = await analyzeHwpxBuffer(input, { analysisMode: "deep" });
+
+    expect(quick.sameVisualDuplicateImages).toEqual([]);
+    expect(quick.nearDuplicateImages).toEqual([]);
+    expect(deep.sameVisualDuplicateImages).toEqual([
+      expect.objectContaining({ paths: ["BinData/image1.png", "BinData/image2.bmp"] })
+    ]);
+  });
+
   it("records local performance timings in analysis reports", async () => {
     const input = await createHwpxFixture({
       entries: {

@@ -98,6 +98,8 @@ try {
       throw "Desktop smoke failed with exit code $($process.ExitCode) for mode $currentMode"
     }
     Write-Host "Desktop smoke passed: $artifactPath ($currentMode)"
+    Write-Host "  - Includes full-window drag/drop overlay regression"
+    Write-Host "  - Includes analysis-details width and help manual regression"
   }
 } finally {
   if ($null -eq $previousInput) {

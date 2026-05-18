@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
 import { findByteIdenticalImageGroups, findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
+import { readImageMetadata } from "./imageMetadata.js";
 import { stripJpegMetadataSegments } from "./optimizer.js";
 import type { HwpxPackage, OptimizationOpportunity } from "./types.js";
 
@@ -20,6 +21,7 @@ const AGGRESSIVE_JPEG_QUALITY = 80;
 // 256 bytes or 0.5% of the file is not worth surfacing as an opportunity.
 const JPEG_METADATA_MIN_SAVING_BYTES = 256;
 const JPEG_METADATA_MIN_SAVING_RATIO = 0.005;
+const PNG_OPTIMIZE_MIN_BYTES = 4096;
 
 export type ImageOptimizationProfile = {
   maxEdge: number;
@@ -200,25 +202,27 @@ async function collectOpportunities(
         }
       }
 
-      const afterSize = await measureOrEstimateImageSize({
-        confidence,
-        size: entry.size,
-        transform: () => optimizePng(entry.data, profile),
-        estimate: () => Math.round(entry.size * (profile.pngPalette ? 0.8 : 0.95))
-      });
-      if (afterSize === null) continue;
-      addOpportunityIfSmaller(opportunities, {
-        id: `optimize-png:${entry.path}`,
-        label: profile.pngPalette ? "Optimize PNG with aggressive palette reduction" : "Optimize PNG losslessly",
-        action: "optimize-png",
-        target: entry.path,
-        beforeSize: entry.size,
-        afterSize,
-        confidence,
-        risk: profile.pngPalette ? "medium" : "safe",
-        visualImpact: profile.pngPalette ? "low" : "none",
-        defaultEnabledIn: profile.pngPalette ? ["aggressive"] : ["safe", "balanced", "aggressive"]
-      });
+      if (entry.size >= PNG_OPTIMIZE_MIN_BYTES) {
+        const afterSize = await measureOrEstimateImageSize({
+          confidence,
+          size: entry.size,
+          transform: () => optimizePng(entry.data, profile),
+          estimate: () => Math.round(entry.size * (profile.pngPalette ? 0.8 : 0.95))
+        });
+        if (afterSize === null) continue;
+        addOpportunityIfSmaller(opportunities, {
+          id: `optimize-png:${entry.path}`,
+          label: profile.pngPalette ? "Optimize PNG with aggressive palette reduction" : "Optimize PNG losslessly",
+          action: "optimize-png",
+          target: entry.path,
+          beforeSize: entry.size,
+          afterSize,
+          confidence,
+          risk: profile.pngPalette ? "medium" : "safe",
+          visualImpact: profile.pngPalette ? "low" : "none",
+          defaultEnabledIn: profile.pngPalette ? ["aggressive"] : ["safe", "balanced", "aggressive"]
+        });
+      }
     }
   }
 
@@ -533,15 +537,8 @@ function pngOptions(profile: ImageOptimizationProfile): sharp.PngOptions {
 }
 
 async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number }> {
-  const bmp = decodeBmp(data);
-  if (bmp) return { width: bmp.width, height: bmp.height };
-
-  try {
-    const metadata = await sharp(data).metadata();
-    return { width: metadata.width, height: metadata.height };
-  } catch {
-    return {};
-  }
+  const metadata = await readImageMetadata("", data);
+  return { width: metadata.width, height: metadata.height };
 }
 
 function addOpportunityIfSmaller(

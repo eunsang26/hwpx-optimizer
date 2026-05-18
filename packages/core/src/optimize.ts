@@ -24,8 +24,9 @@ type OptimizeOptions = {
   allowLarger?: boolean;
   targetBytes?: number;
   onProgress?: OptimizeProgressCallback;
+  analysisMode?: AnalysisMode;
 };
-type SafeOptimizeOptions = { targetBytes?: number; onProgress?: OptimizeProgressCallback };
+type SafeOptimizeOptions = { targetBytes?: number; onProgress?: OptimizeProgressCallback; analysisMode?: AnalysisMode };
 type AnalysisMode = "quick" | "deep";
 
 export async function analyzeHwpxBuffer(
@@ -36,7 +37,7 @@ export async function analyzeHwpxBuffer(
   const targetBytes = normalizeTargetBytes(options.targetBytes);
   const pkg = await timer.measure("read", () => readHwpxPackage(input));
   const analysis = await timer.measure("analyze", () =>
-    analyzeHwpxPackage(pkg, analysisOptions(options.analysisMode ?? "deep"))
+    analyzeHwpxPackage(pkg, analysisOptions(options.analysisMode ?? "quick"))
   );
   const opportunities = await timer.measure("opportunities", () =>
     detectEstimatedOptimizationOpportunities(pkg, balancedImageProfile, {
@@ -56,7 +57,9 @@ export async function optimizeHwpxBufferSafe(input: Buffer, options: SafeOptimiz
   const timer = new PerformanceTimer();
   emitProgress(options, 25, "Analyzing document structure");
   const pkg = await timer.measure("read", () => readHwpxPackage(input));
-  const analysis = await timer.measure("analyze", () => analyzeHwpxPackage(pkg));
+  const analysis = await timer.measure("analyze", () =>
+    analyzeHwpxPackage(pkg, analysisOptions(options.analysisMode ?? "quick"))
+  );
   const graph = analysis.referenceGraph ?? buildReferenceGraph(pkg);
   emitProgress(options, 40, "Planning safe changes");
   const plan = measureSync(timer, "plan", () => createSafeOptimizationPlan({ pkg, analysis, graph }));
@@ -153,7 +156,9 @@ async function optimizeHwpxBufferAdvanced(
   const timer = new PerformanceTimer();
   emitProgress(options, 25, "Analyzing document structure");
   const pkg = await timer.measure("read", () => readHwpxPackage(input));
-  const analysis = await timer.measure("analyze", () => analyzeHwpxPackage(pkg));
+  const analysis = await timer.measure("analyze", () =>
+    analyzeHwpxPackage(pkg, analysisOptions(options.analysisMode ?? "quick"))
+  );
   const profiles = createTargetProfileLadder(settings.mode, settings.profile, options.targetBytes, input.byteLength);
   let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
   const verificationWarnings: string[] = [];
