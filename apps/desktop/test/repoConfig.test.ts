@@ -104,10 +104,11 @@ describe("repository runtime and cleanup configuration", () => {
 
     expect(main).toContain('app.setAppUserModelId("local.hwpxoptimizer.app")');
     expect(main).toContain('icon: join(import.meta.dirname, "app-icon.png")');
-    expect(main).toContain("width: 1120");
+    expect(main).toContain("width: 1040");
     expect(main).toContain("height: 820");
     expect(main).toContain("minWidth: 960");
     expect(main).toContain("minHeight: 720");
+    expect(main).toContain("maxWidth: 1360");
     expect(main).toContain('backgroundColor: "#f6f8fb"');
     expect(styles).toMatch(/\.shell\s*{[^}]*padding:\s*0 6px 80px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.drop-zone\s*{[^}]*padding:\s*10px 14px/s);
