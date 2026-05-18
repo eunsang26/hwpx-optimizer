@@ -129,6 +129,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('class="analysis-verification"');
     expect(html).toContain('id="verification-body"');
     expect(html).toContain('id="result-guidance"');
+    expect(html).toContain('id="drop-overlay"');
+    expect(html).toContain("HWPX 파일을 여기에 놓으세요");
     expect(html).toContain('id="plan-count-pill"');
     expect(html).toContain('id="option-plan-summary"');
     expect(html).toContain('id="run-dock"');
@@ -148,6 +150,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).not.toContain("verificationDetails");
     expect(renderer).not.toContain("verificationSummary");
     expect(renderer).toContain("selectHwpxMany");
+    expect(renderer).toContain('requireElement("drop-overlay")');
+    expect(renderer).toContain('document.addEventListener("dragenter"');
     expect(renderer).toContain("handleAdditionalPaths(selected)");
     expect(renderer).toContain('document.addEventListener("dragover"');
     expect(renderer).toContain('document.addEventListener("drop"');
@@ -177,6 +181,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(css).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
     expect(css).toMatch(/\.settings-check\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/body\[data-drag-over="true"\] \.file-panel\s*{[^}]*border-color:\s*var\(--blue\)/s);
+    expect(css).toMatch(/\.drop-overlay\s*{[^}]*position:\s*fixed/s);
+    expect(css).toMatch(/\.drop-overlay\s*{[^}]*pointer-events:\s*none/s);
     expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
     expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);
     expect(renderer).toContain("plan-priority");

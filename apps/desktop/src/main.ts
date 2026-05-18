@@ -517,6 +517,40 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     throw new Error("Desktop smoke failed: manual-style help panel did not render");
   }
 
+  const dragUi = (await window.webContents.executeJavaScript(`
+    (() => {
+      document.getElementById("help-close-button")?.click();
+      const dragEnter = new DragEvent("dragenter", { bubbles: true, cancelable: true });
+      document.dispatchEvent(dragEnter);
+      const overlay = document.getElementById("drop-overlay");
+      const active = document.body.dataset.dragOver === "true";
+      const overlayVisible = overlay?.hidden === false;
+      const overlayText = overlay?.textContent ?? "";
+      const drop = new DragEvent("drop", { bubbles: true, cancelable: true });
+      document.dispatchEvent(drop);
+      return {
+        active,
+        overlayVisible,
+        overlayText,
+        cleared: document.body.dataset.dragOver !== "true" && overlay?.hidden === true
+      };
+    })()
+  `)) as {
+    active?: boolean;
+    overlayVisible?: boolean;
+    overlayText?: string;
+    cleared?: boolean;
+  };
+
+  if (
+    dragUi.active !== true ||
+    dragUi.overlayVisible !== true ||
+    !dragUi.overlayText?.includes("HWPX 파일을 여기에 놓으세요") ||
+    dragUi.cleared !== true
+  ) {
+    throw new Error("Desktop smoke failed: full-window drag overlay did not respond to drag/drop events");
+  }
+
   const workflow = (await window.webContents.executeJavaScript(`
     (async () => {
       const progress = [];

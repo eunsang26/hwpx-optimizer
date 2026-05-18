@@ -109,6 +109,7 @@ let analysisSequence = 0;
 let progressAnimationTimer: number | undefined;
 let displayedProgressPercent = 0;
 let targetProgressPercent = 0;
+let dragDepth = 0;
 const CLEANUP_ACTIONS = ["clean-shape-comment", "strip-metadata"] as const satisfies readonly SubmissionActionId[];
 
 type DesktopSettings = {
@@ -121,6 +122,7 @@ type DesktopSettings = {
   preservationPreference: PreservationPreference;
 };
 
+const dropOverlay = requireElement("drop-overlay");
 const dropZone = requireElement("drop-zone");
 const fileName = requireElement("file-name");
 const fileMeta = requireElement("file-meta");
@@ -448,15 +450,22 @@ async function init(): Promise<void> {
     setStatus("원본 문서 폴더에 저장하도록 변경했습니다.");
   });
 
+  document.addEventListener("dragenter", (event) => {
+    event.preventDefault();
+    dragDepth += 1;
+    setDragOver(true);
+  });
   document.addEventListener("dragover", (event) => {
     event.preventDefault();
     setDragOver(true);
   });
   document.addEventListener("dragleave", (event) => {
-    if (!event.relatedTarget) setDragOver(false);
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0 || !event.relatedTarget) setDragOver(false);
   });
   document.addEventListener("drop", async (event) => {
     event.preventDefault();
+    dragDepth = 0;
     setDragOver(false);
     const dropped = event.dataTransfer?.files;
     if (!dropped || dropped.length === 0) {
@@ -1623,6 +1632,8 @@ function promoteRemainingBatchItemToSingle(item: BatchItem): void {
 
 function setDragOver(active: boolean): void {
   document.body.dataset.dragOver = active ? "true" : "";
+  dropOverlay.hidden = !active;
+  dropOverlay.setAttribute("aria-hidden", active ? "false" : "true");
   dropZone.classList.toggle("is-over", active && !dropZone.hidden);
 }
 

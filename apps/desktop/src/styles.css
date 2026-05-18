@@ -442,6 +442,47 @@ body[data-drag-over="true"] .file-panel {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14), var(--shadow-sm);
 }
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(2px);
+}
+.drop-overlay[hidden] {
+  display: none !important;
+}
+.drop-overlay > div {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  width: min(420px, calc(100vw - 48px));
+  padding: 28px;
+  border: 2px dashed var(--blue);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-elev);
+  color: var(--blue);
+  text-align: center;
+}
+.drop-overlay .file-add-icon {
+  width: 28px;
+  height: 28px;
+}
+.drop-overlay strong {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 800;
+}
+.drop-overlay p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
 
 .empty-file-illustration {
   grid-column: 1;
