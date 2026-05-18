@@ -15,7 +15,7 @@ describe("repository runtime and cleanup configuration", () => {
   it("keeps release packaging and local artifact cleanup explicit", async () => {
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
       scripts?: Record<string, string>;
-      build?: { files?: string[] };
+      build?: { afterPack?: string; files?: string[] };
     };
 
     expect(packageJson.scripts?.["release:clean"]).toBe("node scripts/clean-release-artifacts.mjs");
@@ -30,10 +30,21 @@ describe("repository runtime and cleanup configuration", () => {
       "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit --audit-level=moderate && npm run desktop:smoke:built"
     );
     expect(packageJson.scripts?.["desktop:smoke:built"]).toBe("node scripts/run-electron-app.mjs --smoke-test");
+    expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.png");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.svg");
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
+    await expect(access("scripts/prune-electron-locales.cjs")).resolves.toBeUndefined();
+  });
+
+  it("keeps Windows package locale pruning scoped to Korean and English", async () => {
+    const script = await readFile("scripts/prune-electron-locales.cjs", "utf8");
+
+    expect(script).toContain('context.electronPlatformName !== "win32"');
+    expect(script).toContain('"ko.pak"');
+    expect(script).toContain('"en-US.pak"');
+    expect(script).toContain("Pruned");
   });
 
   it("keeps desktop analysis automatic and shows the selected output folder in the run panel", async () => {
