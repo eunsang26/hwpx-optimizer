@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { readFile, readdir } from "node:fs/promises";
+import { basename, join } from "node:path";
 import JSZip from "jszip";
 import { evaluateRegressionCorpus } from "@hwpx-optimizer/core";
 import type { RegressionCorpusCase } from "@hwpx-optimizer/core";
 
 const DEFAULT_MAX_TOTAL_MS = 15_000;
+const requireLocalSamples = process.argv.includes("--require-local-samples");
 
 const cases: RegressionCorpusCase[] = [
   {
@@ -33,7 +34,14 @@ const cases: RegressionCorpusCase[] = [
   }
 ];
 
-for (const samplePath of samplePathsFromEnvironment()) {
+const localSamplePaths = await resolveLocalSamplePaths();
+if (requireLocalSamples && localSamplePaths.length === 0) {
+  throw new Error(
+    "Release corpus requires at least one local real HWPX sample. Set HWPX_OPT_CORPUS_SAMPLES or place sample*.hwpx files in the repository root."
+  );
+}
+
+for (const samplePath of localSamplePaths) {
   cases.push({
     name: `local-${basename(samplePath)}`,
     input: await readFile(samplePath),
@@ -77,6 +85,19 @@ function samplePathsFromEnvironment(): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+async function resolveLocalSamplePaths(): Promise<string[]> {
+  const explicit = samplePathsFromEnvironment();
+  if (explicit.length > 0) return explicit;
+  if (!requireLocalSamples) return [];
+  const entries = await readdir(process.cwd(), { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => /^sample\d*\.hwpx$/i.test(name))
+    .sort()
+    .map((name) => join(process.cwd(), name));
 }
 
 function sampleModeFromEnvironment(): "analyze" | "safe" | "balanced" | "aggressive" {

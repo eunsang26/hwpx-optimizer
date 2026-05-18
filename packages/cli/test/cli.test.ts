@@ -437,6 +437,29 @@ describe("runCli", () => {
     expect(text).toContain("Images:");
   });
 
+  it("includes result insights in human-readable report command output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "shape.hwpx");
+    const reportPath = join(dir, "report.txt");
+    await writeFile(
+      inputPath,
+      await createHwpxFixture({
+        entries: {
+          "Contents/section0.xml": `<root><hp:shapeComment>그림입니다.
+원본 그림의 이름: IMG_1234.JPG
+원본 그림의 크기: 가로 5712pixel, 세로 4284pixel</hp:shapeComment></root>`
+        }
+      })
+    );
+
+    const code = await runCli(["report", inputPath, "--out", reportPath]);
+
+    expect(code).toBe(0);
+    const text = await readFile(reportPath, "utf8");
+    expect(text).toContain("결과 해석:");
+    expect(text).toContain("가장 큰 절감 후보: clean-shape-comment");
+  });
+
   it("accepts --report as an alias for human-readable report output", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");

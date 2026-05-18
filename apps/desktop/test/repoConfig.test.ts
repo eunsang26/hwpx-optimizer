@@ -27,10 +27,17 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:win-portable"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:win"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:preflight"]).toBe(
-      "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus && npm audit --audit-level=moderate && npm run desktop:smoke:built"
+      "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit --audit-level=moderate && npm run desktop:smoke:built"
     );
     expect(packageJson.scripts?.["quality:corpus"]).toBe("tsx --conditions=development scripts/run-regression-corpus.ts");
+    expect(packageJson.scripts?.["quality:corpus:release"]).toBe(
+      "tsx --conditions=development scripts/run-regression-corpus.ts --require-local-samples"
+    );
+    expect(packageJson.scripts?.["release:verify-win-portable-smoke"]).toBe("node scripts/run-windows-portable-smoke.mjs");
+    expect(packageJson.scripts?.["release:check"]).toContain("npm run quality:corpus:release");
+    expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:verify-win-portable-smoke");
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
+    await expect(access("scripts/run-windows-portable-smoke.mjs")).resolves.toBeUndefined();
     expect(packageJson.scripts?.["desktop:smoke:built"]).toBe("node scripts/run-electron-smoke.mjs");
     expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.png");
@@ -52,6 +59,7 @@ describe("repository runtime and cleanup configuration", () => {
 
   it("keeps Windows portable smoke strict enough for release artifact verification", async () => {
     const script = await readFile("scripts/windows-portable-smoke.ps1", "utf8");
+    const wrapper = await readFile("scripts/run-windows-portable-smoke.mjs", "utf8");
 
     expect(script).toContain("[switch]$RequireChecksumEntry");
     expect(script).toContain("[string]$ExpectedSha256");
@@ -59,6 +67,11 @@ describe("repository runtime and cleanup configuration", () => {
     expect(script).toContain("throw \"No checksum entry found");
     expect(script).toContain("ExpectedSha256 mismatch");
     expect(script).toContain("smaller than required minimum");
+    expect(wrapper).toContain("-RequireChecksumEntry");
+    expect(wrapper).toContain("-MinArtifactBytes");
+    expect(wrapper).toContain("SHA256SUMS.txt");
+    expect(wrapper).toContain("copyFileSync");
+    expect(wrapper).toContain("windowsTempDirectory");
   });
 
   it("keeps desktop analysis automatic and shows the selected output folder in the run panel", async () => {

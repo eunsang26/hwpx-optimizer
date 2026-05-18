@@ -44,12 +44,14 @@
     "release:manifest": "node scripts/write-release-manifest.mjs",
     "release:verify-manifest": "node scripts/verify-release-manifest.mjs",
     "release:verify-win-native": "node scripts/verify-win-native-runtime.mjs",
-    "release:preflight": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus && npm audit --audit-level=moderate && npm run desktop:smoke:built",
-    "release:check": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win && npm run release:verify-artifacts && npm run release:verify-win-native",
-    "release:check:win-portable": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus && npm audit && npm run desktop:smoke && npm run desktop:local:win && npm run release:verify-artifacts && npm run release:verify-win-native && npm run release:manifest && npm run release:verify-manifest",
-    "release:check:win": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus && npm audit && npm run desktop:smoke && npm run desktop:dist:win && npm run release:verify-artifacts && npm run release:verify-win-native",
+    "release:preflight": "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit --audit-level=moderate && npm run desktop:smoke:built",
+    "release:check": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win && npm run release:verify-artifacts && npm run release:verify-win-native",
+    "release:check:win-portable": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit && npm run desktop:smoke && npm run desktop:local:win && npm run release:verify-artifacts && npm run release:verify-win-native && npm run release:manifest && npm run release:verify-manifest && npm run release:verify-win-portable-smoke",
+    "release:check:win": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit && npm run desktop:smoke && npm run desktop:dist:win && npm run release:verify-artifacts && npm run release:verify-win-native",
     "cli": "tsx --conditions=development packages/cli/src/index.ts",
-    "quality:corpus": "tsx --conditions=development scripts/run-regression-corpus.ts"
+    "quality:corpus": "tsx --conditions=development scripts/run-regression-corpus.ts",
+    "quality:corpus:release": "tsx --conditions=development scripts/run-regression-corpus.ts --require-local-samples",
+    "release:verify-win-portable-smoke": "node scripts/run-windows-portable-smoke.mjs"
   },
   "build": {
     "appId": "local.hwpxoptimizer.app",
