@@ -25,7 +25,7 @@ export async function applyBalancedOptimizationPlan(input: {
   const warnings: string[] = [];
   const transformActionByTarget = new Map<string, TransformImageAction>();
   for (const action of input.plan.actions) {
-    if (isTransformImageAction(action.type)) {
+    if (isTransformImageAction(action.type) && !transformActionByTarget.has(action.target)) {
       transformActionByTarget.set(action.target, action.type);
     }
   }
