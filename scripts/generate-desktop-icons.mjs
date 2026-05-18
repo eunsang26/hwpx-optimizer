@@ -5,16 +5,21 @@ import sharp from "sharp";
 const buildDir = "build";
 const iconPngPath = join(buildDir, "icon.png");
 const iconIcoPath = join(buildDir, "icon.ico");
+const tauriIconDir = join("apps", "tauri-desktop", "src-tauri", "icons");
+const tauriIconPngPath = join(tauriIconDir, "icon.png");
 
 const iconSourcePath = join("apps", "desktop", "src", "app-icon.svg");
 
 await mkdir(buildDir, { recursive: true });
+await mkdir(tauriIconDir, { recursive: true });
 const png = await sharp(await readFile(iconSourcePath)).resize(256, 256).png().toBuffer();
 await writeFile(iconPngPath, png);
 await writeFile(iconIcoPath, createIcoFromPng(png));
+await writeFile(tauriIconPngPath, png);
 
 console.log(`Wrote ${iconPngPath}`);
 console.log(`Wrote ${iconIcoPath}`);
+console.log(`Wrote ${tauriIconPngPath}`);
 
 function createIcoFromPng(png) {
   const header = Buffer.alloc(6);

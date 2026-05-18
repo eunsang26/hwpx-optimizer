@@ -91,6 +91,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(copyAssets).toContain('"app-icon.svg"');
     expect(copyAssets).toContain('join(root, "dist", "app-icon.png")');
     expect(generateIcons).toContain('join("apps", "desktop", "src", "app-icon.svg")');
+    expect(generateIcons).toContain('join("apps", "tauri-desktop", "src-tauri", "icons")');
     expect(previewConfig).toContain('src="/apps/desktop/src/app-icon.svg"');
     expect(iconSvg).toContain('aria-label="HWPX Optimizer"');
     expect(iconSvg).toContain("#16a34a");

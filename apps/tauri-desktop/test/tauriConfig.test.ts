@@ -35,6 +35,8 @@ describe("Tauri desktop scaffold", () => {
     const script = await readFile("scripts/prepare-tauri-sidecar.mjs", "utf8");
     const rustMain = await readFile("apps/tauri-desktop/src-tauri/src/main.rs", "utf8");
 
+    expect(packageJson.scripts?.["build:tauri"]).toContain("npm --prefix ../.. run desktop:icons");
+    expect(packageJson.scripts?.dev).toContain("npm --prefix ../.. run desktop:icons");
     expect(packageJson.scripts?.["prepare-sidecar"]).toBe("node ../../scripts/prepare-tauri-sidecar.mjs");
     expect(script).toContain("hwpx-sidecar");
     expect(script).toContain("process.execPath");
