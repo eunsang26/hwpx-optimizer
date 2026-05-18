@@ -6,5 +6,6 @@
     "lib": ["ES2022", "DOM"],
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "sidecar/**/*.ts"]
+  "include": ["src/**/*.ts", "sidecar/**/*.ts"],
+  "references": [{ "path": "../../packages/core" }]
 }

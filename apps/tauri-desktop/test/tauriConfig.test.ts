@@ -63,9 +63,13 @@ describe("Tauri desktop scaffold", () => {
     const packageJson = JSON.parse(await readFile("apps/tauri-desktop/package.json", "utf8")) as {
       scripts?: Record<string, string>;
     };
+    const tsconfig = JSON.parse(await readFile("apps/tauri-desktop/tsconfig.json", "utf8")) as {
+      references?: Array<{ path?: string }>;
+    };
     const viteConfig = await readFile("apps/tauri-desktop/vite.config.ts", "utf8");
 
     expect(packageJson.scripts?.build).toContain("vite build --config vite.config.ts");
+    expect(tsconfig.references).toContainEqual({ path: "../../packages/core" });
     expect(viteConfig).toContain('outDir: resolve(import.meta.dirname, "dist", "src")');
     expect(viteConfig).toContain("emptyOutDir: true");
   });
