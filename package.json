@@ -35,6 +35,7 @@
     "tauri:dev": "npm run dev -w @hwpx-optimizer/tauri-desktop",
     "tauri:build": "npm run build:tauri -w @hwpx-optimizer/tauri-desktop",
     "tauri:sidecar": "npm run sidecar -w @hwpx-optimizer/tauri-desktop",
+    "tauri:sidecar:prepare": "node scripts/prepare-tauri-sidecar.mjs",
     "release:clean": "node scripts/clean-release-artifacts.mjs",
     "clean:build": "node scripts/clean-build-artifacts.mjs",
     "clean:local-artifacts": "node scripts/clean-local-artifacts.mjs",

@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Command, Stdio};
+use tauri::{Manager, AppHandle};
+use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,18 +21,19 @@ struct SidecarRequest<'a> {
 }
 
 #[tauri::command]
-fn sidecar_health() -> Result<Value, String> {
-    call_sidecar("health", json!({}))
+async fn sidecar_health(app: AppHandle) -> Result<Value, String> {
+    call_sidecar(app, "health", json!({})).await
 }
 
 #[tauri::command]
-fn analyze_hwpx(file_path: String) -> Result<Value, String> {
-    call_sidecar("analyze", json!({ "filePath": file_path }))
+async fn analyze_hwpx(app: AppHandle, file_path: String) -> Result<Value, String> {
+    call_sidecar(app, "analyze", json!({ "filePath": file_path })).await
 }
 
 #[tauri::command]
-fn optimize_hwpx(input: OptimizeInput) -> Result<Value, String> {
+async fn optimize_hwpx(app: AppHandle, input: OptimizeInput) -> Result<Value, String> {
     call_sidecar(
+        app,
         "optimize",
         json!({
             "filePath": input.file_path,
@@ -39,12 +41,12 @@ fn optimize_hwpx(input: OptimizeInput) -> Result<Value, String> {
             "outputDirectory": input.output_directory,
             "actions": input.actions
         }),
-    )
+    ).await
 }
 
 #[tauri::command]
-fn verify_hwpx(file_path: String) -> Result<Value, String> {
-    call_sidecar("verify", json!({ "filePath": file_path }))
+async fn verify_hwpx(app: AppHandle, file_path: String) -> Result<Value, String> {
+    call_sidecar(app, "verify", json!({ "filePath": file_path })).await
 }
 
 #[tauri::command]
@@ -123,51 +125,58 @@ fn open_path(_file_path: String) -> Result<Value, String> {
     Err("openPath is outside the Tauri PoC scope until generated-path allowlisting is ported.".into())
 }
 
-fn call_sidecar(method: &str, params: Value) -> Result<Value, String> {
-    let sidecar = std::env::current_exe()
+async fn call_sidecar(app: AppHandle, method: &str, params: Value) -> Result<Value, String> {
+    let sidecar_entry = app
+        .path()
+        .resolve("sidecar/index.js", tauri::path::BaseDirectory::Resource)
+        .map_err(|error| error.to_string())?;
+    let sidecar_entry_arg = sidecar_entry
+        .to_str()
+        .ok_or("Failed to convert sidecar entry path to UTF-8.")?
+        .to_string();
+    let sidecar_command = app
+        .shell()
+        .sidecar("hwpx-sidecar")
         .map_err(|error| error.to_string())?
-        .with_file_name(sidecar_binary_name());
-    let mut child = Command::new(sidecar)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
+        .args([sidecar_entry_arg]);
+    let (mut rx, mut child) = sidecar_command
         .spawn()
         .map_err(|error| error.to_string())?;
 
     let request = SidecarRequest { id: 1, method, params };
-    {
-        let stdin = child.stdin.as_mut().ok_or("Failed to open sidecar stdin.")?;
-        writeln!(
-            stdin,
-            "{}",
-            serde_json::to_string(&request).map_err(|error| error.to_string())?
-        )
+    let request_line = format!(
+        "{}\n",
+        serde_json::to_string(&request).map_err(|error| error.to_string())?
+    );
+    child
+        .write(request_line.as_bytes())
         .map_err(|error| error.to_string())?;
-    }
 
-    let stdout = child.stdout.take().ok_or("Failed to open sidecar stdout.")?;
-    let mut lines = BufReader::new(stdout).lines();
-    let line = lines
-        .next()
-        .ok_or("Sidecar did not return a response.")?
-        .map_err(|error| error.to_string())?;
-    let response: Value = serde_json::from_str(&line).map_err(|error| error.to_string())?;
-    if response.get("ok").and_then(Value::as_bool) == Some(true) {
-        Ok(response.get("result").cloned().unwrap_or(Value::Null))
-    } else {
-        Err(response
-            .get("error")
-            .and_then(Value::as_str)
-            .unwrap_or("Sidecar request failed.")
-            .to_string())
+    let mut stderr = String::new();
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line_bytes) => {
+                let line = String::from_utf8_lossy(&line_bytes);
+                let response: Value = serde_json::from_str(line.trim()).map_err(|error| error.to_string())?;
+                if response.get("ok").and_then(Value::as_bool) == Some(true) {
+                    return Ok(response.get("result").cloned().unwrap_or(Value::Null));
+                }
+                return Err(response
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Sidecar request failed.")
+                    .to_string());
+            }
+            CommandEvent::Stderr(line_bytes) => {
+                stderr.push_str(&String::from_utf8_lossy(&line_bytes));
+            }
+            CommandEvent::Terminated(payload) => {
+                return Err(format!("Sidecar terminated before response: {:?}; {}", payload, stderr));
+            }
+            _ => {}
+        }
     }
-}
-
-fn sidecar_binary_name() -> &'static str {
-    if cfg!(windows) {
-        "hwpx-sidecar.exe"
-    } else {
-        "hwpx-sidecar"
-    }
+    Err(format!("Sidecar ended without response. {}", stderr))
 }
 
 fn main() {

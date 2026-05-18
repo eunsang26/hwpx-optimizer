@@ -52,6 +52,7 @@ async function runSidecarRequests(requests: Array<{ id: number; method: string; 
   error?: string;
 }>> {
   const child = spawn(process.execPath, [
+    "--conditions=development",
     "--import",
     "tsx",
     "apps/tauri-desktop/sidecar/index.ts"

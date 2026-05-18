@@ -26,6 +26,9 @@
     "active": true,
     "targets": "nsis",
     "externalBin": ["binaries/hwpx-sidecar"],
+    "resources": {
+      "../dist/sidecar": "sidecar"
+    },
     "windows": {
       "webviewInstallMode": {
         "type": "embedBootstrapper"
