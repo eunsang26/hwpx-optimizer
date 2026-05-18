@@ -54,7 +54,7 @@ describe("Tauri desktop scaffold", () => {
     expect(rustMain).toContain("sidecar/index.js");
     expect(rustMain).toContain("child.kill()");
     expect(cargoToml).toContain("tauri-plugin-dialog");
-    expect(capabilities).toContain("shell:allow-spawn");
+    expect(capabilities).not.toContain("shell:allow-spawn");
     expect(capabilities).not.toContain("dialog:");
     expect(capabilities).not.toContain("shell:allow-open");
   });
@@ -92,10 +92,10 @@ describe("Tauri desktop scaffold", () => {
   it("provides a browser adapter shaped like the Electron preload API", async () => {
     const adapter = await readFile("apps/tauri-desktop/src/tauriApi.ts", "utf8");
 
-    expect(adapter).toContain('import { getCurrentWebview } from "@tauri-apps/api/webview"');
     expect(adapter).toContain('import { listen } from "@tauri-apps/api/event"');
     expect(adapter).toContain("window.hwpxOptimizer");
     expect(adapter).toContain('listen("hwpx:optimize-progress"');
+    expect(adapter).toContain('listen("hwpx:tauri-dropped-files"');
     expect(adapter).toContain('window.dispatchEvent(new CustomEvent("hwpx-tauri-dropped-files"))');
     expect(adapter).toContain('invoke("consume_dropped_hwpx_files"');
     for (const method of [
@@ -122,6 +122,7 @@ describe("Tauri desktop scaffold", () => {
     expect(rustMain).toContain("consume_dropped_hwpx_files");
     expect(rustMain).toContain("on_webview_event");
     expect(rustMain).toContain("DragDropEvent::Drop");
+    expect(rustMain).toContain('webview.emit("hwpx:tauri-dropped-files"');
     expect(rustMain).toContain('app.emit("hwpx:optimize-progress"');
     expect(rustMain).toContain('"saveBatchReport"');
     expect(rustMain).toContain('"previewImageDiffs"');

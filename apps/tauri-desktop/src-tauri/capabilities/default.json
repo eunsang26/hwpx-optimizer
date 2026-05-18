@@ -3,21 +3,5 @@
   "identifier": "default",
   "description": "Default permissions for the HWPX Optimizer Tauri PoC.",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        {
-          "name": "hwpx-sidecar",
-          "sidecar": true,
-          "args": [
-            {
-              "validator": ".+sidecar[\\\\/]index\\.js$"
-            }
-          ]
-        }
-      ]
-    }
-  ]
+  "permissions": ["core:default"]
 }

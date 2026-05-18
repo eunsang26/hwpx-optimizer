@@ -1,8 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Event } from "@tauri-apps/api/event";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { DragDropEvent } from "@tauri-apps/api/webview";
 
 type OptimizationMode = "safe" | "balanced" | "aggressive";
 
@@ -26,13 +23,9 @@ type OptimizeInput = {
 
 type ProgressCallback = (progress: { percent: number; item: string }) => void;
 
-void getCurrentWebview()
-  .onDragDropEvent((event: Event<DragDropEvent>) => {
-    if (event.payload.type === "drop") {
-      window.dispatchEvent(new CustomEvent("hwpx-tauri-dropped-files"));
-    }
-  })
-  .catch(() => undefined);
+void listen("hwpx:tauri-dropped-files", () => {
+  window.dispatchEvent(new CustomEvent("hwpx-tauri-dropped-files"));
+});
 
 const api = {
   health: () => invoke("sidecar_health"),

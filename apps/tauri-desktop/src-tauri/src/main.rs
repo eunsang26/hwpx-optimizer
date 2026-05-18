@@ -744,7 +744,9 @@ fn main() {
         .on_webview_event(|webview, event| {
             if let tauri::WebviewEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
                 let registry = webview.app_handle().state::<Mutex<PathRegistry>>();
-                let _ = register_dropped_hwpx_paths(&registry, paths);
+                if register_dropped_hwpx_paths(&registry, paths).is_ok() {
+                    let _ = webview.emit("hwpx:tauri-dropped-files", ());
+                }
             }
         })
         .plugin(tauri_plugin_dialog::init())
