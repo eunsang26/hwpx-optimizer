@@ -11,11 +11,12 @@
   },
   "workspaces": [
     "apps/desktop",
+    "apps/tauri-desktop",
     "packages/core",
     "packages/cli"
   ],
   "scripts": {
-    "build": "npm run clean:build && tsc -b packages/core packages/cli apps/desktop && npm run desktop:assets",
+    "build": "npm run clean:build && tsc -b packages/core packages/cli apps/desktop apps/tauri-desktop && npm run desktop:assets",
     "desktop:assets": "node apps/desktop/scripts/copy-assets.mjs",
     "desktop:icons": "node scripts/generate-desktop-icons.mjs",
     "desktop:dev": "node scripts/run-electron-dev.mjs",
@@ -30,7 +31,10 @@
     "desktop:local:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win portable zip --x64 -c.win.signAndEditExecutable=false",
     "desktop:dist:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win --x64",
     "test": "vitest run",
-    "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
+    "typecheck": "tsc -b packages/core packages/cli apps/desktop apps/tauri-desktop --pretty false",
+    "tauri:dev": "npm run dev -w @hwpx-optimizer/tauri-desktop",
+    "tauri:build": "npm run build:tauri -w @hwpx-optimizer/tauri-desktop",
+    "tauri:sidecar": "npm run sidecar -w @hwpx-optimizer/tauri-desktop",
     "release:clean": "node scripts/clean-release-artifacts.mjs",
     "clean:build": "node scripts/clean-build-artifacts.mjs",
     "clean:local-artifacts": "node scripts/clean-local-artifacts.mjs",
