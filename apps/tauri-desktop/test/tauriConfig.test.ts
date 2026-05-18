@@ -79,6 +79,10 @@ describe("Tauri desktop scaffold", () => {
 
     expect(workflow).toContain('node-version: "20.20.2"');
     expect(workflow).toContain("tauri-size-report.txt");
+    expect(workflow).toContain("Package Tauri portable folder");
+    expect(workflow).toContain("HWPX-Optimizer-Tauri-Portable.zip");
+    expect(workflow).toContain("Publish Tauri portable release asset");
+    expect(workflow).toContain("tauri-portable-poc");
     expect(workflow).toContain("Get-FileHash");
     expect(workflow).toContain("id: upload-tauri-installer");
     expect(workflow).toContain("continue-on-error: true");

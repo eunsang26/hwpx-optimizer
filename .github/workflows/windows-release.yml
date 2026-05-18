@@ -13,9 +13,17 @@ on:
         required: false
         default: false
         type: boolean
+      publish_tauri_portable:
+        description: "Publish the generated Tauri portable ZIP to a temporary GitHub Release"
+        required: false
+        default: false
+        type: boolean
   push:
     tags:
       - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   windows-release:
@@ -100,6 +108,40 @@ jobs:
               $report += "{0}`t{1:N0} bytes`tsha256:{2}" -f $_.FullName, $_.Length, $hash
             }
           $report | Tee-Object -FilePath "apps/tauri-desktop/src-tauri/target/release/tauri-size-report.txt"
+
+      - name: Package Tauri portable folder
+        shell: pwsh
+        run: |
+          $releaseDir = "apps/tauri-desktop/src-tauri/target/release"
+          $portableDir = Join-Path $releaseDir "portable/HWPX Optimizer Tauri"
+          $zipPath = Join-Path $releaseDir "HWPX-Optimizer-Tauri-Portable.zip"
+          Remove-Item -LiteralPath $portableDir -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+
+          Copy-Item -LiteralPath (Join-Path $releaseDir "hwpx-tauri-desktop.exe") -Destination (Join-Path $portableDir "HWPX Optimizer.exe")
+          Copy-Item -LiteralPath (Join-Path $releaseDir "hwpx-sidecar.exe") -Destination (Join-Path $portableDir "hwpx-sidecar.exe")
+          Copy-Item -LiteralPath (Join-Path $releaseDir "sidecar") -Destination (Join-Path $portableDir "sidecar") -Recurse
+          Copy-Item -LiteralPath (Join-Path $releaseDir "node_modules") -Destination (Join-Path $portableDir "node_modules") -Recurse
+
+          Compress-Archive -Path $portableDir -DestinationPath $zipPath -Force
+          $zip = Get-Item $zipPath
+          $hash = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "{0}`t{1:N0} bytes`tsha256:{2}" -f $zip.FullName, $zip.Length, $hash | Tee-Object -FilePath (Join-Path $releaseDir "tauri-portable-report.txt")
+
+      - name: Publish Tauri portable release asset
+        if: inputs.publish_tauri_portable == true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "tauri-portable-poc"
+          $zipPath = "apps/tauri-desktop/src-tauri/target/release/HWPX-Optimizer-Tauri-Portable.zip"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title "Tauri Portable PoC" --notes "Temporary portable Tauri build for manual validation." --prerelease
+          }
+          gh release upload $tag $zipPath --clobber
 
       - name: Upload Tauri installer artifact
         id: upload-tauri-installer
