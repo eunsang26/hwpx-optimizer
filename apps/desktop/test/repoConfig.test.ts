@@ -32,8 +32,13 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["desktop:smoke:built"]).toBe("node scripts/run-electron-app.mjs --smoke-test");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.png");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.svg");
+    expect(packageJson.build?.asar).toEqual({ smartUnpack: false });
+    expect(packageJson.build?.asarUnpack).toEqual(["node_modules/@img/sharp-win32-x64/**/*"]);
+    expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
+    expect(packageJson.build?.electronLanguages).toEqual(["ko"]);
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
+    await expect(access("scripts/prune-electron-locales.cjs")).resolves.toBeUndefined();
   });
 
   it("keeps desktop analysis automatic and shows the selected output folder in the run panel", async () => {
