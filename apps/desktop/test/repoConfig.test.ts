@@ -131,6 +131,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="result-guidance"');
     expect(html).toContain('id="drop-overlay"');
     expect(html).toContain("HWPX 파일을 여기에 놓으세요");
+    expect(html).toContain('id="status-banner"');
+    expect(html).toContain('id="batch-result-details"');
     expect(html).toContain('id="plan-count-pill"');
     expect(html).toContain('id="option-plan-summary"');
     expect(html).toContain('id="run-dock"');
@@ -146,6 +148,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('<span aria-hidden="true">×</span>');
     expect(html).toContain('id="cleanup-document-toggle"');
     expect(html).toContain('id="cleanup-image-toggle"');
+    expect(html).toContain('<option value="mb41">41MB 이하</option>');
+    expect(html).toContain('<option value="mb100">100MB 이하</option>');
+    expect(html.match(/id="single-saving-ring"/g)?.length).toBe(1);
     expect(renderer).not.toContain("chooseManyButton");
     expect(renderer).not.toContain("verificationDetails");
     expect(renderer).not.toContain("verificationSummary");
@@ -170,6 +175,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("helpButton.addEventListener");
     expect(renderer).toContain("promoteRemainingBatchItemToSingle");
     expect(renderer).toContain("settingSaveReport.checked = settings.saveReport");
+    expect(renderer).toContain("batchResultDetails.textContent");
+    expect(renderer).toContain("statusBannerText.textContent");
+    expect(renderer).toContain('state.submissionLimit.id === "mb41"');
     expect(renderer).toContain('from "./shared/resultGuidance.js"');
     expect(renderer).toContain("resultGuidanceText(report, plan)");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
@@ -183,6 +191,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(css).toMatch(/body\[data-drag-over="true"\] \.file-panel\s*{[^}]*border-color:\s*var\(--blue\)/s);
     expect(css).toMatch(/\.drop-overlay\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.drop-overlay\s*{[^}]*pointer-events:\s*none/s);
+    expect(css).toMatch(/\.status-banner\s*{[^}]*display:\s*flex/s);
+    expect(css).toMatch(/\.batch-result-details\s*{[^}]*background:\s*var\(--surface-2\)/s);
     expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
     expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);
     expect(renderer).toContain("plan-priority");

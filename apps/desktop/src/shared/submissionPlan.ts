@@ -2,7 +2,7 @@ import type { OptimizationOpportunityGroup, OptimizationReport } from "@hwpx-opt
 import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
 import { createActionToggles, formatBytes, type OptimizationMode } from "./viewModel.js";
 
-export type SubmissionLimitId = "none" | "mb10" | "mb20" | "mb50" | "custom";
+export type SubmissionLimitId = "none" | "mb5" | "mb10" | "mb20" | "mb30" | "mb41" | "mb50" | "mb100" | "custom";
 export type PreservationPreference = "preserve" | "recommended" | "size";
 export type PlanStatus = "target-met" | "target-missed" | "already-under-target" | "no-target";
 export type PlanKind = "automatic" | "custom";
@@ -72,9 +72,13 @@ type CompactSubmissionPlanInput = {
 
 export const SUBMISSION_LIMIT_LABELS: Record<SubmissionLimitId, string> = {
   none: "제한 없음",
+  mb5: "5 MB 이하",
   mb10: "10 MB 이하",
   mb20: "20 MB 이하",
+  mb30: "30 MB 이하",
+  mb41: "41 MB 이하",
   mb50: "50 MB 이하",
+  mb100: "100 MB 이하",
   custom: "직접 입력"
 };
 
@@ -127,9 +131,13 @@ export function modeForPreservation(preference: PreservationPreference): Optimiz
 }
 
 export function resolveSubmissionLimitBytes(limit: SubmissionLimit): number | undefined {
+  if (limit.id === "mb5") return 5 * 1024 * 1024;
   if (limit.id === "mb10") return 10 * 1024 * 1024;
   if (limit.id === "mb20") return 20 * 1024 * 1024;
+  if (limit.id === "mb30") return 30 * 1024 * 1024;
+  if (limit.id === "mb41") return 41 * 1024 * 1024;
   if (limit.id === "mb50") return 50 * 1024 * 1024;
+  if (limit.id === "mb100") return 100 * 1024 * 1024;
   if (limit.id === "custom" && limit.customBytes && limit.customBytes > 0) return limit.customBytes;
   return undefined;
 }

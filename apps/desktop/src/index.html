@@ -50,6 +50,11 @@
         <p id="progress-item">대기 중입니다.</p>
       </section>
 
+      <section id="status-banner" class="status-banner" hidden aria-live="polite">
+        <span class="info-icon" aria-hidden="true"></span>
+        <p id="status-banner-text">대기 중입니다.</p>
+      </section>
+
       <section id="single-workspace" class="workspace-grid">
         <!-- ① IMPORT — single compact row -->
         <section class="panel import-row file-panel">
@@ -196,6 +201,7 @@
               </div>
             </div>
             <div id="batch-result-stats" class="batch-result-stats"></div>
+            <p id="batch-result-details" class="batch-result-details"></p>
             <div class="batch-result-actions">
               <button id="batch-open-folder-button" type="button">폴더 보기</button>
               <button id="batch-open-report-button" type="button" class="ghost" disabled>결과 리포트 (JSON)</button>
@@ -239,9 +245,13 @@
                 <span>제출 제한</span>
                 <select id="submission-limit-select">
                   <option value="none">제한 없음</option>
+                  <option value="mb5">5MB 이하</option>
                   <option value="mb10">10MB 이하</option>
                   <option value="mb20">20MB 이하</option>
+                  <option value="mb30">30MB 이하</option>
+                  <option value="mb41">41MB 이하</option>
                   <option value="mb50">50MB 이하</option>
+                  <option value="mb100">100MB 이하</option>
                   <option value="custom">직접 입력</option>
                 </select>
               </label>

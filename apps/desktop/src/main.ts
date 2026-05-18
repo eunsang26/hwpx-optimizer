@@ -532,6 +532,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
         active,
         overlayVisible,
         overlayText,
+        statusBannerExists: Boolean(document.getElementById("status-banner")),
+        hasSubmission41Preset: Boolean(document.querySelector("#submission-limit-select option[value='mb41']")),
+        batchResultDetailsExists: Boolean(document.getElementById("batch-result-details")),
         cleared: document.body.dataset.dragOver !== "true" && overlay?.hidden === true
       };
     })()
@@ -539,6 +542,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     active?: boolean;
     overlayVisible?: boolean;
     overlayText?: string;
+    statusBannerExists?: boolean;
+    hasSubmission41Preset?: boolean;
+    batchResultDetailsExists?: boolean;
     cleared?: boolean;
   };
 
@@ -546,6 +552,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     dragUi.active !== true ||
     dragUi.overlayVisible !== true ||
     !dragUi.overlayText?.includes("HWPX 파일을 여기에 놓으세요") ||
+    dragUi.statusBannerExists !== true ||
+    dragUi.hasSubmission41Preset !== true ||
+    dragUi.batchResultDetailsExists !== true ||
     dragUi.cleared !== true
   ) {
     throw new Error("Desktop smoke failed: full-window drag overlay did not respond to drag/drop events");

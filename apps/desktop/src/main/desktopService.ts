@@ -422,9 +422,13 @@ function isSubmissionLimit(value: unknown): value is SubmissionLimit {
   const candidate = value as { id?: unknown; customBytes?: unknown };
   if (
     candidate.id !== "none" &&
+    candidate.id !== "mb5" &&
     candidate.id !== "mb10" &&
     candidate.id !== "mb20" &&
+    candidate.id !== "mb30" &&
+    candidate.id !== "mb41" &&
     candidate.id !== "mb50" &&
+    candidate.id !== "mb100" &&
     candidate.id !== "custom"
   ) {
     return false;

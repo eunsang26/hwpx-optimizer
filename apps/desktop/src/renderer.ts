@@ -153,6 +153,7 @@ const batchResultPanel = requireElement("batch-result-panel");
 const batchResultTitle = requireElement("batch-result-title");
 const batchResultLine = requireElement("batch-result-line");
 const batchResultStats = requireElement("batch-result-stats");
+const batchResultDetails = requireElement("batch-result-details");
 const batchOpenFolderButton = requireButton("batch-open-folder-button");
 const batchOpenReportButton = requireButton("batch-open-report-button");
 const batchRetryButton = requireButton("batch-retry-button");
@@ -170,6 +171,8 @@ const actionSelectNone = requireButton("action-select-none");
 const actionReset = requireButton("action-reset");
 const warningList = requireElement("warning-list");
 const statusText = requireElement("status-text");
+const statusBanner = requireElement("status-banner");
+const statusBannerText = requireElement("status-banner-text");
 const modeInputs = Array.from(document.querySelectorAll<HTMLInputElement>("input[name='mode']"));
 const openFileButton = requireButton("open-file-button");
 const openReportButton = requireButton("open-report-button");
@@ -995,9 +998,13 @@ function targetLabelForDisplay(): string {
 
 function resolveTargetBytesForDisplay(): number | undefined {
   if (state.currentPlan?.targetBytes) return state.currentPlan.targetBytes;
+  if (state.submissionLimit.id === "mb5") return 5 * 1024 * 1024;
   if (state.submissionLimit.id === "mb10") return 10 * 1024 * 1024;
   if (state.submissionLimit.id === "mb20") return 20 * 1024 * 1024;
+  if (state.submissionLimit.id === "mb30") return 30 * 1024 * 1024;
+  if (state.submissionLimit.id === "mb41") return 41 * 1024 * 1024;
   if (state.submissionLimit.id === "mb50") return 50 * 1024 * 1024;
+  if (state.submissionLimit.id === "mb100") return 100 * 1024 * 1024;
   if (state.submissionLimit.id === "custom") return state.submissionLimit.customBytes;
   return undefined;
 }
@@ -1281,8 +1288,29 @@ function renderBatchResultPanel(): void {
     metricHtml("실패", `${failed.length}개`),
     metricHtml("리포트", state.batchReportPath ? "저장됨" : "꺼짐")
   ].join("");
+  batchResultDetails.textContent = batchResultDetailsText({ done, failed, cancelled });
   batchOpenFolderButton.disabled = !hasOutput;
   batchOpenReportButton.disabled = !state.batchReportPath;
+}
+
+function batchResultDetailsText(input: { done: BatchItem[]; failed: BatchItem[]; cancelled: BatchItem[] }): string {
+  if (input.failed.length > 0) {
+    return `실패 파일: ${input.failed
+      .slice(0, 3)
+      .map((item) => `${item.fileName}${item.error ? ` (${item.error})` : ""}`)
+      .join(" · ")}${input.failed.length > 3 ? ` 외 ${input.failed.length - 3}개` : ""}`;
+  }
+  if (input.cancelled.length > 0) {
+    return `취소 파일: ${input.cancelled.slice(0, 3).map((item) => item.fileName).join(" · ")}${
+      input.cancelled.length > 3 ? ` 외 ${input.cancelled.length - 3}개` : ""
+    }`;
+  }
+  const topSaved = input.done
+    .filter((item) => (item.savedBytes ?? 0) > 0)
+    .sort((a, b) => (b.savedBytes ?? 0) - (a.savedBytes ?? 0))
+    .slice(0, 3);
+  if (topSaved.length === 0) return "절감된 파일이 없습니다. 원본과 동일하거나 이미 충분히 최적화된 문서입니다.";
+  return `절감 상위: ${topSaved.map((item) => `${item.fileName} ${formatBytes(item.savedBytes ?? 0)}`).join(" · ")}`;
 }
 
 function resetBatchCompletedItems(): void {
@@ -1448,6 +1476,15 @@ function setSubmissionInputsDisabled(disabled: boolean): void {
 
 function setStatus(message: string): void {
   statusText.textContent = message;
+  statusBannerText.textContent = message;
+  statusBanner.hidden = message.trim().length === 0;
+  statusBanner.dataset.tone = statusTone(message);
+}
+
+function statusTone(message: string): "info" | "success" | "warning" {
+  if (/실패|오류|없습니다|초과|권한|손상|아닙니다|보류|우회|지원/i.test(message)) return "warning";
+  if (/완료|성공|통과|변경했습니다|저장/i.test(message)) return "success";
+  return "info";
 }
 
 function errorMessage(error: unknown): string {

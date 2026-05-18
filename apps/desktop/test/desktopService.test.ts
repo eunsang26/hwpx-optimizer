@@ -143,13 +143,15 @@ describe("desktop service", () => {
     expect(
       persistentDesktopSettingsPatch({
         saveReport: true,
+        submissionLimit: { id: "mb41" },
         saveNextToOriginal: false,
         outputDirectory: "/private/reports",
         recentFiles: ["/private/input.hwpx"],
         reportPath: "/private/input.report.json"
       })
     ).toEqual({
-      saveReport: true
+      saveReport: true,
+      submissionLimit: { id: "mb41" }
     });
   });
 
