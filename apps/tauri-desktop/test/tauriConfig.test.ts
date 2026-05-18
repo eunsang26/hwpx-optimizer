@@ -80,6 +80,10 @@ describe("Tauri desktop scaffold", () => {
     expect(workflow).toContain('node-version: "20.20.2"');
     expect(workflow).toContain("tauri-size-report.txt");
     expect(workflow).toContain("Get-FileHash");
+    expect(workflow).toContain("id: upload-tauri-installer");
+    expect(workflow).toContain("continue-on-error: true");
+    expect(workflow).toContain("steps.upload-tauri-installer.outcome == 'failure'");
+    expect(workflow).toContain("GitHub Actions artifact quota");
   });
 
   it("cleans Tauri build output before workspace builds", async () => {

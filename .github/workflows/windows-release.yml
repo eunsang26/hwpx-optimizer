@@ -102,9 +102,17 @@ jobs:
           $report | Tee-Object -FilePath "apps/tauri-desktop/src-tauri/target/release/tauri-size-report.txt"
 
       - name: Upload Tauri installer artifact
+        id: upload-tauri-installer
         if: inputs.upload_artifact == true
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: hwpx-optimizer-tauri-nsis
           path: apps/tauri-desktop/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
+
+      - name: Report skipped Tauri artifact publication
+        if: inputs.upload_artifact == true && steps.upload-tauri-installer.outcome == 'failure'
+        shell: pwsh
+        run: |
+          Write-Warning "Tauri installer artifact upload failed. The Windows build remains valid; rerun after GitHub Actions artifact quota is available to publish a downloadable installer."
