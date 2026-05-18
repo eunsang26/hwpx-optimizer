@@ -70,11 +70,11 @@ describe("repository runtime and cleanup configuration", () => {
     expect(main).toContain("minWidth: 960");
     expect(main).toContain("minHeight: 720");
     expect(main).toContain('backgroundColor: "#f6f8fb"');
-    expect(styles).toMatch(/\.shell\s*{[^}]*padding:\s*0 10px 80px/s);
+    expect(styles).toMatch(/\.shell\s*{[^}]*padding:\s*0 6px 80px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.drop-zone\s*{[^}]*padding:\s*10px 14px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.summary-panel\s*{[^}]*padding-bottom:\s*8px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.bottom-row\s*{[^}]*gap:\s*6px/s);
-    expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*max-width:\s*1120px/s);
+    expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*max-width:\s*1320px/s);
     expect(styles).toMatch(/\.brand-mark img\s*{[^}]*width:\s*30px/s);
     expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(150px, 1fr\)\)/s);
     expect(styles).toMatch(/\.option-grid select,\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);

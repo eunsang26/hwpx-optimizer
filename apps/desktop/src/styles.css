@@ -162,8 +162,8 @@ button.icon-text { gap: 8px; }
 .shell {
   display: grid;
   gap: 10px;
-  padding: 0 10px 80px;
-  max-width: 1440px;
+  padding: 0 6px 80px;
+  max-width: 1560px;
   margin: 0 auto;
   min-width: 0;
 }
@@ -176,7 +176,7 @@ body[data-view="empty"] .shell {
   display: grid;
   grid-template-rows: auto;
   gap: 0;
-  margin: 0 -10px 0;
+  margin: 0 -6px 0;
   padding: 8px 14px;
   background: var(--surface);
   border-bottom: 1px solid var(--hairline);
@@ -271,13 +271,13 @@ body[data-view="empty"] .shell {
   gap: 8px;
   align-items: start;
   animation: rise 360ms ease both;
-  max-width: 1100px;
+  max-width: 1320px;
   margin: 0 auto;
   min-width: 0;
 }
 body[data-view="empty"] .workspace-grid {
   gap: 6px;
-  max-width: 1120px;
+  max-width: 1320px;
 }
 .workflow-stack { display: grid; gap: 8px; }
 
