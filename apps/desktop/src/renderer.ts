@@ -140,6 +140,10 @@ const settingsButton = requireButton("settings-button");
 const settingsPanel = requireElement("settings-panel");
 const settingsBackdrop = requireElement("settings-backdrop");
 const settingsCloseButton = requireButton("settings-close-button");
+const helpButton = requireButton("help-button");
+const helpPanel = requireElement("help-panel");
+const helpBackdrop = requireElement("help-backdrop");
+const helpCloseButton = requireButton("help-close-button");
 const resultPanel = requireElement("result-panel");
 const resultSummary = requireElement("result-summary");
 const resultGuidance = requireElement("result-guidance");
@@ -300,8 +304,14 @@ async function init(): Promise<void> {
   settingsButton.addEventListener("click", () => setSettingsOpen(!settingsPanel.classList.contains("is-open")));
   settingsCloseButton.addEventListener("click", () => setSettingsOpen(false));
   settingsBackdrop.addEventListener("click", () => setSettingsOpen(false));
+  helpButton.addEventListener("click", () => setHelpOpen(!helpPanel.classList.contains("is-open")));
+  helpCloseButton.addEventListener("click", () => setHelpOpen(false));
+  helpBackdrop.addEventListener("click", () => setHelpOpen(false));
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setSettingsOpen(false);
+    if (event.key === "Escape") {
+      setSettingsOpen(false);
+      setHelpOpen(false);
+    }
   });
   openFileButton.addEventListener("click", () => state.result && window.hwpxOptimizer.openPath(state.result.outputPath));
   openReportButton.addEventListener(
@@ -548,9 +558,17 @@ function renderSettings(settings: DesktopSettings): void {
 }
 
 function setSettingsOpen(open: boolean): void {
+  if (open) setHelpOpen(false);
   settingsPanel.classList.toggle("is-open", open);
   settingsPanel.setAttribute("aria-hidden", open ? "false" : "true");
   settingsBackdrop.hidden = !open;
+}
+
+function setHelpOpen(open: boolean): void {
+  if (open) setSettingsOpen(false);
+  helpPanel.classList.toggle("is-open", open);
+  helpPanel.setAttribute("aria-hidden", open ? "false" : "true");
+  helpBackdrop.hidden = !open;
 }
 
 function applySessionOutputDirectory(outputDirectory: string): void {
@@ -1556,6 +1574,53 @@ function clearSelectedFiles(message: string): void {
   setStatus(message);
 }
 
+function promoteRemainingBatchItemToSingle(item: BatchItem): void {
+  analysisSequence += 1;
+  document.body.dataset.view = "single";
+  document.body.dataset.result = "";
+  document.body.dataset.batchResult = "";
+  state.filePath = item.path;
+  state.report = item.report;
+  state.result = undefined;
+  state.currentPlan = undefined;
+  state.batchItems = [];
+  state.batchReportPath = undefined;
+  state.batchRunCompleted = false;
+  state.batchCancelled = false;
+  state.actionSelections.clear();
+  batchList.innerHTML = "";
+  batchPanel.hidden = true;
+  batchResultPanel.hidden = true;
+  singleWorkspace.hidden = false;
+  selectedFileCard.hidden = false;
+  dropZone.hidden = true;
+  resultPanel.hidden = true;
+  resultGuidance.textContent = "";
+  fileName.textContent = item.fileName;
+  fileMeta.textContent = "선택한 경로는 현재 실행에서만 사용하며 저장하지 않습니다.";
+  selectedFileName.textContent = item.fileName;
+  selectedFilePath.textContent = "파일 경로는 앱 기록으로 저장하지 않습니다.";
+  selectedOriginalMeta.textContent = item.originalSizeLabel ? `원본 크기: ${item.originalSizeLabel}` : "원본 크기: 분석 대기";
+  selectedModifiedMeta.textContent = "수정일: 분석 대기";
+  resetVerificationPanel();
+  compareButton.disabled = true;
+  closeImageCompareModal();
+
+  if (item.report) {
+    renderAnalysis(item.report);
+    refreshSubmissionPlan();
+    renderRunDock(state.currentPlan);
+    setStatus("남은 1개 파일을 단일 모드로 전환했습니다.");
+    return;
+  }
+
+  state.report = undefined;
+  state.analysisRunning = true;
+  renderPendingAnalysisSummary();
+  setStatus("남은 1개 파일을 단일 모드로 전환하고 분석합니다.");
+  void analyzeFile(item.path);
+}
+
 function setDragOver(active: boolean): void {
   document.body.dataset.dragOver = active ? "true" : "";
   dropZone.classList.toggle("is-over", active && !dropZone.hidden);
@@ -1660,6 +1725,9 @@ function handleBatchRowAction(button: HTMLButtonElement): void {
       singleWorkspace.hidden = false;
       renderEmptySummary();
       setStatus("배치 목록을 비웠습니다.");
+    } else if (state.batchItems.length === 1) {
+      promoteRemainingBatchItemToSingle(state.batchItems[0]);
+      return;
     }
     renderBatchList();
   }

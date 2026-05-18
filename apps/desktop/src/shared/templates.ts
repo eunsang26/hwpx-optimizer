@@ -57,9 +57,9 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
     item.originalSizeLabel ?? "-"
   )}</td><td>${escapeHtml(item.expectedSizeLabel ?? "-")}</td><td>${escapeHtml(
     item.targetLabel ?? "20MB 이하"
-  )}</td><td><span class="status ${statusClass}">${escapeHtml(
+  )}</td><td class="batch-status-cell"><span class="status-line"><span class="status ${statusClass}">${escapeHtml(
     statusLabel
-  )}</span><span class="row-meta">${escapeHtml(meta)}</span><span class="row-actions">${actions}</span></td></tr>`;
+  )}</span><span class="row-meta">${escapeHtml(meta)}</span></span><span class="row-actions">${actions}</span></td></tr>`;
 }
 
 function batchTableStatusLabel(item: BatchItemLike): string {

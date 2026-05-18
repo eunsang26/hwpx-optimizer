@@ -22,7 +22,7 @@
             <span id="status-text" class="sr-only">대기 중입니다.</span>
           </div>
           <div class="top-actions">
-            <button type="button" class="chrome-button" title="도움말" aria-label="도움말">
+            <button id="help-button" type="button" class="chrome-button" title="도움말" aria-label="도움말">
               <span class="help-icon" aria-hidden="true"></span>
               도움말
             </button>
@@ -355,6 +355,32 @@
       </div>
 
       <div id="settings-backdrop" class="settings-backdrop" hidden></div>
+      <div id="help-backdrop" class="help-backdrop" hidden></div>
+      <aside id="help-panel" class="help-panel" aria-hidden="true" aria-labelledby="help-title">
+        <div class="help-header">
+          <div>
+            <h2 id="help-title">도움말</h2>
+            <p>파일 선택부터 저장까지 현재 화면 기준으로 확인합니다.</p>
+          </div>
+          <button id="help-close-button" class="ghost settings-close" type="button" aria-label="도움말 닫기"><span aria-hidden="true">×</span></button>
+        </div>
+        <section>
+          <h3>파일 처리</h3>
+          <p>파일 1개는 단일 모드로 분석하고, 2개 이상은 일괄 처리 목록으로 전환합니다. 일괄 목록에서 1개만 남으면 단일 모드로 돌아갑니다.</p>
+        </section>
+        <section>
+          <h3>제출 기준</h3>
+          <p>제출 제한과 보존 기준을 바꾸면 예상 결과와 자동 최적화 계획이 즉시 다시 계산됩니다.</p>
+        </section>
+        <section>
+          <h3>저장과 리포트</h3>
+          <p>결과 파일은 원본을 덮어쓰지 않고 새 파일로 저장합니다. JSON 리포트 저장은 설정에서 필요할 때만 켭니다.</p>
+        </section>
+        <section>
+          <h3>보안 문서</h3>
+          <p>암호·권한 보호 문서는 우회하지 않으며, 모든 처리는 네트워크 전송 없이 이 PC 안에서만 수행합니다.</p>
+        </section>
+      </aside>
       <aside id="settings-panel" class="settings" aria-hidden="true" aria-labelledby="settings-title">
         <div class="settings-header">
           <h2 id="settings-title">설정</h2>

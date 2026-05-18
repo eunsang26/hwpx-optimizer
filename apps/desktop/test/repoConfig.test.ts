@@ -133,6 +133,10 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="option-plan-summary"');
     expect(html).toContain('id="run-dock"');
     expect(html).toContain('id="settings-close-button"');
+    expect(html).toContain('id="help-button"');
+    expect(html).toContain('id="help-panel"');
+    expect(html).toContain('id="help-backdrop"');
+    expect(html).toContain('id="help-close-button"');
     expect(html).toContain('<span aria-hidden="true">×</span>');
     expect(html).toContain('id="cleanup-document-toggle"');
     expect(html).toContain('id="cleanup-image-toggle"');
@@ -154,9 +158,16 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("visiblePlanRows(plan)");
     expect(renderer).toContain("renderCleanupSettings(plan)");
     expect(renderer).toContain("runDock.hidden");
+    expect(renderer).toContain("function setHelpOpen(open: boolean)");
+    expect(renderer).toContain("helpButton.addEventListener");
+    expect(renderer).toContain("promoteRemainingBatchItemToSingle");
+    expect(renderer).toContain("settingSaveReport.checked = settings.saveReport");
     expect(renderer).toContain('from "./shared/resultGuidance.js"');
     expect(renderer).toContain("resultGuidanceText(report, plan)");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
+    expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
+    expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, 1320px\)/s);
+    expect(css).toMatch(/\.help-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
     expect(css).toMatch(/\.settings-check\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/body\[data-drag-over="true"\] \.file-panel\s*{[^}]*border-color:\s*var\(--blue\)/s);
