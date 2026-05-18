@@ -30,7 +30,7 @@ describe("balanced optimization", () => {
       "image2": { path: "BinData/image2.bmp", mediaType: "image/bmp", data: bmp }
     });
 
-    const report = await analyzeHwpxBuffer(fixture);
+    const report = await analyzeHwpxBuffer(fixture, { analysisMode: "deep" });
 
     expect(report.opportunities).toEqual(
       expect.arrayContaining([
@@ -299,7 +299,7 @@ describe("balanced optimization", () => {
       }
     });
 
-    const report = await analyzeHwpxBuffer(fixture);
+    const report = await analyzeHwpxBuffer(fixture, { analysisMode: "deep" });
     expect(report.sameVisualDuplicateImages).toEqual([
       expect.objectContaining({
         paths: ["BinData/image1.png", "BinData/image2.bmp"],

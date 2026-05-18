@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 import { createHwpxFixture } from "../../core/test/fixtures.js";
 import { isCliEntrypoint, printAnalysisSummaryForTest, renderHumanReport, runCli } from "../src/index.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
@@ -19,7 +20,7 @@ describe("runCli", () => {
 
     expect(code).toBe(1);
     const usage = errors.join("\n");
-    expect(usage).toContain("analyze <file.hwpx> [--report report.json] [--target-bytes bytes|--target-mb mb]");
+    expect(usage).toContain("analyze <file.hwpx> [--report report.json] [--analysis-mode quick|deep]");
     expect(usage).toContain("batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb]");
     expect(usage).toContain("[--jobs count]");
   });
@@ -89,6 +90,35 @@ describe("runCli", () => {
     expect(logs.join("\n")).toContain("Opportunities:");
     expect(logs.join("\n")).toContain("clean-shape-comment: 1 target");
     expect(logs.join("\n")).toContain("Suggested: hwpx-opt optimize");
+  });
+
+  it("accepts deep analysis mode for precision diagnostics", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    const reportPath = join(dir, "report.json");
+    const png = await sharp({
+      create: { width: 16, height: 10, channels: 3, background: "#000000" }
+    })
+      .png()
+      .toBuffer();
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": "<root />",
+        "BinData/a.png": png,
+        "BinData/b.bmp": createBmp24(16, 10)
+      }
+    });
+    await writeFile(inputPath, input);
+
+    const code = await runCli(["analyze", inputPath, "--report", reportPath, "--analysis-mode", "deep"]);
+
+    expect(code).toBe(0);
+    const report = JSON.parse(await readFile(reportPath, "utf8")) as {
+      sameVisualDuplicateImages: Array<{ paths: string[] }>;
+    };
+    expect(report.sameVisualDuplicateImages).toEqual([
+      expect.objectContaining({ paths: ["BinData/a.png", "BinData/b.bmp"] })
+    ]);
   });
 
   it("prints non-overlapping total potential savings in human reports", () => {
@@ -649,3 +679,20 @@ const minimalReport: OptimizationReport = {
   opportunityGroups: [],
   warnings: []
 };
+
+function createBmp24(width: number, height: number): Buffer {
+  const rowSize = Math.ceil((width * 3) / 4) * 4;
+  const pixelDataSize = rowSize * height;
+  const fileSize = 54 + pixelDataSize;
+  const buffer = Buffer.alloc(fileSize);
+  buffer.write("BM", 0, "ascii");
+  buffer.writeUInt32LE(fileSize, 2);
+  buffer.writeUInt32LE(54, 10);
+  buffer.writeUInt32LE(40, 14);
+  buffer.writeInt32LE(width, 18);
+  buffer.writeInt32LE(height, 22);
+  buffer.writeUInt16LE(1, 26);
+  buffer.writeUInt16LE(24, 28);
+  buffer.writeUInt32LE(pixelDataSize, 34);
+  return buffer;
+}

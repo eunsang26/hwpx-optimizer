@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
 import { findByteIdenticalImageGroups, findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
+import { readImageMetadata } from "./imageMetadata.js";
 import { stripJpegMetadataSegments } from "./optimizer.js";
 import type { HwpxPackage, OptimizationOpportunity } from "./types.js";
 
@@ -21,7 +22,6 @@ const AGGRESSIVE_JPEG_QUALITY = 80;
 const JPEG_METADATA_MIN_SAVING_BYTES = 256;
 const JPEG_METADATA_MIN_SAVING_RATIO = 0.005;
 const PNG_OPTIMIZE_MIN_BYTES = 4096;
-const metadataCache = new WeakMap<Buffer, Promise<{ width?: number; height?: number }>>();
 
 export type ImageOptimizationProfile = {
   maxEdge: number;
@@ -537,24 +537,8 @@ function pngOptions(profile: ImageOptimizationProfile): sharp.PngOptions {
 }
 
 async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number }> {
-  const cached = metadataCache.get(data);
-  if (cached) return cached;
-
-  const metadata = readMetadataUncached(data);
-  metadataCache.set(data, metadata);
-  return metadata;
-}
-
-async function readMetadataUncached(data: Buffer): Promise<{ width?: number; height?: number }> {
-  const bmp = decodeBmp(data);
-  if (bmp) return { width: bmp.width, height: bmp.height };
-
-  try {
-    const metadata = await sharp(data).metadata();
-    return { width: metadata.width, height: metadata.height };
-  } catch {
-    return {};
-  }
+  const metadata = await readImageMetadata("", data);
+  return { width: metadata.width, height: metadata.height };
 }
 
 function addOpportunityIfSmaller(

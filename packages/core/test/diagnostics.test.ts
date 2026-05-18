@@ -30,7 +30,7 @@ describe("analysis diagnostics", () => {
       }
     });
 
-    const report = await analyzeHwpxBuffer(input);
+    const report = await analyzeHwpxBuffer(input, { analysisMode: "deep" });
 
     expect(report.nearDuplicateImages).toEqual([
       expect.objectContaining({
@@ -61,7 +61,7 @@ describe("analysis diagnostics", () => {
       }
     });
 
-    const report = await analyzeHwpxBuffer(input);
+    const report = await analyzeHwpxBuffer(input, { analysisMode: "deep" });
 
     expect(report.nearDuplicateImages).toEqual([]);
   });
