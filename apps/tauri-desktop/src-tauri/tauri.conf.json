@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
@@ -27,8 +27,30 @@
     "targets": "nsis",
     "externalBin": ["binaries/hwpx-sidecar"],
     "resources": {
-      "../dist/sidecar": "sidecar"
+      "../dist/sidecar": "sidecar",
+      "../../../packages/core/dist": "node_modules/@hwpx-optimizer/core/dist",
+      "../../../packages/core/package.json": "node_modules/@hwpx-optimizer/core/package.json",
+      "../../../node_modules/@img": "node_modules/@img",
+      "../../../node_modules/@nodable": "node_modules/@nodable",
+      "../../../node_modules/core-util-is": "node_modules/core-util-is",
+      "../../../node_modules/fast-xml-builder": "node_modules/fast-xml-builder",
+      "../../../node_modules/fast-xml-parser": "node_modules/fast-xml-parser",
+      "../../../node_modules/inherits": "node_modules/inherits",
+      "../../../node_modules/isarray": "node_modules/isarray",
+      "../../../node_modules/jszip": "node_modules/jszip",
+      "../../../node_modules/lie": "node_modules/lie",
+      "../../../node_modules/pako": "node_modules/pako",
+      "../../../node_modules/path-expression-matcher": "node_modules/path-expression-matcher",
+      "../../../node_modules/process-nextick-args": "node_modules/process-nextick-args",
+      "../../../node_modules/readable-stream": "node_modules/readable-stream",
+      "../../../node_modules/safe-buffer": "node_modules/safe-buffer",
+      "../../../node_modules/setimmediate": "node_modules/setimmediate",
+      "../../../node_modules/sharp": "node_modules/sharp",
+      "../../../node_modules/string_decoder": "node_modules/string_decoder",
+      "../../../node_modules/strnum": "node_modules/strnum",
+      "../../../node_modules/util-deprecate": "node_modules/util-deprecate"
     },
+    "icon": ["icons/icon.png", "icons/icon.ico"],
     "windows": {
       "webviewInstallMode": {
         "type": "embedBootstrapper"

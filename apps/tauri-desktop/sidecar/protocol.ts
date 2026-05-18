@@ -18,8 +18,8 @@ export type SidecarResponse =
 
 export function parseSidecarRequest(line: string): SidecarRequest {
   const parsed = JSON.parse(line) as Partial<SidecarRequest>;
-  if (typeof parsed.id !== "number" || !Number.isInteger(parsed.id)) {
-    throw new Error("Invalid sidecar request: id must be an integer.");
+  if (typeof parsed.id !== "number" || !Number.isSafeInteger(parsed.id) || parsed.id < 0) {
+    throw new Error("Invalid sidecar request: id must be a non-negative safe integer.");
   }
   const id = parsed.id;
   if (typeof parsed.method !== "string" || parsed.method.length === 0) {

@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "20.20.2"
           cache: "npm"
 
       - name: Install dependencies
@@ -57,7 +57,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "20.20.2"
           cache: "npm"
 
       - name: Setup Rust
@@ -81,6 +81,7 @@ jobs:
       - name: Print Tauri artifact sizes
         shell: pwsh
         run: |
+          $report = @()
           $paths = @(
             "apps/tauri-desktop/src-tauri/target/release/hwpx-tauri-desktop.exe",
             "apps/tauri-desktop/src-tauri/target/release/hwpx-sidecar.exe"
@@ -88,12 +89,17 @@ jobs:
           foreach ($path in $paths) {
             if (Test-Path $path) {
               $item = Get-Item $path
-              "{0}`t{1:N0} bytes" -f $item.FullName, $item.Length
+              $hash = (Get-FileHash $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              $report += "{0}`t{1:N0} bytes`tsha256:{2}" -f $item.FullName, $item.Length, $hash
             }
           }
           Get-ChildItem "apps/tauri-desktop/src-tauri/target/release/bundle" -Recurse -File |
             Sort-Object FullName |
-            ForEach-Object { "{0}`t{1:N0} bytes" -f $_.FullName, $_.Length }
+            ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              $report += "{0}`t{1:N0} bytes`tsha256:{2}" -f $_.FullName, $_.Length, $hash
+            }
+          $report | Tee-Object -FilePath "apps/tauri-desktop/src-tauri/target/release/tauri-size-report.txt"
 
       - name: Upload Tauri installer artifact
         if: inputs.upload_artifact == true

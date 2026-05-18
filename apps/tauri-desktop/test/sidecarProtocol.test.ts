@@ -43,9 +43,59 @@ describe("Tauri Node sidecar protocol", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("does not overwrite an existing Tauri output and supports batch output folders", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-output-"));
+    try {
+      const inputPath = join(dir, "input.hwpx");
+      const outputDirectory = join(dir, "out");
+      await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+      await writeFile(join(dir, "input_tauri_optimized.hwpx"), "existing");
+
+      const responses = await runSidecarRequests([
+        { id: 1, method: "optimize", params: { filePath: inputPath, mode: "safe" } },
+        { id: 2, method: "optimize", params: { filePath: inputPath, mode: "safe", outputDirectory, outputMode: "batch" } }
+      ]);
+
+      expect(responses[0]).toMatchObject({
+        id: 1,
+        ok: true,
+        result: { outputPath: join(dir, "input_tauri_optimized-2.hwpx") }
+      });
+      expect(responses[1]).toMatchObject({
+        id: 2,
+        ok: true,
+        result: { outputPath: join(outputDirectory, "output", "input_tauri_optimized.hwpx") }
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects invalid protocol ids", async () => {
+    await expect(runRawSidecarLine(JSON.stringify({ id: -1, method: "health" }))).resolves.toEqual({
+      id: 0,
+      ok: false,
+      error: "Invalid sidecar request: id must be a non-negative safe integer."
+    });
+  });
 });
 
 async function runSidecarRequests(requests: Array<{ id: number; method: string; params?: unknown }>): Promise<Array<{
+  id: number;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+}>> {
+  return runSidecarProcess(requests.map((request) => JSON.stringify(request)).join("\n") + "\n");
+}
+
+async function runRawSidecarLine(line: string): Promise<{ id: number; ok: boolean; result?: unknown; error?: string }> {
+  const [response] = await runSidecarProcess(`${line}\n`);
+  return response;
+}
+
+async function runSidecarProcess(input: string): Promise<Array<{
   id: number;
   ok: boolean;
   result?: unknown;
@@ -72,9 +122,7 @@ async function runSidecarRequests(requests: Array<{ id: number; method: string; 
     stderr += chunk;
   });
 
-  for (const request of requests) {
-    child.stdin.write(`${JSON.stringify(request)}\n`);
-  }
+  child.stdin.write(input);
   child.stdin.end();
 
   const [code] = await once(child, "exit");
@@ -85,5 +133,5 @@ async function runSidecarRequests(requests: Array<{ id: number; method: string; 
     .trim()
     .split("\n")
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as { id: number; ok: boolean; result?: unknown; error?: string });
+    .map((outputLine) => JSON.parse(outputLine) as { id: number; ok: boolean; result?: unknown; error?: string });
 }

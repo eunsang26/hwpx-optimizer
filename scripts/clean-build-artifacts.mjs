@@ -7,7 +7,9 @@ const buildArtifacts = [
   "packages/cli/dist",
   "packages/cli/tsconfig.tsbuildinfo",
   "apps/desktop/dist",
-  "apps/desktop/tsconfig.tsbuildinfo"
+  "apps/desktop/tsconfig.tsbuildinfo",
+  "apps/tauri-desktop/dist",
+  "apps/tauri-desktop/tsconfig.tsbuildinfo"
 ];
 
 for (const artifact of buildArtifacts) {

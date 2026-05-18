@@ -24,13 +24,20 @@ The first implementation intentionally keeps several Electron behaviors out of t
 - Drag/drop path registration is disabled because browser-provided dropped paths are not trusted.
 - `openPath` and `showItem` return explicit errors until generated-path allowlisting is ported.
 - Optimization progress events and cancellation are placeholders; Electron still has the complete worker-termination flow.
-- Tauri binary packaging requires a Rust toolchain and platform system dependencies. Rust can be installed locally, but this WSL environment still needs Linux Tauri system packages such as `pkg-config`, `libglib2.0-dev`, `libgtk-3-dev`, and `libwebkit2gtk-4.1-dev`. `sudo` requires a password here, so those packages could not be installed by the agent.
+- Tauri binary packaging requires a Rust toolchain and platform system dependencies. The local Linux build now passes after installing `pkg-config`, `libglib2.0-dev`, `libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, and `librsvg2-dev`.
+- The current PoC uses Tauri-selected input/output paths only. Renderer-provided arbitrary file paths are rejected by Rust-side session allowlists.
 
 ## Sidecar Packaging
 
 Tauri `externalBin` requires target-triple suffixed files such as `hwpx-sidecar-x86_64-unknown-linux-gnu` or `hwpx-sidecar-x86_64-pc-windows-msvc.exe`. The PoC uses `scripts/prepare-tauri-sidecar.mjs` to copy the active Node runtime into `apps/tauri-desktop/src-tauri/binaries/` with the expected suffix. The Rust shell launches that sidecar with the bundled `sidecar/index.js` resource path.
 
-This is intentionally conservative. It proves Tauri can launch a Node sidecar without committing a large generated binary. A later size-focused pass should compare this against `pkg`, `nexe`, Node SEA, or a Rust core port because the copied Node runtime is about 99 MB before final installer compression.
+This is intentionally conservative. It proves Tauri can launch a Node sidecar without committing a large generated binary. The sidecar resource also bundles the compiled `@hwpx-optimizer/core` package and the runtime dependencies needed by the current core path. A later size-focused pass should compare this against `pkg`, `nexe`, Node SEA, or a Rust core port because the copied Node runtime is still the largest uncompressed component.
+
+Observed build sizes from the Windows Tauri PoC workflow on Node 20.20.2:
+
+- Tauri app executable: about 11.9 MB.
+- Node sidecar executable: about 72.4 MB.
+- NSIS installer: about 23.1 MB.
 
 Out of scope for this first pass:
 
@@ -38,7 +45,7 @@ Out of scope for this first pass:
 - Windows installer signing.
 - Rust port of `packages/core`.
 - Removing the Electron app.
-- Production-size claims before a Windows Tauri build is available.
+- Treating the PoC as the release app before the remaining Electron parity work is implemented.
 
 ## Architecture
 

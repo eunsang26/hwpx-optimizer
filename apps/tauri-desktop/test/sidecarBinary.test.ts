@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 describe("Tauri sidecar binary preparation", () => {
   it("creates a target-triple Node sidecar binary that can run the built sidecar entry", async () => {
+    await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "build", "-w", "@hwpx-optimizer/tauri-desktop"]);
     await run(process.execPath, ["scripts/prepare-tauri-sidecar.mjs"]);
     const triple = process.platform === "linux" && process.arch === "x64"
       ? "x86_64-unknown-linux-gnu"
@@ -14,7 +15,7 @@ describe("Tauri sidecar binary preparation", () => {
 
     const sidecarPath = join("apps", "tauri-desktop", "src-tauri", "binaries", `hwpx-sidecar-${triple}`);
     await expect(access(sidecarPath)).resolves.toBeUndefined();
-    await expect(runSidecarBinary(sidecarPath)).resolves.toEqual({
+    await expect(runSidecarBinary(sidecarPath, "apps/tauri-desktop/dist/sidecar/index.js")).resolves.toEqual({
       id: 1,
       ok: true,
       result: {
@@ -31,13 +32,8 @@ async function run(command: string, args: string[]): Promise<void> {
   if (code !== 0) throw new Error(`${command} ${args.join(" ")} exited with ${code}`);
 }
 
-async function runSidecarBinary(sidecarPath: string): Promise<unknown> {
-  const child = spawn(sidecarPath, [
-    "--conditions=development",
-    "--import",
-    "tsx",
-    "apps/tauri-desktop/sidecar/index.ts"
-  ], {
+async function runSidecarBinary(sidecarPath: string, sidecarEntry: string): Promise<unknown> {
+  const child = spawn(sidecarPath, [sidecarEntry], {
     cwd: process.cwd(),
     stdio: ["pipe", "pipe", "pipe"]
   });
