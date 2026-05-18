@@ -93,9 +93,9 @@ describe("analysis diagnostics", () => {
 describe("PNG candidate profiles", () => {
   it("keeps PNG palette optimization aggressive-only", async () => {
     const png = await sharp({
-      create: { width: 80, height: 80, channels: 3, background: "#aa7733" }
+      create: { width: 256, height: 256, channels: 3, background: "#aa7733" }
     })
-      .png()
+      .png({ compressionLevel: 0 })
       .toBuffer();
     const pkg = await readHwpxPackage(
       await createHwpxFixture({
@@ -110,5 +110,19 @@ describe("PNG candidate profiles", () => {
 
     expect(balanced.find((item) => item.action === "optimize-png")?.visualImpact).toBe("none");
     expect(aggressive.find((item) => item.action === "optimize-png")?.visualImpact).toBe("low");
+  });
+
+  it("does not spend PNG optimization work on tiny files", async () => {
+    const pkg = await readHwpxPackage(
+      await createHwpxFixture({
+        entries: {
+          "BinData/tiny.png": Buffer.from([0x89, 0x50, 0x4e, 0x47])
+        }
+      })
+    );
+
+    const opportunities = await detectEstimatedOptimizationOpportunities(pkg, balancedImageProfile);
+
+    expect(opportunities).not.toContainEqual(expect.objectContaining({ action: "optimize-png", target: "BinData/tiny.png" }));
   });
 });

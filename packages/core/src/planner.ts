@@ -1,5 +1,7 @@
 import type { HwpxPackage, OptimizationPlan, PackageAnalysis, ReferenceGraph } from "./types.js";
 
+const PNG_OPTIMIZE_MIN_BYTES = 4096;
+
 export function createSafeOptimizationPlan(input: {
   pkg: HwpxPackage;
   analysis: PackageAnalysis;
@@ -17,7 +19,7 @@ export function createSafeOptimizationPlan(input: {
     if (image.hasMetadata && canStripMetadataLosslessly(image.path)) {
       actions.push({ type: "strip-metadata", target: image.path, risk: "safe" });
     }
-    if (canOptimizeLosslessly(image.path)) {
+    if (canOptimizeLosslessly(image.path, image.size, image.width, image.height)) {
       actions.push({ type: "optimize-png", target: image.path, risk: "safe" });
     }
   }
@@ -37,6 +39,6 @@ function canStripMetadataLosslessly(path: string): boolean {
   return /\.(jpe?g)$/i.test(path);
 }
 
-function canOptimizeLosslessly(path: string): boolean {
-  return /\.png$/i.test(path);
+function canOptimizeLosslessly(path: string, size: number, width?: number, height?: number): boolean {
+  return /\.png$/i.test(path) && (size >= PNG_OPTIMIZE_MIN_BYTES || !width || !height);
 }

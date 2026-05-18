@@ -36,6 +36,13 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.build?.asarUnpack).toEqual(["node_modules/@img/sharp-win32-x64/**/*"]);
     expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
     expect(packageJson.build?.electronLanguages).toEqual(["ko"]);
+    expect(packageJson.build?.files).toContain("!node_modules/**/README*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/CHANGELOG*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/CHANGES*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/CONTRIBUTING*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/GOVERNANCE*");
+    expect(packageJson.build?.files).toContain("!node_modules/**/test.*");
+    expect(packageJson.build?.files).toContain("!node_modules/sharp/src/**");
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/prune-electron-locales.cjs")).resolves.toBeUndefined();
