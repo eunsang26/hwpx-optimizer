@@ -294,32 +294,32 @@
             <p>원본은 그대로 유지되며, 보안 문서 우회 없이 새 파일로 저장됩니다.</p>
           </div>
         </div>
-      </section>
 
-      <section class="bottom-accordions">
-        <details id="analysis-details" class="analysis-details">
-          <summary id="analysis-detail-summary">
-            <span class="search-icon" aria-hidden="true"></span>
-            <strong>세부 분석 보기</strong>
-            <span>파일을 선택하면 세부 분석 결과를 확인할 수 있습니다.</span>
-          </summary>
-          <div id="analysis-grid" class="metric-grid"></div>
-          <div class="two-column compact">
-            <div>
-              <h2>줄일 수 있는 항목</h2>
-              <ul id="opportunity-list" class="list"></ul>
+        <section class="bottom-accordions">
+          <details id="analysis-details" class="analysis-details">
+            <summary id="analysis-detail-summary">
+              <span class="search-icon" aria-hidden="true"></span>
+              <strong>세부 분석 보기</strong>
+              <span>파일을 선택하면 세부 분석 결과를 확인할 수 있습니다.</span>
+            </summary>
+            <div id="analysis-grid" class="metric-grid"></div>
+            <div class="two-column compact">
+              <div>
+                <h2>줄일 수 있는 항목</h2>
+                <ul id="opportunity-list" class="list"></ul>
+              </div>
+              <div>
+                <h2>주의할 점</h2>
+                <ul id="warning-list" class="list"></ul>
+              </div>
             </div>
-            <div>
-              <h2>주의할 점</h2>
-              <ul id="warning-list" class="list"></ul>
-            </div>
-          </div>
-          <div id="category-chart" class="category-chart" hidden></div>
-          <section class="analysis-verification">
-            <h2>자동 검증 결과</h2>
-            <p id="verification-body" class="detail-placeholder">최적화 후 문서 구조, 누락 리소스, 이미지 품질 기준을 자동으로 확인합니다.</p>
-          </section>
-        </details>
+            <div id="category-chart" class="category-chart" hidden></div>
+            <section class="analysis-verification">
+              <h2>자동 검증 결과</h2>
+              <p id="verification-body" class="detail-placeholder">최적화 후 문서 구조, 누락 리소스, 이미지 품질 기준을 자동으로 확인합니다.</p>
+            </section>
+          </details>
+        </section>
       </section>
 
       <div id="action-panel" hidden>
@@ -359,27 +359,49 @@
       <aside id="help-panel" class="help-panel" aria-hidden="true" aria-labelledby="help-title">
         <div class="help-header">
           <div>
-            <h2 id="help-title">도움말</h2>
-            <p>파일 선택부터 저장까지 현재 화면 기준으로 확인합니다.</p>
+            <h2 id="help-title">사용 매뉴얼</h2>
+            <p>제출용 HWPX 파일을 줄일 때 필요한 순서와 판단 기준입니다.</p>
           </div>
           <button id="help-close-button" class="ghost settings-close" type="button" aria-label="도움말 닫기"><span aria-hidden="true">×</span></button>
         </div>
-        <section>
-          <h3>파일 처리</h3>
-          <p>파일 1개는 단일 모드로 분석하고, 2개 이상은 일괄 처리 목록으로 전환합니다. 일괄 목록에서 1개만 남으면 단일 모드로 돌아갑니다.</p>
-        </section>
-        <section>
-          <h3>제출 기준</h3>
-          <p>제출 제한과 보존 기준을 바꾸면 예상 결과와 자동 최적화 계획이 즉시 다시 계산됩니다.</p>
-        </section>
-        <section>
-          <h3>저장과 리포트</h3>
-          <p>결과 파일은 원본을 덮어쓰지 않고 새 파일로 저장합니다. JSON 리포트 저장은 설정에서 필요할 때만 켭니다.</p>
-        </section>
-        <section>
-          <h3>보안 문서</h3>
-          <p>암호·권한 보호 문서는 우회하지 않으며, 모든 처리는 네트워크 전송 없이 이 PC 안에서만 수행합니다.</p>
-        </section>
+        <ol class="manual-steps">
+          <li>
+            <strong>1. 파일 선택</strong>
+            <p>파일 1개를 선택하면 단일 모드로 바로 분석합니다. 파일이나 폴더를 추가해 2개 이상이 되면 일괄 처리 목록으로 전환됩니다.</p>
+          </li>
+          <li>
+            <strong>2. 분석 결과 확인</strong>
+            <p>원본 용량, 예상 결과 용량, 예상 절감량, 제출 기준 통과 여부를 먼저 확인합니다. 초록 상태면 현재 기준으로 제출 가능성이 높습니다.</p>
+          </li>
+          <li>
+            <strong>3. 제출 기준 설정</strong>
+            <p>기관 기준이 있으면 제출 제한을 직접 입력합니다. 보존 기준은 기본적으로 권장(균형)을 사용하고, 외형 보존이 중요하면 보수(외형)를 선택합니다.</p>
+          </li>
+          <li>
+            <strong>4. 자동 최적화 계획 확인</strong>
+            <p>오른쪽 계획 목록에서 적용할 작업을 확인합니다. 체크된 항목만 실행되며, 분석 후 예상 절감량이 항목별로 표시됩니다.</p>
+          </li>
+          <li>
+            <strong>5. 실행과 저장</strong>
+            <p>최적화 버튼을 누르면 원본은 그대로 두고 새 HWPX 파일을 저장합니다. 저장 위치를 바꾸지 않으면 원본 문서 폴더에 저장합니다.</p>
+          </li>
+          <li>
+            <strong>6. 일괄 처리</strong>
+            <p>목록에서 불필요한 파일은 제거할 수 있습니다. 일괄 목록에 1개만 남으면 단일 모드로 돌아가 세부 옵션을 더 쉽게 조정합니다.</p>
+          </li>
+          <li>
+            <strong>7. 세부 분석 보기</strong>
+            <p>하단의 세부 분석 보기를 열면 이미지, 중복 리소스, 메타데이터, 주의 리소스와 자동 검증 결과를 확인할 수 있습니다.</p>
+          </li>
+          <li>
+            <strong>8. JSON 리포트</strong>
+            <p>일반 사용에는 필요하지 않습니다. 제출 기록이나 내부 검토용 근거 파일이 필요할 때만 설정에서 JSON 리포트 저장을 켭니다.</p>
+          </li>
+          <li>
+            <strong>9. 보안 문서 제한</strong>
+            <p>암호나 권한으로 보호된 문서는 우회하지 않습니다. 파일 내용은 업로드하지 않고 이 PC 안에서만 처리합니다.</p>
+          </li>
+        </ol>
       </aside>
       <aside id="settings-panel" class="settings" aria-hidden="true" aria-labelledby="settings-title">
         <div class="settings-header">

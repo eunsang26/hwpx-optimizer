@@ -137,6 +137,10 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="help-panel"');
     expect(html).toContain('id="help-backdrop"');
     expect(html).toContain('id="help-close-button"');
+    expect(html).toContain("사용 매뉴얼");
+    expect(html).toContain("1. 파일 선택");
+    expect(html).toContain("9. 보안 문서 제한");
+    expect(html.match(/id="verification-body"/g)?.length).toBe(1);
     expect(html).toContain('<span aria-hidden="true">×</span>');
     expect(html).toContain('id="cleanup-document-toggle"');
     expect(html).toContain('id="cleanup-image-toggle"');
@@ -168,6 +172,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, 1320px\)/s);
     expect(css).toMatch(/\.help-panel\s*{[^}]*position:\s*fixed/s);
+    expect(css).toMatch(/\.help-panel\s*{[^}]*width:\s*min\(520px, calc\(100vw - 28px\)\)/s);
+    expect(css).toMatch(/\.manual-steps\s*{[^}]*display:\s*grid/s);
     expect(css).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
     expect(css).toMatch(/\.settings-check\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/body\[data-drag-over="true"\] \.file-panel\s*{[^}]*border-color:\s*var\(--blue\)/s);
@@ -181,10 +187,15 @@ describe("repository runtime and cleanup configuration", () => {
     const resultPanel = html.indexOf('id="result-panel"');
     const bottomRow = html.indexOf("<!-- ③ BOTTOM ROW");
     const bottomAccordions = html.indexOf('<section class="bottom-accordions">');
+    const actionPanel = html.indexOf('<div id="action-panel"');
     expect(summaryPanelStart).toBeGreaterThanOrEqual(0);
     expect(resultPanel).toBeGreaterThan(summaryPanelStart);
     expect(resultPanel).toBeLessThan(bottomRow);
     expect(resultPanel).toBeLessThan(bottomAccordions);
+    expect(bottomAccordions).toBeLessThan(actionPanel);
+    expect(html).toMatch(
+      /<section id="single-workspace"[\s\S]*<section class="bottom-accordions">[\s\S]*<\/section>\s*<\/section>\s*<div id="action-panel"/
+    );
   });
 
   it("keeps private sample filenames out of desktop source placeholders", async () => {
