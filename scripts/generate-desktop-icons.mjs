@@ -7,6 +7,7 @@ const iconPngPath = join(buildDir, "icon.png");
 const iconIcoPath = join(buildDir, "icon.ico");
 const tauriIconDir = join("apps", "tauri-desktop", "src-tauri", "icons");
 const tauriIconPngPath = join(tauriIconDir, "icon.png");
+const tauriIconIcoPath = join(tauriIconDir, "icon.ico");
 
 const iconSourcePath = join("apps", "desktop", "src", "app-icon.svg");
 
@@ -16,10 +17,12 @@ const png = await sharp(await readFile(iconSourcePath)).resize(256, 256).png().t
 await writeFile(iconPngPath, png);
 await writeFile(iconIcoPath, createIcoFromPng(png));
 await writeFile(tauriIconPngPath, png);
+await writeFile(tauriIconIcoPath, createIcoFromPng(png));
 
 console.log(`Wrote ${iconPngPath}`);
 console.log(`Wrote ${iconIcoPath}`);
 console.log(`Wrote ${tauriIconPngPath}`);
+console.log(`Wrote ${tauriIconIcoPath}`);
 
 function createIcoFromPng(png) {
   const header = Buffer.alloc(6);
