@@ -5,15 +5,15 @@
 - Primary artifact: `release/HWPX Optimizer-0.1.0-x64.zip`
 - Secondary artifact: `release/HWPX Optimizer-0.1.0-x64.exe`
 - Version: `0.1.0`
-- Release candidate generated: `2026-05-19 16:59 KST`
+- Release candidate generated: `2026-05-19 21:59 KST`
 - Signing status: unsigned. Code signing is intentionally excluded from this approval record and must be handled separately when an approved certificate is available.
 
 ## Checksums
 
 | Artifact | Bytes | SHA256 |
 | --- | ---: | --- |
-| `HWPX Optimizer-0.1.0-x64.zip` | 143,513,968 | `5ea6e30378d8e4f347a7545b58481bb4416f72662f7728a957ed710b7390dbad` |
-| `HWPX Optimizer-0.1.0-x64.exe` | 96,570,041 | `62a444c528b6561d25c3180294fb16c7ba6cdc37e55e07b488d938760bd02f56` |
+| `HWPX Optimizer-0.1.0-x64.zip` | 143,513,968 | `d67058036af867dee3aa4502de7bac234663a6c3229d8e0534a704b3c648efd2` |
+| `HWPX Optimizer-0.1.0-x64.exe` | 96,570,042 | `8e7e40adb503cfb02226f085d26d646803dd6f39dc42cdfd6d57fbacc35801a7` |
 
 Checksum source files:
 
@@ -43,6 +43,12 @@ Covered evidence:
 - Windows sharp native runtime verification: passed.
 - Manifest generation and verification: 2 release artifacts verified.
 - Windows portable automated smoke through PowerShell: passed in `safe` mode with checksum match.
+
+Windows CI evidence:
+
+- GitHub Actions `Windows Release Build` run `26087133720` passed on `main` at commit `c9f5c3f`.
+- The CI workflow runs `release:check:win:ci`, which is the Windows packaging gate without private real HWPX samples.
+- The sample-backed release gate remains the local QA gate recorded above because root-level `sample*.hwpx` files are not committed.
 
 Additional ZIP smoke:
 
@@ -121,8 +127,8 @@ Release notice template:
 - Primary download: `HWPX Optimizer-0.1.0-x64.zip`
 - Secondary download: `HWPX Optimizer-0.1.0-x64.exe`
 - Signing status: unsigned; code signing is excluded from this release-preparation record.
-- Primary SHA256: `5ea6e30378d8e4f347a7545b58481bb4416f72662f7728a957ed710b7390dbad`
-- Secondary SHA256: `62a444c528b6561d25c3180294fb16c7ba6cdc37e55e07b488d938760bd02f56`
+- Primary SHA256: `d67058036af867dee3aa4502de7bac234663a6c3229d8e0534a704b3c648efd2`
+- Secondary SHA256: `8e7e40adb503cfb02226f085d26d646803dd6f39dc42cdfd6d57fbacc35801a7`
 - Redistribution: approved internal location only; do not share extracted working folders.
 
 ## Approval State
