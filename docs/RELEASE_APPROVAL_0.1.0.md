@@ -131,6 +131,51 @@ Release notice template:
 - Secondary SHA256: `8e7e40adb503cfb02226f085d26d646803dd6f39dc42cdfd6d57fbacc35801a7`
 - Redistribution: approved internal location only; do not share extracted working folders.
 
+## Clean Windows QA Evidence Template
+
+Fill this section only after running the checklist on a clean Windows 10/11 machine.
+
+- QA date: `TBD`
+- QA owner: `TBD`
+- Machine type: `TBD clean Windows 10/11`
+- Windows version/build: `TBD`
+- Artifact tested: `TBD ZIP primary or portable EXE secondary`
+- Artifact source path: `TBD approved release location or local transfer path`
+- Artifact SHA256 observed on Windows: `TBD`
+- SHA256 matched `release/SHA256SUMS.txt`: `TBD yes/no`
+- `scripts/windows-portable-smoke.ps1` no-sample launch: `TBD pass/fail`
+- `scripts/windows-portable-smoke.ps1 -Sample <sample.hwpx> -AllModes`: `TBD pass/fail`
+- Manual launch without terminal dependency: `TBD pass/fail`
+- Start-screen local-only/original-preserving/security-document policy text visible: `TBD pass/fail`
+- Drag/drop analysis workflow: `TBD pass/fail`
+- Optimization progress does not freeze: `TBD pass/fail`
+- Output file opens in a compatible HWPX viewer: `TBD pass/fail`
+- Original file timestamp and size unchanged: `TBD pass/fail`
+- Repeated optimization does not overwrite outputs by default: `TBD pass/fail`
+- Large HWPX package completes or fails with a clear non-crashing error: `TBD pass/fail`
+- Representative real-world documents avoid missing-reference verifier failures: `TBD pass/fail`
+- Protected, signed, or encrypted HWPX-like package is rejected without decryption, bypass, or signature-preservation promises: `TBD pass/fail`
+- QA evidence attachment location: `TBD`
+- QA result summary: `TBD pass/fail`
+
+## Distribution Approval Record Template
+
+Fill this section before internal distribution.
+
+- Release date: `TBD`
+- Release owner: `TBD`
+- Approver: `TBD`
+- Approved distribution location: `TBD`
+- Distribution method: `TBD internal share or software distribution system`
+- Primary artifact placed at approved location: `TBD yes/no`
+- Secondary artifact placed at approved location: `TBD yes/no`
+- SHA256 values included in release notice: `TBD yes/no`
+- Unsigned status included in release notice: `TBD yes/no`
+- User notice included in release notice: `TBD yes/no`
+- External redistribution prohibition included: `TBD yes/no`
+- Extracted working folders excluded from distribution: `TBD yes/no`
+- Approval evidence attachment location: `TBD`
+
 ## Approval State
 
 Automated release gate: complete.
