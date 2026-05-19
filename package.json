@@ -48,6 +48,7 @@
     "release:check": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit && npm run desktop:smoke && npm run desktop:pack && npm run desktop:pack:win && npm run release:verify-artifacts && npm run release:verify-win-native",
     "release:check:win-portable": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit && npm run desktop:smoke && npm run desktop:local:win && npm run release:verify-artifacts && npm run release:verify-win-native && npm run release:manifest && npm run release:verify-manifest && npm run release:verify-win-portable-smoke",
     "release:check:win": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit && npm run desktop:smoke && npm run desktop:dist:win && npm run release:verify-artifacts && npm run release:verify-win-native",
+    "release:check:win:ci": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus && npm audit && npm run desktop:smoke && npm run desktop:dist:win && npm run release:verify-artifacts && npm run release:verify-win-native",
     "release:electron:check:win-portable": "npm run release:check:win-portable",
     "release:tauri:build": "npm run tauri:build",
     "cli": "tsx --conditions=development packages/cli/src/index.ts",

@@ -44,7 +44,7 @@ jobs:
         run: npm ci
 
       - name: Run Windows release gate
-        run: npm run release:check:win
+        run: npm run release:check:win:ci
 
       - name: Upload installer artifact
         if: github.event_name == 'push' || inputs.upload_artifact == true
