@@ -8,8 +8,8 @@ describe("repository runtime and cleanup configuration", () => {
     };
 
     expect(packageJson.engines?.node).toBe(">=20.20.0");
-    await expect(readFile(".nvmrc", "utf8")).resolves.toBe("20.20.2\n");
-    await expect(readFile(".node-version", "utf8")).resolves.toBe("20.20.2\n");
+    await expect(readFile(".nvmrc", "utf8")).resolves.toSatisfy((value) => value.trim() === "20.20.2");
+    await expect(readFile(".node-version", "utf8")).resolves.toSatisfy((value) => value.trim() === "20.20.2");
   });
 
   it("keeps release packaging and local artifact cleanup explicit", async () => {
@@ -117,7 +117,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*max-width:\s*1320px/s);
     expect(styles).toMatch(/\.brand-mark img\s*{[^}]*width:\s*30px/s);
     expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(150px, 1fr\)\)/s);
-    expect(styles).toMatch(/\.option-grid select,\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
+    expect(styles).toMatch(/\.option-grid select,\r?\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
     expect(styles).toMatch(/\.cleanup-settings\s*{[^}]*grid-template-columns:\s*1fr/s);
   });
 
