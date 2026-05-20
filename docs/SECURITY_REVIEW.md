@@ -44,7 +44,8 @@ npm run release:check:win-portable
 ## 4. 배포 통제
 
 - 배포 파일은 승인된 사내 공유 위치 또는 소프트웨어 배포 시스템으로만 배포한다.
-- 배포 공지에는 버전, 배포일, 담당자, 변경 내역, SHA256 값, 제작자/사용 조건을 포함한다.
+- 배포 공지에는 버전, 배포일, 담당자, 변경 내역, SHA256 값, 미서명 상태, 제작자/사용 조건, 보증 부인 및 사용자 책임 문구를 포함한다.
+- `release:manifest`는 `release/RELEASE_NOTICE_0.1.0.txt`를 생성하며, `release:verify-manifest`는 공지문에 artifact 파일명과 SHA256이 포함되었는지 검증한다.
 - 배포 패키지에는 사용자에게 보이는 `TERMS.txt`를 포함한다.
 - 임의 재배포와 외부 반출을 금지한다.
 - 사전 승인 없는 수정, 변형, 파생물 제작, 영리 목적 이용, 제작자 또는 출처 표시 제거를 금지한다.
@@ -62,6 +63,7 @@ npm run release:check:win-portable
 - [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md)
 - [Known Limitations](KNOWN_LIMITATIONS.md)
 - `TERMS.txt`
+- `release/RELEASE_NOTICE_0.1.0.txt`
 - 릴리즈별 SHA256 checksum과 manifest
 - 테스트 및 QA 결과 요약
 
@@ -76,4 +78,5 @@ npm run release:check:win-portable
 - 보안 처리된 문서는 처리하지 않으며, 암호화, DRM, 전자서명, 권한 제한을 해제하거나 우회하지 않는다.
 - 배포는 승인된 내부 경로로만 수행한다.
 - 비영리 목적의 개인 또는 기관 내부 사용만 무상 허용하며, 사전 승인 없는 수정, 재배포, 영리 이용은 금지한다.
+- 현재 Windows 배포 파일은 미서명 배포본이며, 실행 전 SHA256 대조 확인이 필요하다.
 - 본 소프트웨어는 있는 그대로 제공되며, 결과물 이상 여부의 최종 확인 및 사용 책임은 사용자에게 있다.

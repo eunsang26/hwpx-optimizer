@@ -5,20 +5,21 @@
 - Primary artifact: `release/HWPX Optimizer-0.1.0-x64.zip`
 - Secondary artifact: `release/HWPX Optimizer-0.1.0-x64.exe`
 - Version: `0.1.0`
-- Release candidate generated: `2026-05-20 19:25 KST`
+- Release candidate generated: `2026-05-20 20:23 KST`
 - Signing status: unsigned. Code signing is intentionally excluded from this approval record and must be handled separately when an approved certificate is available.
 
 ## Checksums
 
 | Artifact | Bytes | SHA256 |
 | --- | ---: | --- |
-| `HWPX Optimizer-0.1.0-x64.zip` | 143,515,269 | `f5ded58c3ad0f13fe651829599220e047b44b015cc123b352d5e22b962b494b0` |
-| `HWPX Optimizer-0.1.0-x64.exe` | 96,570,475 | `cac1cd7df42958b6bd7fe278048422b71a6b65cb1a8596ea290a9912ad08461f` |
+| `HWPX Optimizer-0.1.0-x64.zip` | 143,515,511 | `83887f2b985560356d9309d795486e898fce4db628fd4787cad7abee0e76aecd` |
+| `HWPX Optimizer-0.1.0-x64.exe` | 96,581,519 | `20b6e1920b49705a495a3a9a0e908452a03ae1010de6c82b03516ee0d08709a1` |
 
 Checksum source files:
 
 - `release/SHA256SUMS.txt`
 - `release/release-manifest.json`
+- `release/RELEASE_NOTICE_0.1.0.txt`
 
 ## Automated Release Gate
 
@@ -41,7 +42,7 @@ Covered evidence:
 - Windows ZIP and portable EXE packaging: passed.
 - Artifact hygiene: passed, including `TERMS.txt` presence in the Windows ZIP artifact.
 - Windows sharp native runtime verification: passed.
-- Manifest generation and verification: 2 release artifacts verified.
+- Manifest, checksum, and release notice generation and verification: 2 release artifacts verified.
 - Windows portable automated smoke through PowerShell: passed in `safe` mode with checksum match.
 
 Windows CI evidence:
@@ -89,6 +90,7 @@ Current source evidence:
 - Settings text states recent files, output folders, processing history, and internal logs are not stored.
 - Desktop smoke checks that the local security policy text is present.
 - `TERMS.txt` is included in the packaged Windows ZIP and `release/win-unpacked`.
+- `RELEASE_NOTICE_0.1.0.txt` is generated beside the release artifacts with SHA256 values, unsigned status, permitted-use terms, warranty disclaimer, and user-responsibility notice.
 - Protected document rejection message is defined in `packages/core/src/reader.ts`.
 - Reader tests cover encrypted package flags, signature entries, and protection metadata rejection.
 
@@ -121,6 +123,7 @@ Approved distribution path:
 Required user notice:
 
 > This tool processes HWPX documents only on the user's PC. It does not modify the original file and creates optimized outputs separately. It does not optimize encrypted, DRM-protected, electronically signed, or permission-restricted documents, and it does not remove or bypass protection. The desktop app does not store recent files, processing history, output folder paths, or internal logs. JSON reports are created only when the user enables report saving.
+> Current Windows release artifacts are unsigned. Before running them, compare their SHA256 values against the release notice, `SHA256SUMS.txt`, and `release-manifest.json`.
 > Producer/maintainer: 한강유역수도지원센터 조은상 과장. Non-commercial personal or internal organizational use is permitted. Unapproved modification, redistribution, commercial use, and removal or alteration of producer attribution are prohibited.
 > This software is provided as is. Users must preserve original documents and review optimized outputs before submission, distribution, or retention. Final verification and use responsibility belongs to the user.
 
@@ -134,8 +137,9 @@ Release notice template:
 - Primary download: `HWPX Optimizer-0.1.0-x64.zip`
 - Secondary download: `HWPX Optimizer-0.1.0-x64.exe`
 - Signing status: unsigned; code signing is excluded from this release-preparation record.
-- Primary SHA256: `f5ded58c3ad0f13fe651829599220e047b44b015cc123b352d5e22b962b494b0`
-- Secondary SHA256: `cac1cd7df42958b6bd7fe278048422b71a6b65cb1a8596ea290a9912ad08461f`
+- Primary SHA256: `83887f2b985560356d9309d795486e898fce4db628fd4787cad7abee0e76aecd`
+- Secondary SHA256: `20b6e1920b49705a495a3a9a0e908452a03ae1010de6c82b03516ee0d08709a1`
+- Release notice: `RELEASE_NOTICE_0.1.0.txt`
 - Redistribution: approved internal location only; do not share extracted working folders.
 - Use terms: non-commercial personal or internal organizational use only; no unapproved modification, redistribution, commercial use, or removal of producer attribution.
 - Warranty/user responsibility: provided as is; users must preserve originals and review outputs before submission, distribution, or retention.
@@ -202,7 +206,7 @@ Distribution approval: pending until clean Windows QA evidence is attached.
 | ZIP is the primary artifact | `release/HWPX Optimizer-0.1.0-x64.zip`; checksum table above | Complete |
 | Portable EXE is the secondary artifact | `release/HWPX Optimizer-0.1.0-x64.exe`; checksum table above | Complete |
 | Release gate was rerun for the current artifacts | `release:check:win-portable` command and evidence above | Complete |
-| Manifest and SHA256 files match artifacts | `release/release-manifest.json`, `release/SHA256SUMS.txt`, `release:verify-manifest` | Complete |
+| Manifest, SHA256 files, and release notice match artifacts | `release/release-manifest.json`, `release/SHA256SUMS.txt`, `release/RELEASE_NOTICE_0.1.0.txt`, `release:verify-manifest` | Complete |
 | ZIP artifact runtime smoke | Extracted ZIP under Windows local temp; `sample2.hwpx`; `safe`, `balanced`, `aggressive` | Complete |
 | Portable EXE runtime smoke | Copied EXE under Windows local temp; SHA256 match; `sample2.hwpx`; `safe`, `balanced`, `aggressive` | Complete |
 | Code signing excluded and not claimed | PE security directory check records no Authenticode signature block | Complete |

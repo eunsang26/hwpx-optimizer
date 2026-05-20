@@ -73,6 +73,13 @@ describe("repository runtime and cleanup configuration", () => {
     const releaseArtifactCheck = await readFile("scripts/check-release-artifacts.mjs", "utf8");
     expect(releaseArtifactCheck).toContain("TERMS.txt");
     expect(releaseArtifactCheck).toContain("Windows ZIP artifacts must include TERMS.txt");
+    const releaseManifestWriter = await readFile("scripts/write-release-manifest.mjs", "utf8");
+    const releaseManifestVerifier = await readFile("scripts/verify-release-manifest.mjs", "utf8");
+    expect(releaseManifestWriter).toContain("RELEASE_NOTICE_${version}.txt");
+    expect(releaseManifestWriter).toContain("미서명 배포본");
+    expect(releaseManifestWriter).toContain("최종 확인 및 사용 책임은 사용자에게 있습니다");
+    expect(releaseManifestVerifier).toContain("RELEASE_NOTICE_${manifest.version}.txt");
+    expect(releaseManifestVerifier).toContain("Release notice is missing");
   });
 
   it("keeps Windows package locale pruning scoped to Korean", async () => {
@@ -203,6 +210,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain("10. 제작자 및 사용 조건");
     expect(html).toContain("제작/관리: 한강유역수도지원센터 조은상 과장");
     expect(html).toContain("사전 승인 없는 수정, 재배포, 영리 이용, 제작자 표시 제거는 금지됩니다.");
+    expect(html).toContain("현재 Windows 배포 파일은 미서명 배포본입니다.");
+    expect(html).toContain("SHA256 값을 배포 공지, SHA256SUMS.txt, release-manifest.json과 대조해 확인하세요.");
     expect(html).toContain("결과물은 제출·배포·보관 전에 사용자가 직접 확인해야 하며, 원본 보존과 최종 사용 책임은 사용자에게 있습니다.");
     expect(html.match(/id="verification-body"/g)?.length).toBe(1);
     expect(html).toContain('<span aria-hidden="true">×</span>');

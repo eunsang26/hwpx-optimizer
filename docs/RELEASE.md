@@ -128,9 +128,9 @@ On Linux/WSL without Wine, run the portable Windows release gate:
 npm run release:check:win-portable
 ```
 
-This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact and `release/HWPX Optimizer-0.1.0-x64.zip` as a faster-starting extracted-folder distribution. It verifies that packaged artifacts do not contain development files or user-history files, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifacts. It does not replace a clean Windows runtime test.
+This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact and `release/HWPX Optimizer-0.1.0-x64.zip` as a faster-starting extracted-folder distribution. It verifies that packaged artifacts do not contain development files or user-history files, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, writes `release/release-manifest.json`, `release/SHA256SUMS.txt`, and `release/RELEASE_NOTICE_0.1.0.txt`, and verifies that the checksum files and release notice match the artifacts. It does not replace a clean Windows runtime test.
 
-The package also includes `TERMS.txt` with the producer, permitted-use, warranty-disclaimer, and user-responsibility notice. The release notice must repeat that non-commercial personal or internal organizational use is permitted, while unapproved modification, redistribution, commercial use, and removal of producer attribution are prohibited. It must also state that optimized outputs must be reviewed by the user before submission, distribution, or retention, and that final use responsibility remains with the user.
+The package also includes `TERMS.txt` with the producer, permitted-use, unsigned-status, SHA256-check, warranty-disclaimer, and user-responsibility notice. The generated release notice must repeat the artifact SHA256 values, unsigned status, permitted-use terms, warranty disclaimer, and user responsibility. It must also state that optimized outputs must be reviewed by the user before submission, distribution, or retention, and that final use responsibility remains with the user.
 
 To verify the native Windows image runtime layout on an existing Windows build:
 
@@ -172,7 +172,7 @@ If the portable artifact already exists and only the checksum files need to be r
 npm run release:manifest
 ```
 
-Verify an existing manifest and checksum file against the artifact:
+Verify an existing manifest, checksum file, and release notice against the artifact:
 
 ```bash
 npm run release:verify-manifest
@@ -247,4 +247,4 @@ Do include:
 - Lockfile.
 - Release configuration once packaging is added.
 
-Generated release artifacts and checksum files live under `release/` and are ignored by git.
+Generated release artifacts, checksum files, and `RELEASE_NOTICE_0.1.0.txt` live under `release/` and are ignored by git.
