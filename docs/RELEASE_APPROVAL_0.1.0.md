@@ -5,15 +5,15 @@
 - Primary artifact: `release/HWPX Optimizer-0.1.0-x64.zip`
 - Secondary artifact: `release/HWPX Optimizer-0.1.0-x64.exe`
 - Version: `0.1.0`
-- Release candidate generated: `2026-05-20 20:23 KST`
-- Signing status: unsigned. Code signing is intentionally excluded from this approval record and must be handled separately when an approved certificate is available.
+- Release candidate generated: `2026-05-20 21:43 KST`
+- Signing status: self-signed Authenticode. The Windows artifacts are signed with a local self-signed code-signing certificate, not a public CA certificate, so Windows publisher-trust warnings can still appear.
 
 ## Checksums
 
 | Artifact | Bytes | SHA256 |
 | --- | ---: | --- |
-| `HWPX Optimizer-0.1.0-x64.zip` | 143,515,511 | `83887f2b985560356d9309d795486e898fce4db628fd4787cad7abee0e76aecd` |
-| `HWPX Optimizer-0.1.0-x64.exe` | 96,581,519 | `20b6e1920b49705a495a3a9a0e908452a03ae1010de6c82b03516ee0d08709a1` |
+| `HWPX Optimizer-0.1.0-x64.zip` | 147,776,624 | `7b309eac7d5858e2fc21a082360e39a69f4d9587cb5fa80a03c284429fa6be8f` |
+| `HWPX Optimizer-0.1.0-x64.exe` | 96,571,952 | `27bc386cdbb7576000bf604b8ea8a33afea889436c89be561b3ad816c1faa554` |
 
 Checksum source files:
 
@@ -42,14 +42,15 @@ Covered evidence:
 - Windows ZIP and portable EXE packaging: passed.
 - Artifact hygiene: passed, including `TERMS.txt` presence in the Windows ZIP artifact.
 - Windows sharp native runtime verification: passed.
+- Self-signed Authenticode verification: passed for the portable EXE and unpacked app EXE.
 - Manifest, checksum, and release notice generation and verification: 2 release artifacts verified.
 - Windows portable automated smoke through PowerShell: passed in `safe` mode with checksum match.
 
 Windows CI evidence:
 
-- GitHub Actions `Windows Release Build` run `26087133720` passed on `main` at commit `c9f5c3f`.
-- The CI workflow runs `release:check:win:ci`, which is the Windows packaging gate without private real HWPX samples.
-- The sample-backed release gate remains the local QA gate recorded above because root-level `sample*.hwpx` files are not committed.
+- GitHub Actions `Windows Release Build` run `26159434272` passed on `main` at commit `88df45e`.
+- The CI workflow runs `release:check:win:ci`, which is the Windows packaging gate without private real HWPX samples and without the local self-signed post-signing step.
+- The sample-backed self-signed release gate remains the local QA gate recorded above because root-level `sample*.hwpx` files and the local self-signed certificate are not committed.
 
 Additional ZIP smoke:
 
@@ -58,7 +59,7 @@ Additional ZIP smoke:
 - Real local sample: `sample2.hwpx`.
 - Modes: `safe`, `balanced`, and `aggressive`.
 - Result: all three modes passed.
-- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-release-zip-5dddb5a6-352a-41d9-95a2-4e452b7eff43`.
+- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-release-zip-selfsigned-1779280790`.
 - Note: the extracted inner EXE is not listed in `release/SHA256SUMS.txt`; the checksum warning for `HWPX Optimizer.exe` is expected. The ZIP artifact itself is covered by `release/SHA256SUMS.txt`.
 
 Additional portable EXE smoke:
@@ -69,16 +70,16 @@ Additional portable EXE smoke:
 - Real local sample: `sample2.hwpx`.
 - Modes: `safe`, `balanced`, and `aggressive`.
 - Result: all three modes passed.
-- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-release-exe-9c155524-5ebf-402d-a41a-6c0b5301c7da`.
+- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-optimizer-smoke-637309`.
 
-## Code Signing Boundary
+## Code Signing Evidence
 
 PE signature inspection after the release gate:
 
-- `release/HWPX Optimizer-0.1.0-x64.exe`: no Authenticode security directory.
-- `release/win-unpacked/HWPX Optimizer.exe`: no Authenticode security directory.
+- `release/HWPX Optimizer-0.1.0-x64.exe`: Authenticode certificate table present; security directory file offset `96569736`, size `2216`.
+- `release/win-unpacked/HWPX Optimizer.exe`: Authenticode certificate table present; security directory file offset `226578432`, size `2216`.
 
-This record therefore confirms artifact integrity and automated release verification only. It does not claim code signing completion.
+This confirms self-signed code signing only. It does not claim public CA trust or SmartScreen reputation.
 
 ## Security and Policy Evidence
 
@@ -90,7 +91,7 @@ Current source evidence:
 - Settings text states recent files, output folders, processing history, and internal logs are not stored.
 - Desktop smoke checks that the local security policy text is present.
 - `TERMS.txt` is included in the packaged Windows ZIP and `release/win-unpacked`.
-- `RELEASE_NOTICE_0.1.0.txt` is generated beside the release artifacts with SHA256 values, unsigned status, permitted-use terms, warranty disclaimer, and user-responsibility notice.
+- `RELEASE_NOTICE_0.1.0.txt` is generated beside the release artifacts with SHA256 values, self-signed status, permitted-use terms, warranty disclaimer, and user-responsibility notice.
 - Protected document rejection message is defined in `packages/core/src/reader.ts`.
 - Reader tests cover encrypted package flags, signature entries, and protection metadata rejection.
 
@@ -123,7 +124,7 @@ Approved distribution path:
 Required user notice:
 
 > This tool processes HWPX documents only on the user's PC. It does not modify the original file and creates optimized outputs separately. It does not optimize encrypted, DRM-protected, electronically signed, or permission-restricted documents, and it does not remove or bypass protection. The desktop app does not store recent files, processing history, output folder paths, or internal logs. JSON reports are created only when the user enables report saving.
-> Current Windows release artifacts are unsigned. Before running them, compare their SHA256 values against the release notice, `SHA256SUMS.txt`, and `release-manifest.json`.
+> Current Windows release artifacts are signed with a self-signed code-signing certificate, not a public CA certificate. Windows publisher-trust warnings can still appear. Before running them, compare their SHA256 values against the release notice, `SHA256SUMS.txt`, and `release-manifest.json`.
 > Producer/maintainer: 한강유역수도지원센터 조은상 과장. Non-commercial personal or internal organizational use is permitted. Unapproved modification, redistribution, commercial use, and removal or alteration of producer attribution are prohibited.
 > This software is provided as is. Users must preserve original documents and review optimized outputs before submission, distribution, or retention. Final verification and use responsibility belongs to the user.
 
@@ -136,9 +137,9 @@ Release notice template:
 - Distribution location: `TBD approved internal location`
 - Primary download: `HWPX Optimizer-0.1.0-x64.zip`
 - Secondary download: `HWPX Optimizer-0.1.0-x64.exe`
-- Signing status: unsigned; code signing is excluded from this release-preparation record.
-- Primary SHA256: `83887f2b985560356d9309d795486e898fce4db628fd4787cad7abee0e76aecd`
-- Secondary SHA256: `20b6e1920b49705a495a3a9a0e908452a03ae1010de6c82b03516ee0d08709a1`
+- Signing status: self-signed Authenticode; public CA trust is not claimed.
+- Primary SHA256: `7b309eac7d5858e2fc21a082360e39a69f4d9587cb5fa80a03c284429fa6be8f`
+- Secondary SHA256: `27bc386cdbb7576000bf604b8ea8a33afea889436c89be561b3ad816c1faa554`
 - Release notice: `RELEASE_NOTICE_0.1.0.txt`
 - Redistribution: approved internal location only; do not share extracted working folders.
 - Use terms: non-commercial personal or internal organizational use only; no unapproved modification, redistribution, commercial use, or removal of producer attribution.
@@ -183,7 +184,7 @@ Fill this section before internal distribution.
 - Primary artifact placed at approved location: `TBD yes/no`
 - Secondary artifact placed at approved location: `TBD yes/no`
 - SHA256 values included in release notice: `TBD yes/no`
-- Unsigned status included in release notice: `TBD yes/no`
+- Self-signed status included in release notice: `TBD yes/no`
 - User notice included in release notice: `TBD yes/no`
 - External redistribution prohibition included: `TBD yes/no`
 - Extracted working folders excluded from distribution: `TBD yes/no`
@@ -209,7 +210,7 @@ Distribution approval: pending until clean Windows QA evidence is attached.
 | Manifest, SHA256 files, and release notice match artifacts | `release/release-manifest.json`, `release/SHA256SUMS.txt`, `release/RELEASE_NOTICE_0.1.0.txt`, `release:verify-manifest` | Complete |
 | ZIP artifact runtime smoke | Extracted ZIP under Windows local temp; `sample2.hwpx`; `safe`, `balanced`, `aggressive` | Complete |
 | Portable EXE runtime smoke | Copied EXE under Windows local temp; SHA256 match; `sample2.hwpx`; `safe`, `balanced`, `aggressive` | Complete |
-| Code signing excluded and not claimed | PE security directory check records no Authenticode signature block | Complete |
+| Self-signed code signing is present and public CA trust is not claimed | `release:verify-win-signature`; release notice states self-signed status and Windows publisher-trust warning | Complete |
 | Producer, permitted-use, and user-responsibility notice | App help/settings text, root `TERMS.txt`, ZIP `TERMS.txt`, internal distribution docs | Complete |
 | Security and policy source evidence | Desktop policy text, settings storage text, protected-document reader policy, reader tests | Complete |
 | Clean Windows manual QA | Must be run on a clean Windows 10/11 machine using the checklist above | Pending |

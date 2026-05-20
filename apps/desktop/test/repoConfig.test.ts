@@ -42,10 +42,15 @@ describe("repository runtime and cleanup configuration", () => {
       "tsx --conditions=development scripts/run-regression-corpus.ts --require-local-samples"
     );
     expect(packageJson.scripts?.["release:verify-win-portable-smoke"]).toBe("node scripts/run-windows-portable-smoke.mjs");
+    expect(packageJson.scripts?.["release:verify-win-signature"]).toBe("node scripts/verify-win-signature.mjs");
     expect(packageJson.scripts?.["release:electron:check:win-portable"]).toBe("npm run release:check:win-portable");
     expect(packageJson.scripts?.["release:tauri:build"]).toBe("npm run tauri:build");
     expect(packageJson.scripts?.["release:check"]).toContain("npm run quality:corpus:release");
+    expect(packageJson.scripts?.["desktop:local:win:self-signed"]).toContain("sign-self-signed-release-artifacts.mjs");
+    expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run desktop:local:win:self-signed");
+    expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:verify-win-signature");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:verify-win-portable-smoke");
+    expect(packageJson.scripts?.["release:check:win-portable:unsigned"]).toContain("npm run desktop:local:win");
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
     await expect(access("scripts/run-windows-portable-smoke.mjs")).resolves.toBeUndefined();
     expect(packageJson.scripts?.["desktop:smoke:built"]).toBe("node scripts/run-electron-smoke.mjs");
@@ -76,7 +81,7 @@ describe("repository runtime and cleanup configuration", () => {
     const releaseManifestWriter = await readFile("scripts/write-release-manifest.mjs", "utf8");
     const releaseManifestVerifier = await readFile("scripts/verify-release-manifest.mjs", "utf8");
     expect(releaseManifestWriter).toContain("RELEASE_NOTICE_${version}.txt");
-    expect(releaseManifestWriter).toContain("미서명 배포본");
+    expect(releaseManifestWriter).toContain("자체서명 코드서명 인증서");
     expect(releaseManifestWriter).toContain("최종 확인 및 사용 책임은 사용자에게 있습니다");
     expect(releaseManifestVerifier).toContain("RELEASE_NOTICE_${manifest.version}.txt");
     expect(releaseManifestVerifier).toContain("Release notice is missing");
@@ -210,7 +215,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain("10. 제작자 및 사용 조건");
     expect(html).toContain("제작/관리: 한강유역수도지원센터 조은상 과장");
     expect(html).toContain("사전 승인 없는 수정, 재배포, 영리 이용, 제작자 표시 제거는 금지됩니다.");
-    expect(html).toContain("현재 Windows 배포 파일은 미서명 배포본입니다.");
+    expect(html).toContain("현재 Windows 배포 파일은 자체서명 배포본입니다.");
     expect(html).toContain("SHA256 값을 배포 공지, SHA256SUMS.txt, release-manifest.json과 대조해 확인하세요.");
     expect(html).toContain("결과물은 제출·배포·보관 전에 사용자가 직접 확인해야 하며, 원본 보존과 최종 사용 책임은 사용자에게 있습니다.");
     expect(html.match(/id="verification-body"/g)?.length).toBe(1);

@@ -39,8 +39,12 @@ for (const artifact of manifest.artifacts) {
   }
 }
 
-if (!releaseNotice.includes("미서명 배포본") || !releaseNotice.includes("최종 확인 및 사용 책임은 사용자에게 있습니다")) {
-  throw new Error("Release notice is missing unsigned-status or user-responsibility text.");
+const portableExe = manifest.artifacts.find((artifact) => artifact.file.endsWith(".exe"));
+const isSigned = portableExe ? await hasAuthenticodeCertificateTable(join(releaseDir, portableExe.file)) : false;
+const expectedSigningText = isSigned ? "자체서명 코드서명 인증서" : "미서명 배포본";
+
+if (!releaseNotice.includes(expectedSigningText) || !releaseNotice.includes("최종 확인 및 사용 책임은 사용자에게 있습니다")) {
+  throw new Error("Release notice is missing signing-status or user-responsibility text.");
 }
 
 console.log(`Verified ${manifest.artifacts.length} release artifact(s).`);
@@ -56,4 +60,18 @@ function parseSha256Sums(input) {
     result.set(match[2], match[1].toLowerCase());
   }
   return result;
+}
+
+async function hasAuthenticodeCertificateTable(path) {
+  const data = await readFile(path);
+  if (data.length < 0x100 || data.toString("ascii", 0, 2) !== "MZ") return false;
+  const peOffset = data.readUInt32LE(0x3c);
+  if (data.toString("ascii", peOffset, peOffset + 4) !== "PE\u0000\u0000") return false;
+  const optionalHeaderOffset = peOffset + 24;
+  const magic = data.readUInt16LE(optionalHeaderOffset);
+  const dataDirectoryOffset =
+    magic === 0x10b ? optionalHeaderOffset + 96 : magic === 0x20b ? optionalHeaderOffset + 112 : null;
+  if (dataDirectoryOffset === null) return false;
+  const securityDirectoryOffset = dataDirectoryOffset + 4 * 8;
+  return data.readUInt32LE(securityDirectoryOffset + 4) > 0;
 }

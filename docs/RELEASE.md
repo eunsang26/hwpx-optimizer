@@ -125,12 +125,12 @@ This gate builds the Windows NSIS installer through `desktop:dist:win`.
 On Linux/WSL without Wine, run the portable Windows release gate:
 
 ```bash
-npm run release:check:win-portable
+npm run release:check:win-portable:self-signed
 ```
 
-This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact and `release/HWPX Optimizer-0.1.0-x64.zip` as a faster-starting extracted-folder distribution. It verifies that packaged artifacts do not contain development files or user-history files, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, writes `release/release-manifest.json`, `release/SHA256SUMS.txt`, and `release/RELEASE_NOTICE_0.1.0.txt`, and verifies that the checksum files and release notice match the artifacts. It does not replace a clean Windows runtime test.
+This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a self-signed portable Windows artifact and `release/HWPX Optimizer-0.1.0-x64.zip` as a faster-starting extracted-folder distribution. It verifies that packaged artifacts do not contain development files or user-history files, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, verifies the Windows PE Authenticode certificate table, writes `release/release-manifest.json`, `release/SHA256SUMS.txt`, and `release/RELEASE_NOTICE_0.1.0.txt`, and verifies that the checksum files and release notice match the artifacts. It does not replace a clean Windows runtime test.
 
-The package also includes `TERMS.txt` with the producer, permitted-use, unsigned-status, SHA256-check, warranty-disclaimer, and user-responsibility notice. The generated release notice must repeat the artifact SHA256 values, unsigned status, permitted-use terms, warranty disclaimer, and user responsibility. It must also state that optimized outputs must be reviewed by the user before submission, distribution, or retention, and that final use responsibility remains with the user.
+The package also includes `TERMS.txt` with the producer, permitted-use, self-signed-status, SHA256-check, warranty-disclaimer, and user-responsibility notice. The generated release notice must repeat the artifact SHA256 values, self-signed status, permitted-use terms, warranty disclaimer, and user responsibility. It must also state that optimized outputs must be reviewed by the user before submission, distribution, or retention, and that final use responsibility remains with the user.
 
 To verify the native Windows image runtime layout on an existing Windows build:
 
@@ -178,7 +178,7 @@ Verify an existing manifest, checksum file, and release notice against the artif
 npm run release:verify-manifest
 ```
 
-The repository also includes `.github/workflows/windows-release.yml`, which runs the CI-safe Windows packaging gate on `workflow_dispatch` and `v*` tags. This CI gate does not use private real HWPX samples because root-level `sample*.hwpx` files are not committed. Run the sample-backed `npm run release:check:win` or `npm run release:check:win-portable` in a local QA environment before product-ready approval. Manual `workflow_dispatch` runs skip artifact upload by default to avoid Actions storage quota failures; set the `upload_artifact` input to `true` when an uploaded installer is needed. Tag builds upload the generated installer artifact.
+The repository also includes `.github/workflows/windows-release.yml`, which runs the CI-safe Windows packaging gate on `workflow_dispatch` and `v*` tags. This CI gate does not use private real HWPX samples because root-level `sample*.hwpx` files are not committed. Run the sample-backed `npm run release:check:win` or self-signed `npm run release:check:win-portable` in a local QA environment before product-ready approval. Manual `workflow_dispatch` runs skip artifact upload by default to avoid Actions storage quota failures; set the `upload_artifact` input to `true` when an uploaded installer is needed. Tag builds upload the generated installer artifact.
 
 Then verify at least one HWPX end-to-end:
 
@@ -200,13 +200,13 @@ Before treating a build as releasable:
 2. Launch the unpacked app on the target platform.
 3. Verify the app can analyze and optimize a local HWPX file.
 4. Run `npm run desktop:pack:win` to confirm a Windows unpacked folder can be generated.
-5. Run `npm run desktop:local:win` to create both the portable EXE and the faster-starting ZIP artifact.
+5. Run `npm run desktop:local:win:self-signed` to create both the self-signed portable EXE and the faster-starting ZIP artifact.
 6. Run `npm run release:verify-artifacts`.
 7. Run `scripts/windows-portable-smoke.ps1` on a clean Windows machine.
 8. Complete [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) on a clean Windows machine.
 9. Attach [Internal Distribution Guide](INTERNAL_DISTRIBUTION.md), [Security Review Checklist](SECURITY_REVIEW.md), SHA256 checksums, and test evidence to the internal approval record.
 10. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
-11. Code-sign the Windows artifact when an approved certificate is available; otherwise document the unsigned status in the approval record.
+11. Use `npm run desktop:local:win:self-signed` or the self-signed release gate for internal distribution; replace it with approved public CA code signing when a certificate is available.
 12. Install or launch the generated artifact on a clean Windows machine.
 
 Suggested future scripts:
