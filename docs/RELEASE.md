@@ -130,7 +130,7 @@ npm run release:check:win-portable
 
 This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a portable Windows artifact and `release/HWPX Optimizer-0.1.0-x64.zip` as a faster-starting extracted-folder distribution. It verifies that packaged artifacts do not contain development files or user-history files, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, writes `release/release-manifest.json` plus `release/SHA256SUMS.txt`, and verifies that both checksum files match the artifacts. It does not replace a clean Windows runtime test.
 
-The package also includes `TERMS.txt` with the producer and permitted-use notice. The release notice must repeat that non-commercial personal or internal organizational use is permitted, while unapproved modification, redistribution, commercial use, and removal of producer attribution are prohibited.
+The package also includes `TERMS.txt` with the producer, permitted-use, warranty-disclaimer, and user-responsibility notice. The release notice must repeat that non-commercial personal or internal organizational use is permitted, while unapproved modification, redistribution, commercial use, and removal of producer attribution are prohibited. It must also state that optimized outputs must be reviewed by the user before submission, distribution, or retention, and that final use responsibility remains with the user.
 
 To verify the native Windows image runtime layout on an existing Windows build:
 

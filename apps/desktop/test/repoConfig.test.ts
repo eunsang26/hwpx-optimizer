@@ -203,6 +203,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain("10. 제작자 및 사용 조건");
     expect(html).toContain("제작/관리: 한강유역수도지원센터 조은상 과장");
     expect(html).toContain("사전 승인 없는 수정, 재배포, 영리 이용, 제작자 표시 제거는 금지됩니다.");
+    expect(html).toContain("결과물은 제출·배포·보관 전에 사용자가 직접 확인해야 하며, 원본 보존과 최종 사용 책임은 사용자에게 있습니다.");
     expect(html.match(/id="verification-body"/g)?.length).toBe(1);
     expect(html).toContain('<span aria-hidden="true">×</span>');
     expect(html).toContain('id="cleanup-document-toggle"');
