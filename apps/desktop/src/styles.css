@@ -2035,6 +2035,24 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
 }
 .settings-actions { display: flex; gap: 6px; }
 .settings-actions button { min-height: 34px; font-size: 12.5px; padding: 0 12px; }
+.legal-notice {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.legal-notice strong {
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.legal-notice p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
 .settings > p {
   font-size: 11.5px;
   color: var(--muted);

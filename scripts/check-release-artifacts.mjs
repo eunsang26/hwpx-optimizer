@@ -6,6 +6,7 @@ import JSZip from "jszip";
 
 const releaseDir = "release";
 const artifactLists = [];
+const zipArtifactLists = [];
 
 for (const asarPath of await findReleaseFiles(releaseDir, (name) => name === "app.asar")) {
   artifactLists.push({
@@ -16,10 +17,12 @@ for (const asarPath of await findReleaseFiles(releaseDir, (name) => name === "ap
 
 for (const zipPath of await findReleaseFiles(releaseDir, (name) => name.toLowerCase().endsWith(".zip"))) {
   const zip = await JSZip.loadAsync(await readFile(zipPath));
-  artifactLists.push({
+  const zipArtifact = {
     label: zipPath,
     entries: Object.keys(zip.files)
-  });
+  };
+  artifactLists.push(zipArtifact);
+  zipArtifactLists.push(zipArtifact);
 }
 
 if (artifactLists.length === 0) {
@@ -57,6 +60,18 @@ if (violations.length > 0) {
   console.error("Release artifact check failed. Packaged artifacts include development or user-history files:");
   for (const violation of violations) {
     console.error(`- ${violation}`);
+  }
+  process.exit(1);
+}
+
+const zipArtifactsMissingTerms = zipArtifactLists
+  .filter(({ entries }) => !entries.some((entry) => /(^|\/)TERMS\.txt$/i.test(entry)))
+  .map(({ label }) => label);
+
+if (zipArtifactsMissingTerms.length > 0) {
+  console.error("Release artifact check failed. Windows ZIP artifacts must include TERMS.txt:");
+  for (const label of zipArtifactsMissingTerms) {
+    console.error(`- ${label}`);
   }
   process.exit(1);
 }

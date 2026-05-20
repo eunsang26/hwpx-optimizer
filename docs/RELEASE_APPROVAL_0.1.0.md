@@ -5,15 +5,15 @@
 - Primary artifact: `release/HWPX Optimizer-0.1.0-x64.zip`
 - Secondary artifact: `release/HWPX Optimizer-0.1.0-x64.exe`
 - Version: `0.1.0`
-- Release candidate generated: `2026-05-19 21:59 KST`
+- Release candidate generated: `2026-05-20 18:30 KST`
 - Signing status: unsigned. Code signing is intentionally excluded from this approval record and must be handled separately when an approved certificate is available.
 
 ## Checksums
 
 | Artifact | Bytes | SHA256 |
 | --- | ---: | --- |
-| `HWPX Optimizer-0.1.0-x64.zip` | 143,513,968 | `d67058036af867dee3aa4502de7bac234663a6c3229d8e0534a704b3c648efd2` |
-| `HWPX Optimizer-0.1.0-x64.exe` | 96,570,042 | `8e7e40adb503cfb02226f085d26d646803dd6f39dc42cdfd6d57fbacc35801a7` |
+| `HWPX Optimizer-0.1.0-x64.zip` | 143,514,920 | `b29d3c630fa9351dc16d6c6d3f6d7228d11539adf65f0c375d64e866e88ac320` |
+| `HWPX Optimizer-0.1.0-x64.exe` | 96,575,860 | `e8fb4a30bffb74a83647aa83f07341216843f66a8f06a6b4f4adb45da7cc5483` |
 
 Checksum source files:
 
@@ -28,7 +28,7 @@ Command:
 PATH=/home/eunsang26/.nvm/versions/node/v20.20.2/bin:$PATH npm run release:check:win-portable
 ```
 
-Result: passed on `2026-05-19`.
+Result: passed on `2026-05-20`.
 
 Covered evidence:
 
@@ -39,7 +39,7 @@ Covered evidence:
 - `npm audit`: 0 vulnerabilities.
 - Desktop smoke: passed.
 - Windows ZIP and portable EXE packaging: passed.
-- Artifact hygiene: passed.
+- Artifact hygiene: passed, including `TERMS.txt` presence in the Windows ZIP artifact.
 - Windows sharp native runtime verification: passed.
 - Manifest generation and verification: 2 release artifacts verified.
 - Windows portable automated smoke through PowerShell: passed in `safe` mode with checksum match.
@@ -57,6 +57,7 @@ Additional ZIP smoke:
 - Real local sample: `sample2.hwpx`.
 - Modes: `safe`, `balanced`, and `aggressive`.
 - Result: all three modes passed.
+- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-release-zip-5dddb5a6-352a-41d9-95a2-4e452b7eff43`.
 - Note: the extracted inner EXE is not listed in `release/SHA256SUMS.txt`; the checksum warning for `HWPX Optimizer.exe` is expected. The ZIP artifact itself is covered by `release/SHA256SUMS.txt`.
 
 Additional portable EXE smoke:
@@ -67,6 +68,7 @@ Additional portable EXE smoke:
 - Real local sample: `sample2.hwpx`.
 - Modes: `safe`, `balanced`, and `aggressive`.
 - Result: all three modes passed.
+- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-release-exe-9c155524-5ebf-402d-a41a-6c0b5301c7da`.
 
 ## Code Signing Boundary
 
@@ -83,8 +85,10 @@ Current source evidence:
 
 - Start-screen safety text exists in `apps/desktop/src/index.html`: "원본은 변경하지 않고, 보안 문서 우회 없이 내 PC에서만 처리됩니다."
 - Help text states protected documents are not bypassed and files stay on the PC.
+- Help and settings text state the producer and permitted-use notice: non-commercial personal or internal organizational use is permitted; unapproved modification, redistribution, commercial use, and removal of producer attribution are prohibited.
 - Settings text states recent files, output folders, processing history, and internal logs are not stored.
 - Desktop smoke checks that the local security policy text is present.
+- `TERMS.txt` is included in the packaged Windows ZIP and `release/win-unpacked`.
 - Protected document rejection message is defined in `packages/core/src/reader.ts`.
 - Reader tests cover encrypted package flags, signature entries, and protection metadata rejection.
 
@@ -111,11 +115,13 @@ Approved distribution path:
 - Use only an approved internal shared location or software distribution system.
 - Distribute the original ZIP or portable EXE only; do not distribute extracted working folders.
 - Include artifact filename, version, release date, owner, change summary, SHA256, and signing status in the release notice.
+- Include the `TERMS.txt` permitted-use notice in the release notice.
 - Prohibit external redistribution and unapproved sharing.
 
 Required user notice:
 
 > This tool processes HWPX documents only on the user's PC. It does not modify the original file and creates optimized outputs separately. It does not optimize encrypted, DRM-protected, electronically signed, or permission-restricted documents, and it does not remove or bypass protection. The desktop app does not store recent files, processing history, output folder paths, or internal logs. JSON reports are created only when the user enables report saving.
+> Producer/maintainer: 한강유역수도지원센터 조은상 과장. Non-commercial personal or internal organizational use is permitted. Unapproved modification, redistribution, commercial use, and removal or alteration of producer attribution are prohibited.
 
 Release notice template:
 
@@ -127,9 +133,10 @@ Release notice template:
 - Primary download: `HWPX Optimizer-0.1.0-x64.zip`
 - Secondary download: `HWPX Optimizer-0.1.0-x64.exe`
 - Signing status: unsigned; code signing is excluded from this release-preparation record.
-- Primary SHA256: `d67058036af867dee3aa4502de7bac234663a6c3229d8e0534a704b3c648efd2`
-- Secondary SHA256: `8e7e40adb503cfb02226f085d26d646803dd6f39dc42cdfd6d57fbacc35801a7`
+- Primary SHA256: `b29d3c630fa9351dc16d6c6d3f6d7228d11539adf65f0c375d64e866e88ac320`
+- Secondary SHA256: `e8fb4a30bffb74a83647aa83f07341216843f66a8f06a6b4f4adb45da7cc5483`
 - Redistribution: approved internal location only; do not share extracted working folders.
+- Use terms: non-commercial personal or internal organizational use only; no unapproved modification, redistribution, commercial use, or removal of producer attribution.
 
 ## Clean Windows QA Evidence Template
 
@@ -197,6 +204,7 @@ Distribution approval: pending until clean Windows QA evidence is attached.
 | ZIP artifact runtime smoke | Extracted ZIP under Windows local temp; `sample2.hwpx`; `safe`, `balanced`, `aggressive` | Complete |
 | Portable EXE runtime smoke | Copied EXE under Windows local temp; SHA256 match; `sample2.hwpx`; `safe`, `balanced`, `aggressive` | Complete |
 | Code signing excluded and not claimed | PE security directory check records no Authenticode signature block | Complete |
+| Producer and permitted-use notice | App help/settings text, root `TERMS.txt`, ZIP `TERMS.txt`, internal distribution docs | Complete |
 | Security and policy source evidence | Desktop policy text, settings storage text, protected-document reader policy, reader tests | Complete |
 | Clean Windows manual QA | Must be run on a clean Windows 10/11 machine using the checklist above | Pending |
 | Release owner/date/location | Template fields exist, but actual owner, release date, and approved distribution location are not filled | Pending |

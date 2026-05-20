@@ -14,10 +14,18 @@ describe("repository runtime and cleanup configuration", () => {
 
   it("keeps release packaging and local artifact cleanup explicit", async () => {
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
+      author?: string;
+      license?: string;
       scripts?: Record<string, string>;
-      build?: { afterPack?: string; files?: string[] };
+      build?: {
+        afterPack?: string;
+        files?: string[];
+        extraFiles?: Array<{ from?: string; to?: string }>;
+      };
     };
 
+    expect(packageJson.author).toBe("한강유역수도지원센터 조은상 과장");
+    expect(packageJson.license).toBe("UNLICENSED");
     expect(packageJson.scripts?.["release:clean"]).toBe("node scripts/clean-release-artifacts.mjs");
     expect(packageJson.scripts?.["clean:local-artifacts"]).toBe("node scripts/clean-local-artifacts.mjs");
     expect(packageJson.scripts?.["desktop:pack"]).not.toMatch(/release:clean/);
@@ -46,6 +54,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.svg");
     expect(packageJson.build?.asar).toEqual({ smartUnpack: false });
     expect(packageJson.build?.asarUnpack).toEqual(["node_modules/@img/sharp-win32-x64/**/*"]);
+    expect(packageJson.build?.extraFiles).toContainEqual({ from: "TERMS.txt", to: "TERMS.txt" });
     expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
     expect(packageJson.build?.electronLanguages).toEqual(["ko"]);
     expect(packageJson.build?.files).toContain("!node_modules/**/README*");
@@ -59,6 +68,11 @@ describe("repository runtime and cleanup configuration", () => {
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/prune-electron-locales.cjs")).resolves.toBeUndefined();
     await expect(access("scripts/run-electron-smoke.mjs")).resolves.toBeUndefined();
+    await expect(access("TERMS.txt")).resolves.toBeUndefined();
+
+    const releaseArtifactCheck = await readFile("scripts/check-release-artifacts.mjs", "utf8");
+    expect(releaseArtifactCheck).toContain("TERMS.txt");
+    expect(releaseArtifactCheck).toContain("Windows ZIP artifacts must include TERMS.txt");
   });
 
   it("keeps Windows package locale pruning scoped to Korean", async () => {
@@ -186,6 +200,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain("사용 매뉴얼");
     expect(html).toContain("1. 파일 선택");
     expect(html).toContain("9. 보안 문서 제한");
+    expect(html).toContain("10. 제작자 및 사용 조건");
+    expect(html).toContain("제작/관리: 한강유역수도지원센터 조은상 과장");
+    expect(html).toContain("사전 승인 없는 수정, 재배포, 영리 이용, 제작자 표시 제거는 금지됩니다.");
     expect(html.match(/id="verification-body"/g)?.length).toBe(1);
     expect(html).toContain('<span aria-hidden="true">×</span>');
     expect(html).toContain('id="cleanup-document-toggle"');
@@ -223,6 +240,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain('state.submissionLimit.id === "mb41"');
     expect(renderer).toContain('from "./shared/resultGuidance.js"');
     expect(renderer).toContain("resultGuidanceText(report, plan)");
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.manualStepCount !== 10");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, 1320px\)/s);
@@ -231,6 +249,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(css).toMatch(/\.manual-steps\s*{[^}]*display:\s*grid/s);
     expect(css).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
     expect(css).toMatch(/\.settings-check\s*{[^}]*display:\s*flex/s);
+    expect(css).toMatch(/\.legal-notice\s*{[^}]*display:\s*grid/s);
     expect(css).toMatch(/body\[data-drag-over="true"\] \.file-panel\s*{[^}]*border-color:\s*var\(--blue\)/s);
     expect(css).toMatch(/\.drop-overlay\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.drop-overlay\s*{[^}]*pointer-events:\s*none/s);

@@ -514,7 +514,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       `Desktop smoke failed: analysis details width ${String(layout.detailsWidth)} does not match workspace width ${String(layout.safeLineWidth)}`
     );
   }
-  if (layout.helpOpen !== true || layout.helpTitle !== "사용 매뉴얼" || layout.manualStepCount !== 9) {
+  if (layout.helpOpen !== true || layout.helpTitle !== "사용 매뉴얼" || layout.manualStepCount !== 10) {
     throw new Error("Desktop smoke failed: manual-style help panel did not render");
   }
 

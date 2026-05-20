@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "description": "Local HWPX document size optimizer",
-  "author": "HWPX Optimizer contributors",
+  "author": "한강유역수도지원센터 조은상 과장",
+  "license": "UNLICENSED",
   "main": "apps/desktop/dist/main.cjs",
   "engines": {
     "node": ">=20.20.0"
@@ -72,6 +73,12 @@
     "directories": {
       "output": "release"
     },
+    "extraFiles": [
+      {
+        "from": "TERMS.txt",
+        "to": "TERMS.txt"
+      }
+    ],
     "extraMetadata": {
       "main": "apps/desktop/dist/main.cjs"
     },
