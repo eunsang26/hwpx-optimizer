@@ -62,6 +62,20 @@ describe("batchView helpers", () => {
     ).toBe("61.80 MiB → 27.40 MiB · 목표 미달 가능");
   });
 
+  it("renders allocated aggregate target in pending row meta", () => {
+    expect(
+      batchItemMetaText({
+        path: "/report.hwpx",
+        fileName: "report.hwpx",
+        status: "pending",
+        originalSizeLabel: "61.80 MiB",
+        expectedSizeLabel: "27.40 MiB",
+        targetStatusLabel: "목표 달성 가능",
+        allocatedTargetLabel: "배분 목표 18.00 MiB"
+      })
+    ).toBe("61.80 MiB → 27.40 MiB · 목표 달성 가능 · 배분 목표 18.00 MiB");
+  });
+
   it("returns a placeholder summary when the queue is empty", () => {
     const summary = summarizeBatchItems([]);
     expect(summary.totalCount).toBe(0);

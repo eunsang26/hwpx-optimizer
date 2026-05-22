@@ -8,6 +8,7 @@ type DesktopSettings = {
   showAggressiveWarning: boolean;
   submissionLimit: { id: "none" | "mb10" | "mb20" | "mb50" | "custom"; customBytes?: number };
   preservationPreference: "preserve" | "recommended" | "size";
+  batchTargetMode: "aggregate" | "per-file";
 };
 
 const originalSize = 89.72 * 1024 * 1024;
@@ -24,7 +25,8 @@ let settings: DesktopSettings = {
   preventOverwrite: true,
   showAggressiveWarning: true,
   submissionLimit: { id: "mb20" },
-  preservationPreference: "recommended"
+  preservationPreference: "recommended",
+  batchTargetMode: "aggregate"
 };
 
 const sampleReport = {

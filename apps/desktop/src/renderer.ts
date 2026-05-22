@@ -43,10 +43,13 @@ type BatchItem = {
   expectedSizeLabel?: string;
   targetLabel?: string;
   targetStatusLabel?: string;
+  allocatedTargetLabel?: string;
   savedBytes?: number;
   savedPercent?: number;
   error?: string;
 };
+
+type BatchTargetMode = "aggregate" | "per-file";
 
 type AppState = {
   filePath?: string;
@@ -59,6 +62,7 @@ type AppState = {
   actionSelections: Map<SubmissionActionId, boolean>;
   submissionLimit: SubmissionLimit;
   preservationPreference: PreservationPreference;
+  batchTargetMode: BatchTargetMode;
   currentPlan?: SubmissionPlan;
   batchItems: BatchItem[];
   batchAnalyzing: boolean;
@@ -96,6 +100,7 @@ const state: AppState = {
   actionSelections: new Map(),
   submissionLimit: { id: "mb20" },
   preservationPreference: "recommended",
+  batchTargetMode: "aggregate",
   batchItems: [],
   batchAnalyzing: false,
   batchRunning: false,
@@ -121,6 +126,7 @@ type DesktopSettings = {
   showAggressiveWarning: boolean;
   submissionLimit: SubmissionLimit;
   preservationPreference: PreservationPreference;
+  batchTargetMode: BatchTargetMode;
 };
 
 const dropOverlay = requireElement("drop-overlay");
@@ -198,6 +204,7 @@ const submissionLimitSelect = requireSelect("submission-limit-select");
 const customLimitField = requireElement("custom-limit-field");
 const customLimitInput = requireInput("custom-limit-input");
 const preservationSelect = requireSelect("preservation-select");
+const batchTargetModeSelect = requireSelect("batch-target-mode-select");
 const cleanupDocumentToggle = requireInput("cleanup-document-toggle");
 const cleanupImageToggle = requireInput("cleanup-image-toggle");
 const planTitle = requireElement("plan-title");
@@ -238,6 +245,7 @@ async function init(): Promise<void> {
   state.mode = settings.defaultMode ?? "safe";
   state.submissionLimit = settings.submissionLimit ?? { id: "mb20" };
   state.preservationPreference = settings.preservationPreference ?? "recommended";
+  state.batchTargetMode = settings.batchTargetMode ?? "aggregate";
   renderSettings(settings);
   renderSubmissionControls();
   modeInputs.find((input) => input.value === state.mode)?.click();
@@ -400,6 +408,12 @@ async function init(): Promise<void> {
     refreshBatchPlans();
     void saveSettings({ preservationPreference: state.preservationPreference });
   });
+  batchTargetModeSelect.addEventListener("change", () => {
+    state.batchTargetMode = batchTargetModeSelect.value as BatchTargetMode;
+    renderSubmissionControls();
+    refreshBatchPlans();
+    void saveSettings({ batchTargetMode: state.batchTargetMode });
+  });
 
   cleanupDocumentToggle.addEventListener("change", () => {
     state.actionSelections.set("clean-shape-comment", cleanupDocumentToggle.checked);
@@ -559,6 +573,7 @@ async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
   state.settings = settings;
   state.submissionLimit = settings.submissionLimit ?? state.submissionLimit;
   state.preservationPreference = settings.preservationPreference ?? state.preservationPreference;
+  state.batchTargetMode = settings.batchTargetMode ?? state.batchTargetMode;
   renderSettings(settings);
   renderSubmissionControls();
   if (state.report) refreshSubmissionPlan();
@@ -616,6 +631,7 @@ function renderSubmissionControls(): void {
     ? String(Math.round(state.submissionLimit.customBytes / 1024 / 1024))
     : "";
   preservationSelect.value = state.preservationPreference;
+  batchTargetModeSelect.value = state.batchTargetMode;
   renderCleanupSettings();
 }
 
@@ -884,16 +900,19 @@ function renderBatchSummary(): void {
   const passed = analyzed.filter((item) => item.targetStatusLabel !== "목표 미달 가능").length;
   const warning = Math.max(0, analyzed.length - passed);
   const batchTargetBytes = resolveBatchTargetBytes();
-  const aggregateTargetStatus = aggregateTargetStatusText(originalTotal, expectedTotal, batchTargetBytes);
+  const targetModeLabel = state.batchTargetMode === "aggregate" ? "전체 합계 기준" : "파일별 기준";
+  const targetStatusSummary = state.batchTargetMode === "aggregate"
+    ? aggregateTargetStatusText(originalTotal, expectedTotal, batchTargetBytes)
+    : fileTargetStatusText(passed, warning, batchTargetBytes);
   summaryOriginal.textContent = analyzed.length ? formatBytes(originalTotal) : "-";
   summaryExpected.textContent = analyzed.length ? formatBytes(expectedTotal) : "-";
   summarySaving.textContent = analyzed.length ? formatBytes(saving) : "-";
   summaryPercent.textContent = analyzed.length ? `${savingPercent.toFixed(1)}%` : "-";
   summaryStatus.innerHTML = `<span class="success-dot" aria-hidden="true"></span>${
-    analyzed.length ? `${aggregateTargetStatus} · 파일별 통과 ${passed}개 · 주의 ${warning}개` : "파일을 분석하는 중입니다."
+    analyzed.length ? `${targetModeLabel} · ${targetStatusSummary} · 통과 ${passed}개 · 주의 ${warning}개` : "파일을 분석하는 중입니다."
   }`;
   summaryResultLine.textContent = analyzed.length ? `예상 결과: ${formatBytes(expectedTotal)}` : "예상 결과: -";
-  summaryTargetLine.textContent = `전체 제출 기준: ${batchTargetBytes ? formatBytes(batchTargetBytes) : "제한 없음"}`;
+  summaryTargetLine.textContent = batchTargetSummaryLine(batchTargetBytes);
   targetTrackFill.style.width = `${Math.min(100, Math.max(0, savingPercent))}%`;
   optimizeButton.textContent = "제출 기준에 맞게 일괄 최적화";
   optimizeButton.disabled = state.batchAnalyzing || !state.batchItems.some((item) => item.status === "pending");
@@ -915,7 +934,7 @@ function createBatchPlanSummary(): BatchPlanSummary | undefined {
   for (const item of analyzedItems) {
     if (!item.report) continue;
     const plan = createSubmissionPlan(item.report, {
-      submissionLimit: state.submissionLimit,
+      submissionLimit: batchSubmissionLimitForItem(item),
       preservationPreference: state.preservationPreference,
       actionOverrides: state.actionSelections
     });
@@ -1029,6 +1048,13 @@ function resolveBatchTargetBytes(): number | undefined {
   return resolveSubmissionLimitBytes(state.submissionLimit);
 }
 
+function batchTargetSummaryLine(targetBytes: number | undefined): string {
+  const targetLabel = targetBytes ? formatBytes(targetBytes) : "제한 없음";
+  return state.batchTargetMode === "aggregate"
+    ? `전체 제출 기준: ${targetLabel}`
+    : `파일별 제출 기준: ${targetLabel}`;
+}
+
 function aggregateTargetStatusText(
   originalTotal: number,
   expectedTotal: number,
@@ -1040,12 +1066,37 @@ function aggregateTargetStatusText(
   return "전체 목표 주의 필요";
 }
 
+function fileTargetStatusText(passed: number, warning: number, targetBytes: number | undefined): string {
+  if (!targetBytes) return "파일별 목표 제한 없음";
+  if (warning === 0 && passed > 0) return "파일별 목표 달성 예상";
+  if (warning > 0) return "파일별 목표 주의 필요";
+  return "파일별 분석 대기";
+}
+
+function batchSubmissionLimitForItem(item: BatchItem): SubmissionLimit {
+  if (state.batchTargetMode === "per-file") return state.submissionLimit;
+  const targetBytes = batchTargetBytesForItem(item);
+  return targetBytes ? { id: "custom", customBytes: targetBytes } : { id: "none" };
+}
+
 function batchTargetBytesForItem(item: BatchItem): number | undefined {
   const batchTargetBytes = resolveBatchTargetBytes();
   if (!batchTargetBytes || !item.originalSizeBytes) return undefined;
+  if (state.batchTargetMode === "per-file") return batchTargetBytes;
   const totalOriginalSize = state.batchItems.reduce((sum, current) => sum + (current.originalSizeBytes ?? 0), 0);
   if (totalOriginalSize <= 0) return undefined;
   return Math.max(1, Math.floor((batchTargetBytes * item.originalSizeBytes) / totalOriginalSize));
+}
+
+function batchTargetLabelForItem(item: BatchItem): string {
+  const targetBytes = batchTargetBytesForItem(item);
+  return targetBytes ? `${formatBytes(targetBytes)} 이하` : "제한 없음";
+}
+
+function batchAllocatedTargetLabelForItem(item: BatchItem): string | undefined {
+  if (state.batchTargetMode !== "aggregate") return undefined;
+  const targetBytes = batchTargetBytesForItem(item);
+  return targetBytes ? `배분 목표 ${formatBytes(targetBytes)}` : undefined;
 }
 
 function percentFromPlan(plan: SubmissionPlan): number {
@@ -1505,6 +1556,7 @@ function setSubmissionInputsDisabled(disabled: boolean): void {
   submissionLimitSelect.disabled = disabled;
   customLimitInput.disabled = disabled;
   preservationSelect.disabled = disabled;
+  batchTargetModeSelect.disabled = disabled;
   cleanupDocumentToggle.disabled = disabled;
   cleanupImageToggle.disabled = disabled;
   actionCheckboxes.querySelectorAll<HTMLInputElement>("input[type='checkbox']").forEach((input) => {
@@ -1734,18 +1786,19 @@ async function analyzeBatchItems(): Promise<void> {
         const percentBase = pendingItems.length > 0 ? (analyzedCount / pendingItems.length) * 88 : 0;
         renderProgress(6 + percentBase, `${item.fileName} 분석 중`);
         const response = await window.hwpxOptimizer.analyze(item.path);
+        item.report = response.report;
+        item.originalSizeBytes = response.report.originalSize;
         const plan = createSubmissionPlan(response.report, {
-          submissionLimit: state.submissionLimit,
+          submissionLimit: batchSubmissionLimitForItem(item),
           preservationPreference: state.preservationPreference,
           actionOverrides: state.actionSelections
         });
-        item.report = response.report;
-        item.originalSizeBytes = response.report.originalSize;
         item.expectedSizeBytes = plan.expectedSizeBytes;
         item.originalSizeLabel = plan.originalSizeLabel;
         item.expectedSizeLabel = plan.expectedSizeLabel;
-        item.targetLabel = targetLabelForDisplay();
+        item.targetLabel = batchTargetLabelForItem(item);
         item.targetStatusLabel = plan.targetStatusLabel;
+        item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item);
         analyzedCount += 1;
         renderProgress(
           6 + (pendingItems.length > 0 ? (analyzedCount / pendingItems.length) * 88 : 88),
@@ -1762,6 +1815,7 @@ async function analyzeBatchItems(): Promise<void> {
     if (pendingItems.length > 0) {
       renderProgress(100, "일괄 분석 완료");
       setStatus("일괄 분석이 완료되었습니다. 제출 기준에 맞게 최적화할 수 있습니다.");
+      refreshBatchPlanItems();
     }
   } finally {
     if (pendingItems.length > 0) {
@@ -1775,20 +1829,25 @@ async function analyzeBatchItems(): Promise<void> {
 
 function refreshBatchPlans(): void {
   if (state.batchItems.length === 0) return;
+  refreshBatchPlanItems();
+  renderBatchList();
+  renderBatchSummary();
+}
+
+function refreshBatchPlanItems(): void {
   for (const item of state.batchItems) {
     if (!item.report) continue;
     const plan = createSubmissionPlan(item.report, {
-      submissionLimit: state.submissionLimit,
+      submissionLimit: batchSubmissionLimitForItem(item),
       preservationPreference: state.preservationPreference,
       actionOverrides: state.actionSelections
     });
     item.expectedSizeBytes = plan.expectedSizeBytes;
     item.expectedSizeLabel = plan.expectedSizeLabel;
-    item.targetLabel = targetLabelForDisplay();
+    item.targetLabel = batchTargetLabelForItem(item);
     item.targetStatusLabel = plan.targetStatusLabel;
+    item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item);
   }
-  renderBatchList();
-  renderBatchSummary();
 }
 
 function handleBatchRowAction(button: HTMLButtonElement): void {
@@ -1847,7 +1906,7 @@ async function runBatch(): Promise<void> {
     try {
       const plan = item.report
         ? createSubmissionPlan(item.report, {
-            submissionLimit: state.submissionLimit,
+            submissionLimit: batchSubmissionLimitForItem(item),
             preservationPreference: state.preservationPreference,
             actionOverrides: state.actionSelections
           })
@@ -1897,7 +1956,7 @@ async function saveBatchSummaryReport(): Promise<string | undefined> {
       firstInputPath,
       outputDirectory: state.outputDirectory,
       mode: modeForPreservation(state.preservationPreference),
-      batchTargetBytes: resolveBatchTargetBytes(),
+      batchTargetBytes: state.batchTargetMode === "aggregate" ? resolveBatchTargetBytes() : undefined,
       items: state.batchItems
         .filter((item) => item.status === "done" || item.status === "failed" || item.status === "cancelled")
         .map((item) => ({

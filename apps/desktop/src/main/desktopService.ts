@@ -6,6 +6,7 @@ import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
 
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
+export type BatchTargetMode = "aggregate" | "per-file";
 
 export type DesktopSettings = {
   settingsVersion?: number;
@@ -16,6 +17,7 @@ export type DesktopSettings = {
   showAggressiveWarning: boolean;
   submissionLimit: SubmissionLimit;
   preservationPreference: PreservationPreference;
+  batchTargetMode: BatchTargetMode;
 };
 
 export type DesktopSettingsPatch = Partial<DesktopSettings> & Record<string, unknown>;
@@ -28,7 +30,8 @@ export const defaultDesktopSettings: DesktopSettings = {
   preventOverwrite: true,
   showAggressiveWarning: true,
   submissionLimit: { id: "mb20" },
-  preservationPreference: "recommended"
+  preservationPreference: "recommended",
+  batchTargetMode: "aggregate"
 };
 
 const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
@@ -305,6 +308,7 @@ export function persistentDesktopSettingsPatch(patch: DesktopSettingsPatch): Par
   if (typeof patch.showAggressiveWarning === "boolean") sanitized.showAggressiveWarning = patch.showAggressiveWarning;
   if (isSubmissionLimit(patch.submissionLimit)) sanitized.submissionLimit = patch.submissionLimit;
   if (isPreservationPreference(patch.preservationPreference)) sanitized.preservationPreference = patch.preservationPreference;
+  if (isBatchTargetMode(patch.batchTargetMode)) sanitized.batchTargetMode = patch.batchTargetMode;
   return sanitized;
 }
 
@@ -474,4 +478,8 @@ function isSubmissionLimit(value: unknown): value is SubmissionLimit {
 
 function isPreservationPreference(value: unknown): value is PreservationPreference {
   return value === "preserve" || value === "recommended" || value === "size";
+}
+
+function isBatchTargetMode(value: unknown): value is BatchTargetMode {
+  return value === "aggregate" || value === "per-file";
 }

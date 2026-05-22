@@ -24,6 +24,7 @@ describe("desktop service", () => {
     expect(settings.defaultMode).toBe("balanced");
     expect(settings.submissionLimit).toEqual({ id: "mb20" });
     expect(settings.preservationPreference).toBe("recommended");
+    expect(settings.batchTargetMode).toBe("aggregate");
     expect(settings.saveReport).toBe(false);
   });
 
@@ -153,6 +154,14 @@ describe("desktop service", () => {
       saveReport: true,
       submissionLimit: { id: "mb41" }
     });
+  });
+
+  it("persists valid batch target mode settings", () => {
+    expect(
+      persistentDesktopSettingsPatch({
+        batchTargetMode: "per-file"
+      })
+    ).toEqual({ batchTargetMode: "per-file" });
   });
 
   it("prevents overwriting existing optimized files", async () => {
