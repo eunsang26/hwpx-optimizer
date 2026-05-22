@@ -147,6 +147,41 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(opportunityPasses).toBe(1);
   });
 
+  it("prefers the least aggressive verified profile that still reaches a tight target", async () => {
+    const width = 2000;
+    const height = 1500;
+    const raw = Buffer.alloc(width * height * 3);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 3;
+        raw[offset] = (x * 17 + y * 13) % 256;
+        raw[offset + 1] = (x * 3 + y * 29) % 256;
+        raw[offset + 2] = (x * 11 + y * 7) % 256;
+      }
+    }
+    const jpeg = await sharp(raw, { raw: { width, height, channels: 3 } })
+      .jpeg({ quality: 100 })
+      .toBuffer();
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/image1.jpg" media-type="image/jpeg"/></opf:manifest></opf:package>`,
+        "Contents/section0.xml": `<root><hc:img binaryItemIDRef="image1" /></root>`,
+        "BinData/image1.jpg": jpeg
+      }
+    });
+    const targetBytes = Math.floor(input.byteLength * 0.25);
+
+    const result = await optimizeHwpxBufferBalanced(input, {
+      actions: ["resize-jpeg"],
+      targetBytes
+    });
+
+    expect(result.report.targetStatus).toBe("met");
+    expect(result.output.byteLength).toBeLessThanOrEqual(targetBytes);
+    expect(result.output.byteLength).toBeGreaterThan(targetBytes * 0.9);
+    expect(result.report.performance?.stages.filter((stage) => stage.name === "opportunities").length).toBeGreaterThan(1);
+  });
+
   it("removes unreferenced BinData and writes a verified package", async () => {
     const input = await createHwpxFixture({
       entries: {

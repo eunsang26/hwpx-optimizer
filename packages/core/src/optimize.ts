@@ -174,8 +174,9 @@ async function optimizeHwpxBufferAdvanced(
         profile,
         warnings: [...(settings.warnings ?? []), ...verificationWarnings]
       });
-      best = chooseBestCandidate(best, candidate);
-      if (!options.targetBytes || candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target") {
+      best = chooseBestCandidate(best, candidate, options.targetBytes);
+      const targetMet = candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target";
+      if (!options.targetBytes || (targetMet && !strongestProfileFirst)) {
         return candidate;
       }
       if (strongestProfileFirst && profileIndex === 0 && candidate.report.targetStatus === "missed") {
@@ -364,12 +365,20 @@ function writeCompressionLevel(targetBytes: number | undefined): number {
 
 function chooseBestCandidate(
   previous: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined,
-  candidate: { output: Buffer; report: OptimizationReport }
+  candidate: { output: Buffer; report: OptimizationReport },
+  targetBytes: number | undefined
 ): { output: Buffer; report: OptimizationReport; targetMet: boolean } {
   const targetMet = candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target";
   const current = { ...candidate, targetMet };
   if (!previous) return current;
   if (current.targetMet && !previous.targetMet) return current;
+  if (!current.targetMet && previous.targetMet) return previous;
+  if (current.targetMet && previous.targetMet && targetBytes) {
+    const currentDistance = targetBytes - current.output.byteLength;
+    const previousDistance = targetBytes - previous.output.byteLength;
+    if (currentDistance >= 0 && currentDistance < previousDistance) return current;
+    return previous;
+  }
   if (current.targetMet === previous.targetMet && current.output.byteLength < previous.output.byteLength) return current;
   return previous;
 }

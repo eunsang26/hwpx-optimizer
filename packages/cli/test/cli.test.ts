@@ -716,6 +716,18 @@ describe("runCli", () => {
     expect(code).toBe(1);
   });
 
+  it("rejects aggregate batch targets that cannot allocate at least one byte per file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    await mkdir(inputDir);
+    await writeFile(join(inputDir, "one.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(join(inputDir, "two.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const code = await runCli(["batch", inputDir, "--mode", "safe", "--batch-target-bytes", "1"]);
+
+    expect(code).toBe(1);
+  });
+
   it("rejects invalid batch worker limits", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputDir = join(dir, "docs");

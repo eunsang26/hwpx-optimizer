@@ -416,6 +416,9 @@ async function runBatch(
     .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name))
     .map((entry) => entry.name)
     .sort();
+  if (batchTargetBytes !== undefined && files.length > batchTargetBytes) {
+    throw new Error("--batch-target-bytes must allow at least one byte per HWPX file.");
+  }
   const originalSizeByFile = await readBatchOriginalSizes(inputDir, files);
   const targetByFile = batchTargetBytes
     ? allocateBatchTargetBytes(files, originalSizeByFile, batchTargetBytes)
