@@ -47,5 +47,5 @@
 - [x] Run `npm test`.
 - [x] Run `npm run typecheck`.
 - [x] Run `npm run build`.
-- [ ] Run release/build command available for this repo and report any platform limits.
-- [ ] Commit, push branch, and report deployment artifact state.
+- [x] Run release/build command available for this repo and report any platform limits.
+- [x] Commit, push branch, and report deployment artifact state.
