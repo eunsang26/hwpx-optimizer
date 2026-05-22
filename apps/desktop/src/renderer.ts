@@ -16,7 +16,7 @@ import { createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
 import { resultGuidanceText } from "./shared/resultGuidance.js";
-import { createSubmissionPlan, modeForPreservation } from "./shared/submissionPlan.js";
+import { createSubmissionPlan, modeForPreservation, resolveSubmissionLimitBytes } from "./shared/submissionPlan.js";
 import type {
   PreservationPreference,
   SubmissionActionId,
@@ -883,15 +883,17 @@ function renderBatchSummary(): void {
   const savingPercent = originalTotal > 0 ? (saving / originalTotal) * 100 : 0;
   const passed = analyzed.filter((item) => item.targetStatusLabel !== "목표 미달 가능").length;
   const warning = Math.max(0, analyzed.length - passed);
+  const batchTargetBytes = resolveBatchTargetBytes();
+  const aggregateTargetStatus = aggregateTargetStatusText(originalTotal, expectedTotal, batchTargetBytes);
   summaryOriginal.textContent = analyzed.length ? formatBytes(originalTotal) : "-";
   summaryExpected.textContent = analyzed.length ? formatBytes(expectedTotal) : "-";
   summarySaving.textContent = analyzed.length ? formatBytes(saving) : "-";
   summaryPercent.textContent = analyzed.length ? `${savingPercent.toFixed(1)}%` : "-";
   summaryStatus.innerHTML = `<span class="success-dot" aria-hidden="true"></span>${
-    analyzed.length ? `목표 통과 예상 ${passed}개 · 주의 필요 ${warning}개` : "파일을 분석하는 중입니다."
+    analyzed.length ? `${aggregateTargetStatus} · 파일별 통과 ${passed}개 · 주의 ${warning}개` : "파일을 분석하는 중입니다."
   }`;
   summaryResultLine.textContent = analyzed.length ? `예상 결과: ${formatBytes(expectedTotal)}` : "예상 결과: -";
-  summaryTargetLine.textContent = `제출 기준: ${targetLabelForDisplay()}`;
+  summaryTargetLine.textContent = `전체 제출 기준: ${batchTargetBytes ? formatBytes(batchTargetBytes) : "제한 없음"}`;
   targetTrackFill.style.width = `${Math.min(100, Math.max(0, savingPercent))}%`;
   optimizeButton.textContent = "제출 기준에 맞게 일괄 최적화";
   optimizeButton.disabled = state.batchAnalyzing || !state.batchItems.some((item) => item.status === "pending");
@@ -1021,6 +1023,29 @@ function resolveTargetBytesForDisplay(): number | undefined {
   if (state.submissionLimit.id === "mb100") return 100 * 1024 * 1024;
   if (state.submissionLimit.id === "custom") return state.submissionLimit.customBytes;
   return undefined;
+}
+
+function resolveBatchTargetBytes(): number | undefined {
+  return resolveSubmissionLimitBytes(state.submissionLimit);
+}
+
+function aggregateTargetStatusText(
+  originalTotal: number,
+  expectedTotal: number,
+  targetBytes: number | undefined
+): string {
+  if (!targetBytes) return "전체 목표 제한 없음";
+  if (originalTotal <= targetBytes) return "이미 전체 목표 이하";
+  if (expectedTotal <= targetBytes) return "전체 목표 달성 예상";
+  return "전체 목표 주의 필요";
+}
+
+function batchTargetBytesForItem(item: BatchItem): number | undefined {
+  const batchTargetBytes = resolveBatchTargetBytes();
+  if (!batchTargetBytes || !item.originalSizeBytes) return undefined;
+  const totalOriginalSize = state.batchItems.reduce((sum, current) => sum + (current.originalSizeBytes ?? 0), 0);
+  if (totalOriginalSize <= 0) return undefined;
+  return Math.max(1, Math.floor((batchTargetBytes * item.originalSizeBytes) / totalOriginalSize));
 }
 
 function percentFromPlan(plan: SubmissionPlan): number {
@@ -1832,7 +1857,8 @@ async function runBatch(): Promise<void> {
         mode: plan?.mode ?? modeForPreservation(state.preservationPreference),
         outputDirectory: state.outputDirectory,
         outputMode: "batch",
-        actions: selectedActionsForPlan(plan)
+        actions: selectedActionsForPlan(plan),
+        targetBytes: batchTargetBytesForItem(item)
       });
       Object.assign(item, applyOptimizationResultToBatchItem(item, response));
     } catch (error) {
@@ -1871,6 +1897,7 @@ async function saveBatchSummaryReport(): Promise<string | undefined> {
       firstInputPath,
       outputDirectory: state.outputDirectory,
       mode: modeForPreservation(state.preservationPreference),
+      batchTargetBytes: resolveBatchTargetBytes(),
       items: state.batchItems
         .filter((item) => item.status === "done" || item.status === "failed" || item.status === "cancelled")
         .map((item) => ({

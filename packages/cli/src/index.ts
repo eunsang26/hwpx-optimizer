@@ -191,6 +191,28 @@ function parseTargetBytes(options: Record<string, string>): number | undefined {
   return undefined;
 }
 
+function parseBatchTargetBytes(options: Record<string, string>): number | undefined {
+  const hasBatchBytes = options["batch-target-bytes"] !== undefined;
+  const hasBatchMb = options["batch-target-mb"] !== undefined;
+  if (hasBatchBytes && hasBatchMb) {
+    throw new Error("Use only one of --batch-target-bytes or --batch-target-mb.");
+  }
+  if ((hasBatchBytes || hasBatchMb) && (options["target-bytes"] !== undefined || options["target-mb"] !== undefined)) {
+    throw new Error("Use per-file target options or aggregate batch target options, not both.");
+  }
+  if (hasBatchBytes) {
+    const bytes = Math.floor(parsePositiveNumber(options["batch-target-bytes"], "--batch-target-bytes"));
+    if (bytes <= 0) throw new Error("--batch-target-bytes must be a positive number.");
+    return bytes;
+  }
+  if (hasBatchMb) {
+    const bytes = Math.floor(parsePositiveNumber(options["batch-target-mb"], "--batch-target-mb") * 1024 * 1024);
+    if (bytes <= 0) throw new Error("--batch-target-mb must be at least one byte.");
+    return bytes;
+  }
+  return undefined;
+}
+
 function parseAnalysisMode(value: string | undefined): "quick" | "deep" | undefined {
   if (value === undefined) return undefined;
   if (value === "quick" || value === "deep") return value;
@@ -226,7 +248,7 @@ function printUsage(): void {
   console.error("  hwpx-opt report <file.hwpx> [--report report.txt|--out report.txt] [--analysis-mode quick|deep] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
   console.error("  hwpx-opt verify <file.hwpx> [--max-input-bytes bytes]");
   console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json] [--max-input-bytes bytes]");
-  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--jobs count] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--batch-target-bytes bytes|--batch-target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--jobs count] [--max-input-bytes bytes]");
   console.error("  hwpx-opt list-actions");
 }
 
@@ -363,9 +385,10 @@ function printOptimizationSummary(report: OptimizationReport): void {
 async function optimizeByMode(
   input: Buffer,
   mode: OptimizationMode,
-  options: Record<string, string>
+  options: Record<string, string>,
+  targetBytesOverride?: number
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
-  const targetBytes = parseTargetBytes(options);
+  const targetBytes = targetBytesOverride ?? parseTargetBytes(options);
   if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes });
   const advancedOptions = {
     actions: parseActionList(options.actions),
@@ -387,11 +410,16 @@ async function runBatch(
   const outputDir = options.out ?? join(inputDir, "optimized");
   const overwrite = options.overwrite === "true";
   await mkdir(outputDir, { recursive: true });
+  const batchTargetBytes = parseBatchTargetBytes(options);
 
   const files = (await readdir(inputDir, { withFileTypes: true }))
     .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name))
     .map((entry) => entry.name)
     .sort();
+  const originalSizeByFile = await readBatchOriginalSizes(inputDir, files);
+  const targetByFile = batchTargetBytes
+    ? allocateBatchTargetBytes(files, originalSizeByFile, batchTargetBytes)
+    : new Map<string, number>();
   const jobs = parseBatchJobs(options.jobs);
   const results = new Array<BatchFileResult>(files.length);
   const startedAt = Date.now();
@@ -403,7 +431,7 @@ async function runBatch(
     try {
       const buffer = await readSupportedInput(sourcePath, options);
       stage = "optimize";
-      const result = await optimizeByMode(buffer, mode, options);
+      const result = await optimizeByMode(buffer, mode, options, targetByFile.get(file));
       stage = "resolve-output-path";
       const requestedOutputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
       const outputPath = overwrite ? requestedOutputPath : await nextAvailablePath(requestedOutputPath);
@@ -413,7 +441,16 @@ async function runBatch(
       await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2));
       const savedBytes = result.report.savedBytes ?? 0;
       const savedPercent = result.report.savedPercent ?? 0;
-      results[index] = { input: file, status: "optimized", output: outputPath, report: reportPath, savedBytes, savedPercent };
+      results[index] = {
+        input: file,
+        status: "optimized",
+        output: outputPath,
+        report: reportPath,
+        originalSize: result.report.originalSize,
+        optimizedSize: result.report.optimizedSize ?? result.output.byteLength,
+        savedBytes,
+        savedPercent
+      };
       console.log(`${progressPrefix} optimized -${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -431,6 +468,14 @@ async function runBatch(
     (sum, result) => sum + (result.status === "optimized" ? result.savedBytes : 0),
     0
   );
+  const totalOriginalSize = completedResults.reduce(
+    (sum, result) => sum + (result.status === "optimized" ? result.originalSize : 0),
+    0
+  );
+  const totalOptimizedSize = completedResults.reduce(
+    (sum, result) => sum + (result.status === "optimized" ? result.optimizedSize : 0),
+    0
+  );
   await writeFile(
     reportPath,
     JSON.stringify(
@@ -443,7 +488,10 @@ async function runBatch(
         totals: {
           optimized: optimizedCount,
           failed: failedCount,
-          totalSavedBytes
+          totalSavedBytes,
+          totalOriginalSize,
+          totalOptimizedSize,
+          ...createBatchTargetFields(totalOriginalSize, totalOptimizedSize, batchTargetBytes)
         },
         results: completedResults
       },
@@ -455,6 +503,61 @@ async function runBatch(
     optimized: optimizedCount,
     failed: failedCount,
     reportPath
+  };
+}
+
+async function readBatchOriginalSizes(inputDir: string, files: string[]): Promise<Map<string, number>> {
+  const sizes = new Map<string, number>();
+  await Promise.all(
+    files.map(async (file) => {
+      const { size } = await stat(join(inputDir, file));
+      sizes.set(file, size);
+    })
+  );
+  return sizes;
+}
+
+function allocateBatchTargetBytes(
+  files: string[],
+  originalSizeByFile: Map<string, number>,
+  batchTargetBytes: number
+): Map<string, number> {
+  const totalOriginalSize = files.reduce((sum, file) => sum + (originalSizeByFile.get(file) ?? 0), 0);
+  if (totalOriginalSize <= 0) return new Map(files.map((file) => [file, 1]));
+  const raw = files.map((file) => {
+    const size = originalSizeByFile.get(file) ?? 0;
+    const exact = (batchTargetBytes * size) / totalOriginalSize;
+    return { file, bytes: Math.floor(exact), fraction: exact - Math.floor(exact) };
+  });
+  let allocated = raw.reduce((sum, item) => sum + item.bytes, 0);
+  for (const item of [...raw].sort((left, right) => right.fraction - left.fraction)) {
+    if (allocated >= batchTargetBytes) break;
+    item.bytes += 1;
+    allocated += 1;
+  }
+  return new Map(raw.map((item) => [item.file, Math.max(1, item.bytes)]));
+}
+
+function createBatchTargetFields(
+  totalOriginalSize: number,
+  totalOptimizedSize: number,
+  batchTargetBytes: number | undefined
+): {
+  batchTargetBytes?: number;
+  batchTargetStatus?: "met" | "missed" | "already-under-target";
+  batchTargetMissReason?: string;
+} {
+  if (!batchTargetBytes) return {};
+  if (totalOriginalSize <= batchTargetBytes) {
+    return { batchTargetBytes, batchTargetStatus: "already-under-target" };
+  }
+  if (totalOptimizedSize <= batchTargetBytes) {
+    return { batchTargetBytes, batchTargetStatus: "met" };
+  }
+  return {
+    batchTargetBytes,
+    batchTargetStatus: "missed",
+    batchTargetMissReason: "No verified aggregate batch optimization result reached the target."
   };
 }
 
@@ -642,7 +745,16 @@ type OptimizationMode = "safe" | "balanced" | "aggressive";
 type BatchFailureStage = "read-input" | "optimize" | "resolve-output-path" | "write-output" | "write-report";
 
 type BatchFileResult =
-  | { input: string; status: "optimized"; output: string; report: string; savedBytes: number; savedPercent: number }
+  | {
+      input: string;
+      status: "optimized";
+      output: string;
+      report: string;
+      originalSize: number;
+      optimizedSize: number;
+      savedBytes: number;
+      savedPercent: number;
+    }
   | { input: string; status: "failed"; stage: BatchFailureStage; error: string };
 
 function isOptimizationMode(value: string): value is OptimizationMode {

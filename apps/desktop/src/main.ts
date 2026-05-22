@@ -204,6 +204,7 @@ function registerIpc(): void {
         outputDirectory?: string;
         outputMode?: "single" | "batch";
         actions?: string[];
+        targetBytes?: number;
       }
     ) => {
       if (pendingDocumentOperation || activeAnalyzeWorker || activeOptimizeWorker) {
@@ -254,6 +255,7 @@ function registerIpc(): void {
         firstInputPath: string;
         outputDirectory?: string;
         mode: OptimizationMode;
+        batchTargetBytes?: number;
         items: Array<{
           input: string;
           status: "done" | "failed" | "cancelled";
@@ -282,6 +284,7 @@ function registerIpc(): void {
         reportDirectory: join(outputDirectory, "output"),
         mode: input.mode,
         settings,
+        batchTargetBytes: input.batchTargetBytes,
         items
       });
       await registerGeneratedPath(result.reportPath);
@@ -742,6 +745,7 @@ type DocumentWorkerRequest =
         outputDirectory?: string;
         outputMode?: "single" | "batch";
         actions?: string[];
+        targetBytes?: number;
         settings: DesktopSettings;
       };
     };
@@ -757,6 +761,7 @@ type DocumentWorkerRequestInput =
         outputDirectory?: string;
         outputMode?: "single" | "batch";
         actions?: string[];
+        targetBytes?: number;
         settings: DesktopSettings;
       };
     };
