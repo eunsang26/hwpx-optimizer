@@ -21,7 +21,9 @@ describe("runCli", () => {
     expect(code).toBe(1);
     const usage = errors.join("\n");
     expect(usage).toContain("analyze <file.hwpx> [--report report.json] [--analysis-mode quick|deep]");
-    expect(usage).toContain("batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb]");
+    expect(usage).toContain(
+      "batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--batch-target-bytes bytes|--batch-target-mb mb]"
+    );
     expect(usage).toContain("[--jobs count]");
   });
 
@@ -673,6 +675,106 @@ describe("runCli", () => {
     expect(summary.jobs).toBe(2);
     expect(summary.results).toHaveLength(2);
     expect(summary.results.every((result) => result.status === "optimized")).toBe(true);
+  });
+
+  it("allocates aggregate batch targets across files and records total target status", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    const outDir = join(dir, "optimized");
+    await mkdir(inputDir);
+    await writeFile(join(inputDir, "small.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(
+      join(inputDir, "large.hwpx"),
+      await createHwpxFixture({
+        entries: {
+          "Contents/section0.xml": "<root />",
+          "BinData/pad.bin": Buffer.alloc(4096, 1)
+        }
+      })
+    );
+
+    const code = await runCli(["batch", inputDir, "--mode", "safe", "--batch-target-bytes", "100", "--out", outDir]);
+
+    expect(code).toBe(0);
+    const summary = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8")) as {
+      totals: {
+        optimized: number;
+        failed: number;
+        batchTargetBytes: number;
+        batchTargetStatus: string;
+        batchTargetMissReason?: string;
+        totalOriginalSize: number;
+        totalOptimizedSize: number;
+      };
+    };
+    const smallReport = JSON.parse(await readFile(join(outDir, "small.optimized.hwpx.report.json"), "utf8")) as {
+      targetBytes: number;
+    };
+    const largeReport = JSON.parse(await readFile(join(outDir, "large.optimized.hwpx.report.json"), "utf8")) as {
+      targetBytes: number;
+    };
+    expect(summary.totals.optimized).toBe(2);
+    expect(summary.totals.failed).toBe(0);
+    expect(summary.totals.batchTargetBytes).toBe(100);
+    expect(summary.totals.batchTargetStatus).toBe("missed");
+    expect(summary.totals.batchTargetMissReason).toContain("aggregate");
+    expect(summary.totals.totalOriginalSize).toBeGreaterThan(summary.totals.batchTargetBytes);
+    expect(summary.totals.totalOptimizedSize).toBeGreaterThan(summary.totals.batchTargetBytes);
+    expect(smallReport.targetBytes + largeReport.targetBytes).toBeLessThanOrEqual(100);
+    expect(largeReport.targetBytes).toBeGreaterThan(smallReport.targetBytes);
+  });
+
+  it("does not mark aggregate batch targets as met when any input fails", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    const outDir = join(dir, "optimized");
+    await mkdir(inputDir);
+    await writeFile(join(inputDir, "valid.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(join(inputDir, "broken.hwpx"), Buffer.from("not a zip"));
+
+    const code = await runCli(["batch", inputDir, "--mode", "safe", "--batch-target-bytes", "1000000", "--out", outDir]);
+
+    expect(code).toBe(1);
+    const summary = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8")) as {
+      totals: {
+        optimized: number;
+        failed: number;
+        batchTargetBytes: number;
+        batchTargetStatus: string;
+        batchTargetMissReason?: string;
+        totalOriginalSize: number;
+        totalOptimizedSize: number;
+      };
+    };
+    expect(summary.totals.optimized).toBe(1);
+    expect(summary.totals.failed).toBe(1);
+    expect(summary.totals.batchTargetBytes).toBe(1_000_000);
+    expect(summary.totals.batchTargetStatus).toBe("missed");
+    expect(summary.totals.batchTargetMissReason).toContain("failed");
+    expect(summary.totals.totalOriginalSize).toBeGreaterThan(0);
+    expect(summary.totals.totalOptimizedSize).toBeGreaterThan(0);
+  });
+
+  it("rejects mixing per-file and aggregate batch targets", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    await mkdir(inputDir);
+
+    const code = await runCli(["batch", inputDir, "--mode", "safe", "--target-mb", "1", "--batch-target-mb", "2"]);
+
+    expect(code).toBe(1);
+  });
+
+  it("rejects aggregate batch targets that cannot allocate at least one byte per file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    await mkdir(inputDir);
+    await writeFile(join(inputDir, "one.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await writeFile(join(inputDir, "two.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const code = await runCli(["batch", inputDir, "--mode", "safe", "--batch-target-bytes", "1"]);
+
+    expect(code).toBe(1);
   });
 
   it("rejects invalid batch worker limits", async () => {

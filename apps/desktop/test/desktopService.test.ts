@@ -24,6 +24,7 @@ describe("desktop service", () => {
     expect(settings.defaultMode).toBe("balanced");
     expect(settings.submissionLimit).toEqual({ id: "mb20" });
     expect(settings.preservationPreference).toBe("recommended");
+    expect(settings.batchTargetMode).toBe("aggregate");
     expect(settings.saveReport).toBe(false);
   });
 
@@ -155,6 +156,14 @@ describe("desktop service", () => {
     });
   });
 
+  it("persists valid batch target mode settings", () => {
+    expect(
+      persistentDesktopSettingsPatch({
+        batchTargetMode: "per-file"
+      })
+    ).toEqual({ batchTargetMode: "per-file" });
+  });
+
   it("prevents overwriting existing optimized files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
@@ -270,9 +279,98 @@ describe("desktop service", () => {
       items: Array<{ input: string; status: string }>;
     };
     expect(report.mode).toBe("balanced");
-    expect(report.totals).toEqual({ done: 1, failed: 1, cancelled: 0, savedBytes: 1024 });
+    expect(report.totals).toMatchObject({ done: 1, failed: 1, cancelled: 0, savedBytes: 1024 });
     expect(report.items).toHaveLength(2);
     expect(await readFile(join(dir, "batch-report.json"), "utf8")).toBe("existing");
+  });
+
+  it("writes aggregate target status into desktop batch reports", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-batch-"));
+
+    const result = await writeDesktopBatchReport({
+      reportDirectory: dir,
+      mode: "balanced",
+      settings: defaultDesktopSettings,
+      batchTargetBytes: 2_000,
+      items: [
+        {
+          input: "a.hwpx",
+          status: "done",
+          output: join(dir, "a_optimized.hwpx"),
+          originalSize: 3_000,
+          optimizedSize: 1_400,
+          savedBytes: 1_600,
+          savedPercent: 53.33
+        },
+        {
+          input: "b.hwpx",
+          status: "done",
+          output: join(dir, "b_optimized.hwpx"),
+          originalSize: 2_000,
+          optimizedSize: 900,
+          savedBytes: 1_100,
+          savedPercent: 55
+        }
+      ]
+    });
+
+    const report = JSON.parse(await readFile(result.reportPath, "utf8")) as {
+      totals: {
+        batchTargetBytes: number;
+        batchTargetStatus: string;
+        batchTargetMissReason?: string;
+        totalOriginalSize: number;
+        totalOptimizedSize: number;
+      };
+    };
+    expect(report.totals.batchTargetBytes).toBe(2_000);
+    expect(report.totals.batchTargetStatus).toBe("missed");
+    expect(report.totals.batchTargetMissReason).toContain("aggregate");
+    expect(report.totals.totalOriginalSize).toBe(5_000);
+    expect(report.totals.totalOptimizedSize).toBe(2_300);
+  });
+
+  it("does not mark aggregate desktop batch targets as met when any item is incomplete", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-batch-"));
+
+    const result = await writeDesktopBatchReport({
+      reportDirectory: dir,
+      mode: "balanced",
+      settings: defaultDesktopSettings,
+      batchTargetBytes: 10_000,
+      items: [
+        {
+          input: "a.hwpx",
+          status: "done",
+          output: join(dir, "a_optimized.hwpx"),
+          originalSize: 3_000,
+          optimizedSize: 1_400,
+          savedBytes: 1_600,
+          savedPercent: 53.33
+        },
+        {
+          input: "broken.hwpx",
+          status: "failed",
+          originalSize: 4_000,
+          error: "Invalid HWPX package"
+        }
+      ]
+    });
+
+    const report = JSON.parse(await readFile(result.reportPath, "utf8")) as {
+      totals: {
+        batchTargetBytes: number;
+        batchTargetStatus: string;
+        batchTargetMissReason?: string;
+        totalOriginalSize: number;
+        totalOptimizedSize: number;
+      };
+    };
+    expect(report.totals.batchTargetBytes).toBe(10_000);
+    expect(report.totals.batchTargetStatus).toBe("missed");
+    expect(report.totals.batchTargetMissReason).toContain("failed or were cancelled");
+    expect(report.totals.totalOriginalSize).toBe(7_000);
+    expect(report.totals.totalOptimizedSize).toBe(5_400);
   });
 
   it("rejects invalid batch report payload values at runtime", async () => {
@@ -372,6 +470,22 @@ describe("desktop service", () => {
         ...defaultDesktopSettings,
         submissionLimit: { id: "custom", customBytes: 1 }
       }
+    });
+
+    expect(result.report.targetBytes).toBe(1);
+    expect(result.report.targetStatus).toBe("missed");
+  });
+
+  it("allows desktop optimization calls to override the saved submission limit target", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "input.hwpx");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+
+    const result = await optimizeDesktopFile({
+      filePath: inputPath,
+      mode: "balanced",
+      settings: defaultDesktopSettings,
+      targetBytes: 1
     });
 
     expect(result.report.targetBytes).toBe(1);

@@ -21,6 +21,7 @@ const api = {
     outputDirectory?: string;
     outputMode?: "single" | "batch";
     actions?: string[];
+    targetBytes?: number;
   }) => ipcRenderer.invoke("hwpx:optimize", input),
   cancelAnalyze: () => ipcRenderer.invoke("hwpx:cancel-analyze"),
   cancelOptimize: () => ipcRenderer.invoke("hwpx:cancel-optimize"),
@@ -34,6 +35,7 @@ const api = {
     firstInputPath: string;
     outputDirectory?: string;
     mode: "safe" | "balanced" | "aggressive";
+    batchTargetBytes?: number;
     items: Array<{
       input: string;
       status: "done" | "failed" | "cancelled";

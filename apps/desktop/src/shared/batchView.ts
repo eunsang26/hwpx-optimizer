@@ -15,6 +15,7 @@ export type BatchItemLike = {
   expectedSizeLabel?: string;
   targetLabel?: string;
   targetStatusLabel?: string;
+  allocatedTargetLabel?: string;
   savedBytes?: number;
   savedPercent?: number;
   error?: string;
@@ -96,7 +97,11 @@ export function batchItemMetaText(item: BatchItemLike): string {
   if (item.status === "failed") return item.error ?? "실패";
   if (item.status === "cancelled") return "취소됨";
   if (item.originalSizeLabel && item.expectedSizeLabel && item.targetStatusLabel) {
-    return `${item.originalSizeLabel} → ${item.expectedSizeLabel} · ${item.targetStatusLabel}`;
+    return [
+      `${item.originalSizeLabel} → ${item.expectedSizeLabel}`,
+      item.targetStatusLabel,
+      item.allocatedTargetLabel
+    ].filter(Boolean).join(" · ");
   }
   return item.path;
 }

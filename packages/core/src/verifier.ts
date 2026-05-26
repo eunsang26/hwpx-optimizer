@@ -262,15 +262,15 @@ function minimumAdvancedImageDimensions(
   if (!image.width || !image.height) return { width: 1, height: 1 };
   const expected = image.largestDisplay
     ? fitInsideDimensions(image.width, image.height, image.largestDisplay.widthPx96, image.largestDisplay.heightPx96)
-    : fitInsideDimensions(image.width, image.height, advancedMaxEdge(mode), advancedMaxEdge(mode));
+    : fitInsideDimensions(image.width, image.height, advancedMinimumEdge(mode), advancedMinimumEdge(mode));
   return {
     width: Math.max(1, Math.floor(expected.width * 0.9)),
     height: Math.max(1, Math.floor(expected.height * 0.9))
   };
 }
 
-function advancedMaxEdge(mode: Exclude<VerifyMode, "safe">): number {
-  return mode === "balanced" ? 1920 : 1280;
+function advancedMinimumEdge(mode: Exclude<VerifyMode, "safe">): number {
+  return mode === "balanced" ? 1280 : 800;
 }
 
 function fitInsideDimensions(

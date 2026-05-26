@@ -6,6 +6,7 @@ import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
 
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
+export type BatchTargetMode = "aggregate" | "per-file";
 
 export type DesktopSettings = {
   settingsVersion?: number;
@@ -16,6 +17,7 @@ export type DesktopSettings = {
   showAggressiveWarning: boolean;
   submissionLimit: SubmissionLimit;
   preservationPreference: PreservationPreference;
+  batchTargetMode: BatchTargetMode;
 };
 
 export type DesktopSettingsPatch = Partial<DesktopSettings> & Record<string, unknown>;
@@ -28,7 +30,8 @@ export const defaultDesktopSettings: DesktopSettings = {
   preventOverwrite: true,
   showAggressiveWarning: true,
   submissionLimit: { id: "mb20" },
-  preservationPreference: "recommended"
+  preservationPreference: "recommended",
+  batchTargetMode: "aggregate"
 };
 
 const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
@@ -49,6 +52,7 @@ export type DesktopOptimizeInput = {
   outputDirectory?: string;
   outputMode?: "single" | "batch";
   actions?: string[];
+  targetBytes?: number;
   maxInputBytes?: number;
 };
 
@@ -74,6 +78,7 @@ export type DesktopBatchReportInput = {
   reportDirectory: string;
   mode: OptimizationMode;
   settings: Pick<DesktopSettings, "preventOverwrite">;
+  batchTargetBytes?: number;
   items: DesktopBatchReportItem[];
 };
 
@@ -127,7 +132,7 @@ export async function optimizeDesktopFile(
     source,
     input.mode,
     input.actions,
-    resolveSubmissionLimitBytes(input.settings.submissionLimit),
+    input.targetBytes ?? resolveSubmissionLimitBytes(input.settings.submissionLimit),
     onProgress
   );
   source = undefined;
@@ -160,6 +165,12 @@ export async function writeDesktopBatchReport(input: DesktopBatchReportInput): P
   await mkdir(input.reportDirectory, { recursive: true });
   const requestedReportPath = join(input.reportDirectory, "batch-report.json");
   const reportPath = input.settings.preventOverwrite ? await nextAvailableReportPath(requestedReportPath) : requestedReportPath;
+  const totalOriginalSize = input.items.reduce((sum, item) => sum + (item.originalSize ?? 0), 0);
+  const totalOptimizedSize = input.items.reduce(
+    (sum, item) => sum + (item.status === "done" ? item.optimizedSize ?? 0 : item.originalSize ?? 0),
+    0
+  );
+  const incompleteCount = input.items.filter((item) => item.status === "failed" || item.status === "cancelled").length;
   const report = {
     mode: input.mode,
     generatedAt: new Date().toISOString(),
@@ -167,7 +178,10 @@ export async function writeDesktopBatchReport(input: DesktopBatchReportInput): P
       done: input.items.filter((item) => item.status === "done").length,
       failed: input.items.filter((item) => item.status === "failed").length,
       cancelled: input.items.filter((item) => item.status === "cancelled").length,
-      savedBytes: input.items.reduce((sum, item) => sum + (item.savedBytes ?? 0), 0)
+      savedBytes: input.items.reduce((sum, item) => sum + (item.savedBytes ?? 0), 0),
+      totalOriginalSize,
+      totalOptimizedSize,
+      ...createBatchTargetFields(totalOriginalSize, totalOptimizedSize, input.batchTargetBytes, incompleteCount)
     },
     items: input.items
   };
@@ -182,6 +196,12 @@ function assertValidBatchReportInput(input: DesktopBatchReportInput): void {
   if (!Array.isArray(input.items) || input.items.length > MAX_BATCH_REPORT_ITEMS) {
     throw new Error(`Invalid batch report items: expected at most ${MAX_BATCH_REPORT_ITEMS} items.`);
   }
+  if (
+    input.batchTargetBytes !== undefined &&
+    (!Number.isFinite(input.batchTargetBytes) || input.batchTargetBytes <= 0)
+  ) {
+    throw new Error("Invalid batch report target bytes.");
+  }
   for (const item of input.items) {
     if (item.status !== "done" && item.status !== "failed" && item.status !== "cancelled") {
       throw new Error(`Invalid batch report item status: ${String(item.status)}`);
@@ -193,6 +213,37 @@ function assertValidBatchReportInput(input: DesktopBatchReportInput): void {
       }
     }
   }
+}
+
+function createBatchTargetFields(
+  totalOriginalSize: number,
+  totalOptimizedSize: number,
+  batchTargetBytes: number | undefined,
+  incompleteCount = 0
+): {
+  batchTargetBytes?: number;
+  batchTargetStatus?: "met" | "missed" | "already-under-target";
+  batchTargetMissReason?: string;
+} {
+  if (!batchTargetBytes) return {};
+  if (incompleteCount > 0) {
+    return {
+      batchTargetBytes,
+      batchTargetStatus: "missed",
+      batchTargetMissReason: `Batch target status is incomplete because ${incompleteCount} file(s) failed or were cancelled.`
+    };
+  }
+  if (totalOriginalSize <= batchTargetBytes) {
+    return { batchTargetBytes, batchTargetStatus: "already-under-target" };
+  }
+  if (totalOptimizedSize <= batchTargetBytes) {
+    return { batchTargetBytes, batchTargetStatus: "met" };
+  }
+  return {
+    batchTargetBytes,
+    batchTargetStatus: "missed",
+    batchTargetMissReason: "No verified aggregate batch optimization result reached the target."
+  };
 }
 
 export async function verifyDesktopFile(
@@ -269,6 +320,7 @@ export function persistentDesktopSettingsPatch(patch: DesktopSettingsPatch): Par
   if (typeof patch.showAggressiveWarning === "boolean") sanitized.showAggressiveWarning = patch.showAggressiveWarning;
   if (isSubmissionLimit(patch.submissionLimit)) sanitized.submissionLimit = patch.submissionLimit;
   if (isPreservationPreference(patch.preservationPreference)) sanitized.preservationPreference = patch.preservationPreference;
+  if (isBatchTargetMode(patch.batchTargetMode)) sanitized.batchTargetMode = patch.batchTargetMode;
   return sanitized;
 }
 
@@ -438,4 +490,8 @@ function isSubmissionLimit(value: unknown): value is SubmissionLimit {
 
 function isPreservationPreference(value: unknown): value is PreservationPreference {
   return value === "preserve" || value === "recommended" || value === "size";
+}
+
+function isBatchTargetMode(value: unknown): value is BatchTargetMode {
+  return value === "aggregate" || value === "per-file";
 }
