@@ -1,4 +1,4 @@
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 import sharp from "sharp";
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
@@ -55,8 +55,14 @@ function verifyParsedXml(pkg: HwpxPackage): void {
   const parser = new XMLParser({ ignoreAttributes: false, preserveOrder: true });
   for (const entry of pkg.entries) {
     if (entry.kind !== "xml") continue;
+    const text = entry.data.toString("utf8");
+    const validation = XMLValidator.validate(text);
+    if (validation !== true) {
+      const message = validation.err?.msg ? `: ${validation.err.msg}` : "";
+      throw new Error(`Verification failed: XML is not well-formed at ${entry.path}${message}`);
+    }
     try {
-      parser.parse(entry.data.toString("utf8"));
+      parser.parse(text);
     } catch (error) {
       throw new Error(`Verification failed: XML does not parse at ${entry.path}`, { cause: error });
     }
@@ -219,13 +225,65 @@ function verifyAdvancedImage(input: {
     input.originalImage.width &&
     input.originalImage.height &&
     outputImage.width &&
-    outputImage.height &&
-    (outputImage.width > input.originalImage.width || outputImage.height > input.originalImage.height)
+    outputImage.height
   ) {
-    throw new Error(`Verification failed: ${input.mode} mode image dimensions enlarged ${input.originalImage.path}`);
+    if (outputImage.width > input.originalImage.width || outputImage.height > input.originalImage.height) {
+      throw new Error(`Verification failed: ${input.mode} mode image dimensions enlarged ${input.originalImage.path}`);
+    }
+    verifyAdvancedImageGeometry(input.originalImage, outputImage, input.mode);
   }
 
   return outputImage;
+}
+
+function verifyAdvancedImageGeometry(
+  originalImage: ImageInventoryItem,
+  outputImage: ImageInventoryItem,
+  mode: Exclude<VerifyMode, "safe">
+): void {
+  if (!originalImage.width || !originalImage.height || !outputImage.width || !outputImage.height) return;
+  const originalRatio = originalImage.width / originalImage.height;
+  const outputRatio = outputImage.width / outputImage.height;
+  const ratioDelta = Math.abs(outputRatio - originalRatio) / originalRatio;
+  if (ratioDelta > 0.05) {
+    throw new Error(`Verification failed: ${mode} mode image aspect ratio changed ${originalImage.path}`);
+  }
+
+  const minimum = minimumAdvancedImageDimensions(originalImage, mode);
+  if (outputImage.width < minimum.width || outputImage.height < minimum.height) {
+    throw new Error(`Verification failed: ${mode} mode image dimensions collapsed ${originalImage.path}`);
+  }
+}
+
+function minimumAdvancedImageDimensions(
+  image: ImageInventoryItem,
+  mode: Exclude<VerifyMode, "safe">
+): { width: number; height: number } {
+  if (!image.width || !image.height) return { width: 1, height: 1 };
+  const expected = image.largestDisplay
+    ? fitInsideDimensions(image.width, image.height, image.largestDisplay.widthPx96, image.largestDisplay.heightPx96)
+    : fitInsideDimensions(image.width, image.height, advancedMaxEdge(mode), advancedMaxEdge(mode));
+  return {
+    width: Math.max(1, Math.floor(expected.width * 0.9)),
+    height: Math.max(1, Math.floor(expected.height * 0.9))
+  };
+}
+
+function advancedMaxEdge(mode: Exclude<VerifyMode, "safe">): number {
+  return mode === "balanced" ? 1920 : 1280;
+}
+
+function fitInsideDimensions(
+  sourceWidth: number,
+  sourceHeight: number,
+  boxWidth: number,
+  boxHeight: number
+): { width: number; height: number } {
+  const scale = Math.min(1, boxWidth / sourceWidth, boxHeight / sourceHeight);
+  return {
+    width: sourceWidth * scale,
+    height: sourceHeight * scale
+  };
 }
 
 function verifySafeImages(input: {

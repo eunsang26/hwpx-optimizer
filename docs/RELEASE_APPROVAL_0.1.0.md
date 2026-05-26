@@ -5,15 +5,15 @@
 - Primary artifact: `release/HWPX Optimizer-0.1.0-x64.zip`
 - Secondary artifact: `release/HWPX Optimizer-0.1.0-x64.exe`
 - Version: `0.1.0`
-- Release candidate generated: `2026-05-20 21:43 KST`
+- Release candidate generated: `2026-05-26 15:16 KST`
 - Signing status: self-signed Authenticode. The Windows artifacts are signed with a local self-signed code-signing certificate, not a public CA certificate, so Windows publisher-trust warnings can still appear.
 
 ## Checksums
 
 | Artifact | Bytes | SHA256 |
 | --- | ---: | --- |
-| `HWPX Optimizer-0.1.0-x64.zip` | 147,776,624 | `7b309eac7d5858e2fc21a082360e39a69f4d9587cb5fa80a03c284429fa6be8f` |
-| `HWPX Optimizer-0.1.0-x64.exe` | 96,571,952 | `27bc386cdbb7576000bf604b8ea8a33afea889436c89be561b3ad816c1faa554` |
+| `HWPX Optimizer-0.1.0-x64.zip` | 147,778,073 | `63a36b9263f80cff01c3061931d5782d2c530efb252cd033a4cc4f78e1a157ab` |
+| `HWPX Optimizer-0.1.0-x64.exe` | 96,567,232 | `097930f24676ad1addf59058d6e454e7d50428bffae51cba4ca4d3071edc2486` |
 
 Checksum source files:
 
@@ -29,12 +29,12 @@ Command:
 PATH=/home/eunsang26/.nvm/versions/node/v20.20.2/bin:$PATH npm run release:check:win-portable
 ```
 
-Result: passed on `2026-05-20`.
+Result: passed on `2026-05-26`.
 
 Covered evidence:
 
 - Release hygiene: passed.
-- Vitest: 35 test files, 277 tests passed.
+- Vitest: 35 test files, 281 tests passed.
 - TypeScript build/typecheck: passed.
 - Regression corpus: 4/4 passed, including local `sample2.hwpx` and `sample3.hwpx`.
 - `npm audit`: 0 vulnerabilities.
@@ -59,7 +59,7 @@ Additional ZIP smoke:
 - Real local sample: `sample2.hwpx`.
 - Modes: `safe`, `balanced`, and `aggressive`.
 - Result: all three modes passed.
-- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-release-zip-selfsigned-1779280790`.
+- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-release-zip-final-1779776335`.
 - Note: the extracted inner EXE is not listed in `release/SHA256SUMS.txt`; the checksum warning for `HWPX Optimizer.exe` is expected. The ZIP artifact itself is covered by `release/SHA256SUMS.txt`.
 
 Additional portable EXE smoke:
@@ -70,13 +70,13 @@ Additional portable EXE smoke:
 - Real local sample: `sample2.hwpx`.
 - Modes: `safe`, `balanced`, and `aggressive`.
 - Result: all three modes passed.
-- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-optimizer-smoke-637309`.
+- Smoke temp: `C:\Users\<user>\AppData\Local\Temp\hwpx-optimizer-smoke-sample-final-1779776194`.
 
 ## Code Signing Evidence
 
 PE signature inspection after the release gate:
 
-- `release/HWPX Optimizer-0.1.0-x64.exe`: Authenticode certificate table present; security directory file offset `96569736`, size `2216`.
+- `release/HWPX Optimizer-0.1.0-x64.exe`: Authenticode certificate table present; security directory file offset `96565016`, size `2216`.
 - `release/win-unpacked/HWPX Optimizer.exe`: Authenticode certificate table present; security directory file offset `226578432`, size `2216`.
 
 This confirms self-signed code signing only. It does not claim public CA trust or SmartScreen reputation.
@@ -138,8 +138,8 @@ Release notice template:
 - Primary download: `HWPX Optimizer-0.1.0-x64.zip`
 - Secondary download: `HWPX Optimizer-0.1.0-x64.exe`
 - Signing status: self-signed Authenticode; public CA trust is not claimed.
-- Primary SHA256: `7b309eac7d5858e2fc21a082360e39a69f4d9587cb5fa80a03c284429fa6be8f`
-- Secondary SHA256: `27bc386cdbb7576000bf604b8ea8a33afea889436c89be561b3ad816c1faa554`
+- Primary SHA256: `63a36b9263f80cff01c3061931d5782d2c530efb252cd033a4cc4f78e1a157ab`
+- Secondary SHA256: `097930f24676ad1addf59058d6e454e7d50428bffae51cba4ca4d3071edc2486`
 - Release notice: `RELEASE_NOTICE_0.1.0.txt`
 - Redistribution: approved internal location only; do not share extracted working folders.
 - Use terms: non-commercial personal or internal organizational use only; no unapproved modification, redistribution, commercial use, or removal of producer attribution.

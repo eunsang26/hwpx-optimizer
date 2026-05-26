@@ -24,6 +24,16 @@ describe("verifyHwpxOutput", () => {
     await expect(verifyHwpxOutput(output)).rejects.toThrow(/missing required files/i);
   });
 
+  it("rejects malformed XML entries", async () => {
+    const output = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": "<root><a></root>"
+      }
+    });
+
+    await expect(verifyHwpxOutput(output)).rejects.toThrow(/XML is not well-formed/);
+  });
+
   it("parses the serialized output even when original analysis is supplied", async () => {
     const original = await createHwpxFixture({
       entries: {
@@ -91,6 +101,17 @@ describe("verifyHwpxOutput", () => {
 
     await expect(verifyHwpxOutput(output, { original, mode: "aggressive" })).rejects.toThrow(
       /aggressive mode image dimensions enlarged/
+    );
+  });
+
+  it("rejects advanced-mode outputs that collapse referenced image dimensions", async () => {
+    const originalImage = await createJpeg(120, 80);
+    const collapsedImage = await createJpeg(120, 1);
+    const original = await createReferencedImageFixture("BinData/image1.jpg", originalImage);
+    const output = await createReferencedImageFixture("BinData/image1.jpg", collapsedImage);
+
+    await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(
+      /balanced mode image aspect ratio changed/
     );
   });
 

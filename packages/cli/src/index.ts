@@ -28,8 +28,8 @@ export async function runCli(argv: string[]): Promise<number> {
     return 1;
   }
 
-  const options = parseOptions(rest);
   try {
+    const options = parseOptions(command, rest);
     if (command === "analyze") {
       const report = await analyzeHwpxBuffer(await readSupportedInput(inputPath, options), {
         targetBytes: parseTargetBytes(options),
@@ -106,21 +106,38 @@ export async function runCli(argv: string[]): Promise<number> {
   }
 }
 
-function parseOptions(args: string[]): Record<string, string> {
+function parseOptions(command: string, args: string[]): Record<string, string> {
   const options: Record<string, string> = {};
+  const valueFlags = valueOptionFlags(command);
+  const booleanFlags = new Set(["allow-larger", "overwrite"]);
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (!arg.startsWith("--")) continue;
     const key = arg.slice(2);
-    const value = args[index + 1];
-    if (value && !value.startsWith("--")) {
+    if (valueFlags.has(key)) {
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error(`Missing value for --${key}.`);
+      }
       options[key] = value;
       index += 1;
-    } else {
+    } else if (booleanFlags.has(key)) {
       options[key] = "true";
+    } else {
+      throw new Error(`Unknown option --${key}.`);
     }
   }
   return options;
+}
+
+function valueOptionFlags(command: string): Set<string> {
+  const common = ["target-bytes", "target-mb", "max-input-bytes"];
+  if (command === "analyze") return new Set([...common, "report", "analysis-mode"]);
+  if (command === "report") return new Set([...common, "report", "out", "analysis-mode"]);
+  if (command === "verify") return new Set(["max-input-bytes"]);
+  if (command === "optimize") return new Set([...common, "mode", "actions", "out", "report"]);
+  if (command === "batch") return new Set([...common, "mode", "actions", "out", "jobs"]);
+  return new Set();
 }
 
 function defaultOutputPath(inputPath: string): string {
@@ -392,6 +409,7 @@ async function runBatch(
     .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name))
     .map((entry) => entry.name)
     .sort();
+  const inputPaths = files.map((file) => join(inputDir, file));
   const jobs = parseBatchJobs(options.jobs);
   const results = new Array<BatchFileResult>(files.length);
   const startedAt = Date.now();
@@ -409,6 +427,8 @@ async function runBatch(
       const outputPath = overwrite ? requestedOutputPath : await nextAvailablePath(requestedOutputPath);
       const requestedReportPath = `${outputPath}.report.json`;
       const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
+      assertDoesNotTargetAnyInput(outputPath, inputPaths, "output");
+      assertDoesNotTargetAnyInput(reportPath, inputPaths, "report");
       stage = "write-output";
       await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2));
       const savedBytes = result.report.savedBytes ?? 0;
@@ -456,6 +476,12 @@ async function runBatch(
     failed: failedCount,
     reportPath
   };
+}
+
+function assertDoesNotTargetAnyInput(targetPath: string, inputPaths: string[], kind: "output" | "report"): void {
+  if (inputPaths.some((inputPath) => pathsReferToSameFile(targetPath, inputPath))) {
+    throw new Error(`Refusing to overwrite a batch input file with ${kind}.`);
+  }
 }
 
 function parseBatchJobs(value: string | undefined): number {

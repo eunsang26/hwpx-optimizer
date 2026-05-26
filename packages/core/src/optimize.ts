@@ -187,7 +187,8 @@ async function optimizeHwpxBufferAdvanced(
     }
   }
   if (best) return best;
-  throw new Error("No verified optimization candidate could be produced.");
+  const suffix = verificationWarnings.length > 0 ? ` ${verificationWarnings.join(" ")}` : "";
+  throw new Error(`No verified optimization candidate could be produced.${suffix}`);
 }
 
 function normalizeTargetBytes(value: number | undefined): number | undefined {

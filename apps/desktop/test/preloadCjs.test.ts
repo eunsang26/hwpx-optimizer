@@ -40,8 +40,14 @@ describe("CommonJS preload bridge", () => {
       optimizedPath: "/tmp/optimized.hwpx",
       maxInputBytes: 10
     });
+    await (exposedApi?.saveBatchReport as (input: unknown) => Promise<unknown>)({
+      firstInputPath: "/tmp/original.hwpx",
+      mode: "safe",
+      items: []
+    });
 
     expect(invokedChannels).toContain("hwpx:cancel-analyze");
+    expect(invokedChannels).toContain("hwpx:save-batch-report");
     expect(invokedChannels).toContain("hwpx:image-preview");
   });
 

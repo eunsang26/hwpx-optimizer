@@ -293,6 +293,24 @@ describe("runCli", () => {
     expect(logs.join("\n")).toContain("Applied:");
   });
 
+  it("rejects output flags without path values", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputPath = join(dir, "input.hwpx");
+    await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    const errors: string[] = [];
+    const errorSpy = vi.spyOn(console, "error").mockImplementation((message?: unknown) => {
+      errors.push(String(message));
+    });
+
+    const optimizeCode = await runCli(["optimize", inputPath, "--mode", "safe", "--out", "--overwrite"]);
+    const reportCode = await runCli(["report", inputPath, "--out"]);
+    errorSpy.mockRestore();
+
+    expect(optimizeCode).toBe(1);
+    expect(reportCode).toBe(1);
+    expect(errors.join("\n")).toContain("Missing value for --out");
+  });
+
   it("accepts --target-bytes and records target status in optimization reports", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputPath = join(dir, "input.hwpx");
@@ -726,6 +744,20 @@ describe("runCli", () => {
     expect(await readFile(join(outDir, "batch-report.json"), "utf8")).toBe("existing batch");
     expect((await readFile(join(outDir, "good.optimized-2.hwpx"))).byteLength).toBeGreaterThan(0);
     expect((await readFile(join(outDir, "batch-report-2.json"))).byteLength).toBeGreaterThan(0);
+  });
+
+  it("never overwrites any batch input file when output directory overlaps", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const inputDir = join(dir, "docs");
+    await mkdir(inputDir);
+    await writeFile(join(inputDir, "good.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    const existingInput = await createHwpxFixture({ entries: { "Contents/section0.xml": "<existing />" } });
+    await writeFile(join(inputDir, "good.optimized.hwpx"), existingInput);
+
+    const code = await runCli(["batch", inputDir, "--mode", "safe", "--out", inputDir, "--overwrite"]);
+
+    expect(code).toBe(1);
+    expect(await readFile(join(inputDir, "good.optimized.hwpx"))).toEqual(existingInput);
   });
 });
 

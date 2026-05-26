@@ -23,6 +23,7 @@ const api = {
     return () => ipcRenderer.off("hwpx:optimize-progress", listener);
   },
   verify: (filePath) => ipcRenderer.invoke("hwpx:verify", filePath),
+  saveBatchReport: (input) => ipcRenderer.invoke("hwpx:save-batch-report", input),
   previewImageDiffs: (input) => ipcRenderer.invoke("hwpx:image-preview", input),
   showItem: (filePath) => ipcRenderer.invoke("shell:show-item", filePath),
   openPath: (filePath) => ipcRenderer.invoke("shell:open-path", filePath)
