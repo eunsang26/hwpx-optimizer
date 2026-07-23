@@ -15,9 +15,10 @@
 - Safety rules (never violate): never overwrite/mutate the original input; never delete a referenced resource; if verification fails, produce no output.
 - Output parity is SEMANTIC, not byte: compare unzipped entry data + reports with the `performance` field stripped; never compare raw ZIP bytes (JSZip stamps current time).
 - Every task is TDD: write the failing test, watch it fail, minimal implementation, watch it pass, commit.
-- Run tests with Node 20, e.g.:
-  `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20; node node_modules/vitest/vitest.mjs run <path>`
-  (from repo root). Substitute the repo's `npm test -- <path>` if Node 20 is already default.
+- Run tests with Node 20 from the worktree root (worktree has no local
+  node_modules; deps resolve from the main repo). Exact command:
+  `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20; node /home/eunsang26/projects/hwpx-optimizer/node_modules/vitest/vitest.mjs run <path>`
+  Typecheck: `node /home/eunsang26/projects/hwpx-optimizer/node_modules/typescript/bin/tsc -b packages/core packages/cli --pretty false`
 - Pre-existing failing test `packages/cli/test/cli.test.ts > "verifies an HWPX file"` is out of scope; do not attempt to fix it.
 
 ## File Structure
