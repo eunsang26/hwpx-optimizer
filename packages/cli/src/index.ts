@@ -327,53 +327,9 @@ export async function runBatch(
   const jobDescriptors: OptimizeJob[] = [];
   const jobMeta: BatchJobMeta[] = [];
 
-  for (let index = 0; index < files.length; index += 1) {
-    const file = files[index];
-    const sourcePath = inputPaths[index];
-    const progressPrefix = `[${index + 1}/${files.length}] ${file}`;
-    const claimedThisIteration: string[] = [];
-    try {
-      const requestedOutputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
-      let outputPath: string;
-      if (overwrite) {
-        outputPath = requestedOutputPath;
-      } else {
-        outputPath = await claims.claim(await nextAvailablePath(requestedOutputPath));
-        claimedThisIteration.push(outputPath);
-      }
-      const requestedReportPath = `${outputPath}.report.json`;
-      let reportPath: string;
-      if (overwrite) {
-        reportPath = requestedReportPath;
-      } else {
-        reportPath = await claims.claim(await nextAvailablePath(requestedReportPath));
-        claimedThisIteration.push(reportPath);
-      }
-      assertDoesNotTargetAnyInput(outputPath, inputPaths, "output");
-      assertDoesNotTargetAnyInput(reportPath, inputPaths, "report");
-
-      for (const claimedPath of claimedThisIteration) uncommittedClaimedPaths.add(claimedPath);
-      const tempOutputPath = `${outputPath}.tmp`;
-      const tempReportPath = `${reportPath}.tmp`;
-      jobDescriptors.push({
-        sourcePath,
-        tempOutputPath,
-        tempReportPath,
-        mode,
-        options,
-        targetBytes: targetByFile.get(file)
-      });
-      jobMeta.push({ index, file, outputPath, reportPath, tempOutputPath, tempReportPath });
-    } catch (error) {
-      await Promise.all(claimedThisIteration.map((path) => claims.release(path)));
-      const message = error instanceof Error ? error.message : String(error);
-      results[index] = { input: file, status: "failed", stage: "resolve-output-path", error: message };
-      console.error(`${progressPrefix} failed at resolve-output-path: ${message}`);
-    }
-  }
-
-  const jobsEffective = Math.max(1, Math.min(jobsRequested, jobMeta.length));
-
+  // Registered before the claim loop (not just before the worker pool run) so
+  // an interrupt during claiming is handled too; cleanupOnSignal releases
+  // whatever has been claimed so far via uncommittedClaimedPaths/jobMeta.
   let pool: WorkerPool<OptimizeJob, OptimizeJobResult> | undefined;
   const cleanupOnSignal = async (code: number): Promise<void> => {
     try {
@@ -400,6 +356,59 @@ export async function runBatch(
   process.once("SIGTERM", sigtermHandler);
 
   try {
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      const sourcePath = inputPaths[index];
+      const progressPrefix = `[${index + 1}/${files.length}] ${file}`;
+      const claimedThisIteration: string[] = [];
+      try {
+        const requestedOutputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
+        // Assert before claiming (before the wx open) so a doomed job never
+        // creates a stray placeholder file for a path we're about to reject.
+        assertDoesNotTargetAnyInput(requestedOutputPath, inputPaths, "output");
+        let outputPath: string;
+        if (overwrite) {
+          outputPath = requestedOutputPath;
+        } else {
+          outputPath = await claims.claim(await nextAvailablePath(requestedOutputPath));
+          claimedThisIteration.push(outputPath);
+        }
+        const requestedReportPath = `${outputPath}.report.json`;
+        assertDoesNotTargetAnyInput(requestedReportPath, inputPaths, "report");
+        let reportPath: string;
+        if (overwrite) {
+          reportPath = requestedReportPath;
+        } else {
+          reportPath = await claims.claim(await nextAvailablePath(requestedReportPath));
+          claimedThisIteration.push(reportPath);
+        }
+
+        for (const claimedPath of claimedThisIteration) uncommittedClaimedPaths.add(claimedPath);
+        const tempOutputPath = `${outputPath}.tmp`;
+        const tempReportPath = `${reportPath}.tmp`;
+        jobDescriptors.push({
+          sourcePath,
+          tempOutputPath,
+          tempReportPath,
+          mode,
+          options,
+          targetBytes: targetByFile.get(file)
+        });
+        // `claimed` records whether outputPath/reportPath were reserved via
+        // PathClaimRegistry (non-overwrite mode). In --overwrite mode these
+        // paths target the user's existing files directly and were never
+        // claimed, so cleanupFailedJob must never unlink them.
+        jobMeta.push({ index, file, outputPath, reportPath, tempOutputPath, tempReportPath, claimed: !overwrite });
+      } catch (error) {
+        await Promise.all(claimedThisIteration.map((path) => claims.release(path)));
+        const message = error instanceof Error ? error.message : String(error);
+        results[index] = { input: file, status: "failed", stage: "resolve-output-path", error: message };
+        console.error(`${progressPrefix} failed at resolve-output-path: ${message}`);
+      }
+    }
+
+    const jobsEffective = Math.max(1, Math.min(jobsRequested, jobMeta.length));
+
     if (jobMeta.length > 0) {
       pool = new WorkerPool<OptimizeJob, OptimizeJobResult>({
         size: jobsEffective,
@@ -535,9 +544,26 @@ async function sweepStaleTempFiles(outputDir: string): Promise<void> {
     return;
   }
   await Promise.all(
-    entries
-      .filter((name) => name.endsWith(".tmp"))
-      .map((name) => rm(join(outputDir, name), { force: true }).catch(() => {}))
+    entries.map(async (name) => {
+      const fullPath = join(outputDir, name);
+      if (name.endsWith(".tmp")) {
+        await rm(fullPath, { force: true }).catch(() => {});
+        return;
+      }
+      // A claim creates a real final-named 0-byte file via `wx` (see pathClaims.ts).
+      // An interrupt during the claim loop can leave one of these behind; the next
+      // run's sweep must reap it too, or nextAvailablePath permanently shifts past
+      // it. A real optimized HWPX/zip or report JSON produced by this tool is never
+      // 0 bytes, so removing any 0-byte file here is safe.
+      try {
+        const stats = await stat(fullPath);
+        if (stats.isFile() && stats.size === 0) {
+          await rm(fullPath, { force: true }).catch(() => {});
+        }
+      } catch {
+        // ignore races / non-files
+      }
+    })
   );
 }
 
@@ -548,6 +574,10 @@ type BatchJobMeta = {
   reportPath: string;
   tempOutputPath: string;
   tempReportPath: string;
+  // Whether outputPath/reportPath were reserved via PathClaimRegistry (non-overwrite
+  // mode). In --overwrite mode these paths target the user's existing files directly
+  // and were never claimed, so cleanupFailedJob must never unlink them on failure.
+  claimed: boolean;
 };
 
 async function commitBatchJob(meta: BatchJobMeta): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -571,8 +601,15 @@ async function cleanupFailedJob(
   claims: PathClaimRegistry,
   uncommittedClaimedPaths: Set<string>
 ): Promise<void> {
-  await claims.release(meta.outputPath);
-  await claims.release(meta.reportPath);
+  // DATA LOSS GUARD: only unlink the final output/report path if this job actually
+  // claimed it (non-overwrite mode). In --overwrite mode outputPath/reportPath are
+  // the user's pre-existing files targeted directly (never claimed); unlinking them
+  // here on a failed job would destroy a good prior output. Temp files are always
+  // ours and are always safe to remove unconditionally.
+  if (meta.claimed) {
+    await claims.release(meta.outputPath);
+    await claims.release(meta.reportPath);
+  }
   uncommittedClaimedPaths.delete(meta.outputPath);
   uncommittedClaimedPaths.delete(meta.reportPath);
   await rm(meta.tempOutputPath, { force: true }).catch(() => {});
