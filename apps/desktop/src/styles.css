@@ -6,6 +6,17 @@
    - Preserves all selectors used by renderer.ts
    ================================================================= */
 
+/* Pretendard is bundled locally (fonts/PretendardVariable.woff2, SIL OFL 1.1)
+   so the intended Korean typography renders offline on target Windows machines
+   without depending on a system install. Served same-origin under CSP font-src 'self'. */
+@font-face {
+  font-family: "Pretendard Variable";
+  font-style: normal;
+  font-weight: 45 920;
+  font-display: swap;
+  src: url("./fonts/PretendardVariable.woff2") format("woff2-variations");
+}
+
 :root {
   color-scheme: light;
 
@@ -979,6 +990,22 @@ body[data-view="empty"] .drop-copy h3 {
   line-height: 1.15;
 }
 
+/* Hierarchy: the reduction rate is the headline number — give it more weight than
+   the raw byte metrics so the eye lands on "how much smaller" first. */
+.summary-card--primary {
+  border-color: var(--blue-tint);
+  background: linear-gradient(180deg, var(--blue-soft) 0%, var(--surface) 90%);
+}
+.summary-card--primary > div > strong {
+  font-size: 19px;
+  color: var(--blue-2);
+}
+body[data-view="empty"] .summary-card--primary {
+  border-color: var(--hairline);
+  background: var(--surface);
+}
+body[data-view="empty"] .summary-card--primary > div > strong { color: var(--text-2); }
+
 /* Empty-state metrics: grey placeholders */
 body[data-view="empty"] .summary-card .metric-icon {
   background: var(--surface-3) !important;
@@ -1053,7 +1080,7 @@ body[data-view="empty"] .summary-card > div > strong {
   position: relative;
   overflow: visible;
 }
-.target-track > span {
+.target-track > #target-track-fill {
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 0%;
@@ -1061,6 +1088,55 @@ body[data-view="empty"] .summary-card > div > strong {
   border-radius: 999px;
   box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.18);
   transition: width 280ms ease;
+}
+/* Signature: the submission-limit gauge. The green fill is the reduction the plan
+   achieves; the limit marker is the reduction required to pass the limit. Fill
+   reaching the marker == pass. When the plan can't reach it, the fill turns amber. */
+.target-track > #target-track-fill[data-status="over"] {
+  background: linear-gradient(90deg, #ea7a16 0%, #f59e0b 100%);
+  box-shadow: 0 0 0 1px rgba(234, 122, 22, 0.22);
+}
+.target-limit {
+  position: absolute;
+  top: -3px; bottom: -3px;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--text-2);
+  border-radius: 2px;
+}
+.target-limit::after {
+  content: "제출 한도";
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.verdict-pill {
+  align-self: start;
+  justify-self: end;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+}
+.verdict-pill[data-status="pass"] {
+  background: var(--green-soft);
+  color: var(--green-2);
+  border-color: var(--green-border);
+}
+.verdict-pill[data-status="over"] {
+  background: var(--orange-soft);
+  color: var(--amber);
+  border-color: #f6d08a;
 }
 
 /* Empty state target row */
@@ -2188,4 +2264,30 @@ body[data-view="single"] .safe-card { /* preserved hook */ }
   --ic-image:        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='2'/><circle cx='8.5' cy='8.5' r='1.5'/><path d='M21 15l-5-5L5 21'/></svg>");
   --ic-user:         url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='8' r='4'/><path d='M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6'/></svg>");
   --ic-caret:        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a93a4' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+}
+
+/* =================================================================
+   Accessibility: visible keyboard focus on every interactive control
+   and reduced-motion support (frontend-design quality floor).
+   ================================================================= */
+a:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--radius-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

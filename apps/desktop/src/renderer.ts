@@ -236,6 +236,8 @@ const summaryStatus = requireElement("summary-status");
 const summaryResultLine = requireElement("summary-result-line");
 const summaryTargetLine = requireElement("summary-target-line");
 const targetTrackFill = requireElement("target-track-fill");
+const targetTrackLimit = requireElement("target-track-limit");
+const summaryVerdict = requireElement("summary-verdict");
 const runDock = requireElement("run-dock");
 const runDockStatus = requireElement("run-dock-status");
 const runDockSummary = requireElement("run-dock-summary");
@@ -888,10 +890,10 @@ function renderEmptySummary(): void {
   summaryExpected.textContent = "-";
   summarySaving.textContent = "-";
   summaryPercent.textContent = "-";
-  summaryStatus.innerHTML = '<span class="success-dot" aria-hidden="true"></span>파일을 선택하면 분석 결과가 표시됩니다.';
-  summaryResultLine.textContent = "예상 결과: -";
+  summaryStatus.innerHTML = '<span class="success-dot" aria-hidden="true"></span>여기에서 제출 기준 통과 여부를 확인합니다.';
+  summaryResultLine.textContent = "파일을 선택하면 예상 결과 용량을 계산합니다.";
   summaryTargetLine.textContent = `제출 기준: ${targetLabelForDisplay()}`;
-  targetTrackFill.style.width = "0%";
+  clearTargetGauge();
   optimizeButton.textContent = "파일을 선택해 시작하세요";
   optimizeButton.disabled = true;
   renderSelectionClearButton();
@@ -907,7 +909,7 @@ function renderPendingAnalysisSummary(): void {
   summaryStatus.innerHTML = '<span class="success-dot" aria-hidden="true"></span>파일을 분석하는 중입니다.';
   summaryResultLine.textContent = "예상 결과: 계산 중";
   summaryTargetLine.textContent = `제출 기준: ${targetLabelForDisplay()}`;
-  targetTrackFill.style.width = "0%";
+  clearTargetGauge();
   optimizeButton.textContent = "분석 중입니다";
   optimizeButton.disabled = true;
   renderSelectionClearButton();
@@ -937,10 +939,51 @@ function renderSingleSummary(plan: SubmissionPlan): void {
   summaryStatus.innerHTML = `<span class="success-dot" aria-hidden="true"></span>${singleStatusText(plan)}`;
   summaryResultLine.textContent = `예상 결과: ${plan.expectedSizeLabel.replace(/^약 /, "")}`;
   summaryTargetLine.textContent = `제출 기준: ${targetLabelForDisplay()}`;
-  targetTrackFill.style.width = `${progressForPlan(plan)}%`;
+  renderTargetGauge(plan);
   optimizeButton.textContent = "제출 기준에 맞게 줄이기";
   renderSelectionClearButton();
   renderRunDock(plan);
+}
+
+// P2 signature: draw the submission-limit gauge — reduction achieved (fill) vs
+// reduction required to pass (limit marker) — plus a pass/over verdict pill.
+function renderTargetGauge(plan: SubmissionPlan): void {
+  targetTrackFill.style.width = `${progressForPlan(plan)}%`;
+  const original = state.report?.originalSize ?? 0;
+  const overLimit = plan.targetStatus === "target-missed";
+  targetTrackFill.dataset.status = overLimit ? "over" : "pass";
+
+  if (plan.targetBytes && plan.targetBytes > 0 && original > 0) {
+    const requiredReductionPercent = Math.min(100, Math.max(0, ((original - plan.targetBytes) / original) * 100));
+    targetTrackLimit.style.left = `${requiredReductionPercent}%`;
+    targetTrackLimit.hidden = false;
+  } else {
+    targetTrackLimit.hidden = true;
+  }
+
+  if (plan.targetStatus === "no-target") {
+    summaryVerdict.hidden = true;
+    delete summaryVerdict.dataset.status;
+    return;
+  }
+  const expectedLabel = plan.expectedSizeLabel.replace(/^약 /, "");
+  if (overLimit) {
+    const over = plan.targetBytes ? Math.max(0, plan.expectedSizeBytes - plan.targetBytes) : 0;
+    summaryVerdict.textContent = over > 0 ? `초과 +${formatBytes(over)}` : "기준 초과";
+    summaryVerdict.dataset.status = "over";
+  } else {
+    summaryVerdict.textContent = `통과 ${expectedLabel}`;
+    summaryVerdict.dataset.status = "pass";
+  }
+  summaryVerdict.hidden = false;
+}
+
+function clearTargetGauge(): void {
+  targetTrackFill.style.width = "0%";
+  delete targetTrackFill.dataset.status;
+  targetTrackLimit.hidden = true;
+  summaryVerdict.hidden = true;
+  delete summaryVerdict.dataset.status;
 }
 
 function renderBatchSummary(): void {
@@ -1314,7 +1357,16 @@ function resetProgressAnimation(): void {
   progressBar.setAttribute("aria-valuenow", "0");
 }
 
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
 function startProgressAnimation(): void {
+  if (prefersReducedMotion()) {
+    displayedProgressPercent = targetProgressPercent;
+    progressBar.style.width = `${Math.max(0, Math.min(100, displayedProgressPercent))}%`;
+    return;
+  }
   progressAnimationTimer ??= window.setInterval(() => {
     const delta = targetProgressPercent - displayedProgressPercent;
     if (delta <= 0.3) {

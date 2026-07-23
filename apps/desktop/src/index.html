@@ -171,7 +171,7 @@
               <span class="metric-icon down-icon" aria-hidden="true"></span>
               <div><span>예상 절감량</span><strong id="summary-saving">-</strong></div>
             </div>
-            <div class="summary-card">
+            <div class="summary-card summary-card--primary">
               <span class="metric-icon percent-icon" aria-hidden="true"></span>
               <div><span>예상 절감률</span><strong id="summary-percent">-</strong></div>
             </div>
@@ -184,8 +184,12 @@
               </strong>
               <span id="summary-result-line">예상 결과: -</span>
             </div>
+            <span id="summary-verdict" class="verdict-pill" hidden></span>
           </div>
-          <div class="target-track"><span id="target-track-fill"></span></div>
+          <div class="target-track" id="target-track">
+            <span id="target-track-fill"></span>
+            <span id="target-track-limit" class="target-limit" hidden aria-hidden="true"></span>
+          </div>
           <section class="primary-run-panel">
             <button id="optimize-button" type="button" disabled>파일을 선택해 시작하세요</button>
             <button id="output-button" type="button" class="ghost">저장 위치</button>
