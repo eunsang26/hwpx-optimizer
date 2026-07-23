@@ -1,6 +1,6 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import sharp from "sharp";
-import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
+import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 
 type PngOptimizationResult = { data: Buffer } | { error: unknown };
@@ -8,6 +8,7 @@ type PngOptimizationResult = { data: Buffer } | { error: unknown };
 export async function applySafeOptimizationPlan(input: {
   pkg: HwpxPackage;
   plan: OptimizationPlan;
+  imageConcurrency?: number;
 }): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[] }> {
   const applied: AppliedAction[] = [];
   const skipped: AppliedAction[] = [];
@@ -31,7 +32,7 @@ export async function applySafeOptimizationPlan(input: {
   // report identical to sequential processing.
   const pngTargetEntries = input.pkg.entries.filter((entry) => optimizePngTargets.has(entry.path));
   const pngResults = new Map<string, PngOptimizationResult>();
-  await mapLimit(pngTargetEntries, defaultImageConcurrency(), async (entry) => {
+  await mapLimit(pngTargetEntries, resolveImageConcurrency(input.imageConcurrency), async (entry) => {
     try {
       pngResults.set(entry.path, { data: await optimizePngLosslessly(entry.data) });
     } catch (error) {

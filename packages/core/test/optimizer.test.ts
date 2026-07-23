@@ -161,6 +161,19 @@ describe("applySafeOptimizationPlan", () => {
     );
     expect(result.warnings.some((warning) => warning.includes("BinData/broken.png"))).toBe(true);
   });
+
+  it("optimizes PNGs when imageConcurrency is forced to 1", async () => {
+    const png = await sharp({ create: { width: 64, height: 48, channels: 4, background: { r: 5, g: 90, b: 200, alpha: 1 } } })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+    const pkg: HwpxPackage = { entries: [{ path: "BinData/x.png", data: png, size: png.byteLength, kind: "image" }] };
+    const plan: OptimizationPlan = { mode: "safe", actions: [{ type: "optimize-png", target: "BinData/x.png", risk: "safe" }] };
+
+    const result = await applySafeOptimizationPlan({ pkg, plan, imageConcurrency: 1 });
+
+    expect(result.pkg.entries[0].data.byteLength).toBeLessThan(png.byteLength);
+    expect(result.applied).toContainEqual(expect.objectContaining({ type: "optimize-png", target: "BinData/x.png" }));
+  });
 });
 
 function segment(marker: number, payload: Buffer): Buffer {

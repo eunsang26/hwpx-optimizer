@@ -1,10 +1,14 @@
 import { createHash } from "node:crypto";
-import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
+import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { computeAverageHash, computeDecodedPixelHash, hammingDistance } from "./visualSimilarity.js";
 import type { DuplicateImageGroup, HwpxEntry, HwpxPackage, NearDuplicateImageGroup } from "./types.js";
 
 export type ImageConsolidationGroup = DuplicateImageGroup & {
   canonicalPath: string;
+};
+
+export type ImageDuplicateOptions = {
+  imageConcurrency?: number;
 };
 
 type ImageEntrySummary = {
@@ -41,18 +45,24 @@ export function findByteIdenticalImageGroups(pkg: HwpxPackage): ImageConsolidati
   return result;
 }
 
-export async function findSameVisualImageGroups(pkg: HwpxPackage): Promise<ImageConsolidationGroup[]> {
+export async function findSameVisualImageGroups(
+  pkg: HwpxPackage,
+  options: ImageDuplicateOptions = {}
+): Promise<ImageConsolidationGroup[]> {
   const cached = sameVisualGroupsCache.get(pkg);
   if (cached) return cached;
 
-  const result = collectSameVisualImageGroups(pkg);
+  const result = collectSameVisualImageGroups(pkg, options);
   sameVisualGroupsCache.set(pkg, result);
   return result;
 }
 
-async function collectSameVisualImageGroups(pkg: HwpxPackage): Promise<ImageConsolidationGroup[]> {
+async function collectSameVisualImageGroups(
+  pkg: HwpxPackage,
+  options: ImageDuplicateOptions = {}
+): Promise<ImageConsolidationGroup[]> {
   const imageEntries = pkg.entries.filter((entry): entry is HwpxEntry & { kind: "image" } => entry.kind === "image");
-  const decoded = await mapLimit(imageEntries, defaultImageConcurrency(), async (entry) => {
+  const decoded = await mapLimit(imageEntries, resolveImageConcurrency(options.imageConcurrency), async (entry) => {
     const decodedHash = await computeDecodedPixelHash(entry.data);
     if (!decodedHash) return null;
     return {
@@ -77,30 +87,39 @@ async function collectSameVisualImageGroups(pkg: HwpxPackage): Promise<ImageCons
     .sort(compareDuplicateGroups);
 }
 
-export async function findImageConsolidationGroups(pkg: HwpxPackage): Promise<ImageConsolidationGroup[]> {
+export async function findImageConsolidationGroups(
+  pkg: HwpxPackage,
+  options: ImageDuplicateOptions = {}
+): Promise<ImageConsolidationGroup[]> {
   const cached = imageConsolidationGroupsCache.get(pkg);
   if (cached) return cached;
 
-  const result = collectImageConsolidationGroups(pkg);
+  const result = collectImageConsolidationGroups(pkg, options);
   imageConsolidationGroupsCache.set(pkg, result);
   return result;
 }
 
-export async function findNearDuplicateImageGroups(pkg: HwpxPackage): Promise<NearDuplicateImageGroup[]> {
+export async function findNearDuplicateImageGroups(
+  pkg: HwpxPackage,
+  options: ImageDuplicateOptions = {}
+): Promise<NearDuplicateImageGroup[]> {
   const cached = nearDuplicateGroupsCache.get(pkg);
   if (cached) return cached;
 
-  const result = collectNearDuplicateImageGroups(pkg);
+  const result = collectNearDuplicateImageGroups(pkg, options);
   nearDuplicateGroupsCache.set(pkg, result);
   return result;
 }
 
-async function collectNearDuplicateImageGroups(pkg: HwpxPackage): Promise<NearDuplicateImageGroup[]> {
-  const exactGroups = await findImageConsolidationGroups(pkg);
+async function collectNearDuplicateImageGroups(
+  pkg: HwpxPackage,
+  options: ImageDuplicateOptions = {}
+): Promise<NearDuplicateImageGroup[]> {
+  const exactGroups = await findImageConsolidationGroups(pkg, options);
   const exactPaths = new Set(exactGroups.flatMap((group) => group.paths));
   const imageEntries = pkg.entries.filter((entry): entry is HwpxEntry & { kind: "image" } => entry.kind === "image");
   const hashed = (
-    await mapLimit(imageEntries, defaultImageConcurrency(), async (entry) => {
+    await mapLimit(imageEntries, resolveImageConcurrency(options.imageConcurrency), async (entry) => {
       const averageHash = await computeAverageHash(entry.data);
       if (!averageHash) return null;
       if (averageHash.standardDeviation < NEAR_DUPLICATE_MIN_HASH_STDDEV) return null;
@@ -151,8 +170,11 @@ async function collectNearDuplicateImageGroups(pkg: HwpxPackage): Promise<NearDu
     .sort(compareDuplicateGroups);
 }
 
-async function collectImageConsolidationGroups(pkg: HwpxPackage): Promise<ImageConsolidationGroup[]> {
-  const sameVisualGroups = await findSameVisualImageGroups(pkg);
+async function collectImageConsolidationGroups(
+  pkg: HwpxPackage,
+  options: ImageDuplicateOptions = {}
+): Promise<ImageConsolidationGroup[]> {
+  const sameVisualGroups = await findSameVisualImageGroups(pkg, options);
   const pathsCoveredBySameVisualGroups = new Set<string>();
   for (const group of sameVisualGroups) {
     for (const path of group.paths) {

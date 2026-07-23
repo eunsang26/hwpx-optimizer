@@ -1,7 +1,7 @@
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import sharp from "sharp";
 import { analyzeHwpxPackage } from "./analyzer.js";
-import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
+import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { computeVisualMetrics } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
@@ -16,6 +16,7 @@ export type VerifyHwpxOutputOptions = {
   originalPackage?: HwpxPackage;
   originalAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
   outputAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
+  imageConcurrency?: number;
 };
 
 const PSNR_MINIMUM_DB: Record<Exclude<VerifyMode, "safe">, number> = {
@@ -47,7 +48,8 @@ export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutput
       output: pkg,
       mode: options.mode,
       originalAnalysis: options.originalAnalysis,
-      outputAnalysis: options.outputAnalysis
+      outputAnalysis: options.outputAnalysis,
+      imageConcurrency: options.imageConcurrency
     });
   }
 }
@@ -76,19 +78,28 @@ async function verifyAgainstOriginal(input: {
   mode: VerifyMode;
   originalAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
   outputAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
+  imageConcurrency?: number;
 }): Promise<void> {
   const originalGraph = buildReferenceGraph(input.original);
   const outputGraph = buildReferenceGraph(input.output);
   const outputPaths = new Set(input.output.entries.map((entry) => entry.path));
   const originalAnalysis =
     input.originalAnalysis ??
-    (await analyzeHwpxPackage(input.original, { graph: originalGraph, includeNearDuplicateImages: false }));
+    (await analyzeHwpxPackage(input.original, {
+      graph: originalGraph,
+      includeNearDuplicateImages: false,
+      imageConcurrency: input.imageConcurrency
+    }));
   const outputAnalysis =
     input.outputAnalysis ??
-    (await analyzeHwpxPackage(input.output, { graph: outputGraph, includeNearDuplicateImages: false }));
+    (await analyzeHwpxPackage(input.output, {
+      graph: outputGraph,
+      includeNearDuplicateImages: false,
+      imageConcurrency: input.imageConcurrency
+    }));
   const originalImages = new Map(originalAnalysis.images.map((image) => [image.path, image]));
   const outputImages = new Map(outputAnalysis.images.map((image) => [image.path, image]));
-  const originalDuplicatePathsByPath = await duplicateImagePathsByPath(input.original);
+  const originalDuplicatePathsByPath = await duplicateImagePathsByPath(input.original, input.imageConcurrency);
   const visualPairs: Array<{ original: HwpxEntry; output: HwpxEntry }> = [];
   const originalImageEntries = new Map(input.original.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
   const outputImageEntries = new Map(input.output.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
@@ -121,12 +132,13 @@ async function verifyAgainstOriginal(input: {
     return;
   }
 
-  await verifyVisualSimilarityPairs(visualPairs, input.mode);
+  await verifyVisualSimilarityPairs(visualPairs, input.mode, input.imageConcurrency);
 }
 
 async function verifyVisualSimilarityPairs(
   pairs: Array<{ original: HwpxEntry; output: HwpxEntry }>,
-  mode: Exclude<VerifyMode, "safe">
+  mode: Exclude<VerifyMode, "safe">,
+  imageConcurrency?: number
 ): Promise<void> {
   if (pairs.length === 0) return;
   const minimum = PSNR_MINIMUM_DB[mode];
@@ -141,7 +153,7 @@ async function verifyVisualSimilarityPairs(
   // concurrently. mapLimit rejects with the first failing pair's error, preserving the
   // sequential contract of "reject if any pair falls below the quality gate".
   const ssimMinimum = SSIM_MINIMUM[mode];
-  await mapLimit(uniquePairs, defaultImageConcurrency(), async (pair) => {
+  await mapLimit(uniquePairs, resolveImageConcurrency(imageConcurrency), async (pair) => {
     if (pair.original.data.equals(pair.output.data)) return;
     const { psnr, ssim } = await computeVisualMetrics(pair.original.data, pair.output.data);
     if (psnr === null && ssim === null) {
@@ -355,9 +367,9 @@ function replaceExtension(path: string, extension: string): string {
   return path.replace(/\.[^.\/]+$/, extension);
 }
 
-async function duplicateImagePathsByPath(pkg: HwpxPackage): Promise<Map<string, string[]>> {
+async function duplicateImagePathsByPath(pkg: HwpxPackage, imageConcurrency?: number): Promise<Map<string, string[]>> {
   const duplicatePathsByPath = new Map<string, string[]>();
-  for (const group of await findImageConsolidationGroups(pkg)) {
+  for (const group of await findImageConsolidationGroups(pkg, { imageConcurrency })) {
     for (const path of group.paths) {
       duplicatePathsByPath.set(path, group.paths);
     }

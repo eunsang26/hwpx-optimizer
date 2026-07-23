@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
+import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { findByteIdenticalImageGroups, findNearDuplicateImageGroups, findSameVisualImageGroups } from "./imageDuplicates.js";
 import { extractImageDisplayReferences } from "./imageDisplay.js";
 import { readImageMetadata } from "./imageMetadata.js";
@@ -26,6 +26,7 @@ export async function analyzeHwpxPackage(
     graph?: ReferenceGraph;
     includeSameVisualDuplicateImages?: boolean;
     includeNearDuplicateImages?: boolean;
+    imageConcurrency?: number;
   } = {}
 ): Promise<PackageAnalysis> {
   const entriesByKind: Record<HwpxEntryKind, number> = {
@@ -62,13 +63,14 @@ export async function analyzeHwpxPackage(
       });
     }
   }
-  const images = await mapLimit(imageInputs, defaultImageConcurrency(), (image) =>
+  const images = await mapLimit(imageInputs, resolveImageConcurrency(options.imageConcurrency), (image) =>
     inspectImage(image.path, image.data, image.size, image.displayRefs)
   );
 
   const graph = options.graph ?? buildReferenceGraph(pkg);
+  const duplicateOptions = { imageConcurrency: options.imageConcurrency };
   const sameVisualDuplicateImages =
-    options.includeSameVisualDuplicateImages === false ? [] : await findSameVisualImageGroups(pkg);
+    options.includeSameVisualDuplicateImages === false ? [] : await findSameVisualImageGroups(pkg, duplicateOptions);
   return {
     totalSize,
     entriesByKind,
@@ -76,7 +78,8 @@ export async function analyzeHwpxPackage(
     images,
     duplicateImages: findByteIdenticalImageGroups(pkg),
     sameVisualDuplicateImages,
-    nearDuplicateImages: options.includeNearDuplicateImages === false ? [] : await findNearDuplicateImageGroups(pkg),
+    nearDuplicateImages:
+      options.includeNearDuplicateImages === false ? [] : await findNearDuplicateImageGroups(pkg, duplicateOptions),
     unusedBinData: findUnusedBinData(pkg, graph),
     riskyResources: findRiskyResources(pkg),
     resourceDiagnostics: findResourceDiagnostics(pkg, categorySizes, totalSize),
