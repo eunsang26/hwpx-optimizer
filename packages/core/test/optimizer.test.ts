@@ -108,6 +108,42 @@ describe("applySafeOptimizationPlan", () => {
     );
   });
 
+  it("optimizes multiple PNG entries while preserving entry and report order", async () => {
+    const paths = ["BinData/a.png", "BinData/b.png", "BinData/c.png"];
+    const pngs = await Promise.all(
+      [
+        { r: 10, g: 20, b: 30 },
+        { r: 200, g: 40, b: 90 },
+        { r: 15, g: 180, b: 120 }
+      ].map((background) =>
+        sharp({ create: { width: 80, height: 60, channels: 4, background: { ...background, alpha: 1 } } })
+          .png({ compressionLevel: 0 })
+          .toBuffer()
+      )
+    );
+    const pkg: HwpxPackage = {
+      entries: [
+        { path: "Contents/section0.xml", data: Buffer.from("<root />"), size: 8, kind: "xml" },
+        ...paths.map((path, index) => ({ path, data: pngs[index], size: pngs[index].byteLength, kind: "image" as const }))
+      ]
+    };
+    const plan: OptimizationPlan = {
+      mode: "safe",
+      actions: paths.map((target) => ({ type: "optimize-png" as const, target, risk: "safe" as const }))
+    };
+
+    const result = await applySafeOptimizationPlan({ pkg, plan });
+
+    // Entry order preserved (XML first, then a, b, c) regardless of concurrent processing.
+    expect(result.pkg.entries.map((entry) => entry.path)).toEqual([
+      "Contents/section0.xml",
+      ...paths
+    ]);
+    // Every PNG was optimized, and applied actions stay in input order.
+    expect(result.applied.map((action) => action.target)).toEqual(paths);
+    expect(result.applied.every((action) => action.type === "optimize-png")).toBe(true);
+  });
+
   it("surfaces optimizer failures as user-visible warnings", async () => {
     const corruptPng = Buffer.from("not a real png");
     const pkg: HwpxPackage = {

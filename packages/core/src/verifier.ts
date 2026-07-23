@@ -1,6 +1,7 @@
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import sharp from "sharp";
 import { analyzeHwpxPackage } from "./analyzer.js";
+import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { computeVisualMetrics } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
@@ -136,8 +137,12 @@ async function verifyVisualSimilarityPairs(
     return true;
   });
 
-  for (const pair of uniquePairs) {
-    if (pair.original.data.equals(pair.output.data)) continue;
+  // Each pair's PSNR/SSIM decode+compare is independent and CPU-bound, so evaluate them
+  // concurrently. mapLimit rejects with the first failing pair's error, preserving the
+  // sequential contract of "reject if any pair falls below the quality gate".
+  const ssimMinimum = SSIM_MINIMUM[mode];
+  await mapLimit(uniquePairs, defaultImageConcurrency(), async (pair) => {
+    if (pair.original.data.equals(pair.output.data)) return;
     const { psnr, ssim } = await computeVisualMetrics(pair.original.data, pair.output.data);
     if (psnr === null && ssim === null) {
       const diff = await describeImagePairDiff(pair.original, pair.output);
@@ -146,7 +151,6 @@ async function verifyVisualSimilarityPairs(
         `Verification failed: ${mode} mode image quality could not be measured for ${pair.original.path}${suffix}`
       );
     }
-    const ssimMinimum = SSIM_MINIMUM[mode];
     if ((psnr !== null && psnr < minimum) || (ssim !== null && ssim < ssimMinimum)) {
       const diff = await describeImagePairDiff(pair.original, pair.output);
       const suffix = diff ? ` ${diff}` : "";
@@ -156,7 +160,7 @@ async function verifyVisualSimilarityPairs(
         `Verification failed: ${mode} mode image quality too low (${psnrText}; ${ssimText}) for ${pair.original.path}${suffix}`
       );
     }
-  }
+  });
 }
 
 async function describeImagePairDiff(original: HwpxEntry, output: HwpxEntry): Promise<string> {
