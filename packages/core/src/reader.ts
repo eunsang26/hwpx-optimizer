@@ -246,12 +246,25 @@ function isProtectedPackagePath(path: string): boolean {
   );
 }
 
+const PROTECTION_TOKENS =
+  "documentProtection|readOnlyRecommended|modifyPassword|writeProtection|editProtection|rightsManagement|drm|encrypted|digitalSignature|signatureInfo|certificate";
+// Match protection markers only in structural positions: an element name
+// (`<drm`, `</drm`, optionally namespaced), an attribute name (`drm=`), or an
+// OPF/meta declaration whose name is the marker (`<meta name="documentProtection">`).
+// Prose or free text that merely mentions one of these words (e.g. a template
+// describing a "certificate") no longer triggers a false rejection.
+const PROTECTED_ELEMENT_PATTERN = new RegExp(`<\\/?(?:[\\w.-]+:)?(?:${PROTECTION_TOKENS})\\b`, "i");
+const PROTECTED_ATTRIBUTE_PATTERN = new RegExp(`\\b(?:[\\w.-]+:)?(?:${PROTECTION_TOKENS})\\s*=`, "i");
+const PROTECTED_META_NAME_PATTERN = new RegExp(`name\\s*=\\s*["'](?:[\\w.-]+:)?(?:${PROTECTION_TOKENS})\\b`, "i");
+
 function hasProtectedMetadata(entry: HwpxEntry): boolean {
   if (entry.kind !== "xml") return false;
   const normalized = entry.path.replace(/\\/g, "/");
   if (/^Contents\/section\d+\.xml$/i.test(normalized)) return false;
   const text = entry.data.toString("utf8");
-  return /\b(documentProtection|readOnlyRecommended|modifyPassword|writeProtection|editProtection|rightsManagement|drm|encrypted|digitalSignature|signatureInfo|certificate)\b/i.test(
-    text
+  return (
+    PROTECTED_ELEMENT_PATTERN.test(text) ||
+    PROTECTED_ATTRIBUTE_PATTERN.test(text) ||
+    PROTECTED_META_NAME_PATTERN.test(text)
   );
 }

@@ -82,6 +82,12 @@ export async function applyBalancedOptimizationPlan(input: {
     }
   });
 
+  // Every existing entry path starts out occupied. A transform that changes an
+  // extension (BMP/TIFF->PNG, JPEG->.jpg) must not land on a path already used by
+  // another entry, or repackaging would collapse two entries onto one zip name and
+  // lose an image / mis-point its manifest href. Colliding transforms are skipped.
+  const occupiedPaths = new Set(consolidated.pkg.entries.map((entry) => entry.path));
+
   for (const outcome of outcomes) {
     if (outcome.status === "skipped") {
       transformedEntries[outcome.index] = outcome.entry;
@@ -92,6 +98,18 @@ export async function applyBalancedOptimizationPlan(input: {
         ...(outcome.size === undefined ? {} : { afterSize: outcome.size })
       });
       continue;
+    }
+    if (outcome.outputPath !== outcome.entry.path && occupiedPaths.has(outcome.outputPath)) {
+      transformedEntries[outcome.index] = outcome.entry;
+      skipped.push({ type: outcome.action, target: outcome.entry.path, beforeSize: outcome.entry.size });
+      warnings.push(
+        `${outcome.action} skipped for ${outcome.entry.path}: output path ${outcome.outputPath} collides with an existing entry`
+      );
+      continue;
+    }
+    if (outcome.outputPath !== outcome.entry.path) {
+      occupiedPaths.delete(outcome.entry.path);
+      occupiedPaths.add(outcome.outputPath);
     }
     pathUpdates.set(outcome.entry.path, outcome.outputPath);
     mediaTypeUpdates.set(outcome.outputPath, outputMediaType(outcome.outputPath));
@@ -261,6 +279,7 @@ function updateHrefAttributes(
     if (!isXmlNode(node)) continue;
     const attrs = getXmlAttributes(node);
     if (attrs) {
+      const hrefKey = findHrefAttributeKey(attrs);
       for (const key of findPackagePathAttributeKeys(attrs)) {
         const value = attrs[key];
         if (typeof value !== "string") continue;
@@ -268,8 +287,9 @@ function updateHrefAttributes(
         if (updatedPath) {
           setAttribute(attrs, key, updatedPath);
           const updatedMediaType = mediaTypeUpdates.get(updatedPath);
-          if (updatedMediaType && key.toLowerCase() === "href" && Object.hasOwn(attrs, "media-type")) {
-            setAttribute(attrs, "media-type", updatedMediaType);
+          if (updatedMediaType && key === hrefKey) {
+            const mediaTypeKey = findMediaTypeAttributeKey(attrs);
+            if (mediaTypeKey) setAttribute(attrs, mediaTypeKey, updatedMediaType);
           }
           changed = true;
         }
@@ -380,6 +400,15 @@ function isIdReferenceAttribute(name: string): boolean {
 
 function findHrefAttributeKey(attrs: Record<string, unknown>): string | null {
   return Object.keys(attrs).find((key) => key.toLowerCase() === "href" || key.toLowerCase().endsWith(":href")) ?? null;
+}
+
+function findMediaTypeAttributeKey(attrs: Record<string, unknown>): string | null {
+  return (
+    Object.keys(attrs).find((key) => {
+      const normalized = key.toLowerCase();
+      return normalized === "media-type" || normalized === "mediatype" || normalized.endsWith(":media-type");
+    }) ?? null
+  );
 }
 
 function findPackagePathAttributeKeys(attrs: Record<string, unknown>): string[] {

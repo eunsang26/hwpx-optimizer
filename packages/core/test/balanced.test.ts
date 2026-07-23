@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
+import { applyBalancedOptimizationPlan } from "../src/balancedOptimizer.js";
 import { aggressiveImageProfile, balancedImageProfile } from "../src/opportunities.js";
 import { readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture } from "./fixtures.js";
@@ -784,6 +785,36 @@ describe("balanced optimization", () => {
     expect(allowedResult.report.actions.applied).toContainEqual(
       expect.objectContaining({ type: "clean-shape-comment", target: "Contents/section0.xml" })
     );
+  });
+});
+
+describe("balanced optimization path collisions", () => {
+  it("skips a format conversion whose output path collides with an existing entry", async () => {
+    const bmp = createBmp24(64, 48, [0x20, 0x40, 0x60]);
+    const png = await sharp({ create: { width: 12, height: 12, channels: 3, background: "#654321" } }).png().toBuffer();
+    const fixture = await createReferencedImageFixture({
+      image1: { path: "BinData/image1.bmp", mediaType: "image/bmp", data: bmp },
+      image2: { path: "BinData/image1.png", mediaType: "image/png", data: png }
+    });
+    const pkg = await readHwpxPackage(fixture);
+
+    const result = await applyBalancedOptimizationPlan({
+      pkg,
+      plan: {
+        mode: "balanced",
+        actions: [
+          { type: "convert-bmp-to-png", target: "BinData/image1.bmp", outputPath: "BinData/image1.png", risk: "medium" },
+          { type: "repack-zip", target: "*", risk: "safe" }
+        ]
+      }
+    });
+
+    const paths = result.pkg.entries.map((entry) => entry.path);
+    // Neither image is lost: the BMP is not renamed onto the existing PNG.
+    expect(paths).toContain("BinData/image1.bmp");
+    expect(paths).toContain("BinData/image1.png");
+    expect(result.applied.some((action) => action.type === "convert-bmp-to-png")).toBe(false);
+    expect(result.warnings.some((warning) => /collides/.test(warning))).toBe(true);
   });
 });
 

@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { decodeBmp } from "./bmp.js";
+import { decodeBmp, readBmpInfo } from "./bmp.js";
 import { findByteIdenticalImageGroups, findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { readImageMetadata } from "./imageMetadata.js";
@@ -461,7 +461,20 @@ async function convertBmpToPng(
           kernel: "lanczos3"
         })
       : image;
-  return resized.png(pngOptions(profile)).toBuffer();
+  try {
+    return await resized.png(pngOptions(profile)).toBuffer();
+  } catch (error) {
+    // decodeBmp handles 24/32-bit and 8-bit palette BI_RGB; other variants
+    // (RLE, BI_BITFIELDS, 1/4-bit) fall back to sharp, which may lack BMP input.
+    // Surface a named reason instead of a cryptic decode error when that happens.
+    const info = bmp ? null : readBmpInfo(data);
+    if (info && !info.supported) {
+      throw new Error(
+        `unsupported BMP variant (bitsPerPixel=${info.bitsPerPixel}, compression=${info.compression})`
+      );
+    }
+    throw error;
+  }
 }
 
 async function convertTiffToPng(
@@ -471,7 +484,10 @@ async function convertTiffToPng(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<Buffer> {
-  const image = sharp(data);
+  // Bake in any EXIF/TIFF orientation so the PNG matches the dimensions the
+  // analyzer and verifier read with auto-orient (otherwise an oriented TIFF's
+  // swapped dimensions fail the verifier's aspect-ratio/enlargement checks).
+  const image = sharp(data).rotate();
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   const resized =
     width && height && shouldResize(width, height, budget, profile)

@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import sharp from "sharp";
+import { readBmpInfo } from "./bmp.js";
 import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
 import { computeAverageHash, computeDecodedPixelHash, hammingDistance } from "./visualSimilarity.js";
 import type { DuplicateImageGroup, HwpxEntry, HwpxPackage, NearDuplicateImageGroup } from "./types.js";
@@ -52,7 +54,26 @@ export async function findSameVisualImageGroups(pkg: HwpxPackage): Promise<Image
 
 async function collectSameVisualImageGroups(pkg: HwpxPackage): Promise<ImageConsolidationGroup[]> {
   const imageEntries = pkg.entries.filter((entry): entry is HwpxEntry & { kind: "image" } => entry.kind === "image");
-  const decoded = await mapLimit(imageEntries, defaultImageConcurrency(), async (entry) => {
+
+  // Two images can only be pixel-identical if they share dimensions, so only the
+  // images that share a (rotation-invariant) dimension key with another image can
+  // possibly be duplicates. Restricting the expensive full-resolution raw decode
+  // to those candidates avoids decoding every image while keeping the result set
+  // identical: an image with unique dimensions is never in a group of size >= 2.
+  const dimensionKeys = await mapLimit(imageEntries, defaultImageConcurrency(), (entry) => candidateDimensionKey(entry.data));
+  const entriesByDimension = new Map<string, number>();
+  for (const key of dimensionKeys) {
+    if (key === null) continue;
+    entriesByDimension.set(key, (entriesByDimension.get(key) ?? 0) + 1);
+  }
+  const candidateEntries = imageEntries.filter((_, index) => {
+    const key = dimensionKeys[index];
+    // Keep entries that share a dimension key, plus any whose dimensions could
+    // not be determined (they must still be compared rather than silently dropped).
+    return key === null || (entriesByDimension.get(key) ?? 0) > 1;
+  });
+
+  const decoded = await mapLimit(candidateEntries, defaultImageConcurrency(), async (entry) => {
     const decodedHash = await computeDecodedPixelHash(entry.data);
     if (!decodedHash) return null;
     return {
@@ -167,6 +188,28 @@ async function collectImageConsolidationGroups(pkg: HwpxPackage): Promise<ImageC
 
 function hashBytes(data: Buffer): string {
   return createHash("sha256").update(data).digest("hex");
+}
+
+/**
+ * Cheap, header-only dimension key used to pre-filter duplicate candidates.
+ * Returns a rotation-invariant `min x max` key so that two images that are
+ * identical after EXIF/orientation handling still land in the same bucket, or
+ * null when dimensions cannot be read (such entries are always kept as candidates).
+ */
+async function candidateDimensionKey(data: Buffer): Promise<string | null> {
+  const bmp = readBmpInfo(data);
+  if (bmp) return dimensionKey(bmp.width, bmp.height);
+  try {
+    const metadata = await sharp(data).metadata();
+    if (metadata.width && metadata.height) return dimensionKey(metadata.width, metadata.height);
+  } catch {
+    // fall through: unreadable header -> treat as its own candidate
+  }
+  return null;
+}
+
+function dimensionKey(width: number, height: number): string {
+  return `${Math.min(width, height)}x${Math.max(width, height)}`;
 }
 
 function findParent(parent: Map<string, string>, path: string): string {

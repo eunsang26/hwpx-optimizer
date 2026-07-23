@@ -115,6 +115,23 @@ describe("verifyHwpxOutput", () => {
     );
   });
 
+  it("allows advanced-mode outputs downsized to the mode maxEdge when the display size exceeds it", async () => {
+    // Displayed at px96 ~2000x1250, larger than the balanced ladder floor (1280),
+    // so the optimizer legitimately downsizes the source below its 1x display
+    // resolution. The floor must not demand more resolution than the optimizer
+    // is allowed to keep, otherwise every candidate profile is rejected.
+    const source = await createGradientPng(2000, 1250);
+    const originalJpeg = await sharp(source).jpeg({ quality: 95 }).toBuffer();
+    const downsizedJpeg = await sharp(source)
+      .resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 88, mozjpeg: true })
+      .toBuffer();
+    const original = await createDisplayReferencedFixture("BinData/image1.jpg", originalJpeg, 150000, 93750);
+    const output = await createDisplayReferencedFixture("BinData/image1.jpg", downsizedJpeg, 150000, 93750);
+
+    await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).resolves.toBeUndefined();
+  });
+
   it("allows balanced-mode outputs that convert referenced BMPs to PNG", async () => {
     const original = await createReferencedImageFixture("BinData/image1.bmp", createBmp24(120, 80));
     const output = await createReferencedImageFixture("BinData/image1.png", await createPng(120, 80));
@@ -212,6 +229,22 @@ async function createReferencedImageFixture(path: string, image: Buffer): Promis
     entries: {
       "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="${path}" media-type="image/${path.split(".").pop()?.toLowerCase() ?? "unknown"}"/></opf:manifest></opf:package>`,
       "Contents/section0.xml": `<root><img href="${path}" /></root>`,
+      [path]: image
+    }
+  });
+}
+
+async function createDisplayReferencedFixture(
+  path: string,
+  image: Buffer,
+  szWidthHwpUnit: number,
+  szHeightHwpUnit: number
+): Promise<Buffer> {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "unknown";
+  return createHwpxFixture({
+    entries: {
+      "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="${path}" media-type="image/${ext}"/></opf:manifest></opf:package>`,
+      "Contents/section0.xml": `<root><hp:pic><hp:sz width="${szWidthHwpUnit}" height="${szHeightHwpUnit}"/><hc:img binaryItemIDRef="image1"/></hp:pic></root>`,
       [path]: image
     }
   });

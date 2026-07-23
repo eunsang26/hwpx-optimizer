@@ -260,9 +260,19 @@ function minimumAdvancedImageDimensions(
   mode: Exclude<VerifyMode, "safe">
 ): { width: number; height: number } {
   if (!image.width || !image.height) return { width: 1, height: 1 };
+  // The optimizer never enlarges past the mode's smallest ladder maxEdge, so the
+  // floor must not demand more resolution than the optimizer is allowed to keep.
+  // Cap the display box at that edge; otherwise an image displayed larger than
+  // maxEdge collapses against a floor the optimizer can never legitimately meet.
+  const edge = advancedMinimumEdge(mode);
   const expected = image.largestDisplay
-    ? fitInsideDimensions(image.width, image.height, image.largestDisplay.widthPx96, image.largestDisplay.heightPx96)
-    : fitInsideDimensions(image.width, image.height, advancedMinimumEdge(mode), advancedMinimumEdge(mode));
+    ? fitInsideDimensions(
+        image.width,
+        image.height,
+        Math.min(image.largestDisplay.widthPx96, edge),
+        Math.min(image.largestDisplay.heightPx96, edge)
+      )
+    : fitInsideDimensions(image.width, image.height, edge, edge);
   return {
     width: Math.max(1, Math.floor(expected.width * 0.9)),
     height: Math.max(1, Math.floor(expected.height * 0.9))

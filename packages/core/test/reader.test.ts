@@ -67,6 +67,31 @@ describe("readHwpxPackage", () => {
     await expect(readHwpxPackage(fixture)).rejects.toThrow(protectedDocumentMessage);
   });
 
+  it("does not reject a document that merely mentions a protection word in prose", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf":
+          '<opf:package xmlns:opf="http://www.idpf.org/2007/opf"><opf:metadata><opf:meta name="description" content="이 서식은 certificate 발급 및 encrypted 통신을 설명합니다." /></opf:metadata></opf:package>'
+      }
+    });
+
+    await expect(readHwpxPackage(fixture)).resolves.toEqual(
+      expect.objectContaining({
+        entries: expect.arrayContaining([expect.objectContaining({ path: "Contents/content.hpf" })])
+      })
+    );
+  });
+
+  it("still rejects protection markers expressed as an element", async () => {
+    const fixture = await createHwpxFixture({
+      entries: {
+        "settings.xml": "<settings><hp:documentProtection level=\"readOnly\"/></settings>"
+      }
+    });
+
+    await expect(readHwpxPackage(fixture)).rejects.toThrow(protectedDocumentMessage);
+  });
+
   it("fails clearly when required HWPX package files are missing", async () => {
     const fixture = await createHwpxFixture({
       includeRequiredFiles: false,
