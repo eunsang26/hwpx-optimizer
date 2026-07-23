@@ -51,7 +51,9 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
   const attentionClass = item.targetStatusLabel === "목표 미달 가능" ? " class=\"needs-attention\"" : "";
   const statusLabel = batchTableStatusLabel(item);
   const statusClass = batchTableStatusClass(item);
-  return `<tr${attentionClass}><td><input type="checkbox" checked aria-label="${escapeHtml(
+  const selectedAttr = item.selected === false ? "" : " checked";
+  const disabledAttr = options.running ? " disabled" : "";
+  return `<tr${attentionClass}><td><input type="checkbox" class="batch-select" data-batch-index="${index}"${selectedAttr}${disabledAttr} aria-label="${escapeHtml(
     item.fileName
   )} 선택" /></td><td class="name"><strong>${escapeHtml(item.fileName)}</strong></td><td>${escapeHtml(
     item.originalSizeLabel ?? "-"
@@ -114,9 +116,9 @@ export function imageComparePairHtml(pair: ImagePreviewPair): string {
     `<div class="pair">`,
     `<header><strong>${escapeHtml(pair.originalPath)} → ${escapeHtml(pair.outputPath)}</strong>`,
     `<span class="meta">${psnrBadge}<span class="saving">${escapeHtml(savingText)}</span></span></header>`,
-    `<figure><img alt="원본 ${escapeHtml(pair.originalPath)}" src="${pair.originalThumbnailDataUrl}" />`,
+    `<figure><img alt="원본 ${escapeHtml(pair.originalPath)}" src="${escapeHtml(pair.originalThumbnailDataUrl)}" />`,
     `<figcaption>원본 · ${escapeHtml(pair.originalFormat.toUpperCase())} · ${escapeHtml(formatBytes(pair.originalSize))}</figcaption></figure>`,
-    `<figure><img alt="결과 ${escapeHtml(pair.outputPath)}" src="${pair.outputThumbnailDataUrl}" />`,
+    `<figure><img alt="결과 ${escapeHtml(pair.outputPath)}" src="${escapeHtml(pair.outputThumbnailDataUrl)}" />`,
     `<figcaption>결과 · ${escapeHtml(pair.outputFormat.toUpperCase())} · ${escapeHtml(formatBytes(pair.outputSize))}</figcaption></figure>`,
     `</div>`
   ].join("");

@@ -5,6 +5,7 @@ import { formatBytes } from "./viewModel.js";
 export type BatchItemLike = {
   path: string;
   fileName: string;
+  selected?: boolean;
   status: BatchItemStatus;
   report?: OptimizationReport;
   outputPath?: string;

@@ -46,8 +46,8 @@
           <h2>진행 상황</h2>
           <button id="cancel-button" class="ghost">취소</button>
         </div>
-        <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
-        <p id="progress-item">대기 중입니다.</p>
+        <div class="progress-track"><div id="progress-bar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
+        <p id="progress-item" aria-live="polite">대기 중입니다.</p>
       </section>
 
       <section id="status-banner" class="status-banner" hidden aria-live="polite">
@@ -133,7 +133,7 @@
               <table class="batch-table">
                 <thead>
                   <tr>
-                    <th><input type="checkbox" checked aria-label="전체 선택" /></th>
+                    <th><input id="batch-select-all" type="checkbox" checked aria-label="전체 선택" /></th>
                     <th>파일명</th>
                     <th>원본 용량</th>
                     <th>예상 결과</th>
@@ -380,7 +380,7 @@
 
       <div id="settings-backdrop" class="settings-backdrop" hidden></div>
       <div id="help-backdrop" class="help-backdrop" hidden></div>
-      <aside id="help-panel" class="help-panel" aria-hidden="true" aria-labelledby="help-title">
+      <aside id="help-panel" class="help-panel" aria-hidden="true" inert aria-labelledby="help-title">
         <div class="help-header">
           <div>
             <h2 id="help-title">사용 매뉴얼</h2>
@@ -433,7 +433,7 @@
           </li>
         </ol>
       </aside>
-      <aside id="settings-panel" class="settings" aria-hidden="true" aria-labelledby="settings-title">
+      <aside id="settings-panel" class="settings" aria-hidden="true" inert aria-labelledby="settings-title">
         <div class="settings-header">
           <h2 id="settings-title">설정</h2>
           <button id="settings-close-button" class="ghost settings-close" type="button" aria-label="설정 닫기"><span aria-hidden="true">×</span></button>

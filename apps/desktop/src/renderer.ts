@@ -33,6 +33,7 @@ declare global {
 type BatchItem = {
   path: string;
   fileName: string;
+  selected: boolean;
   status: "pending" | "running" | "done" | "failed" | "cancelled";
   report?: OptimizationReport;
   outputPath?: string;
@@ -70,6 +71,7 @@ type AppState = {
   batchCancelled: boolean;
   batchRunCompleted: boolean;
   analysisRunning: boolean;
+  optimizeRunning: boolean;
 };
 
 type DisplayPlanRow = {
@@ -106,7 +108,8 @@ const state: AppState = {
   batchRunning: false,
   batchCancelled: false,
   batchRunCompleted: false,
-  analysisRunning: false
+  analysisRunning: false,
+  optimizeRunning: false
 };
 
 let settingsSaveSequence = 0;
@@ -140,6 +143,7 @@ const emptyFolderButton = requireButton("empty-folder-button");
 const optimizeButton = requireButton("optimize-button");
 const batchPanel = requireElement("batch-panel");
 const batchList = requireElement("batch-list");
+const batchSelectAll = requireInput("batch-select-all");
 const batchSummary = requireElement("batch-summary");
 const batchClearButton = requireButton("batch-clear");
 const batchRunButton = requireButton("batch-run");
@@ -283,6 +287,22 @@ async function init(): Promise<void> {
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>("button[data-action]");
     if (button) handleBatchRowAction(button);
   });
+  batchList.addEventListener("change", (event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target || !target.classList.contains("batch-select")) return;
+    const index = Number(target.dataset.batchIndex);
+    const item = Number.isInteger(index) ? state.batchItems[index] : undefined;
+    if (!item) return;
+    item.selected = target.checked;
+    renderBatchList();
+  });
+  batchSelectAll.addEventListener("change", () => {
+    if (state.batchRunning || state.batchAnalyzing) return;
+    for (const item of state.batchItems) {
+      if (item.status === "pending") item.selected = batchSelectAll.checked;
+    }
+    renderBatchList();
+  });
 
   outputButton.addEventListener("click", async () => {
     const selected = await window.hwpxOptimizer.selectDirectory();
@@ -303,6 +323,10 @@ async function init(): Promise<void> {
   cancelButton.addEventListener("click", async () => {
     if (state.analysisRunning || state.batchAnalyzing) {
       state.batchCancelled = state.batchAnalyzing;
+      // Invalidate the in-flight analyze so a late resolve can't overwrite the
+      // cancelled status with a normal result (best-effort backend cancel).
+      analysisSequence += 1;
+      state.analysisRunning = false;
       await window.hwpxOptimizer.cancelAnalyze();
       setStatus("분석을 취소했습니다.");
       setIdle();
@@ -323,8 +347,17 @@ async function init(): Promise<void> {
   helpBackdrop.addEventListener("click", () => setHelpOpen(false));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      if (!compareModal.hidden) {
+        closeImageCompareModal();
+        return;
+      }
       setSettingsOpen(false);
       setHelpOpen(false);
+      return;
+    }
+    if (event.key === "Tab") {
+      const overlay = openOverlayElement();
+      if (overlay) trapFocus(event, overlay);
     }
   });
   openFileButton.addEventListener("click", () => state.result && window.hwpxOptimizer.openPath(state.result.outputPath));
@@ -518,7 +551,7 @@ async function handleSelectedPaths(paths: string[]): Promise<void> {
 
 async function handleAdditionalPaths(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
-  if (state.batchRunning || state.batchAnalyzing || state.analysisRunning) {
+  if (state.batchRunning || state.batchAnalyzing || state.analysisRunning || state.optimizeRunning) {
     setStatus("처리 중에는 새 파일을 추가할 수 없습니다. 완료 후 다시 시도하세요.");
     return;
   }
@@ -598,18 +631,38 @@ function renderSettings(settings: DesktopSettings): void {
   renderRunDock(state.currentPlan);
 }
 
+let panelReturnFocus: HTMLElement | null = null;
+
 function setSettingsOpen(open: boolean): void {
   if (open) setHelpOpen(false);
+  const wasOpen = settingsPanel.classList.contains("is-open");
   settingsPanel.classList.toggle("is-open", open);
   settingsPanel.setAttribute("aria-hidden", open ? "false" : "true");
+  settingsPanel.inert = !open;
   settingsBackdrop.hidden = !open;
+  syncPanelFocus(open, wasOpen, settingsCloseButton);
 }
 
 function setHelpOpen(open: boolean): void {
   if (open) setSettingsOpen(false);
+  const wasOpen = helpPanel.classList.contains("is-open");
   helpPanel.classList.toggle("is-open", open);
   helpPanel.setAttribute("aria-hidden", open ? "false" : "true");
+  helpPanel.inert = !open;
   helpBackdrop.hidden = !open;
+  syncPanelFocus(open, wasOpen, helpCloseButton);
+}
+
+// Move focus into a panel on open and restore it to the trigger on close, so a
+// keyboard user is never left focused on an off-screen (inert) panel.
+function syncPanelFocus(open: boolean, wasOpen: boolean, focusTarget: HTMLElement): void {
+  if (open && !wasOpen) {
+    panelReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    focusTarget.focus();
+  } else if (!open && wasOpen) {
+    panelReturnFocus?.focus();
+    panelReturnFocus = null;
+  }
 }
 
 function applySessionOutputDirectory(outputDirectory: string): void {
@@ -628,11 +681,18 @@ function renderSubmissionControls(): void {
   submissionLimitSelect.value = state.submissionLimit.id;
   customLimitField.hidden = state.submissionLimit.id !== "custom";
   customLimitInput.value = state.submissionLimit.customBytes
-    ? String(Math.round(state.submissionLimit.customBytes / 1024 / 1024))
+    ? formatCustomLimitMb(state.submissionLimit.customBytes)
     : "";
   preservationSelect.value = state.preservationPreference;
   batchTargetModeSelect.value = state.batchTargetMode;
   renderCleanupSettings();
+}
+
+// Preserve a fractional MB entry (e.g. 0.5) instead of rounding it to an integer
+// that no longer matches the stored byte value.
+function formatCustomLimitMb(customBytes: number): string {
+  const mb = customBytes / 1024 / 1024;
+  return Number.isInteger(mb) ? String(mb) : String(Number(mb.toFixed(2)));
 }
 
 function refreshSubmissionPlan(): void {
@@ -1118,7 +1178,7 @@ function singleStatusText(plan: SubmissionPlan): string {
 }
 
 async function loadFile(path: string): Promise<void> {
-  if (state.batchRunning || state.batchAnalyzing || state.analysisRunning) {
+  if (state.batchRunning || state.batchAnalyzing || state.analysisRunning || state.optimizeRunning) {
     setStatus("처리 중에는 새 파일을 열 수 없습니다. 완료 후 다시 시도하세요.");
     return;
   }
@@ -1190,30 +1250,41 @@ async function analyzeFile(path: string): Promise<void> {
 }
 
 async function optimizeCurrentFile(): Promise<void> {
-  if (!state.filePath || !state.report) return;
+  if (!state.filePath || !state.report || state.optimizeRunning) return;
+  // Capture the file this run belongs to. If the user loads a different file
+  // while this optimize is in flight, the resolved result must not overwrite the
+  // newer file's view.
+  const requestFilePath = state.filePath;
+  state.optimizeRunning = true;
   let succeeded = false;
   try {
     setBusy(`${modeLabel(state.mode)} 모드로 최적화하는 중입니다...`, { cancelable: true });
     renderProgress(5, "최적화를 준비하는 중입니다");
     const response = await window.hwpxOptimizer.optimize({
-      filePath: state.filePath,
+      filePath: requestFilePath,
       mode: state.mode,
       outputDirectory: state.outputDirectory,
       outputMode: "single",
       actions: selectedActionsForOptimize(),
       targetBytes: state.currentPlan?.targetBytes ?? resolveSubmissionLimitBytes(state.submissionLimit)
     });
+    if (state.filePath !== requestFilePath) return;
     state.result = response;
     renderResult(response.report, response.outputPath, response.reportPath);
     setStatus("최적화가 완료되었습니다. 파일을 열어 제출 전 상태를 확인하세요.");
     succeeded = true;
   } catch (error) {
-    renderVerificationFailure(error);
-    setStatus(errorMessage(error));
+    if (state.filePath === requestFilePath) {
+      renderVerificationFailure(error);
+      setStatus(errorMessage(error));
+    }
   } finally {
-    setIdle();
-    if (!succeeded) resetProgressAnimation();
-    hideProgressPanel();
+    state.optimizeRunning = false;
+    if (state.filePath === requestFilePath) {
+      setIdle();
+      if (!succeeded) resetProgressAnimation();
+      hideProgressPanel();
+    }
   }
 }
 
@@ -1221,6 +1292,7 @@ function renderProgress(percent: number, item: string): void {
   progressPanel.hidden = false;
   targetProgressPercent = Math.max(targetProgressPercent, Math.max(0, Math.min(100, percent)));
   progressItem.textContent = `${progressLabel(item)} · ${Math.round(targetProgressPercent)}%`;
+  progressBar.setAttribute("aria-valuenow", String(Math.round(targetProgressPercent)));
   startProgressAnimation();
 }
 
@@ -1239,6 +1311,7 @@ function resetProgressAnimation(): void {
   displayedProgressPercent = 0;
   targetProgressPercent = 0;
   progressBar.style.width = "0%";
+  progressBar.setAttribute("aria-valuenow", "0");
 }
 
 function startProgressAnimation(): void {
@@ -1474,9 +1547,41 @@ function targetStatusText(status: OptimizationReport["targetStatus"]): string {
   return "목표 확인 필요";
 }
 
+function openOverlayElement(): HTMLElement | null {
+  if (!compareModal.hidden) {
+    return (compareModal.querySelector<HTMLElement>(".modal-card") ?? compareModal);
+  }
+  if (settingsPanel.classList.contains("is-open")) return settingsPanel;
+  if (helpPanel.classList.contains("is-open")) return helpPanel;
+  return null;
+}
+
+function trapFocus(event: KeyboardEvent, container: HTMLElement): void {
+  const focusables = Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+  if (focusables.length === 0) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement;
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+let compareReturnFocus: HTMLElement | null = null;
+
 async function openImageCompareModal(): Promise<void> {
   if (!state.filePath || !state.result) return;
+  compareReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   compareModal.hidden = false;
+  compareCloseButton.focus();
   compareSummary.textContent = "이미지 변경 사항을 불러오는 중입니다...";
   compareList.innerHTML = "<p class=\"empty\">잠시만 기다려주세요...</p>";
   try {
@@ -1498,8 +1603,13 @@ async function openImageCompareModal(): Promise<void> {
 }
 
 function closeImageCompareModal(): void {
+  const wasOpen = !compareModal.hidden;
   compareModal.hidden = true;
   compareList.innerHTML = "";
+  if (wasOpen) {
+    compareReturnFocus?.focus();
+    compareReturnFocus = null;
+  }
 }
 
 async function reverifyCurrentResult(): Promise<void> {
@@ -1615,7 +1725,7 @@ function syncActionCheckboxIndeterminateState(): void {
 }
 
 function enterBatchMode(paths: string[]): void {
-  if (state.batchRunning || state.batchAnalyzing || state.analysisRunning) {
+  if (state.batchRunning || state.batchAnalyzing || state.analysisRunning || state.optimizeRunning) {
     setStatus("처리 중에는 새 파일을 추가할 수 없습니다. 완료 후 다시 시도하세요.");
     return;
   }
@@ -1643,6 +1753,7 @@ function enterBatchMode(paths: string[]): void {
     state.batchItems.push({
       path,
       fileName: fileNameFromPath(path),
+      selected: true,
       status: "pending"
     });
   }
@@ -1665,8 +1776,12 @@ function renderBatchList(): void {
   batchList.innerHTML = state.batchItems
     .map((item, index) => batchItemRowHtml(item, index, { running: busy }))
     .join("");
-  batchRunButton.disabled =
-    state.batchAnalyzing || state.batchRunning || !state.batchItems.some((item) => item.status === "pending");
+  const pendingItems = state.batchItems.filter((item) => item.status === "pending");
+  const selectedPending = pendingItems.filter((item) => item.selected).length;
+  batchRunButton.disabled = state.batchAnalyzing || state.batchRunning || selectedPending === 0;
+  batchSelectAll.disabled = busy || pendingItems.length === 0;
+  batchSelectAll.checked = pendingItems.length > 0 && selectedPending === pendingItems.length;
+  batchSelectAll.indeterminate = selectedPending > 0 && selectedPending < pendingItems.length;
   renderSelectionClearButton();
   batchRunButton.textContent = state.batchAnalyzing ? "분석 중..." : state.batchRunning ? "처리 중..." : "일괄 최적화";
   renderBatchSummary();
@@ -1882,10 +1997,15 @@ function handleBatchRowAction(button: HTMLButtonElement): void {
 
 async function runBatch(): Promise<void> {
   if (state.batchRunning || state.batchItems.length === 0) return;
+  const selectedPending = state.batchItems.filter((item) => item.status === "pending" && item.selected).length;
+  if (selectedPending === 0) {
+    setStatus("처리할 파일을 하나 이상 선택하세요.");
+    return;
+  }
   state.batchRunning = true;
   state.batchRunCompleted = false;
   state.batchCancelled = false;
-  setBusy(`${state.batchItems.filter((item) => item.status === "pending").length}개 파일을 처리합니다.`, {
+  setBusy(`${selectedPending}개 파일을 처리합니다.`, {
     cancelable: true
   });
   optimizeButton.disabled = true;
@@ -1893,17 +2013,18 @@ async function runBatch(): Promise<void> {
 
   for (let index = 0; index < state.batchItems.length; index += 1) {
     const item = state.batchItems[index];
-    if (item.status !== "pending") continue;
+    // Unchecked files stay pending and are intentionally skipped.
+    if (item.status !== "pending" || !item.selected) continue;
     if (state.batchCancelled) {
       item.status = "cancelled";
       continue;
     }
     item.status = "running";
     renderBatchList();
-    renderProgress(
-      (index / state.batchItems.length) * 100,
-      `${index + 1}/${state.batchItems.length} ${item.fileName} 처리 시작`
-    );
+    // Reset per item so each file's own 0->100 progress (from onOptimizeProgress)
+    // shows, instead of the monotonic bar sticking at 100% after the first file.
+    resetProgressAnimation();
+    renderProgress(2, `${index + 1}/${state.batchItems.length} ${item.fileName} 처리 중`);
     try {
       const plan = item.report
         ? createSubmissionPlan(item.report, {

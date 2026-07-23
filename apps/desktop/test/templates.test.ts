@@ -92,6 +92,23 @@ describe("template HTML builders", () => {
     expect(busyHtml).toBe("");
   });
 
+  it("renders a per-row selection checkbox that reflects the item's selected state", () => {
+    const selected: BatchItemLike = { path: "/x/a.hwpx", fileName: "a.hwpx", status: "pending", selected: true };
+    const unselected: BatchItemLike = { path: "/x/b.hwpx", fileName: "b.hwpx", status: "pending", selected: false };
+
+    const selectedHtml = batchItemRowHtml(selected, 3, { running: false });
+    expect(selectedHtml).toContain('class="batch-select"');
+    expect(selectedHtml).toContain('data-batch-index="3"');
+    expect(selectedHtml).toContain("checked");
+
+    const unselectedHtml = batchItemRowHtml(unselected, 4, { running: false });
+    expect(unselectedHtml).toContain('data-batch-index="4"');
+    expect(unselectedHtml).not.toContain("checked");
+
+    // While a batch is running the checkbox is disabled to prevent mid-run edits.
+    expect(batchItemRowHtml(selected, 0, { running: true })).toContain("disabled");
+  });
+
   it("renders pending batch rows with target criteria and pass or warning badges", () => {
     const passing: BatchItemLike = {
       path: "/x/report.hwpx",
