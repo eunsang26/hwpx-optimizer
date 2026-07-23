@@ -1,5 +1,5 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
-import { defaultImageConcurrency, mapLimit } from "./concurrency.js";
+import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageActionWithBudget } from "./opportunities.js";
@@ -14,6 +14,7 @@ export async function applyBalancedOptimizationPlan(input: {
   plan: OptimizationPlan;
   profile?: ImageOptimizationProfile;
   onTransformProgress?: (progress: { completed: number; total: number; target: string; action: TransformImageAction }) => void;
+  imageConcurrency?: number;
 }): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[] }> {
   const profile = input.profile ?? balancedImageProfile;
   const duplicateTargets = new Set(
@@ -39,7 +40,7 @@ export async function applyBalancedOptimizationPlan(input: {
   type TransformTask = { index: number; entry: HwpxEntry; action: TransformImageAction };
   type TransformOutcome =
     | { index: number; entry: HwpxEntry; action: TransformImageAction; status: "transformed"; outputPath: string; data: Buffer }
-    | { index: number; entry: HwpxEntry; action: TransformImageAction; status: "skipped"; size?: number };
+    | { index: number; entry: HwpxEntry; action: TransformImageAction; status: "skipped"; size?: number; reason?: string };
 
   const transformedEntries = new Array<HwpxEntry>(consolidated.pkg.entries.length);
   const tasks: TransformTask[] = [];
@@ -54,7 +55,7 @@ export async function applyBalancedOptimizationPlan(input: {
   }
 
   let completedTransforms = 0;
-  const outcomes = await mapLimit(tasks, defaultImageConcurrency(), async (task): Promise<TransformOutcome> => {
+  const outcomes = await mapLimit(tasks, resolveImageConcurrency(input.imageConcurrency), async (task): Promise<TransformOutcome> => {
     try {
       const transformed = await transformImageActionWithBudget(
         task.entry.path,
@@ -69,8 +70,7 @@ export async function applyBalancedOptimizationPlan(input: {
       return { ...task, status: "transformed", outputPath: transformed.outputPath, data: transformed.data };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      warnings.push(`${task.action} skipped for ${task.entry.path}: ${reason}`);
-      return { ...task, status: "skipped" };
+      return { ...task, status: "skipped", reason };
     } finally {
       completedTransforms += 1;
       input.onTransformProgress?.({
@@ -85,6 +85,9 @@ export async function applyBalancedOptimizationPlan(input: {
   for (const outcome of outcomes) {
     if (outcome.status === "skipped") {
       transformedEntries[outcome.index] = outcome.entry;
+      if (outcome.reason !== undefined) {
+        warnings.push(`${outcome.action} skipped for ${outcome.entry.path}: ${outcome.reason}`);
+      }
       skipped.push({
         type: outcome.action,
         target: outcome.entry.path,
