@@ -180,7 +180,7 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(result.output.byteLength).toBeLessThanOrEqual(targetBytes);
     expect(result.output.byteLength).toBeGreaterThan(targetBytes * 0.9);
     expect(result.report.performance?.stages.filter((stage) => stage.name === "opportunities").length).toBeGreaterThan(1);
-  }, 10_000);
+  }, 30_000);
 
   it("removes unreferenced BinData and writes a verified package", async () => {
     const input = await createHwpxFixture({

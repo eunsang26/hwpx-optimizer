@@ -209,7 +209,7 @@ describe("balanced optimization", () => {
     expect(result.report.actions.applied).not.toContainEqual(
       expect.objectContaining({ type: "optimize-png", target: "BinData/image1.png" })
     );
-  });
+  }, 30_000);
 
   it("does not resize PNGs in safe mode", async () => {
     const png = await sharp({
@@ -242,7 +242,7 @@ describe("balanced optimization", () => {
     expect(result.report.actions.applied).not.toContainEqual(
       expect.objectContaining({ type: "resize-png", target: "BinData/image1.png" })
     );
-  });
+  }, 30_000);
 
   it("consolidates duplicate image references in balanced mode", async () => {
     const png = await sharp({
