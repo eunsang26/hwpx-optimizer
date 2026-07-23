@@ -2,15 +2,22 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 type OptimizationMode = "safe" | "balanced" | "aggressive";
+// Keep in sync with apps/desktop/src/main/desktopService.ts (DesktopSettings)
+// and apps/desktop/src/shared/submissionPlan.ts (SubmissionLimit).
+type SubmissionLimitId = "none" | "mb5" | "mb10" | "mb20" | "mb30" | "mb41" | "mb50" | "mb100" | "custom";
+type PreservationPreference = "preserve" | "recommended" | "size";
+type BatchTargetMode = "aggregate" | "per-file";
 
 type DesktopSettings = {
+  settingsVersion?: number;
   defaultMode: OptimizationMode;
   saveNextToOriginal: boolean;
   saveReport: boolean;
   preventOverwrite: boolean;
   showAggressiveWarning: boolean;
-  submissionLimit: { id: string; bytes?: number };
-  preservationPreference: string;
+  submissionLimit: { id: SubmissionLimitId; customBytes?: number };
+  preservationPreference: PreservationPreference;
+  batchTargetMode: BatchTargetMode;
 };
 
 type OptimizeInput = {
@@ -19,6 +26,7 @@ type OptimizeInput = {
   outputDirectory?: string;
   outputMode?: "single" | "batch";
   actions?: string[];
+  targetBytes?: number;
 };
 
 type ProgressCallback = (progress: { percent: number; item: string }) => void;

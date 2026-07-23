@@ -90,7 +90,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const requestedReportPath = options.report ?? `${outputPath}.report.json`;
       const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       assertDoesNotTargetInput(reportPath, inputPath, "report");
-      await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2));
+      await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2), { exclusive: !overwrite });
       console.log(`Optimized ${inputPath}`);
       printOptimizationSummary(result.report);
       console.log(`Output: ${outputPath}`);
@@ -267,7 +267,7 @@ function printUsage(): void {
   console.error("  hwpx-opt report <file.hwpx> [--report report.txt|--out report.txt] [--analysis-mode quick|deep] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
   console.error("  hwpx-opt verify <file.hwpx> [--max-input-bytes bytes]");
   console.error("  hwpx-opt optimize <file.hwpx> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output.hwpx] [--report report.json] [--max-input-bytes bytes]");
-  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--batch-target-bytes bytes|--batch-target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--jobs count] [--max-input-bytes bytes]");
+  console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--batch-target-bytes bytes|--batch-target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--jobs count (1-4)] [--max-input-bytes bytes]");
   console.error("  hwpx-opt list-actions");
 }
 
@@ -463,7 +463,7 @@ async function runBatch(
       assertDoesNotTargetAnyInput(outputPath, inputPaths, "output");
       assertDoesNotTargetAnyInput(reportPath, inputPaths, "report");
       stage = "write-output";
-      await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2));
+      await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2), { exclusive: !overwrite });
       const savedBytes = result.report.savedBytes ?? 0;
       const savedPercent = result.report.savedPercent ?? 0;
       results[index] = {
@@ -599,13 +599,18 @@ function createBatchTargetFields(
   };
 }
 
+const MAX_BATCH_JOBS = 4;
+
 function parseBatchJobs(value: string | undefined): number {
   if (value === undefined) return 1;
   const jobs = Number(value);
   if (!Number.isInteger(jobs) || jobs <= 0) {
     throw new Error("--jobs must be a positive integer.");
   }
-  return Math.min(jobs, 4);
+  if (jobs > MAX_BATCH_JOBS) {
+    console.error(`--jobs is capped at ${MAX_BATCH_JOBS}; running ${MAX_BATCH_JOBS} concurrent jobs instead of ${jobs}.`);
+  }
+  return Math.min(jobs, MAX_BATCH_JOBS);
 }
 
 export function renderHumanReport(inputPath: string, report: OptimizationReport): string {
@@ -722,8 +727,25 @@ async function writeOptimizationArtifacts(
   outputPath: string,
   output: Buffer,
   reportPath: string,
-  reportContent: string
+  reportContent: string,
+  options: { exclusive?: boolean } = {}
 ): Promise<void> {
+  if (options.exclusive) {
+    // Non-overwriting mode: the target names were chosen because they did not
+    // exist, but a file could appear in the gap before we write. Create them with
+    // O_EXCL ("wx") so we fail loudly instead of clobbering that file via rename.
+    await assertArtifactTargetIsWritable(outputPath);
+    await assertArtifactTargetIsWritable(reportPath);
+    await writeFile(outputPath, output, { flag: "wx" });
+    try {
+      await writeFile(reportPath, reportContent, { flag: "wx" });
+    } catch (error) {
+      await rm(outputPath, { force: true });
+      throw error;
+    }
+    return;
+  }
+
   const outputTmpPath = temporaryPath(outputPath);
   const reportTmpPath = temporaryPath(reportPath);
   let reportPromoted = false;

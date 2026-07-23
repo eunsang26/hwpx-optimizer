@@ -24,7 +24,7 @@ describe("runCli", () => {
     expect(usage).toContain(
       "batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--batch-target-bytes bytes|--batch-target-mb mb]"
     );
-    expect(usage).toContain("[--jobs count]");
+    expect(usage).toContain("[--jobs count (1-4)]");
   });
 
   it("prints the action catalog with list-actions", async () => {

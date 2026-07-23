@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import {
   analyzeHwpxBuffer,
   extractImageDiffPreviews,
@@ -77,6 +77,7 @@ export async function handleCoreRequest(
           : await optimizeHwpxBufferBalanced(source, { actions: input.actions, onProgress: emitProgress });
     emitProgress?.({ percent: 88, item: "Preparing output file" });
     const outputPath = await nextOutputPath(input.filePath, input.outputDirectory, input.outputMode);
+    await assertDoesNotTargetInput(outputPath, input.filePath);
     await mkdir(dirname(outputPath), { recursive: true });
     emitProgress?.({ percent: 95, item: "Writing optimized document" });
     await writeArtifact(outputPath, result.output);
@@ -282,6 +283,24 @@ async function nextAvailableReportPath(requestedReportPath: string): Promise<str
     if (!(await pathExists(candidate))) return candidate;
   }
   throw new Error("Could not create a non-overwriting batch report path.");
+}
+
+// Safety rule: never overwrite the original input. The `_tauri_optimized` suffix
+// makes this structurally unlikely, but resolve both paths (following symlinks
+// where they exist) so a crafted outputDirectory can never point back at the input.
+async function assertDoesNotTargetInput(outputPath: string, inputPath: string): Promise<void> {
+  const [resolvedOutput, resolvedInput] = await Promise.all([realPathOrResolved(outputPath), realPathOrResolved(inputPath)]);
+  if (resolvedOutput === resolvedInput) {
+    throw new Error("Refusing to overwrite the original input document.");
+  }
+}
+
+async function realPathOrResolved(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch {
+    return resolve(path);
+  }
 }
 
 async function writeArtifact(path: string, content: Buffer): Promise<void> {

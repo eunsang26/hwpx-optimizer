@@ -27,6 +27,10 @@ let activeAnalyzeWorker: Worker | null = null;
 let activeOptimizeWorker: Worker | null = null;
 let pendingDocumentOperation: "analyze" | "optimize" | null = null;
 let nextWorkerRequestId = 1;
+// Watchdog: if the worker hangs (stuck sharp call, infinite loop) the IPC promise
+// would otherwise never settle, leaving pendingDocumentOperation stuck so every
+// later request is refused. Terminate and reject after this budget instead.
+const DOCUMENT_OPERATION_TIMEOUT_MS = 300_000;
 const pendingWorkerRequests = new Map<
   number,
   {
@@ -210,6 +214,7 @@ function registerIpc(): void {
       if (pendingDocumentOperation || activeAnalyzeWorker || activeOptimizeWorker) {
         throw new Error("Another optimization is already running.");
       }
+      validateOptimizeInput(input);
       pendingDocumentOperation = "optimize";
       try {
         const filePath = await requireAllowedInputPath(input.filePath);
@@ -640,10 +645,39 @@ async function createSmokeHwpxFixture(): Promise<Buffer> {
   return Buffer.from(await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }));
 }
 
+const OPTIMIZATION_MODES: readonly OptimizationMode[] = ["safe", "balanced", "aggressive"];
+
+function validateOptimizeInput(input: {
+  filePath: unknown;
+  mode: unknown;
+  outputDirectory?: unknown;
+  outputMode?: unknown;
+  actions?: unknown;
+  targetBytes?: unknown;
+}): void {
+  if (typeof input.filePath !== "string" || input.filePath.length === 0) {
+    throw new Error("Invalid optimize request: filePath must be a non-empty string.");
+  }
+  if (!OPTIMIZATION_MODES.includes(input.mode as OptimizationMode)) {
+    throw new Error("Invalid optimize request: mode must be safe, balanced, or aggressive.");
+  }
+  if (input.actions !== undefined && (!Array.isArray(input.actions) || input.actions.some((action) => typeof action !== "string"))) {
+    throw new Error("Invalid optimize request: actions must be an array of strings.");
+  }
+  if (input.targetBytes !== undefined && (typeof input.targetBytes !== "number" || !Number.isFinite(input.targetBytes) || input.targetBytes <= 0)) {
+    throw new Error("Invalid optimize request: targetBytes must be a positive number.");
+  }
+  if (input.outputMode !== undefined && input.outputMode !== "single" && input.outputMode !== "batch") {
+    throw new Error("Invalid optimize request: outputMode must be 'single' or 'batch'.");
+  }
+}
+
 function runAnalyzeWorker(filePath: string): Promise<DesktopAnalysisResult> {
   const worker = ensureDocumentWorker();
   activeAnalyzeWorker = worker;
-  return postWorkerRequest<DesktopAnalysisResult>({ type: "analyze", filePath }).finally(() => {
+  return postWorkerRequest<DesktopAnalysisResult>({ type: "analyze", filePath }, undefined, {
+    timeoutMs: DOCUMENT_OPERATION_TIMEOUT_MS
+  }).finally(() => {
     if (activeAnalyzeWorker === worker) activeAnalyzeWorker = null;
   });
 }
@@ -661,7 +695,9 @@ function runOptimizeWorker(
 ): Promise<DesktopOptimizeResult> {
   const worker = ensureDocumentWorker();
   activeOptimizeWorker = worker;
-  return postWorkerRequest<DesktopOptimizeResult>({ type: "optimize", input }, onProgress)
+  return postWorkerRequest<DesktopOptimizeResult>({ type: "optimize", input }, onProgress, {
+    timeoutMs: DOCUMENT_OPERATION_TIMEOUT_MS
+  })
     .then((result) => {
       onProgress({ percent: 100, item: "Optimization complete" });
       return result;
@@ -708,17 +744,35 @@ function ensureDocumentWorker(): Worker {
 
 function postWorkerRequest<T = { ok: true }>(
   request: DocumentWorkerRequestInput,
-  onProgress?: (progress: { percent: number; item: string }) => void
+  onProgress?: (progress: { percent: number; item: string }) => void,
+  options: { timeoutMs?: number } = {}
 ): Promise<T> {
   const worker = ensureDocumentWorker();
   const id = nextWorkerRequestId;
   nextWorkerRequestId += 1;
   return new Promise<T>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     pendingWorkerRequests.set(id, {
-      resolve: (value) => resolve(value as T),
-      reject,
+      resolve: (value) => {
+        if (timer) clearTimeout(timer);
+        resolve(value as T);
+      },
+      reject: (reason) => {
+        if (timer) clearTimeout(timer);
+        reject(reason);
+      },
       onProgress
     });
+    if (options.timeoutMs && options.timeoutMs > 0) {
+      timer = setTimeout(() => {
+        if (!pendingWorkerRequests.has(id)) return;
+        pendingWorkerRequests.delete(id);
+        reject(new Error("문서 작업이 시간 내에 완료되지 않아 중단했습니다."));
+        // Terminating triggers the worker "exit" handler, which rejects any
+        // other pending requests and clears the busy flags.
+        void worker.terminate();
+      }, options.timeoutMs);
+    }
     worker.postMessage({ id, ...request });
   });
 }
