@@ -9,12 +9,14 @@ import {
   analyzeHwpxBuffer,
   estimateNonOverlappingSavingBytes,
   mapLimit,
-  optimizeHwpxBufferAggressive,
-  optimizeHwpxBufferBalanced,
-  optimizeHwpxBufferSafe,
   verifyHwpxOutput
 } from "@hwpx-optimizer/core";
 import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
+import { ACTION_CATALOG, optimizeByMode, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
+import type { OptimizationMode } from "./optimizeByMode.js";
+
+export { ACTION_CATALOG, optimizeByMode, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
+export type { OptimizationMode, OptimizeByModeOptions } from "./optimizeByMode.js";
 
 const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
 
@@ -192,25 +194,6 @@ function parseMaxInputBytes(value: string | undefined): number {
   return Math.floor(parsed);
 }
 
-function parseTargetBytes(options: Record<string, string>): number | undefined {
-  const hasBytes = options["target-bytes"] !== undefined;
-  const hasMb = options["target-mb"] !== undefined;
-  if (hasBytes && hasMb) {
-    throw new Error("Use only one of --target-bytes or --target-mb.");
-  }
-  if (hasBytes) {
-    const bytes = Math.floor(parsePositiveNumber(options["target-bytes"], "--target-bytes"));
-    if (bytes <= 0) throw new Error("--target-bytes must be a positive number.");
-    return bytes;
-  }
-  if (hasMb) {
-    const bytes = Math.floor(parsePositiveNumber(options["target-mb"], "--target-mb") * 1024 * 1024);
-    if (bytes <= 0) throw new Error("--target-mb must be at least one byte.");
-    return bytes;
-  }
-  return undefined;
-}
-
 function parseBatchTargetBytes(options: Record<string, string>): number | undefined {
   const hasBatchBytes = options["batch-target-bytes"] !== undefined;
   const hasBatchMb = options["batch-target-mb"] !== undefined;
@@ -239,14 +222,6 @@ function parseAnalysisMode(value: string | undefined): "quick" | "deep" | undefi
   throw new Error("--analysis-mode must be quick or deep.");
 }
 
-function parsePositiveNumber(value: string | undefined, flag: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${flag} must be a positive number.`);
-  }
-  return parsed;
-}
-
 function assertDoesNotTargetInput(targetPath: string, inputPath: string, kind: "output" | "report"): void {
   if (pathsReferToSameFile(targetPath, inputPath)) {
     throw new Error(`Refusing to overwrite the original input file with ${kind}.`);
@@ -271,92 +246,6 @@ function printUsage(): void {
   console.error("  hwpx-opt batch <directory> --mode safe|balanced|aggressive [--target-bytes bytes|--target-mb mb] [--batch-target-bytes bytes|--batch-target-mb mb] [--actions action1,action2] [--allow-larger] [--overwrite] [--out output-directory] [--jobs count] [--max-input-bytes bytes]");
   console.error("  hwpx-opt list-actions");
 }
-
-const ACTION_CATALOG: Array<{
-  action: string;
-  description: string;
-  modes: string;
-  risk: string;
-  visualImpact: string;
-}> = [
-  {
-    action: "strip-metadata",
-    description: "Remove JPEG XMP/IPTC/comment segments while preserving EXIF orientation",
-    modes: "safe, balanced, aggressive",
-    risk: "safe",
-    visualImpact: "none"
-  },
-  {
-    action: "optimize-png",
-    description: "Re-encode PNG with maximum DEFLATE; aggressive mode may use palette reduction",
-    modes: "safe, balanced, aggressive",
-    risk: "safe~medium",
-    visualImpact: "none~low"
-  },
-  {
-    action: "minify-xml",
-    description: "Re-serialize XML entries without insignificant whitespace",
-    modes: "safe",
-    risk: "safe",
-    visualImpact: "none"
-  },
-  {
-    action: "remove-unused",
-    description: "Drop BinData entries not referenced by any XML",
-    modes: "safe",
-    risk: "safe",
-    visualImpact: "none"
-  },
-  {
-    action: "convert-bmp-to-png",
-    description: "Decode BMP and re-encode as PNG (with optional resize)",
-    modes: "balanced, aggressive",
-    risk: "medium",
-    visualImpact: "low~medium"
-  },
-  {
-    action: "resize-jpeg",
-    description: "Resize and re-encode oversized JPEGs to display-size budget with MozJPEG",
-    modes: "balanced, aggressive",
-    risk: "medium",
-    visualImpact: "medium"
-  },
-  {
-    action: "resize-png",
-    description: "Resize oversized PNGs to display-size budget while keeping PNG output",
-    modes: "balanced, aggressive",
-    risk: "medium",
-    visualImpact: "low"
-  },
-  {
-    action: "convert-tiff-to-png",
-    description: "Decode TIFF and re-encode as PNG (with optional resize)",
-    modes: "balanced, aggressive",
-    risk: "medium",
-    visualImpact: "low~medium"
-  },
-  {
-    action: "clean-shape-comment",
-    description: "Strip private filename / dimension lines inside <hp:shapeComment> blocks",
-    modes: "balanced, aggressive",
-    risk: "safe",
-    visualImpact: "none"
-  },
-  {
-    action: "consolidate-duplicate-images",
-    description: "Redirect duplicate image references to a canonical resource and drop the duplicate file",
-    modes: "balanced, aggressive",
-    risk: "medium",
-    visualImpact: "none"
-  },
-  {
-    action: "repack-zip",
-    description: "Always-on final ZIP repack with DEFLATE level 9",
-    modes: "safe, balanced, aggressive",
-    risk: "safe",
-    visualImpact: "none"
-  }
-];
 
 function printActionList(): void {
   console.log("Available --actions keys:");
@@ -400,23 +289,6 @@ function printOptimizationSummary(report: OptimizationReport): void {
   }
 
   console.log(`Applied: ${counts.map(([type, count]) => `${type} ${count}`).join(", ")}`);
-}
-
-async function optimizeByMode(
-  input: Buffer,
-  mode: OptimizationMode,
-  options: Record<string, string>,
-  targetBytesOverride?: number
-): Promise<{ output: Buffer; report: OptimizationReport }> {
-  const targetBytes = targetBytesOverride ?? parseTargetBytes(options);
-  if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes });
-  const advancedOptions = {
-    actions: parseActionList(options.actions),
-    allowLarger: options["allow-larger"] === "true",
-    targetBytes
-  };
-  if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advancedOptions);
-  return optimizeHwpxBufferBalanced(input, advancedOptions);
 }
 
 async function runBatch(
@@ -763,24 +635,6 @@ function temporaryPath(path: string): string {
   const nonce = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${path}.tmp-${nonce}`;
 }
-
-function parseActionList(value?: string): string[] | undefined {
-  if (!value) return undefined;
-  const actions = value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const allowed = new Set(ACTION_CATALOG.map((item) => item.action));
-  const unknown = actions.filter((action) => !allowed.has(action));
-  if (unknown.length > 0) {
-    throw new Error(
-      `Unknown --actions: ${unknown.join(", ")}. Run "hwpx-opt list-actions" to see valid actions.`
-    );
-  }
-  return actions;
-}
-
-type OptimizationMode = "safe" | "balanced" | "aggressive";
 
 type BatchFailureStage = "read-input" | "optimize" | "resolve-output-path" | "write-output" | "write-report";
 
