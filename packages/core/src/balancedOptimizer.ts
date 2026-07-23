@@ -20,7 +20,7 @@ export async function applyBalancedOptimizationPlan(input: {
   const duplicateTargets = new Set(
     input.plan.actions.filter((action) => action.type === "consolidate-duplicate-images").map((action) => action.target)
   );
-  const consolidated = await consolidateDuplicateImages(input.pkg, duplicateTargets);
+  const consolidated = await consolidateDuplicateImages(input.pkg, duplicateTargets, input.imageConcurrency);
   const applied: AppliedAction[] = [...consolidated.applied];
   const skipped: AppliedAction[] = [...consolidated.skipped];
   const warnings: string[] = [];
@@ -148,14 +148,15 @@ function isTransformImageAction(action: string): action is TransformImageAction 
 
 async function consolidateDuplicateImages(
   pkg: HwpxPackage,
-  targets: Set<string>
+  targets: Set<string>,
+  imageConcurrency?: number
 ): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[] }> {
   if (targets.size === 0) return { pkg, applied: [], skipped: [] };
 
   const canonicalByDuplicatePath = new Map<string, string>();
   const duplicateSizes = new Map<string, number>();
   const imageSizes = new Map(pkg.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry.size]));
-  for (const group of await findImageConsolidationGroups(pkg)) {
+  for (const group of await findImageConsolidationGroups(pkg, { imageConcurrency })) {
     for (const duplicatePath of group.paths) {
       if (duplicatePath === group.canonicalPath || !targets.has(duplicatePath)) continue;
       canonicalByDuplicatePath.set(duplicatePath, group.canonicalPath);

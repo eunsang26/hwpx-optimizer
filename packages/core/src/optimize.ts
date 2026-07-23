@@ -47,7 +47,8 @@ export async function analyzeHwpxBuffer(
   );
   const opportunities = await timer.measure("opportunities", () =>
     detectEstimatedOptimizationOpportunities(pkg, balancedImageProfile, {
-      duplicateMode: options.analysisMode === "quick" ? "byte" : "visual"
+      duplicateMode: options.analysisMode === "quick" ? "byte" : "visual",
+      imageConcurrency: options.imageConcurrency
     })
   );
   return createReportWithPerformance(timer, () =>
@@ -242,7 +243,9 @@ async function optimizeHwpxBufferWithProfile(
   const pkg = settings.pkg;
   const analysis = settings.analysis;
   const opportunities = await settings.timer.measure("opportunities", () =>
-    detectEstimatedOptimizationOpportunities(pkg, settings.profile)
+    detectEstimatedOptimizationOpportunities(pkg, settings.profile, {
+      imageConcurrency: settings.options.imageConcurrency
+    })
   );
   const selectedOpportunities =
     settings.options.actions !== undefined

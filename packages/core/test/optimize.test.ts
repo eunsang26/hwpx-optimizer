@@ -354,6 +354,27 @@ describe("optimizeHwpxBufferSafe", () => {
     const { output } = await optimizeHwpxBufferSafe(input, { imageConcurrency: 1 });
     expect(output.byteLength).toBeLessThan(input.byteLength);
   });
+
+  it("accepts imageConcurrency on balanced optimize (including duplicate-image consolidation) and produces a smaller file", async () => {
+    // Regression test: imageConcurrency previously was not threaded into the
+    // duplicate-image consolidation decode pass (opportunities.ts ->
+    // findImageConsolidationGroups / balancedOptimizer.ts -> consolidateDuplicateImages),
+    // so balanced/aggressive optimize always decoded at the default concurrency
+    // regardless of the caller's requested limit. This exercises that path with
+    // imageConcurrency: 1 to confirm the option is accepted end-to-end and the
+    // result is unaffected (grouping/output is concurrency-independent).
+    const input = await createReportLikeHwpxFixture();
+    const { output } = await optimizeHwpxBufferBalanced(input, { imageConcurrency: 1 });
+    expect(output.byteLength).toBeLessThan(input.byteLength);
+  });
+
+  it("accepts imageConcurrency on analyzeHwpxBuffer and reports duplicate-image opportunities", async () => {
+    const input = await createReportLikeHwpxFixture();
+    const report = await analyzeHwpxBuffer(input, { imageConcurrency: 1, analysisMode: "deep" });
+    expect(
+      report.opportunities.some((opportunity) => opportunity.action === "consolidate-duplicate-images")
+    ).toBe(true);
+  });
 });
 
 function createBmp24(width: number, height: number): Buffer {
