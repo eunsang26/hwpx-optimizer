@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
 import { readHwpxPackage } from "../src/reader.js";
-import { createHwpxFixture } from "./fixtures.js";
+import { createHwpxFixture, createReportLikeHwpxFixture } from "./fixtures.js";
 
 describe("optimizeHwpxBufferSafe", () => {
   it("records a missed target without over-compressing or mutating the original result", async () => {
@@ -347,6 +347,12 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(result.report.warnings.some((warning) => warning.includes("BinData/broken.png"))).toBe(
       true
     );
+  });
+
+  it("accepts imageConcurrency on safe optimize and produces a smaller file", async () => {
+    const input = await createReportLikeHwpxFixture();
+    const { output } = await optimizeHwpxBufferSafe(input, { imageConcurrency: 1 });
+    expect(output.byteLength).toBeLessThan(input.byteLength);
   });
 });
 
