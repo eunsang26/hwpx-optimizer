@@ -1,7 +1,7 @@
 # Worker-Pool Batch — Design
 
 - Date: 2026-07-23
-- Status: Revised x2 after Codex review (gpt-5.6-sol) — pending final spec review
+- Status: Revised x2 after Codex review (gpt-5.6-sol) + self-review — ready to plan
 - Scope: CLI `batch` subcommand only. Desktop (single interactive document + its existing single worker) is unchanged. Core stays pure (no fs/terminal I/O).
 
 ## 1. Problem & Goal
@@ -103,14 +103,19 @@ logic is unchanged.
     `imageConcurrency` option**, read at call time (NOT an env var, NOT an
     import-time global). This single validated value must be threaded through
     **every** image-related `mapLimit` fan-out invoked during a document
-    optimization, not just the apply/verify surfaces:
-    `analyzeHwpxPackage` ([analyzer.ts](../../../packages/core/src/analyzer.ts)),
-    duplicate detection ([imageDuplicates.ts](../../../packages/core/src/imageDuplicates.ts)),
-    opportunity detection ([opportunities.ts](../../../packages/core/src/opportunities.ts)),
-    `applySafeOptimizationPlan` ([optimizer.ts](../../../packages/core/src/optimizer.ts)),
-    `applyBalancedOptimizationPlan` ([balancedOptimizer.ts](../../../packages/core/src/balancedOptimizer.ts)),
-    and `verifyHwpxOutput` ([verifier.ts](../../../packages/core/src/verifier.ts)).
-    Each defaults to `defaultImageConcurrency()`
+    optimization, not just the apply/verify surfaces. The authoritative list of
+    image `mapLimit` sites (verified by grep — every `defaultImageConcurrency()`
+    call in core) is exactly:
+    `analyzeHwpxPackage` ([analyzer.ts:65](../../../packages/core/src/analyzer.ts)),
+    duplicate detection — **two** sites
+    ([imageDuplicates.ts:55](../../../packages/core/src/imageDuplicates.ts) and
+    [imageDuplicates.ts:103](../../../packages/core/src/imageDuplicates.ts)),
+    `applySafeOptimizationPlan` ([optimizer.ts:34](../../../packages/core/src/optimizer.ts)),
+    `applyBalancedOptimizationPlan` ([balancedOptimizer.ts:57](../../../packages/core/src/balancedOptimizer.ts)),
+    and `verifyHwpxOutput` ([verifier.ts:144](../../../packages/core/src/verifier.ts)).
+    (`opportunities.ts` is NOT a site — its `sharp` calls run *inside*
+    balancedOptimizer's `mapLimit`, so they are already bounded by it.)
+    Each site defaults to `defaultImageConcurrency()`
     ([concurrency.ts](../../../packages/core/src/concurrency.ts)) when the option
     is omitted, preserving current behavior for non-batch callers.
   - **Honest claim:** total image throughput is NOT simply `pool size`. sharp also
@@ -255,16 +260,19 @@ Desktop always runs built `.js`. CLI differs: `npm run cli` runs sources via
 - Changed: root [package.json](../../../package.json) `cli` script →
   `node --import tsx --conditions=development packages/cli/src/index.ts`
 - Changed (core, **explicit `imageConcurrency?: number` option — no env var**),
-  threaded through EVERY image `mapLimit` used by optimization:
-  `analyzeHwpxPackage` ([analyzer.ts](../../../packages/core/src/analyzer.ts)),
-  duplicate detection ([imageDuplicates.ts](../../../packages/core/src/imageDuplicates.ts)),
-  opportunity detection ([opportunities.ts](../../../packages/core/src/opportunities.ts)),
-  `applySafeOptimizationPlan` ([optimizer.ts](../../../packages/core/src/optimizer.ts)),
-  `applyBalancedOptimizationPlan` ([balancedOptimizer.ts](../../../packages/core/src/balancedOptimizer.ts) —
-  also change to indexed outcomes + entry-order warning append, §8),
-  `verifyHwpxOutput` ([verifier.ts](../../../packages/core/src/verifier.ts)); each
+  threaded through the 5 files / 6 image `mapLimit` sites (authoritative grep list):
+  `analyzeHwpxPackage` ([analyzer.ts:65](../../../packages/core/src/analyzer.ts)),
+  duplicate detection — both sites
+  ([imageDuplicates.ts:55](../../../packages/core/src/imageDuplicates.ts),
+  [imageDuplicates.ts:103](../../../packages/core/src/imageDuplicates.ts)),
+  `applySafeOptimizationPlan` ([optimizer.ts:34](../../../packages/core/src/optimizer.ts)),
+  `applyBalancedOptimizationPlan` ([balancedOptimizer.ts:57](../../../packages/core/src/balancedOptimizer.ts) —
+  also change to indexed outcomes carrying the skip `reason`, and append warnings
+  in the entry-order `for (const outcome of outcomes)` loop, §8),
+  `verifyHwpxOutput` ([verifier.ts:144](../../../packages/core/src/verifier.ts)); each
   defaults to `defaultImageConcurrency()`
   ([concurrency.ts](../../../packages/core/src/concurrency.ts)) when omitted.
+  (`opportunities.ts` is intentionally excluded — no independent fan-out.)
 - Tests: `packages/cli/test/workerPool.test.ts`, extend
   `packages/cli/test/cli.test.ts`; core concurrency-option + warning-order tests.
 
