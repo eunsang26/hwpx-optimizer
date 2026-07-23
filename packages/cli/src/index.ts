@@ -2,6 +2,7 @@
 
 import { constants, realpathSync } from "node:fs";
 import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { availableParallelism } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -599,13 +600,14 @@ function createBatchTargetFields(
   };
 }
 
-function parseBatchJobs(value: string | undefined): number {
-  if (value === undefined) return 1;
+export function parseBatchJobs(value: string | undefined): number {
+  if (value === undefined) return Math.max(1, Math.min(availableParallelism() - 1, 4));
+  if (value === "max") return Math.max(1, availableParallelism());
   const jobs = Number(value);
   if (!Number.isInteger(jobs) || jobs <= 0) {
-    throw new Error("--jobs must be a positive integer.");
+    throw new Error('--jobs must be a positive integer or "max".');
   }
-  return Math.min(jobs, 4);
+  return jobs;
 }
 
 export function renderHumanReport(inputPath: string, report: OptimizationReport): string {

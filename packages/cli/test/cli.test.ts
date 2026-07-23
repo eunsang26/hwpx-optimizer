@@ -1,11 +1,11 @@
 import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 import { createHwpxFixture } from "../../core/test/fixtures.js";
-import { isCliEntrypoint, printAnalysisSummaryForTest, renderHumanReport, runCli } from "../src/index.js";
+import { isCliEntrypoint, parseBatchJobs, printAnalysisSummaryForTest, renderHumanReport, runCli } from "../src/index.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 
 describe("runCli", () => {
@@ -860,6 +860,19 @@ describe("runCli", () => {
 
     expect(code).toBe(1);
     expect(await readFile(join(inputDir, "good.optimized.hwpx"))).toEqual(existingInput);
+  });
+});
+
+describe("parseBatchJobs", () => {
+  it("maps 'max' to the core count", () => {
+    expect(parseBatchJobs("max")).toBe(availableParallelism());
+  });
+  it("honors an explicit number above 4", () => {
+    expect(parseBatchJobs("8")).toBe(8);
+  });
+  it("rejects invalid values", () => {
+    expect(() => parseBatchJobs("0")).toThrow(/positive integer or "max"/);
+    expect(() => parseBatchJobs("-2")).toThrow(/positive integer or "max"/);
   });
 });
 
