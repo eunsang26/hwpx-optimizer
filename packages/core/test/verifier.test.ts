@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 import { analyzeHwpxPackage } from "../src/analyzer.js";
 import { computeSsim } from "../src/imagePreview.js";
@@ -22,6 +23,16 @@ describe("verifyHwpxOutput", () => {
     });
 
     await expect(verifyHwpxOutput(output)).rejects.toThrow(/missing required files/i);
+  });
+
+  it("rejects HWPX packages whose mimetype entry is compressed", async () => {
+    const zip = new JSZip();
+    zip.file("mimetype", "application/hwp+zip");
+    zip.file("Contents/content.hpf", '<opf:package xmlns:opf="http://www.idpf.org/2007/opf" />');
+    zip.file("Contents/section0.xml", "<root />");
+    const output = Buffer.from(await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }));
+
+    await expect(verifyHwpxOutput(output)).rejects.toThrow(/mimetype entry must be stored without compression/);
   });
 
   it("rejects malformed XML entries", async () => {
@@ -50,7 +61,7 @@ describe("verifyHwpxOutput", () => {
         originalPackage,
         originalAnalysis
       })
-    ).rejects.toThrow(/not a readable ZIP archive/);
+    ).rejects.toThrow(/does not start with a ZIP local file header/);
   });
 
   it("rejects safe-mode outputs that change image dimensions", async () => {

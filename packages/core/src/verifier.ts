@@ -34,6 +34,7 @@ export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutput
       "verifyHwpxOutput requires both `original` and `mode` for cross-package verification, or neither."
     );
   }
+  verifyHwpxContainerLayout(output);
   const pkg = await readHwpxPackage(output);
   verifyParsedXml(pkg);
   const graph = buildReferenceGraph(pkg);
@@ -48,6 +49,35 @@ export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutput
       originalAnalysis: options.originalAnalysis,
       outputAnalysis: options.outputAnalysis
     });
+  }
+}
+
+function verifyHwpxContainerLayout(output: Buffer): void {
+  const mimetype = Buffer.from("application/hwp+zip");
+  if (output.byteLength < 30 || output.readUInt32LE(0) !== 0x04034b50) {
+    throw new Error("Verification failed: HWPX package does not start with a ZIP local file header");
+  }
+
+  const compressionMethod = output.readUInt16LE(8);
+  const fileNameLength = output.readUInt16LE(26);
+  const extraLength = output.readUInt16LE(28);
+  const nameStart = 30;
+  const nameEnd = nameStart + fileNameLength;
+  const dataStart = nameEnd + extraLength;
+  const dataEnd = dataStart + mimetype.byteLength;
+  if (dataEnd > output.byteLength) {
+    throw new Error("Verification failed: HWPX mimetype entry is truncated");
+  }
+
+  const name = output.subarray(nameStart, nameEnd).toString("utf8");
+  if (name !== "mimetype") {
+    throw new Error("Verification failed: HWPX mimetype entry must be first in the ZIP package");
+  }
+  if (compressionMethod !== 0) {
+    throw new Error("Verification failed: HWPX mimetype entry must be stored without compression");
+  }
+  if (!output.subarray(dataStart, dataEnd).equals(mimetype)) {
+    throw new Error("Verification failed: HWPX mimetype entry must be application/hwp+zip");
   }
 }
 

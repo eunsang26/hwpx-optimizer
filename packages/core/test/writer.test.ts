@@ -3,6 +3,31 @@ import { writeHwpxPackage } from "../src/writer.js";
 import type { HwpxPackage } from "../src/types.js";
 
 describe("writeHwpxPackage", () => {
+  it("writes the HWPX mimetype entry first and without compression", async () => {
+    const pkg: HwpxPackage = {
+      entries: [
+        {
+          path: "Contents/section0.xml",
+          data: Buffer.from("<root />"),
+          size: 8,
+          kind: "xml"
+        },
+        {
+          path: "mimetype",
+          data: Buffer.from("application/hwp+zip"),
+          size: 19,
+          kind: "other"
+        }
+      ]
+    };
+
+    const output = await writeHwpxPackage(pkg);
+
+    expect(firstLocalZipEntryName(output)).toBe("mimetype");
+    expect(localZipCompressionMethod(output, "mimetype")).toBe(0);
+    expect(output.subarray(38, 57).toString("utf8")).toBe("application/hwp+zip");
+  });
+
   it("accepts an explicit ZIP compression level for speed-sensitive callers", async () => {
     const xml = Array.from({ length: 5000 }, (_, index) => `<p id="${index}">document image optimization test data</p>`).join("");
     const pkg: HwpxPackage = {
@@ -62,6 +87,12 @@ describe("writeHwpxPackage", () => {
     expect(localZipCompressionMethod(output, "BinData/raw.bmp")).toBe(8);
   });
 });
+
+function firstLocalZipEntryName(zip: Buffer): string | undefined {
+  if (zip.byteLength < 30 || zip.readUInt32LE(0) !== 0x04034b50) return undefined;
+  const fileNameLength = zip.readUInt16LE(26);
+  return zip.subarray(30, 30 + fileNameLength).toString("utf8");
+}
 
 function localZipCompressionMethod(zip: Buffer, path: string): number | undefined {
   let offset = 0;

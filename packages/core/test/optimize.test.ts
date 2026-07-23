@@ -199,7 +199,8 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(output.entries.map((entry) => entry.path).sort()).toEqual([
       "BinData/used.bin",
       "Contents/content.hpf",
-      "Contents/section0.xml"
+      "Contents/section0.xml",
+      "mimetype"
     ]);
     expect(result.report.actions.applied).toContainEqual(
       expect.objectContaining({ type: "remove-unused", target: "BinData/unused.bin" })
