@@ -9,6 +9,12 @@ export function defaultImageConcurrency(): number {
   return Math.max(1, Math.min(6, Math.floor(cpuCount || 4)));
 }
 
+export function resolveImageConcurrency(requested?: number): number {
+  if (requested === undefined) return defaultImageConcurrency();
+  if (!Number.isFinite(requested)) return defaultImageConcurrency();
+  return Math.max(1, Math.floor(requested));
+}
+
 export async function mapLimit<T, R>(
   items: T[],
   limit: number,
