@@ -554,7 +554,14 @@ async function sweepStaleTempFiles(outputDir: string): Promise<void> {
       // An interrupt during the claim loop can leave one of these behind; the next
       // run's sweep must reap it too, or nextAvailablePath permanently shifts past
       // it. A real optimized HWPX/zip or report JSON produced by this tool is never
-      // 0 bytes, so removing any 0-byte file here is safe.
+      // 0 bytes, so removing a 0-byte file here is safe -- but only if it also
+      // matches this tool's own output naming. `--out` may point at a shared or
+      // the input directory (the sweep runs before input enumeration when
+      // out==inputDir), so an unrelated 0-byte file -- or a degenerate 0-byte
+      // *.hwpx input -- must never be swept.
+      if (!name.endsWith(".optimized.hwpx") && !name.endsWith(".optimized.hwpx.report.json")) {
+        return;
+      }
       try {
         const stats = await stat(fullPath);
         if (stats.isFile() && stats.size === 0) {
@@ -589,8 +596,19 @@ async function commitBatchJob(meta: BatchJobMeta): Promise<{ ok: true } | { ok: 
   try {
     await rename(meta.tempReportPath, meta.reportPath);
   } catch (error) {
-    // Roll back the output promotion so we never leave a final output without its report.
-    await rename(meta.outputPath, meta.tempOutputPath).catch(() => {});
+    if (meta.claimed) {
+      // Non-overwrite mode: the final path was only a 0-byte PathClaimRegistry
+      // placeholder before the rename above, so rolling the output back to temp
+      // (for cleanupFailedJob to release/unlink) loses nothing real.
+      await rename(meta.outputPath, meta.tempOutputPath).catch(() => {});
+    }
+    // --overwrite mode: outputPath now holds the freshly written, valid,
+    // non-empty optimized file -- the rename above already atomically replaced
+    // whatever was there before. Per spec (§7), --overwrite has a weaker
+    // guarantee: a failure between the output and report rename may leave the
+    // new output with a stale/missing report, but the output itself must never
+    // be rolled back or deleted here. Only the temp report gets cleaned up
+    // (by cleanupFailedJob, which never touches final paths when !claimed).
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
   return { ok: true };
