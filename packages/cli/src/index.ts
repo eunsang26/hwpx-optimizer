@@ -5,15 +5,13 @@ import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "n
 import { availableParallelism } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  analyzeHwpxBuffer,
-  estimateNonOverlappingSavingBytes,
-  mapLimit,
-  verifyHwpxOutput
-} from "@hwpx-optimizer/core";
+import { analyzeHwpxBuffer, estimateNonOverlappingSavingBytes, verifyHwpxOutput } from "@hwpx-optimizer/core";
 import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
 import { ACTION_CATALOG, optimizeByMode, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
 import type { OptimizationMode } from "./optimizeByMode.js";
+import { PathClaimRegistry } from "./pathClaims.js";
+import { WorkerPool } from "./workerPool.js";
+import type { OptimizeJob, OptimizeJobResult } from "./optimizeWorker.js";
 
 export { ACTION_CATALOG, optimizeByMode, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
 export type { OptimizationMode, OptimizeByModeOptions } from "./optimizeByMode.js";
@@ -291,7 +289,7 @@ function printOptimizationSummary(report: OptimizationReport): void {
   console.log(`Applied: ${counts.map(([type, count]) => `${type} ${count}`).join(", ")}`);
 }
 
-async function runBatch(
+export async function runBatch(
   inputDir: string,
   options: Record<string, string>
 ): Promise<{ optimized: number; failed: number; reportPath: string }> {
@@ -302,6 +300,7 @@ async function runBatch(
   const outputDir = options.out ?? join(inputDir, "optimized");
   const overwrite = options.overwrite === "true";
   await mkdir(outputDir, { recursive: true });
+  await sweepStaleTempFiles(outputDir);
   const batchTargetBytes = parseBatchTargetBytes(options);
 
   const files = (await readdir(inputDir, { withFileTypes: true }))
@@ -316,91 +315,268 @@ async function runBatch(
   const targetByFile = batchTargetBytes
     ? allocateBatchTargetBytes(files, originalSizeByFile, batchTargetBytes)
     : new Map<string, number>();
-  const jobs = parseBatchJobs(options.jobs);
-  const results = new Array<BatchFileResult>(files.length);
+  const jobsRequested = parseBatchJobs(options.jobs);
   const startedAt = Date.now();
 
-  await mapLimit([...files.entries()], jobs, async ([index, file]) => {
-    const sourcePath = join(inputDir, file);
+  // Sequential claim pass: reserves each file's final output/report path
+  // (atomically, via PathClaimRegistry) before any worker touches disk.
+  // A claim/overlap failure here is per-file and does not abort the batch.
+  const claims = new PathClaimRegistry();
+  const uncommittedClaimedPaths = new Set<string>();
+  const results = new Array<BatchFileResult>(files.length);
+  const jobDescriptors: OptimizeJob[] = [];
+  const jobMeta: BatchJobMeta[] = [];
+
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    const sourcePath = inputPaths[index];
     const progressPrefix = `[${index + 1}/${files.length}] ${file}`;
-    let stage: BatchFailureStage = "read-input";
+    const claimedThisIteration: string[] = [];
     try {
-      const buffer = await readSupportedInput(sourcePath, options);
-      stage = "optimize";
-      const result = await optimizeByMode(buffer, mode, options, targetByFile.get(file));
-      stage = "resolve-output-path";
       const requestedOutputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
-      const outputPath = overwrite ? requestedOutputPath : await nextAvailablePath(requestedOutputPath);
+      let outputPath: string;
+      if (overwrite) {
+        outputPath = requestedOutputPath;
+      } else {
+        outputPath = await claims.claim(await nextAvailablePath(requestedOutputPath));
+        claimedThisIteration.push(outputPath);
+      }
       const requestedReportPath = `${outputPath}.report.json`;
-      const reportPath = overwrite ? requestedReportPath : await nextAvailablePath(requestedReportPath);
+      let reportPath: string;
+      if (overwrite) {
+        reportPath = requestedReportPath;
+      } else {
+        reportPath = await claims.claim(await nextAvailablePath(requestedReportPath));
+        claimedThisIteration.push(reportPath);
+      }
       assertDoesNotTargetAnyInput(outputPath, inputPaths, "output");
       assertDoesNotTargetAnyInput(reportPath, inputPaths, "report");
-      stage = "write-output";
-      await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2));
-      const savedBytes = result.report.savedBytes ?? 0;
-      const savedPercent = result.report.savedPercent ?? 0;
-      results[index] = {
-        input: file,
-        status: "optimized",
-        output: outputPath,
-        report: reportPath,
-        originalSize: result.report.originalSize,
-        optimizedSize: result.report.optimizedSize ?? result.output.byteLength,
-        savedBytes,
-        savedPercent
-      };
-      console.log(`${progressPrefix} optimized -${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      results[index] = { input: file, status: "failed", stage, error: message };
-      console.error(`${progressPrefix} failed at ${stage}: ${message}`);
-    }
-  });
-  const completedResults = results.filter((result): result is BatchFileResult => Boolean(result));
 
-  const requestedBatchReportPath = join(outputDir, "batch-report.json");
-  const reportPath = overwrite ? requestedBatchReportPath : await nextAvailablePath(requestedBatchReportPath);
-  const optimizedCount = completedResults.filter((result) => result.status === "optimized").length;
-  const failedCount = completedResults.filter((result) => result.status === "failed").length;
-  const totalSavedBytes = completedResults.reduce(
-    (sum, result) => sum + (result.status === "optimized" ? result.savedBytes : 0),
-    0
-  );
-  const totalOriginalSize = files.reduce((sum, file) => sum + (originalSizeByFile.get(file) ?? 0), 0);
-  const totalOptimizedSize = completedResults.reduce(
-    (sum, result) =>
-      sum +
-      (result.status === "optimized" ? result.optimizedSize : originalSizeByFile.get(result.input) ?? 0),
-    0
-  );
-  await writeFile(
-    reportPath,
-    JSON.stringify(
-      {
+      for (const claimedPath of claimedThisIteration) uncommittedClaimedPaths.add(claimedPath);
+      const tempOutputPath = `${outputPath}.tmp`;
+      const tempReportPath = `${reportPath}.tmp`;
+      jobDescriptors.push({
+        sourcePath,
+        tempOutputPath,
+        tempReportPath,
         mode,
-        inputDir,
-        outputDir,
-        jobs,
-        elapsedMs: Date.now() - startedAt,
-        totals: {
-          optimized: optimizedCount,
-          failed: failedCount,
-          totalSavedBytes,
-          totalOriginalSize,
-          totalOptimizedSize,
-          ...createBatchTargetFields(totalOriginalSize, totalOptimizedSize, batchTargetBytes, failedCount)
-        },
-        results: completedResults
-      },
-      null,
-      2
-    )
-  );
-  return {
-    optimized: optimizedCount,
-    failed: failedCount,
-    reportPath
+        options,
+        targetBytes: targetByFile.get(file)
+      });
+      jobMeta.push({ index, file, outputPath, reportPath, tempOutputPath, tempReportPath });
+    } catch (error) {
+      await Promise.all(claimedThisIteration.map((path) => claims.release(path)));
+      const message = error instanceof Error ? error.message : String(error);
+      results[index] = { input: file, status: "failed", stage: "resolve-output-path", error: message };
+      console.error(`${progressPrefix} failed at resolve-output-path: ${message}`);
+    }
+  }
+
+  const jobsEffective = Math.max(1, Math.min(jobsRequested, jobMeta.length));
+
+  let pool: WorkerPool<OptimizeJob, OptimizeJobResult> | undefined;
+  const cleanupOnSignal = async (code: number): Promise<void> => {
+    try {
+      if (pool) await pool.terminate();
+    } catch {
+      // best-effort: the process is exiting regardless
+    }
+    await Promise.all([...uncommittedClaimedPaths].map((path) => claims.release(path).catch(() => {})));
+    await Promise.all(
+      jobMeta.flatMap((meta) => [
+        rm(meta.tempOutputPath, { force: true }).catch(() => {}),
+        rm(meta.tempReportPath, { force: true }).catch(() => {})
+      ])
+    );
+    process.exit(code);
   };
+  const sigintHandler = (): void => {
+    void cleanupOnSignal(130);
+  };
+  const sigtermHandler = (): void => {
+    void cleanupOnSignal(143);
+  };
+  process.once("SIGINT", sigintHandler);
+  process.once("SIGTERM", sigtermHandler);
+
+  try {
+    if (jobMeta.length > 0) {
+      pool = new WorkerPool<OptimizeJob, OptimizeJobResult>({
+        size: jobsEffective,
+        workerUrl: resolveOptimizeWorkerUrl(),
+        execArgv: process.execArgv
+      });
+      const poolResults = await pool.run(jobDescriptors);
+
+      for (let i = 0; i < jobMeta.length; i += 1) {
+        const meta = jobMeta[i];
+        const poolResult = poolResults[i];
+        const progressPrefix = `[${meta.index + 1}/${files.length}] ${meta.file}`;
+
+        if (!poolResult || poolResult.status === "failed") {
+          const message = poolResult ? poolResult.error : "worker pool terminated before this job ran";
+          await cleanupFailedJob(meta, claims, uncommittedClaimedPaths);
+          results[meta.index] = { input: meta.file, status: "failed", stage: "optimize", error: message };
+          console.error(`${progressPrefix} failed at optimize: ${message}`);
+          continue;
+        }
+
+        const jobResult = poolResult.result;
+        if (jobResult.status === "failed") {
+          await cleanupFailedJob(meta, claims, uncommittedClaimedPaths);
+          results[meta.index] = {
+            input: meta.file,
+            status: "failed",
+            stage: jobResult.stage,
+            error: jobResult.error
+          };
+          console.error(`${progressPrefix} failed at ${jobResult.stage}: ${jobResult.error}`);
+          continue;
+        }
+
+        const commit = await commitBatchJob(meta);
+        if (!commit.ok) {
+          await cleanupFailedJob(meta, claims, uncommittedClaimedPaths);
+          results[meta.index] = { input: meta.file, status: "failed", stage: "write-output", error: commit.error };
+          console.error(`${progressPrefix} failed at write-output: ${commit.error}`);
+          continue;
+        }
+        uncommittedClaimedPaths.delete(meta.outputPath);
+        uncommittedClaimedPaths.delete(meta.reportPath);
+
+        const savedBytes = jobResult.savedBytes;
+        const savedPercent = jobResult.savedPercent;
+        results[meta.index] = {
+          input: meta.file,
+          status: "optimized",
+          output: meta.outputPath,
+          report: meta.reportPath,
+          originalSize: jobResult.originalSize,
+          optimizedSize: jobResult.optimizedSize,
+          savedBytes,
+          savedPercent
+        };
+        console.log(`${progressPrefix} optimized -${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
+      }
+    }
+
+    const completedResults = results.filter((result): result is BatchFileResult => Boolean(result));
+
+    const requestedBatchReportPath = join(outputDir, "batch-report.json");
+    const batchReportPath = overwrite ? requestedBatchReportPath : await nextAvailablePath(requestedBatchReportPath);
+    const optimizedCount = completedResults.filter((result) => result.status === "optimized").length;
+    const failedCount = completedResults.filter((result) => result.status === "failed").length;
+    const totalSavedBytes = completedResults.reduce(
+      (sum, result) => sum + (result.status === "optimized" ? result.savedBytes : 0),
+      0
+    );
+    const totalOriginalSize = files.reduce((sum, file) => sum + (originalSizeByFile.get(file) ?? 0), 0);
+    const totalOptimizedSize = completedResults.reduce(
+      (sum, result) =>
+        sum +
+        (result.status === "optimized" ? result.optimizedSize : originalSizeByFile.get(result.input) ?? 0),
+      0
+    );
+    const batchReportTmpPath = `${batchReportPath}.tmp`;
+    await writeFile(
+      batchReportTmpPath,
+      JSON.stringify(
+        {
+          mode,
+          inputDir,
+          outputDir,
+          jobs: jobsEffective,
+          jobsRequested,
+          jobsEffective,
+          elapsedMs: Date.now() - startedAt,
+          totals: {
+            optimized: optimizedCount,
+            failed: failedCount,
+            totalSavedBytes,
+            totalOriginalSize,
+            totalOptimizedSize,
+            ...createBatchTargetFields(totalOriginalSize, totalOptimizedSize, batchTargetBytes, failedCount)
+          },
+          results: completedResults
+        },
+        null,
+        2
+      )
+    );
+    await rename(batchReportTmpPath, batchReportPath);
+    return {
+      optimized: optimizedCount,
+      failed: failedCount,
+      reportPath: batchReportPath
+    };
+  } finally {
+    process.removeListener("SIGINT", sigintHandler);
+    process.removeListener("SIGTERM", sigtermHandler);
+  }
+}
+
+function resolveOptimizeWorkerUrl(): URL {
+  // Built/packaged runs execute compiled JS (dist/index.js -> ./optimizeWorker.js).
+  // Source runs (tsx dev, vitest) execute index.ts directly; a worker_thread does
+  // not inherit the parent's tsx/ESM loader hooks via execArgv (module.register()
+  // hooks are per-thread), so we point at a small .mjs bootstrap that registers
+  // tsx inside the worker's own realm before importing optimizeWorker.ts. See
+  // optimizeWorkerEntry.mjs for details; it is never reached from a built dist.
+  const isSourceRun = import.meta.url.endsWith(".ts");
+  const workerFile = isSourceRun ? "./optimizeWorkerEntry.mjs" : "./optimizeWorker.js";
+  return new URL(workerFile, import.meta.url);
+}
+
+async function sweepStaleTempFiles(outputDir: string): Promise<void> {
+  let entries: string[];
+  try {
+    entries = await readdir(outputDir);
+  } catch {
+    return;
+  }
+  await Promise.all(
+    entries
+      .filter((name) => name.endsWith(".tmp"))
+      .map((name) => rm(join(outputDir, name), { force: true }).catch(() => {}))
+  );
+}
+
+type BatchJobMeta = {
+  index: number;
+  file: string;
+  outputPath: string;
+  reportPath: string;
+  tempOutputPath: string;
+  tempReportPath: string;
+};
+
+async function commitBatchJob(meta: BatchJobMeta): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await rename(meta.tempOutputPath, meta.outputPath);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+  try {
+    await rename(meta.tempReportPath, meta.reportPath);
+  } catch (error) {
+    // Roll back the output promotion so we never leave a final output without its report.
+    await rename(meta.outputPath, meta.tempOutputPath).catch(() => {});
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+  return { ok: true };
+}
+
+async function cleanupFailedJob(
+  meta: BatchJobMeta,
+  claims: PathClaimRegistry,
+  uncommittedClaimedPaths: Set<string>
+): Promise<void> {
+  await claims.release(meta.outputPath);
+  await claims.release(meta.reportPath);
+  uncommittedClaimedPaths.delete(meta.outputPath);
+  uncommittedClaimedPaths.delete(meta.reportPath);
+  await rm(meta.tempOutputPath, { force: true }).catch(() => {});
+  await rm(meta.tempReportPath, { force: true }).catch(() => {});
 }
 
 function assertDoesNotTargetAnyInput(targetPath: string, inputPaths: string[], kind: "output" | "report"): void {

@@ -1,12 +1,26 @@
-import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
-import { createHwpxFixture } from "../../core/test/fixtures.js";
-import { isCliEntrypoint, parseBatchJobs, printAnalysisSummaryForTest, renderHumanReport, runCli } from "../src/index.js";
+import JSZip from "jszip";
+import { createHwpxFixture, createReportLikeHwpxFixture } from "../../core/test/fixtures.js";
+import {
+  isCliEntrypoint,
+  optimizeByMode,
+  parseBatchJobs,
+  printAnalysisSummaryForTest,
+  renderHumanReport,
+  runBatch,
+  runCli
+} from "../src/index.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
+
+async function unzipEntryNames(buf: Buffer): Promise<string[]> {
+  const zip = await JSZip.loadAsync(buf);
+  return Object.keys(zip.files).sort();
+}
 
 describe("runCli", () => {
   it("documents target options anywhere they are accepted", async () => {
@@ -860,6 +874,28 @@ describe("runCli", () => {
 
     expect(code).toBe(1);
     expect(await readFile(join(inputDir, "good.optimized.hwpx"))).toEqual(existingInput);
+  });
+
+  it("batch output matches sequential optimizeByMode (semantic parity) and records jobs", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "batch-"));
+    const outDir = join(dir, "out");
+    await writeFile(join(dir, "one.hwpx"), await createReportLikeHwpxFixture());
+    await writeFile(join(dir, "two.hwpx"), await createReportLikeHwpxFixture());
+
+    await runBatch(dir, { mode: "safe", out: outDir, jobs: "2" });
+
+    const files = (await readdir(outDir)).filter((f) => f.endsWith(".optimized.hwpx"));
+    expect(files.length).toBe(2);
+    // semantic parity: unzip an output and the sequential result, compare entry data
+    const seq = await optimizeByMode(await createReportLikeHwpxFixture(), "safe", {}, undefined);
+    const batchOut = await readFile(join(outDir, files.sort()[0]));
+    expect(await unzipEntryNames(batchOut)).toEqual(await unzipEntryNames(seq.output));
+
+    const report = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8"));
+    expect(report.totals.optimized).toBe(2);
+    expect(report.jobsRequested).toBe(2);
+    expect(report.jobsEffective).toBe(2);
+    await rm(dir, { recursive: true, force: true });
   });
 });
 
