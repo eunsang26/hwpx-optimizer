@@ -138,7 +138,9 @@ npm run release:check:cli-portable
 
 This gate does **not** replace the Windows end-to-end smoke above. Product-ready CLI portable approval still requires `npm run release:verify-cli-portable-smoke` on a Windows machine (or WSL with Windows PowerShell) with a real HWPX sample when possible.
 
-GitHub Actions runs the CI-safe variant on `ubuntu-latest` via `.github/workflows/cli-portable-release.yml` (`release:check:cli-portable:ci`). Tag builds can upload `release/hwpx-opt-win-x64.zip` as a workflow artifact.
+The gate uses `npm audit --audit-level=critical` so known high-severity dev/build transitive issues (for example pinned `sharp@0.33.x`) do not block packaging while a separate sharp upgrade is planned.
+
+GitHub Actions runs the CI-safe variant on `ubuntu-latest` via `.github/workflows/cli-portable-release.yml` (`release:check:cli-portable:ci`). Tag builds and manual runs with `upload_artifact: true` upload the ZIP, zip-only checksum file, shared `release-manifest.json`, `SHA256SUMS.txt`, and `RELEASE_NOTICE_<version>.txt`.
 
 ## Verification Before Release
 

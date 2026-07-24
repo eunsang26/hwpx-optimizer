@@ -59,6 +59,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-cli-portable");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:manifest");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-manifest");
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm audit --audit-level=critical");
     expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toBe(packageJson.scripts?.["release:check:cli-portable"]);
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
     await expect(access("scripts/run-windows-portable-smoke.mjs")).resolves.toBeUndefined();

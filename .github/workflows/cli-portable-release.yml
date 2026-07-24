@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       upload_artifact:
-        description: "Upload the generated hwpx-opt-win-x64.zip artifact"
+        description: "Upload the generated CLI portable release artifacts"
         required: false
         default: false
         type: boolean
@@ -35,7 +35,7 @@ jobs:
       - name: Run CLI portable Linux release gate
         run: npm run release:check:cli-portable:ci
 
-      - name: Upload CLI portable ZIP
+      - name: Upload CLI portable release artifacts
         if: github.event_name == 'push' || inputs.upload_artifact == true
         uses: actions/upload-artifact@v4
         with:
@@ -43,4 +43,7 @@ jobs:
           path: |
             release/hwpx-opt-win-x64.zip
             release/hwpx-opt-win-x64.SHA256SUMS.txt
+            release/release-manifest.json
+            release/SHA256SUMS.txt
+            release/RELEASE_NOTICE_*.txt
           if-no-files-found: error

@@ -56,6 +56,19 @@ HWPX Optimizer는 사용자의 PC 안에서 HWPX 문서 용량 원인을 분석�
 7. 직원 간 공유 시에도 사용 후 폴더가 아니라 릴리즈 게이트를 통과한 원본 ZIP 또는 portable EXE만 공유한다.
 8. 공개 CA 코드서명 인증서가 준비된 경우 자체서명 대신 공개 CA 서명 절차를 수행하고 서명 결과를 배포 기록에 남긴다.
 
+## Desktop vs CLI Portable 선택
+
+| | Desktop (Electron) | CLI Portable ZIP |
+|---|---|---|
+| 대상 사용자 | GUI, 드래그앤드롭, 배치 UI | 명령줄·끌어다 놓기, Node 미설치 PC |
+| 산출물 | `HWPX Optimizer-<version>-x64.exe` / `.zip` | `hwpx-opt-win-x64.zip` |
+| 릴리즈 게이트 | `release:check:win-portable` | `release:check:cli-portable` |
+| Windows E2E | `release:verify-win-portable-smoke` | `release:verify-cli-portable-smoke` |
+| 코드서명 | 자체서명 EXE (현재) | 미서명 `node.exe` + `.bat` |
+| SHA256 출처 | `release/SHA256SUMS.txt`, `release-manifest.json` | 동일 manifest + zip 전용 `hwpx-opt-win-x64.SHA256SUMS.txt` |
+
+두 배포 경로는 독립적으로 승인·배포한다. Desktop만 필요하면 CLI ZIP을 함께 배포할 필요는 없다.
+
 ## CLI Portable Windows ZIP
 
 경량 CLI 배포(`release/hwpx-opt-win-x64.zip`)는 Electron Desktop 배포와 별도로 관리한다.
