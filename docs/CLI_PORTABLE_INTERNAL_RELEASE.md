@@ -32,6 +32,20 @@ Actions → **CLI Portable Windows ZIP** → 해당 tag run → Artifacts 다운
 gh workflow run cli-portable-release.yml -f upload_artifact=true
 ```
 
+## 0.1.1 태그 릴리즈 기록 (2026-07-24)
+
+| 항목 | 값 |
+|------|-----|
+| Tag | `v0.1.1` |
+| CI run | https://github.com/eunsang26/hwpx-optimizer/actions/runs/30061595586 |
+| ZIP SHA256 | `db49cf8a81498764e977d304bb3f0814bdbe80c865af9298b81bd1d70d19f470` |
+| ZIP bytes | 37,021,099 (~35.3 MB) |
+| Artifacts | `hwpx-opt-win-x64`, `hwpx-opt-win-x64-metadata` |
+
+사내 공지에는 위 SHA256을 그대로 붙여 넣으면 된다. `RELEASE_NOTICE_0.1.1.txt`는 metadata artifact에 포함된다.
+
+---
+
 ## 사내 배포 공지 템플릿
 
 아래를 복사해 `[대괄호]`만 채운다. SHA256은 **해당 tag run artifact**의 `SHA256SUMS.txt` 또는 `release-manifest.json` 값을 그대로 사용한다.
