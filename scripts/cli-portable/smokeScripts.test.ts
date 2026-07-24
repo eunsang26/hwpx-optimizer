@@ -41,4 +41,16 @@ describe("CLI portable Windows smoke scripts", () => {
       "Windows PowerShell required; CLI portable Windows support not verified."
     );
   });
+
+  it("runs Windows smoke against Linux-built ZIP in CI", async () => {
+    const workflow = await readFile(
+      resolve(repoRoot, ".github", "workflows", "cli-portable-release.yml"),
+      "utf8"
+    );
+
+    expect(workflow).toContain("cli-portable-windows-smoke");
+    expect(workflow).toContain("needs: cli-portable-linux");
+    expect(workflow).toContain("writeMinimalHwpx.mjs");
+    expect(workflow).toContain("release:verify-cli-portable-smoke");
+  });
 });

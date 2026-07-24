@@ -35,15 +35,58 @@ jobs:
       - name: Run CLI portable Linux release gate
         run: npm run release:check:cli-portable:ci
 
-      - name: Upload CLI portable release artifacts
-        if: github.event_name == 'push' || inputs.upload_artifact == true
+      - name: Upload CLI portable ZIP for Windows smoke
         uses: actions/upload-artifact@v4
         with:
           name: hwpx-opt-win-x64
           path: |
             release/hwpx-opt-win-x64.zip
             release/hwpx-opt-win-x64.SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Upload full release metadata
+        if: github.event_name == 'push' || inputs.upload_artifact == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: hwpx-opt-win-x64-metadata
+          path: |
             release/release-manifest.json
             release/SHA256SUMS.txt
             release/RELEASE_NOTICE_*.txt
           if-no-files-found: error
+
+  cli-portable-windows-smoke:
+    needs: cli-portable-linux
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.20.2"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download CLI portable ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: hwpx-opt-win-x64
+          path: release
+
+      - name: Write synthetic smoke sample
+        shell: bash
+        run: |
+          mkdir -p .tmp/ci-smoke
+          node scripts/cli-portable/writeMinimalHwpx.mjs .tmp/ci-smoke/minimal.hwpx
+
+      - name: Run Windows CLI portable smoke
+        shell: bash
+        env:
+          HWPX_OPT_SMOKE_INPUT: .tmp/ci-smoke/minimal.hwpx
+          HWPX_OPT_SMOKE_MODE: balanced
+        run: npm run release:verify-cli-portable-smoke
