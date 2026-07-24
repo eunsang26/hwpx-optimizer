@@ -37,7 +37,8 @@ export const balancedImageProfile: ImageOptimizationProfile = {
   maxEdge: BALANCED_MAX_EDGE,
   displayScale: 2,
   jpegQuality: BALANCED_JPEG_QUALITY,
-  pngCompressionLevel: 6,
+  // Match safe-mode lossless PNG compression; CPU cost is acceptable vs package bytes.
+  pngCompressionLevel: 9,
   pngPalette: false,
   opportunityLabel: "Resize JPEG to document display budget"
 };
@@ -46,7 +47,7 @@ export const aggressiveImageProfile: ImageOptimizationProfile = {
   maxEdge: AGGRESSIVE_MAX_EDGE,
   displayScale: 1,
   jpegQuality: AGGRESSIVE_JPEG_QUALITY,
-  pngCompressionLevel: 6,
+  pngCompressionLevel: 9,
   pngPalette: true,
   opportunityLabel: "Resize JPEG to aggressive document display budget"
 };
@@ -91,7 +92,10 @@ async function collectOpportunities(
 
     const metadata = await readMetadata(entry.data);
     const resizeBudget = normalizeResizeBudget(resizeBudgets.get(entry.path), profile);
-    if (isJpeg(entry.path) && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
+    // Hangul packages sometimes store JPEG payloads under a .png href. Drive the
+    // JPEG pipeline from decoded format so we never re-encode those as PNG.
+    const jpegPayload = isJpeg(entry.path) || isJpegFormat(metadata.format);
+    if (jpegPayload && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
       const afterSize = await measureOrEstimateImageSize({
         confidence,
         size: entry.size,
@@ -117,7 +121,7 @@ async function collectOpportunities(
       }
     }
 
-    if (isJpeg(entry.path)) {
+    if (jpegPayload) {
       addJpegMetadataOpportunity(opportunities, entry.path, entry.data, entry.size, confidence);
       continue;
     }
@@ -368,13 +372,16 @@ export async function transformImageBalancedWithBudget(
       data: await convertTiffToPng(data, metadata.width, metadata.height, resizeBudget, profile)
     };
   }
-  if (isJpeg(path) && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
+  if (
+    (isJpeg(path) || isJpegFormat(metadata.format)) &&
+    shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)
+  ) {
     return {
-      outputPath: replaceExtension(path, ".jpg"),
+      outputPath: jpegOutputPath(path),
       data: await resizeJpeg(data, resizeBudget, profile)
     };
   }
-  if (isJpeg(path)) {
+  if (isJpeg(path) || isJpegFormat(metadata.format)) {
     return {
       outputPath: path,
       data: stripJpegMetadataSegments(data)
@@ -417,7 +424,7 @@ export async function transformImageActionWithBudget(
     };
   }
   if (action === "resize-jpeg") {
-    return { outputPath: replaceExtension(path, ".jpg"), data: await resizeJpeg(data, resizeBudget, profile) };
+    return { outputPath: jpegOutputPath(path), data: await resizeJpeg(data, resizeBudget, profile) };
   }
   if (action === "resize-png") {
     return { outputPath: path, data: await resizePng(data, resizeBudget, profile) };
@@ -464,12 +471,18 @@ async function convertBmpToPng(
           kernel: "lanczos3"
         })
       : image;
+  // Indexed BMPs stay ≤256 colors after expand→encode; force palette PNG even
+  // when balanced.pngPalette is false so we do not inflate to truecolor PNG.
+  const png = {
+    ...pngOptions(profile),
+    palette: profile.pngPalette || Boolean(bmp?.indexed)
+  };
   try {
-    return await resized.png(pngOptions(profile)).toBuffer();
+    return await resized.png(png).toBuffer();
   } catch (error) {
-    // decodeBmp handles 24/32-bit and 8-bit palette BI_RGB; other variants
-    // (RLE, BI_BITFIELDS, 1/4-bit) fall back to sharp, which may lack BMP input.
-    // Surface a named reason instead of a cryptic decode error when that happens.
+    // decodeBmp covers BI_RGB 1/4/8/16/24/32 and BI_BITFIELDS 16/32. Remaining
+    // variants (RLE) fall back to sharp, which may lack BMP input — surface a
+    // named reason instead of a cryptic decode error when that happens.
     const info = bmp ? null : readBmpInfo(data);
     if (info && !info.supported) {
       throw new Error(
@@ -555,9 +568,9 @@ function pngOptions(profile: ImageOptimizationProfile) {
   };
 }
 
-async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number }> {
+async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number; format?: string }> {
   const metadata = await readImageMetadata("", data);
-  return { width: metadata.width, height: metadata.height };
+  return { width: metadata.width, height: metadata.height, format: metadata.format };
 }
 
 function addOpportunityIfSmaller(
@@ -653,6 +666,16 @@ function isBmp(path: string): boolean {
 
 function isJpeg(path: string): boolean {
   return /\.jpe?g$/i.test(path);
+}
+
+function isJpegFormat(format: string | undefined): boolean {
+  const normalized = format?.toLowerCase();
+  return normalized === "jpeg" || normalized === "jpg";
+}
+
+function jpegOutputPath(path: string): string {
+  // Keep non-.jpg/.jpeg hrefs stable (e.g. JPEG bytes stored as *.png).
+  return isJpeg(path) ? replaceExtension(path, ".jpg") : path;
 }
 
 function isPng(path: string): boolean {

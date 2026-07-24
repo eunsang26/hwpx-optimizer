@@ -21,6 +21,7 @@ import { ensureNodeExe } from "./cli-portable/fetchNode.mjs";
 import { writeSha256Sums } from "./cli-portable/hashTree.mjs";
 import {
   renderDropHereBat,
+  renderDropHereMjs,
   renderHwpxOptCmd,
   renderUsageTxt
 } from "./cli-portable/launchers.mjs";
@@ -144,6 +145,7 @@ async function buildPortable(options) {
 
   await Promise.all([
     writeFile(join(stageRoot, "drop-here.bat"), renderDropHereBat(), "utf8"),
+    writeFile(join(stageRoot, "app", "drop-here.mjs"), renderDropHereMjs(), "utf8"),
     writeFile(join(stageRoot, "hwpx-opt.cmd"), renderHwpxOptCmd(), "utf8"),
     writeFile(join(stageRoot, "사용법.txt"), renderUsageTxt(), "utf8"),
     copyFile(join(repoRoot, "TERMS.txt"), join(stageRoot, "TERMS.txt"))

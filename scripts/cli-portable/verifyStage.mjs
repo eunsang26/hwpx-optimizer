@@ -110,8 +110,13 @@ async function assertRootLaunchers(stageRoot) {
   if (!bat.includes('set "ROOT=%~dp0"')) {
     throw new Error('drop-here.bat must contain set "ROOT=%~dp0"');
   }
-  if (!bat.includes("--mode balanced")) {
-    throw new Error("drop-here.bat must invoke the CLI with --mode balanced");
+  if (!bat.includes("app\\drop-here.mjs") && !bat.includes("app/drop-here.mjs")) {
+    throw new Error("drop-here.bat must forward to app\\drop-here.mjs");
+  }
+  await assertExists(join(stageRoot, "app", "drop-here.mjs"), "app/drop-here.mjs");
+  const runner = await readFile(join(stageRoot, "app", "drop-here.mjs"), "utf8");
+  if (!runner.includes("--mode") || !runner.includes("balanced")) {
+    throw new Error("app/drop-here.mjs must invoke the CLI with --mode balanced");
   }
 }
 

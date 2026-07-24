@@ -3,7 +3,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { REQUIRED_WIN_SHARP_FILES } from "./constants.mjs";
-import { renderDropHereBat, renderHwpxOptCmd } from "./launchers.mjs";
+import { renderDropHereBat, renderDropHereMjs, renderHwpxOptCmd } from "./launchers.mjs";
 import { verifyCliPortableStage } from "./verifyStage.mjs";
 
 async function writeJson(path: string, value: unknown): Promise<void> {
@@ -43,6 +43,7 @@ async function buildValidStage(stageRoot: string): Promise<void> {
   }
 
   await writeFile(join(stageRoot, "drop-here.bat"), renderDropHereBat(), "utf8");
+  await writeFile(join(stageRoot, "app", "drop-here.mjs"), renderDropHereMjs(), "utf8");
   await writeFile(join(stageRoot, "hwpx-opt.cmd"), renderHwpxOptCmd(), "utf8");
   await writeFile(join(stageRoot, "사용법.txt"), "usage\n", "utf8");
   await writeFile(join(stageRoot, "TERMS.txt"), "terms\n", "utf8");
