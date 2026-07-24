@@ -11,8 +11,8 @@ import {
 describe("cli-portable constants", () => {
   it("pins Node and sharp to the design floors", () => {
     expect(NODE_VERSION).toBe("20.20.2");
-    expect(SHARP_VERSION).toBe("0.33.5");
-    expect(SHARP_WIN32_PACKAGE).toBe("@img/sharp-win32-x64@0.33.5");
+    expect(SHARP_VERSION).toBe("0.35.3");
+    expect(SHARP_WIN32_PACKAGE).toBe("@img/sharp-win32-x64@0.35.3");
     expect(STAGE_DIR_NAME).toBe("hwpx-opt-win-x64");
     expect(ZIP_NAME).toBe("hwpx-opt-win-x64.zip");
     expect(REQUIRED_WIN_SHARP_FILES).toEqual(
