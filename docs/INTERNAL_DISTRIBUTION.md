@@ -63,7 +63,7 @@ HWPX Optimizer는 사용자의 PC 안에서 HWPX 문서 용량 원인을 분석�
 | 대상 사용자 | GUI, 드래그앤드롭, 배치 UI | 명령줄·끌어다 놓기, Node 미설치 PC |
 | 산출물 | `HWPX Optimizer-<version>-x64.exe` / `.zip` | `hwpx-opt-win-x64.zip` |
 | 릴리즈 게이트 | `release:check:win-portable` | `release:check:cli-portable` |
-| Windows E2E | `release:verify-win-portable-smoke` | `release:verify-cli-portable-smoke` |
+| Windows E2E | `release:verify-win-portable-smoke` | CI: `cli-portable-release.yml` on `windows-latest` (synthetic HWPX); 로컬: `HWPX_OPT_SMOKE_INPUT=sample*.hwpx npm run release:verify-cli-portable-smoke` |
 | 코드서명 | 자체서명 EXE (현재) | 미서명 `node.exe` + `.bat` |
 | SHA256 출처 | `release/SHA256SUMS.txt`, `release-manifest.json` | 동일 manifest + zip 전용 `hwpx-opt-win-x64.SHA256SUMS.txt` |
 
@@ -73,9 +73,10 @@ HWPX Optimizer는 사용자의 PC 안에서 HWPX 문서 용량 원인을 분석�
 
 경량 CLI 배포(`release/hwpx-opt-win-x64.zip`)는 Electron Desktop 배포와 별도로 관리한다.
 
-1. Linux/WSL에서 `npm run release:check:cli-portable`을 실행한다 (또는 CI `.github/workflows/cli-portable-release.yml` 통과).
-2. Windows에서 `HWPX_OPT_SMOKE_INPUT=path/to/sample.hwpx npm run release:verify-cli-portable-smoke`로 `drop-here.bat` 포함 E2E를 확인한다.
-3. `release/hwpx-opt-win-x64.SHA256SUMS.txt` 또는 `release/SHA256SUMS.txt` / `release/release-manifest.json`의 SHA256 값을 배포 공지에 포함한다.
+1. Linux/WSL에서 `npm run release:check:cli-portable`을 실행한다 (또는 CI `.github/workflows/cli-portable-release.yml`의 Linux 게이트 통과).
+2. CI가 활성화된 경우, 동일 워크플로의 `windows-latest` 스모크 작업이 Linux에서 빌드한 ZIP을 받아 **합성(synthetic) 최소 HWPX**로 `release:verify-cli-portable-smoke`를 실행한다. Linux 게이트만 통과했다고 Windows 런타임 지원을 주장할 수 없다.
+3. 내부 배포 전 실제 문서 QA는 로컬 Windows(또는 WSL PowerShell)에서 `HWPX_OPT_SMOKE_INPUT=sample*.hwpx npm run release:verify-cli-portable-smoke`로 `drop-here.bat` 포함 E2E를 확인한다. `sample*.hwpx`는 저장소에 커밋하지 않으며 CI에 업로드하지 않는다.
+4. `release/hwpx-opt-win-x64.SHA256SUMS.txt` 또는 `release/SHA256SUMS.txt` / `release/release-manifest.json`의 SHA256 값을 배포 공지에 포함한다.
 
 - 지원 OS: **Windows 10+ x64** (Node 설치 불필요; ZIP 압축 해제 후 폴더에서 실행).
 - 배포는 **사내 공유 위치**를 사용한다. 이메일 첨부 배포는 Mark-of-the-Web(MotW)과 보안 필터로 차단될 수 있으므로 지양한다.
