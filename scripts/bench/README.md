@@ -19,7 +19,17 @@ This directory holds the jpegli capacity GO/NO-GO harness and Hangul WebP/AVIF c
 
 ### Installing external CLIs
 
-**jpegli (`cjpegli`):** build or install [libjxl / jpegli tools](https://github.com/libjxl/libjxl) for your platform. The bench invokes:
+**jpegli (`cjpegli`):** libjxl **v0.11.2** static bundle still ships `tools/cjpegli` (v0.12+ dropped it). Example:
+
+```bash
+curl -sL -o /tmp/jxl-static.zip \
+  https://github.com/libjxl/libjxl/releases/download/v0.11.2/jxl-linux-x86_64-static.zip
+mkdir -p ~/.local/libjxl-0.11.2 && cd ~/.local/libjxl-0.11.2
+unzip -q /tmp/jxl-static.zip && tar xzf release_file.tar.gz
+export HWPX_BENCH_JPEGLI="$PWD/tools/cjpegli"
+```
+
+The bench invokes:
 
 ```text
 cjpegli INPUT.ppm OUTPUT.jpg -q QUALITY --quiet
@@ -31,7 +41,12 @@ If the binary is not on PATH, set an absolute path:
 export HWPX_BENCH_JPEGLI=/path/to/cjpegli
 ```
 
-**SSIMULACRA2:** build or install the [ssimulacra2](https://github.com/cloudinary/ssimulacra2) CLI. The bench compares a reference PNG to a distorted JPEG and parses the float score from stdout. Override with:
+**SSIMULACRA2:** install a CLI that accepts `REFERENCE.png DISTORTED.jpg` and prints a float score. Options:
+
+- [libjxl v0.11.2 static `tools/ssimulacra2`](https://github.com/libjxl/libjxl/releases/tag/v0.11.2) (same tarball as above), or
+- Rust [`as2c`](https://github.com/BuyMyMojo/another_ssimulacra2_cli): `cargo install as2c` then `export HWPX_BENCH_SSIMULACRA2=as2c`
+
+Override with:
 
 ```bash
 export HWPX_BENCH_SSIMULACRA2=/path/to/ssimulacra2

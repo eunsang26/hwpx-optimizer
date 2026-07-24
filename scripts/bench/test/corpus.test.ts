@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -55,6 +55,19 @@ describe("corpus manifest", () => {
     expect(loaded.invalidReason).toBe("synthetic-only");
     expect(loaded.docs.every((doc) => doc.source === "fixture")).toBe(true);
     expect(loaded.manifestId).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("listHwpxFiles includes symlinked .hwpx entries", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-bench-symlink-"));
+    try {
+      const target = join(dir, "target.hwpx");
+      await writeFile(target, Buffer.from("symlink-target"));
+      await symlink(target, join(dir, "linked.hwpx"));
+      const manifest = await buildManifest(dir);
+      expect(manifest.files.map((f) => f.relativePath).sort()).toEqual(["linked.hwpx", "target.hwpx"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("writeManifestFile produces manifest with deterministic id", async () => {

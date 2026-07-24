@@ -9,7 +9,11 @@ export type CorpusManifest = { version: 1; files: CorpusFile[] };
 export async function listHwpxFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
   return entries
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".hwpx"))
+    .filter(
+      (entry) =>
+        entry.name.toLowerCase().endsWith(".hwpx") &&
+        (entry.isFile() || entry.isSymbolicLink())
+    )
     .map((entry) => join(dir, entry.name))
     .sort((a, b) => a.localeCompare(b));
 }
