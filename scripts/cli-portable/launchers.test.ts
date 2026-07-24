@@ -9,9 +9,17 @@ describe("cli-portable launchers", () => {
     expect(bat).toContain("--mode balanced");
     expect(bat).toContain("optimize");
     expect(bat).toContain("batch");
-    expect(bat).toContain("EnableDelayedExpansion");
-    expect(bat).toContain('--report "!RPT!"');
+    expect(bat).not.toContain("EnableDelayedExpansion");
+    expect(bat).toContain(":optimize_file");
+    expect(bat).toContain('call :optimize_file "%~1"');
+    expect(bat).toContain('--report "%RPT%"');
     expect(bat).toContain("%TEMP%");
+    // RPT must be set in subroutine, not inside parenthesized else block
+    const optimizeSub = bat.slice(bat.indexOf(":optimize_file"));
+    expect(optimizeSub).toContain('set "RPT=%TEMP%');
+    expect(optimizeSub).toMatch(/set "RPT=%TEMP%\\hwpx-opt-%RANDOM%-%N%.report.json"/);
+    const elseBlock = bat.slice(bat.indexOf(") else ("), bat.indexOf(":done"));
+    expect(elseBlock).not.toContain('set "RPT=');
     expect(bat).toContain("pause");
     expect(bat).toContain("HWPX_OPT_NO_PAUSE");
     expect(bat).toContain('if exist "%~1\\"');
