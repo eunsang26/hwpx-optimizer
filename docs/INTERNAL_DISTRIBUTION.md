@@ -60,9 +60,12 @@ HWPX Optimizer는 사용자의 PC 안에서 HWPX 문서 용량 원인을 분석�
 
 경량 CLI 배포(`release/hwpx-opt-win-x64.zip`)는 Electron Desktop 배포와 별도로 관리한다.
 
+1. Linux/WSL에서 `npm run release:check:cli-portable`을 실행한다 (또는 CI `.github/workflows/cli-portable-release.yml` 통과).
+2. Windows에서 `HWPX_OPT_SMOKE_INPUT=path/to/sample.hwpx npm run release:verify-cli-portable-smoke`로 `drop-here.bat` 포함 E2E를 확인한다.
+3. `release/hwpx-opt-win-x64.SHA256SUMS.txt` 해시를 배포 공지에 포함한다.
+
 - 지원 OS: **Windows 10+ x64** (Node 설치 불필요; ZIP 압축 해제 후 폴더에서 실행).
 - 배포는 **사내 공유 위치**를 사용한다. 이메일 첨부 배포는 Mark-of-the-Web(MotW)과 보안 필터로 차단될 수 있으므로 지양한다.
-- 배포 공지에 `release/hwpx-opt-win-x64.SHA256SUMS.txt`의 SHA256 값을 포함한다.
 - CLI portable은 공개 CA 코드서명 Electron 산출물과 달리 **서명되지 않은 `node.exe`와 `.bat` 런처**를 포함한다. SmartScreen, 백신, 그룹 정책으로 실행이 차단될 수 있으므로 IT 부서와 **허용 목록(allowlist)** 및 MotW 처리 절차를 사전에 문서화한다.
 - 사용자에게 ZIP을 한 번 압축 해제한 뒤 `drop-here.bat`(끌어다 놓기) 또는 `hwpx-opt.cmd`(명령줄)로 실행하도록 안내한다. 폴더를 끌어다 놓으면 결과는 `<폴더>/optimized/`에 저장된다.
 

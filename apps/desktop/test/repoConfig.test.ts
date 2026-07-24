@@ -34,6 +34,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:win-portable"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:win"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:preflight"]).toBe(
       "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit --audit-level=moderate && npm run desktop:smoke:built"
     );
@@ -42,6 +44,8 @@ describe("repository runtime and cleanup configuration", () => {
       "tsx --conditions=development scripts/run-regression-corpus.ts --require-local-samples"
     );
     expect(packageJson.scripts?.["release:verify-win-portable-smoke"]).toBe("node scripts/run-windows-portable-smoke.mjs");
+    expect(packageJson.scripts?.["release:verify-cli-portable"]).toBe("node scripts/verify-cli-portable.mjs");
+    expect(packageJson.scripts?.["release:verify-cli-portable-smoke"]).toBe("node scripts/run-cli-portable-smoke.mjs");
     expect(packageJson.scripts?.["release:verify-win-signature"]).toBe("node scripts/verify-win-signature.mjs");
     expect(packageJson.scripts?.["release:electron:check:win-portable"]).toBe("npm run release:check:win-portable");
     expect(packageJson.scripts?.["release:tauri:build"]).toBe("npm run tauri:build");
@@ -51,8 +55,14 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:verify-win-signature");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:verify-win-portable-smoke");
     expect(packageJson.scripts?.["release:check:win-portable:unsigned"]).toContain("npm run desktop:local:win");
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run build:win-portable");
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-cli-portable");
+    expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toBe(packageJson.scripts?.["release:check:cli-portable"]);
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
     await expect(access("scripts/run-windows-portable-smoke.mjs")).resolves.toBeUndefined();
+    await expect(access("scripts/run-cli-portable-smoke.mjs")).resolves.toBeUndefined();
+    await expect(access("scripts/verify-cli-portable.mjs")).resolves.toBeUndefined();
+    await expect(access(".github/workflows/cli-portable-release.yml")).resolves.toBeUndefined();
     expect(packageJson.scripts?.["desktop:smoke:built"]).toBe("node scripts/run-electron-smoke.mjs");
     expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.png");

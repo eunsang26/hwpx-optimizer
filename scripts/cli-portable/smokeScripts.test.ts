@@ -23,6 +23,9 @@ describe("CLI portable Windows smoke scripts", () => {
     expect(script).toContain('"app\\cli\\dist\\index.js"');
     expect(script).toContain('"node\\node.exe"');
     expect(script).toContain('"hwpx-opt.cmd"');
+    expect(script).toContain('"drop-here.bat"');
+    expect(script).toContain("drop-here.bat optimize file");
+    expect(script).toContain("drop-here.bat batch folder");
     expect(script).toContain('"list-actions"');
     expect(script).toContain('"optimize"');
     expect(script).toContain('"verify"');

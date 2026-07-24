@@ -1,0 +1,46 @@
+name: CLI Portable Windows ZIP
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_artifact:
+        description: "Upload the generated hwpx-opt-win-x64.zip artifact"
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  cli-portable-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.20.2"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run CLI portable Linux release gate
+        run: npm run release:check:cli-portable:ci
+
+      - name: Upload CLI portable ZIP
+        if: github.event_name == 'push' || inputs.upload_artifact == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: hwpx-opt-win-x64
+          path: |
+            release/hwpx-opt-win-x64.zip
+            release/hwpx-opt-win-x64.SHA256SUMS.txt
+          if-no-files-found: error

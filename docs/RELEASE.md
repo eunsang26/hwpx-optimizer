@@ -124,6 +124,16 @@ This gate uses `scripts/cli-portable-smoke.ps1` and is separate from the Electro
 
 Closed-network build: pass a local Node win-x64 zip via `--node-zip <path>` or `HWPX_OPT_NODE_ZIP`, and use a populated npm cache or internal mirror for dependency installation.
 
+Consolidated Linux release gate for the CLI portable ZIP (build, artifact hygiene, structure verify, host JS smoke):
+
+```bash
+npm run release:check:cli-portable
+```
+
+This gate does **not** replace the Windows end-to-end smoke above. Product-ready CLI portable approval still requires `npm run release:verify-cli-portable-smoke` on a Windows machine (or WSL with Windows PowerShell) with a real HWPX sample when possible.
+
+GitHub Actions runs the CI-safe variant on `ubuntu-latest` via `.github/workflows/cli-portable-release.yml` (`release:check:cli-portable:ci`). Tag builds can upload `release/hwpx-opt-win-x64.zip` as a workflow artifact.
+
 ## Verification Before Release
 
 Run:
@@ -207,7 +217,7 @@ Verify an existing manifest, checksum file, and release notice against the artif
 npm run release:verify-manifest
 ```
 
-The repository also includes `.github/workflows/windows-release.yml`, which runs the CI-safe Windows packaging gate on `workflow_dispatch` and `v*` tags. This CI gate does not use private real HWPX samples because root-level `sample*.hwpx` files are not committed. Run the sample-backed `npm run release:check:win` or self-signed `npm run release:check:win-portable` in a local QA environment before product-ready approval. Manual `workflow_dispatch` runs skip artifact upload by default to avoid Actions storage quota failures; set the `upload_artifact` input to `true` when an uploaded installer is needed. Tag builds upload the generated installer artifact.
+The repository also includes `.github/workflows/windows-release.yml`, which runs the CI-safe Windows packaging gate on `workflow_dispatch` and `v*` tags. CLI portable ZIP builds use `.github/workflows/cli-portable-release.yml` on Linux (`release:check:cli-portable:ci`). These CI gates do not use private real HWPX samples because root-level `sample*.hwpx` files are not committed. Run the sample-backed `npm run release:check:win` or self-signed `npm run release:check:win-portable` in a local QA environment before product-ready Electron approval; for CLI portable, run `npm run release:verify-cli-portable-smoke` on Windows when possible. Manual `workflow_dispatch` runs skip artifact upload by default to avoid Actions storage quota failures; set the `upload_artifact` input to `true` when an uploaded artifact is needed. Tag builds upload the generated artifacts.
 
 Then verify at least one HWPX end-to-end:
 

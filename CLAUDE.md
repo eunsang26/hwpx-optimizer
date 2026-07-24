@@ -25,7 +25,7 @@ Desktop smoke test env: `HWPX_OPT_SMOKE_INPUT=path/to.hwpx` copies a real local 
 
 Pre-commit gate: `npm test && npm run typecheck && npm run build`.
 
-Release verification (no Windows machine needed for portable check): `npm run release:check:win-portable`. Full Windows installer gate (`release:check:win`) must run on a Windows runner.
+Release verification (no Windows machine needed for portable check): `npm run release:check:win-portable`. CLI portable ZIP (Linux-assembled): `npm run release:check:cli-portable`; Windows E2E for CLI: `npm run release:verify-cli-portable-smoke`. Full Windows installer gate (`release:check:win`) must run on a Windows runner.
 
 ## Architecture
 
