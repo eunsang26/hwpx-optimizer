@@ -42,13 +42,13 @@ gh workflow run cli-portable-release.yml -f upload_artifact=true
 | ZIP bytes | 37,021,099 (~35.3 MB) |
 | Artifacts | `hwpx-opt-win-x64`, `hwpx-opt-win-x64-metadata` |
 
-사내 공지에는 위 SHA256을 그대로 붙여 넣으면 된다. `RELEASE_NOTICE_0.1.1.txt`는 metadata artifact에 포함된다.
+사내 공지에는 위 SHA256을 그대로 붙여 넣으면 된다. **작성 완료 공지 초안:** [CLI_PORTABLE_NOTICE_0.1.1_사내공지.md](./CLI_PORTABLE_NOTICE_0.1.1_사내공지.md) (`RELEASE_NOTICE_0.1.1.txt`는 metadata artifact에도 포함).
 
 ---
 
-## 사내 배포 공지 템플릿
+## 사내 배포 공지 템플릿 (다음 버전용)
 
-아래를 복사해 `[대괄호]`만 채운다. SHA256은 **해당 tag run artifact**의 `SHA256SUMS.txt` 또는 `release-manifest.json` 값을 그대로 사용한다.
+아래는 **0.1.2+** 등 차기 배포용 빈 템플릿이다. **0.1.1 공지는 위 링크 파일을 그대로 사용**한다.
 
 ---
 
