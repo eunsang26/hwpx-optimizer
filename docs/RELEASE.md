@@ -95,6 +95,35 @@ On Linux/WSL, the NSIS installer build requires `wine`. If `wine` is unavailable
 
 For user-facing downloads, prefer the ZIP artifact when startup speed matters. The portable single EXE is convenient, but it must unpack the app payload to a temporary directory at launch. The ZIP is extracted once by the user, so launching `HWPX Optimizer.exe` inside the extracted folder avoids that repeated self-extraction cost.
 
+## CLI Portable Windows ZIP
+
+Build a lightweight Windows x64 CLI distribution (bundled `node.exe`, built CLI/core, win32 `sharp`, and launchers) from Linux/WSL:
+
+```bash
+npm run build:win-portable
+```
+
+Artifacts:
+
+- `release/hwpx-opt-win-x64.zip`
+- `release/hwpx-opt-win-x64.SHA256SUMS.txt`
+
+Verify ZIP structure, dependency tree, and launcher scripts on Linux:
+
+```bash
+npm run release:verify-cli-portable
+```
+
+Do not claim Windows support until the Windows end-to-end smoke passes:
+
+```bash
+npm run release:verify-cli-portable-smoke
+```
+
+This gate uses `scripts/cli-portable-smoke.ps1` and is separate from the Electron portable smoke (`scripts/windows-portable-smoke.ps1`).
+
+Closed-network build: pass a local Node win-x64 zip via `--node-zip <path>` or `HWPX_OPT_NODE_ZIP`, and use a populated npm cache or internal mirror for dependency installation.
+
 ## Verification Before Release
 
 Run:

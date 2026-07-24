@@ -32,6 +32,13 @@ This file separates release blockers from non-blockers so the project does not o
 - Desktop analysis and optimization run off the main UI path. Progress includes analysis, planning, per-image transform counts, verification, and file-write stages, but it is still estimated progress rather than byte-accurate package progress.
 - `npm audit` currently reports 0 vulnerabilities after dependency updates on 2026-05-08.
 
+## CLI Portable Windows ZIP
+
+- The CLI portable is a ZIP folder, not a single self-contained EXE. Users must extract the archive and run launchers from the extracted directory.
+- Windows support verification uses `npm run release:verify-cli-portable-smoke` and `scripts/cli-portable-smoke.ps1`, separate from the Electron portable smoke (`scripts/windows-portable-smoke.ps1`).
+- When a folder is dropped on `drop-here.bat`, batch output goes to `<folder>/optimized/` (not beside each source file).
+- An interactive numbered menu launcher is not included; use `drop-here.bat`, `hwpx-opt.cmd`, and `사용법.txt`.
+
 ## Safe Mode Caveats
 
 Safe mode intentionally avoids the largest size-saving operations when they could affect the visible document:
