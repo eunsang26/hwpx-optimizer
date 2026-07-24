@@ -1,12 +1,37 @@
-import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
-import { createHwpxFixture } from "../../core/test/fixtures.js";
-import { isCliEntrypoint, printAnalysisSummaryForTest, renderHumanReport, runCli } from "../src/index.js";
+import JSZip from "jszip";
+import { createHwpxFixture, createReportLikeHwpxFixture } from "../../core/test/fixtures.js";
+import {
+  isCliEntrypoint,
+  optimizeByMode,
+  parseBatchJobs,
+  printAnalysisSummaryForTest,
+  renderHumanReport,
+  runBatch,
+  runCli
+} from "../src/index.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
+
+async function unzipEntryNames(buf: Buffer): Promise<string[]> {
+  const zip = await JSZip.loadAsync(buf);
+  return Object.keys(zip.files).sort();
+}
+
+async function unzipEntryBytes(buf: Buffer): Promise<Record<string, string | null>> {
+  const zip = await JSZip.loadAsync(buf);
+  const names = Object.keys(zip.files).sort();
+  const entries: Record<string, string | null> = {};
+  for (const name of names) {
+    const file = zip.files[name];
+    entries[name] = file.dir ? null : Buffer.from(await file.async("uint8array")).toString("base64");
+  }
+  return entries;
+}
 
 describe("runCli", () => {
   it("documents target options anywhere they are accepted", async () => {
@@ -860,6 +885,133 @@ describe("runCli", () => {
 
     expect(code).toBe(1);
     expect(await readFile(join(inputDir, "good.optimized.hwpx"))).toEqual(existingInput);
+  });
+
+  it("batch output matches sequential optimizeByMode (semantic parity) and records jobs", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "batch-"));
+    const outDir = join(dir, "out");
+    await writeFile(join(dir, "one.hwpx"), await createReportLikeHwpxFixture());
+    await writeFile(join(dir, "two.hwpx"), await createReportLikeHwpxFixture());
+
+    await runBatch(dir, { mode: "safe", out: outDir, jobs: "2" });
+
+    const files = (await readdir(outDir)).filter((f) => f.endsWith(".optimized.hwpx"));
+    expect(files.length).toBe(2);
+    // semantic parity: unzip an output and the sequential result, compare entry DATA (not just names)
+    const seq = await optimizeByMode(await createReportLikeHwpxFixture(), "safe", {}, undefined);
+    const batchOut = await readFile(join(outDir, files.sort()[0]));
+    expect(await unzipEntryNames(batchOut)).toEqual(await unzipEntryNames(seq.output));
+    expect(await unzipEntryBytes(batchOut)).toEqual(await unzipEntryBytes(seq.output));
+
+    const report = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8"));
+    expect(report.totals.optimized).toBe(2);
+    expect(report.jobsRequested).toBe(2);
+    expect(report.jobsEffective).toBe(2);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("does not delete a pre-existing output when an --overwrite job fails to optimize", async () => {
+    // Finding 1 (data loss): --overwrite mode never claims the final output/report
+    // path, so cleanupFailedJob must not unlink it on failure.
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const outDir = join(dir, "out");
+    await mkdir(outDir, { recursive: true });
+    await writeFile(join(dir, "foo.hwpx"), Buffer.from("not a zip"));
+    const existingOutput = await createHwpxFixture({ entries: { "Contents/section0.xml": "<existing />" } });
+    await writeFile(join(outDir, "foo.optimized.hwpx"), existingOutput);
+
+    const summary = await runBatch(dir, { mode: "safe", out: outDir, overwrite: "true" });
+
+    expect(summary.failed).toBe(1);
+    expect(summary.optimized).toBe(0);
+    expect(await readFile(join(outDir, "foo.optimized.hwpx"))).toEqual(existingOutput);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("startup sweep reaps stale 0-byte claim placeholders as well as leftover temp files, but leaves unrelated files alone", async () => {
+    // Finding 2a: an interrupted claim loop can leave a real 0-byte final-named
+    // file (created via `wx`), not just `*.tmp`; the sweep must remove both.
+    // Fix B: the sweep must not delete every 0-byte file in the out dir -- only
+    // files matching this tool's own output naming (or `*.tmp`) are eligible, so
+    // an unrelated 0-byte file left in a shared/input --out directory survives.
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const outDir = join(dir, "out");
+    await mkdir(outDir, { recursive: true });
+    await writeFile(join(outDir, "stale.optimized.hwpx"), Buffer.alloc(0));
+    await writeFile(join(outDir, "leftover.tmp"), "leftover");
+    await writeFile(join(outDir, "keep-me.txt"), Buffer.alloc(0));
+
+    await runBatch(dir, { mode: "safe", out: outDir });
+
+    await expect(readFile(join(outDir, "stale.optimized.hwpx"))).rejects.toThrow();
+    await expect(readFile(join(outDir, "leftover.tmp"))).rejects.toThrow();
+    await expect(readFile(join(outDir, "keep-me.txt"))).resolves.toBeDefined();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("keeps a promoted output in --overwrite mode when only the final report rename fails, cleaning just the temp report", async () => {
+    // Fix A: previously commitBatchJob unconditionally rolled the promoted output
+    // back to its temp path on report-rename failure, and cleanupFailedJob then
+    // deleted that temp -- in --overwrite mode the first rename already atomically
+    // replaced whatever was at the final path, so this sequence destroyed the
+    // freshly-written output. Per spec (SDD §7) --overwrite has a weaker
+    // guarantee: keep the new output, only the report may end up stale/missing.
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const outDir = join(dir, "out");
+    await mkdir(outDir, { recursive: true });
+    await writeFile(join(dir, "foo.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    await mkdir(join(outDir, "foo.optimized.hwpx.report.json"));
+
+    const summary = await runBatch(dir, { mode: "safe", out: outDir, overwrite: "true" });
+
+    expect(summary.failed).toBe(1);
+    expect(summary.optimized).toBe(0);
+    const outputBuf = await readFile(join(outDir, "foo.optimized.hwpx"));
+    expect(outputBuf.length).toBeGreaterThan(0);
+    await expect(JSZip.loadAsync(outputBuf)).resolves.toBeDefined();
+    const reportStats = await stat(join(outDir, "foo.optimized.hwpx.report.json"));
+    expect(reportStats.isDirectory()).toBe(true);
+    const entries = await readdir(outDir);
+    expect(entries.some((name) => name.endsWith(".tmp"))).toBe(false);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("does not delete a pre-existing --overwrite output when only the report rename fails afterward", async () => {
+    // Fix A (data loss): seed a real pre-existing output, then force the report
+    // rename to fail after the output rename has already succeeded (atomically
+    // replacing the pre-existing file). The user must not be left with nothing.
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
+    const outDir = join(dir, "out");
+    await mkdir(outDir, { recursive: true });
+    await writeFile(join(dir, "foo.hwpx"), await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+    const preExisting = await createHwpxFixture({ entries: { "Contents/section0.xml": "<old />" } });
+    await writeFile(join(outDir, "foo.optimized.hwpx"), preExisting);
+    await mkdir(join(outDir, "foo.optimized.hwpx.report.json"));
+
+    const summary = await runBatch(dir, { mode: "safe", out: outDir, overwrite: "true" });
+
+    expect(summary.failed).toBe(1);
+    expect(summary.optimized).toBe(0);
+    const outputBuf = await readFile(join(outDir, "foo.optimized.hwpx"));
+    expect(outputBuf.length).toBeGreaterThan(0);
+    await expect(JSZip.loadAsync(outputBuf)).resolves.toBeDefined();
+    // It should be the freshly optimized output (the first rename already
+    // replaced the stale pre-existing file), not just "some bytes".
+    expect(outputBuf.equals(preExisting)).toBe(false);
+    await rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe("parseBatchJobs", () => {
+  it("maps 'max' to the core count", () => {
+    expect(parseBatchJobs("max")).toBe(availableParallelism());
+  });
+  it("honors an explicit number above 4", () => {
+    expect(parseBatchJobs("8")).toBe(8);
+  });
+  it("rejects invalid values", () => {
+    expect(() => parseBatchJobs("0")).toThrow(/positive integer or "max"/);
+    expect(() => parseBatchJobs("-2")).toThrow(/positive integer or "max"/);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapLimit } from "../src/concurrency.js";
+import { mapLimit, resolveImageConcurrency, defaultImageConcurrency } from "../src/concurrency.js";
 
 function defer<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (reason?: unknown) => void } {
   let resolve!: (value: T) => void;
@@ -70,5 +70,20 @@ describe("mapLimit", () => {
     await expect(work).rejects.toBeDefined();
     // Only the initial worker batch (=limit) should have started.
     expect(started).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("resolveImageConcurrency", () => {
+  it("defaults to defaultImageConcurrency() when unset", () => {
+    expect(resolveImageConcurrency(undefined)).toBe(defaultImageConcurrency());
+  });
+  it("uses the requested value when provided", () => {
+    expect(resolveImageConcurrency(1)).toBe(1);
+    expect(resolveImageConcurrency(3)).toBe(3);
+  });
+  it("floors to at least 1 for invalid input", () => {
+    expect(resolveImageConcurrency(0)).toBe(1);
+    expect(resolveImageConcurrency(-4)).toBe(1);
+    expect(resolveImageConcurrency(2.9)).toBe(2);
   });
 });

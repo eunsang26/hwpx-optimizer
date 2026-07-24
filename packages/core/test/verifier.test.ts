@@ -194,6 +194,25 @@ describe("verifyHwpxOutput", () => {
     await expect(verifyHwpxOutput(output, { original, mode: "aggressive" })).resolves.toBeUndefined();
   });
 
+  it("rejects when any referenced image pair fails, not only the first", async () => {
+    const goodGradient = await createGradientPng(96, 64);
+    const goodReencoded = await sharp(goodGradient).png({ compressionLevel: 6, adaptiveFiltering: true }).toBuffer();
+    const badOutput = await createInvertedGradientPng(96, 64);
+
+    const original = await createTwoImageFixture(
+      { path: "BinData/image1.png", image: goodGradient },
+      { path: "BinData/image2.png", image: goodGradient }
+    );
+    const output = await createTwoImageFixture(
+      { path: "BinData/image1.png", image: goodReencoded },
+      { path: "BinData/image2.png", image: badOutput }
+    );
+
+    await expect(verifyHwpxOutput(output, { original, mode: "balanced" })).rejects.toThrow(
+      /image quality too low.*image2\.png/s
+    );
+  });
+
   it("throws when only one of `original` and `mode` is provided", async () => {
     const output = await createReferencedImageFixture("BinData/image1.jpg", await createJpeg(80, 60));
     await expect(verifyHwpxOutput(output, { original: output })).rejects.toThrow(
@@ -257,6 +276,22 @@ async function createDisplayReferencedFixture(
       "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="${path}" media-type="image/${ext}"/></opf:manifest></opf:package>`,
       "Contents/section0.xml": `<root><hp:pic><hp:sz width="${szWidthHwpUnit}" height="${szHeightHwpUnit}"/><hc:img binaryItemIDRef="image1"/></hp:pic></root>`,
       [path]: image
+    }
+  });
+}
+
+async function createTwoImageFixture(
+  first: { path: string; image: Buffer },
+  second: { path: string; image: Buffer }
+): Promise<Buffer> {
+  const manifestItem = (id: string, path: string) =>
+    `<opf:item id="${id}" href="${path}" media-type="image/${path.split(".").pop()?.toLowerCase() ?? "unknown"}"/>`;
+  return createHwpxFixture({
+    entries: {
+      "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest>${manifestItem("image1", first.path)}${manifestItem("image2", second.path)}</opf:manifest></opf:package>`,
+      "Contents/section0.xml": `<root><img href="${first.path}" /><img href="${second.path}" /></root>`,
+      [first.path]: first.image,
+      [second.path]: second.image
     }
   });
 }

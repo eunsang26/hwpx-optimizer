@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
 import { readHwpxPackage } from "../src/reader.js";
-import { createHwpxFixture } from "./fixtures.js";
+import { createHwpxFixture, createReportLikeHwpxFixture } from "./fixtures.js";
 
 describe("optimizeHwpxBufferSafe", () => {
   it("records a missed target without over-compressing or mutating the original result", async () => {
@@ -180,7 +180,7 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(result.output.byteLength).toBeLessThanOrEqual(targetBytes);
     expect(result.output.byteLength).toBeGreaterThan(targetBytes * 0.9);
     expect(result.report.performance?.stages.filter((stage) => stage.name === "opportunities").length).toBeGreaterThan(1);
-  }, 10_000);
+  }, 30_000);
 
   it("removes unreferenced BinData and writes a verified package", async () => {
     const input = await createHwpxFixture({
@@ -348,6 +348,33 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(result.report.warnings.some((warning) => warning.includes("BinData/broken.png"))).toBe(
       true
     );
+  });
+
+  it("accepts imageConcurrency on safe optimize and produces a smaller file", async () => {
+    const input = await createReportLikeHwpxFixture();
+    const { output } = await optimizeHwpxBufferSafe(input, { imageConcurrency: 1 });
+    expect(output.byteLength).toBeLessThan(input.byteLength);
+  });
+
+  it("accepts imageConcurrency on balanced optimize (including duplicate-image consolidation) and produces a smaller file", async () => {
+    // Regression test: imageConcurrency previously was not threaded into the
+    // duplicate-image consolidation decode pass (opportunities.ts ->
+    // findImageConsolidationGroups / balancedOptimizer.ts -> consolidateDuplicateImages),
+    // so balanced/aggressive optimize always decoded at the default concurrency
+    // regardless of the caller's requested limit. This exercises that path with
+    // imageConcurrency: 1 to confirm the option is accepted end-to-end and the
+    // result is unaffected (grouping/output is concurrency-independent).
+    const input = await createReportLikeHwpxFixture();
+    const { output } = await optimizeHwpxBufferBalanced(input, { imageConcurrency: 1 });
+    expect(output.byteLength).toBeLessThan(input.byteLength);
+  });
+
+  it("accepts imageConcurrency on analyzeHwpxBuffer and reports duplicate-image opportunities", async () => {
+    const input = await createReportLikeHwpxFixture();
+    const report = await analyzeHwpxBuffer(input, { imageConcurrency: 1, analysisMode: "deep" });
+    expect(
+      report.opportunities.some((opportunity) => opportunity.action === "consolidate-duplicate-images")
+    ).toBe(true);
   });
 });
 

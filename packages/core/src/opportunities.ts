@@ -63,7 +63,7 @@ export type TransformImageAction =
 export async function detectOptimizationOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile = balancedImageProfile,
-  options: { duplicateMode?: "byte" | "visual" } = {}
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number } = {}
 ): Promise<OptimizationOpportunity[]> {
   return collectOpportunities(pkg, profile, "exact", options);
 }
@@ -71,7 +71,7 @@ export async function detectOptimizationOpportunities(
 export async function detectEstimatedOptimizationOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile = balancedImageProfile,
-  options: { duplicateMode?: "byte" | "visual" } = {}
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number } = {}
 ): Promise<OptimizationOpportunity[]> {
   return collectOpportunities(pkg, profile, "estimated", options);
 }
@@ -80,11 +80,11 @@ async function collectOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile,
   confidence: OpportunityConfidence,
-  options: { duplicateMode?: "byte" | "visual" }
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number }
 ): Promise<OptimizationOpportunity[]> {
   const opportunities: OptimizationOpportunity[] = [];
   const resizeBudgets = getRecommendedImagePixelBudgets(pkg, profile.displayScale);
-  await addDuplicateImageOpportunities(pkg, opportunities, options.duplicateMode ?? "visual");
+  await addDuplicateImageOpportunities(pkg, opportunities, options.duplicateMode ?? "visual", options.imageConcurrency);
 
   for (const entry of pkg.entries) {
     if (entry.kind !== "image") continue;
@@ -244,12 +244,15 @@ async function measureOrEstimateImageSize(input: {
 async function addDuplicateImageOpportunities(
   pkg: HwpxPackage,
   opportunities: OptimizationOpportunity[],
-  duplicateMode: "byte" | "visual"
+  duplicateMode: "byte" | "visual",
+  imageConcurrency?: number
 ): Promise<void> {
   const seenTargets = new Set<string>();
   const sizesByPath = new Map(pkg.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry.size]));
   const groups =
-    duplicateMode === "byte" ? findByteIdenticalImageGroups(pkg) : await findImageConsolidationGroups(pkg);
+    duplicateMode === "byte"
+      ? findByteIdenticalImageGroups(pkg)
+      : await findImageConsolidationGroups(pkg, { imageConcurrency });
   for (const group of groups) {
     for (const duplicatePath of group.paths) {
       if (duplicatePath === group.canonicalPath || seenTargets.has(duplicatePath)) continue;

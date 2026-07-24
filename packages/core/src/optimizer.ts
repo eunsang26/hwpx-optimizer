@@ -1,10 +1,14 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import sharp from "sharp";
+import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
+
+type PngOptimizationResult = { data: Buffer } | { error: unknown };
 
 export async function applySafeOptimizationPlan(input: {
   pkg: HwpxPackage;
   plan: OptimizationPlan;
+  imageConcurrency?: number;
 }): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[] }> {
   const applied: AppliedAction[] = [];
   const skipped: AppliedAction[] = [];
@@ -21,6 +25,20 @@ export async function applySafeOptimizationPlan(input: {
   const minifyXmlTargets = new Set(
     input.plan.actions.filter((action) => action.type === "minify-xml").map((action) => action.target)
   );
+
+  // PNG lossless re-encoding is the only expensive per-entry step here and each entry is
+  // independent, so run them concurrently up front. The assembly loop below still consumes
+  // the results in entry order, keeping output entries and the applied/skipped/warnings
+  // report identical to sequential processing.
+  const pngTargetEntries = input.pkg.entries.filter((entry) => optimizePngTargets.has(entry.path));
+  const pngResults = new Map<string, PngOptimizationResult>();
+  await mapLimit(pngTargetEntries, resolveImageConcurrency(input.imageConcurrency), async (entry) => {
+    try {
+      pngResults.set(entry.path, { data: await optimizePngLosslessly(entry.data) });
+    } catch (error) {
+      pngResults.set(entry.path, { error });
+    }
+  });
 
   const entries = [];
   for (const entry of input.pkg.entries) {
@@ -50,8 +68,9 @@ export async function applySafeOptimizationPlan(input: {
     }
 
     if (optimizePngTargets.has(entry.path)) {
-      try {
-        const optimized = await optimizePngLosslessly(entry.data);
+      const result = pngResults.get(entry.path);
+      if (result && "data" in result) {
+        const optimized = result.data;
         if (optimized.byteLength < entry.data.byteLength) {
           entries.push({ ...entry, data: optimized, size: optimized.byteLength });
           applied.push({
@@ -63,9 +82,9 @@ export async function applySafeOptimizationPlan(input: {
           continue;
         }
         skipped.push({ type: "optimize-png", target: entry.path, beforeSize: entry.size });
-      } catch (error) {
+      } else {
         skipped.push({ type: "optimize-png", target: entry.path, beforeSize: entry.size });
-        warnings.push(`optimize-png skipped for ${entry.path}: ${describeError(error)}`);
+        warnings.push(`optimize-png skipped for ${entry.path}: ${describeError(result?.error)}`);
       }
     }
 

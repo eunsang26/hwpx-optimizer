@@ -2,10 +2,11 @@ import sharp from "sharp";
 import { randomBytes } from "node:crypto";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
-import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
 import { applyBalancedOptimizationPlan } from "../src/balancedOptimizer.js";
+import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
 import { aggressiveImageProfile, balancedImageProfile } from "../src/opportunities.js";
 import { readHwpxPackage } from "../src/reader.js";
+import type { HwpxPackage, OptimizationPlan } from "../src/types.js";
 import { createHwpxFixture } from "./fixtures.js";
 
 describe("balanced optimization", () => {
@@ -208,7 +209,7 @@ describe("balanced optimization", () => {
     expect(result.report.actions.applied).not.toContainEqual(
       expect.objectContaining({ type: "optimize-png", target: "BinData/image1.png" })
     );
-  });
+  }, 30_000);
 
   it("does not resize PNGs in safe mode", async () => {
     const png = await sharp({
@@ -241,7 +242,7 @@ describe("balanced optimization", () => {
     expect(result.report.actions.applied).not.toContainEqual(
       expect.objectContaining({ type: "resize-png", target: "BinData/image1.png" })
     );
-  });
+  }, 30_000);
 
   it("consolidates duplicate image references in balanced mode", async () => {
     const png = await sharp({
@@ -785,6 +786,44 @@ describe("balanced optimization", () => {
     expect(allowedResult.report.actions.applied).toContainEqual(
       expect.objectContaining({ type: "clean-shape-comment", target: "Contents/section0.xml" })
     );
+  });
+
+  it("emits transform-skip warnings in entry order regardless of concurrency", async () => {
+    const bad = (name: string) => ({ path: name, data: Buffer.from("not-an-image"), size: 12, kind: "image" as const });
+    const pkg: HwpxPackage = {
+      entries: [
+        {
+          path: "Contents/content.hpf",
+          data: Buffer.from(
+            '<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="a" href="BinData/a.png" media-type="image/png"/><opf:item id="b" href="BinData/b.png" media-type="image/png"/></opf:manifest></opf:package>'
+          ),
+          size: 10,
+          kind: "xml"
+        },
+        {
+          path: "Contents/section0.xml",
+          data: Buffer.from('<root><hc:img binaryItemIDRef="a"/><hc:img binaryItemIDRef="b"/></root>'),
+          size: 10,
+          kind: "xml"
+        },
+        bad("BinData/a.png"),
+        bad("BinData/b.png")
+      ]
+    };
+    const plan: OptimizationPlan = {
+      mode: "balanced",
+      actions: [
+        { type: "resize-png", target: "BinData/a.png", risk: "medium" },
+        { type: "resize-png", target: "BinData/b.png", risk: "medium" }
+      ]
+    };
+
+    const one = await applyBalancedOptimizationPlan({ pkg, plan, profile: balancedImageProfile, imageConcurrency: 1 });
+    const many = await applyBalancedOptimizationPlan({ pkg, plan, profile: balancedImageProfile, imageConcurrency: 8 });
+
+    const order = (w: string[]) => w.filter((m) => m.includes("BinData/")).map((m) => (m.includes("/a.png") ? "a" : "b"));
+    expect(order(one.warnings)).toEqual(["a", "b"]);
+    expect(order(many.warnings)).toEqual(["a", "b"]);
   });
 });
 

@@ -25,23 +25,30 @@ type OptimizeOptions = {
   targetBytes?: number;
   onProgress?: OptimizeProgressCallback;
   analysisMode?: AnalysisMode;
+  imageConcurrency?: number;
 };
-type SafeOptimizeOptions = { targetBytes?: number; onProgress?: OptimizeProgressCallback; analysisMode?: AnalysisMode };
+type SafeOptimizeOptions = {
+  targetBytes?: number;
+  onProgress?: OptimizeProgressCallback;
+  analysisMode?: AnalysisMode;
+  imageConcurrency?: number;
+};
 type AnalysisMode = "quick" | "deep";
 
 export async function analyzeHwpxBuffer(
   input: Buffer,
-  options: { targetBytes?: number; analysisMode?: AnalysisMode } = {}
+  options: { targetBytes?: number; analysisMode?: AnalysisMode; imageConcurrency?: number } = {}
 ): Promise<OptimizationReport> {
   const timer = new PerformanceTimer();
   const targetBytes = normalizeTargetBytes(options.targetBytes);
   const pkg = await timer.measure("read", () => readHwpxPackage(input));
   const analysis = await timer.measure("analyze", () =>
-    analyzeHwpxPackage(pkg, analysisOptions(options.analysisMode ?? "quick"))
+    analyzeHwpxPackage(pkg, { ...analysisOptions(options.analysisMode ?? "quick"), imageConcurrency: options.imageConcurrency })
   );
   const opportunities = await timer.measure("opportunities", () =>
     detectEstimatedOptimizationOpportunities(pkg, balancedImageProfile, {
-      duplicateMode: options.analysisMode === "quick" ? "byte" : "visual"
+      duplicateMode: options.analysisMode === "quick" ? "byte" : "visual",
+      imageConcurrency: options.imageConcurrency
     })
   );
   return createReportWithPerformance(timer, () =>
@@ -58,13 +65,15 @@ export async function optimizeHwpxBufferSafe(input: Buffer, options: SafeOptimiz
   emitProgress(options, 25, "Analyzing document structure");
   const pkg = await timer.measure("read", () => readHwpxPackage(input));
   const analysis = await timer.measure("analyze", () =>
-    analyzeHwpxPackage(pkg, analysisOptions(options.analysisMode ?? "quick"))
+    analyzeHwpxPackage(pkg, { ...analysisOptions(options.analysisMode ?? "quick"), imageConcurrency: options.imageConcurrency })
   );
   const graph = analysis.referenceGraph ?? buildReferenceGraph(pkg);
   emitProgress(options, 40, "Planning safe changes");
   const plan = measureSync(timer, "plan", () => createSafeOptimizationPlan({ pkg, analysis, graph }));
   emitProgress(options, 52, "Applying safe document cleanup");
-  const optimized = await timer.measure("apply", () => applySafeOptimizationPlan({ pkg, plan }));
+  const optimized = await timer.measure("apply", () =>
+    applySafeOptimizationPlan({ pkg, plan, imageConcurrency: options.imageConcurrency })
+  );
   const opportunities = createOptimizationOpportunitiesFromAppliedActions(optimized.applied);
   emitProgress(options, 72, "Packing optimized document");
   const output = await timer.measure("write", () =>
@@ -76,7 +85,8 @@ export async function optimizeHwpxBufferSafe(input: Buffer, options: SafeOptimiz
       original: input,
       mode: "safe",
       originalPackage: pkg,
-      originalAnalysis: analysis
+      originalAnalysis: analysis,
+      imageConcurrency: options.imageConcurrency
     })
   );
 
@@ -157,7 +167,7 @@ async function optimizeHwpxBufferAdvanced(
   emitProgress(options, 25, "Analyzing document structure");
   const pkg = await timer.measure("read", () => readHwpxPackage(input));
   const analysis = await timer.measure("analyze", () =>
-    analyzeHwpxPackage(pkg, analysisOptions(options.analysisMode ?? "quick"))
+    analyzeHwpxPackage(pkg, { ...analysisOptions(options.analysisMode ?? "quick"), imageConcurrency: options.imageConcurrency })
   );
   const profiles = createTargetProfileLadder(settings.mode, settings.profile, options.targetBytes, input.byteLength);
   let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
@@ -233,7 +243,9 @@ async function optimizeHwpxBufferWithProfile(
   const pkg = settings.pkg;
   const analysis = settings.analysis;
   const opportunities = await settings.timer.measure("opportunities", () =>
-    detectEstimatedOptimizationOpportunities(pkg, settings.profile)
+    detectEstimatedOptimizationOpportunities(pkg, settings.profile, {
+      imageConcurrency: settings.options.imageConcurrency
+    })
   );
   const selectedOpportunities =
     settings.options.actions !== undefined
@@ -277,6 +289,7 @@ async function optimizeHwpxBufferWithProfile(
     pkg,
     plan,
     profile: settings.profile,
+    imageConcurrency: settings.options.imageConcurrency,
     onTransformProgress: (progress) => {
       const percent = 45 + Math.round((progress.completed / progress.total) * 30);
       emitProgress(settings.options, percent, `Transforming images ${progress.completed}/${progress.total}`);
@@ -293,7 +306,8 @@ async function optimizeHwpxBufferWithProfile(
       original: input,
       mode: settings.mode,
       originalPackage: pkg,
-      originalAnalysis: analysis
+      originalAnalysis: analysis,
+      imageConcurrency: settings.options.imageConcurrency
     })
   );
 
