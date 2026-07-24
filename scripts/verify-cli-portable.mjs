@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
 import { STAGE_DIR_NAME, ZIP_NAME } from "./cli-portable/constants.mjs";
+import { writeMinimalHwpxFile } from "./cli-portable/createMinimalHwpx.mjs";
 import { verifyCliPortableStage } from "./cli-portable/verifyStage.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -69,24 +70,6 @@ async function extractZip(zipPath) {
   return join(verifyRoot, STAGE_DIR_NAME);
 }
 
-async function createMinimalHwpx(path) {
-  const zip = new JSZip();
-  zip.file("mimetype", "application/hwp+zip", { compression: "STORE" });
-  zip.file(
-    "Contents/content.hpf",
-    '<opf:package xmlns:opf="http://www.idpf.org/2007/opf" />'
-  );
-  zip.file("Contents/section0.xml", "<root />");
-  await writeFile(
-    path,
-    await zip.generateAsync({
-      type: "nodebuffer",
-      compression: "DEFLATE",
-      compressionOptions: { level: 9 }
-    })
-  );
-}
-
 async function assertNonemptyFile(path, label) {
   await access(path);
   const info = await stat(path);
@@ -101,7 +84,7 @@ async function runJsSmoke() {
   const outputPath = join(smokeRoot, "out.hwpx");
   const reportPath = join(smokeRoot, "r.json");
   await mkdir(smokeRoot, { recursive: true });
-  await createMinimalHwpx(inputPath);
+  await writeMinimalHwpxFile(inputPath);
 
   const result = spawnSync(
     process.execPath,
