@@ -106,11 +106,13 @@ Axis B (`computeVisualMetrics` on original BinData) is secondary and recorded fo
 
 ## Hangul WebP/AVIF compatibility spike
 
-Generate spike artifacts (no real corpus required):
+Generate spike artifacts (requires a real HWPX template shell — default: repo-root `sample2.hwpx`):
 
 ```bash
 npm run bench:spike
 ```
+
+Uses `sample2.hwpx` (or `HWPX_SPIKE_TEMPLATE`) as the OCF/HWPML shell — same `version.xml`, `header.xml`, `META-INF/*`, `Preview/*` as a document Hangul already accepts — and swaps only `BinData` images plus manifest/section references. Minimal hand-built ZIPs are rejected by Hangul as corrupted.
 
 Writes to `scripts/bench/out/spike/`:
 
