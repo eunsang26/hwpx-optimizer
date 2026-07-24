@@ -1,6 +1,8 @@
 import { access, readFile, readdir, stat } from "fs/promises";
 import { join } from "path";
 import { FORBIDDEN_SHARP_DIR_SUBSTRINGS, REQUIRED_WIN_SHARP_FILES } from "./constants.mjs";
+import { assertWinSharpUsesUcrtOnly } from "./peImports.mjs";
+import { shouldPrunePackagingFile } from "./prunePackaging.mjs";
 
 async function pathExists(path) {
   try {
@@ -56,17 +58,13 @@ async function assertHasJsFile(dir, label) {
   }
 }
 
-async function assertNoMapOrDtsFiles(dir, label) {
+async function assertNoPackagingArtifacts(dir, label) {
   await assertExists(dir, label);
-  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isFile()) {
-      continue;
+  await walkDirectory(dir, async (fullPath, name, isDirectory) => {
+    if (!isDirectory && shouldPrunePackagingFile(name)) {
+      throw new Error(`${label} must not contain ${name}: ${fullPath}`);
     }
-    if (entry.name.endsWith(".map") || entry.name.endsWith(".d.ts")) {
-      throw new Error(`${label} must not contain ${entry.name}: ${join(dir, entry.name)}`);
-    }
-  }
+  });
 }
 
 async function assertNodeExe(stageRoot) {
@@ -126,11 +124,14 @@ export async function verifyCliPortableStage(stageRoot) {
   const cliDist = join(appRoot, "cli", "dist");
   await assertExists(join(cliDist, "index.js"), "app/cli/dist/index.js");
   await assertExists(join(cliDist, "optimizeWorker.js"), "app/cli/dist/optimizeWorker.js");
-  await assertNoMapOrDtsFiles(cliDist, "app/cli/dist");
+  await assertNoPackagingArtifacts(cliDist, "app/cli/dist");
 
   const coreDist = join(appRoot, "core", "dist");
   await assertHasJsFile(coreDist, "app/core/dist");
-  await assertNoMapOrDtsFiles(coreDist, "app/core/dist");
+  await assertNoPackagingArtifacts(coreDist, "app/core/dist");
+
+  const nodeModulesRoot = join(appRoot, "node_modules");
+  await assertNoPackagingArtifacts(nodeModulesRoot, "app/node_modules");
 
   await assertModulePackageJson(
     join(appRoot, "node_modules", "@hwpx-optimizer", "core", "package.json"),
@@ -143,5 +144,6 @@ export async function verifyCliPortableStage(stageRoot) {
 
   await assertSharpNativeFiles(stageRoot);
   await assertNoForbiddenSharpDirs(stageRoot);
+  await assertWinSharpUsesUcrtOnly(stageRoot);
   await assertRootLaunchers(stageRoot);
 }

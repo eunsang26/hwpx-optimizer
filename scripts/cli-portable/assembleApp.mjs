@@ -12,6 +12,7 @@ import {
   FORBIDDEN_SHARP_DIR_SUBSTRINGS,
   SHARP_WIN32_PACKAGE
 } from "./constants.mjs";
+import { prunePackagingTree } from "./prunePackaging.mjs";
 
 const execFileAsync = promisify(execFile);
 const RUNTIME_DEPENDENCIES = [
@@ -131,24 +132,7 @@ async function copyWorkspacePackage(repoRoot, appRoot, packageName) {
 }
 
 async function pruneGeneratedFiles(root) {
-  let entries;
-  try {
-    entries = await readdir(root, { withFileTypes: true });
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return;
-    }
-    throw error;
-  }
-
-  for (const entry of entries) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) {
-      await pruneGeneratedFiles(path);
-    } else if (entry.name.endsWith(".map") || entry.name.endsWith(".d.ts")) {
-      await rm(path, { force: true });
-    }
-  }
+  await prunePackagingTree(root);
 }
 
 async function pruneSharpVariants(appRoot) {
@@ -195,6 +179,7 @@ export async function assembleApp({ repoRoot, appRoot, npmCacheDir }) {
     "--ignore-scripts",
     "--no-audit",
     "--no-fund",
+    "--no-package-lock",
     "--cache",
     npmCacheDir
   ];
@@ -224,10 +209,12 @@ export async function assembleApp({ repoRoot, appRoot, npmCacheDir }) {
   for (const root of [
     join(appRoot, "cli"),
     join(appRoot, "core"),
-    join(appRoot, "node_modules", "@hwpx-optimizer")
+    join(appRoot, "node_modules")
   ]) {
     await pruneGeneratedFiles(root);
   }
+
+  await rm(join(appRoot, "package-lock.json"), { force: true });
 
   for (const packageName of ["tsx", "vitest"]) {
     await rm(join(appRoot, "node_modules", packageName), {

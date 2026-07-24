@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "fs/promises";
+import { copyFile, mkdtemp, mkdir, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
@@ -37,8 +37,9 @@ async function buildValidStage(stageRoot: string): Promise<void> {
 
   const sharpLib = join(appRoot, "node_modules", "@img", "sharp-win32-x64", "lib");
   await mkdir(sharpLib, { recursive: true });
+  const sourceSharpLib = join(process.cwd(), "node_modules", "@img", "sharp-win32-x64", "lib");
   for (const file of REQUIRED_WIN_SHARP_FILES) {
-    await writeFile(join(sharpLib, file), "", "utf8");
+    await copyFile(join(sourceSharpLib, file), join(sharpLib, file));
   }
 
   await writeFile(join(stageRoot, "drop-here.bat"), renderDropHereBat(), "utf8");

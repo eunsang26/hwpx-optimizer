@@ -53,7 +53,8 @@ try {
   $node = Join-Path $root "node\node.exe"
   $cli = Join-Path $root "app\cli\dist\index.js"
   $launcher = Join-Path $root "hwpx-opt.cmd"
-  foreach ($requiredPath in @($node, $cli, $launcher)) {
+  $dropHere = Join-Path $root "drop-here.bat"
+  foreach ($requiredPath in @($node, $cli, $launcher, $dropHere)) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
       throw "Required portable file not found after extraction: $requiredPath"
     }
@@ -116,6 +117,40 @@ try {
     $batchOutputs = @(Get-ChildItem -LiteralPath $batchOutput -Filter "*.optimized.hwpx" -File)
     if ($batchOutputs.Count -lt 1) {
       throw "Batch smoke did not create an optimized HWPX in: $batchOutput"
+    }
+
+    $dropSampleRoot = Join-Path $smokeRoot "drop-file"
+    New-Item -ItemType Directory -Path $dropSampleRoot -Force | Out-Null
+    $dropSampleCopy = Join-Path $dropSampleRoot ([System.IO.Path]::GetFileName($resolvedSample))
+    Copy-Item -LiteralPath $resolvedSample -Destination $dropSampleCopy
+    Push-Location $root
+    try {
+      Invoke-Checked -FilePath $env:ComSpec -Arguments @("/d", "/c", "drop-here.bat", $dropSampleCopy) -Label "drop-here.bat optimize file"
+    } finally {
+      Pop-Location
+    }
+    $dropOptimizedPath = Join-Path $dropSampleRoot "$([System.IO.Path]::GetFileNameWithoutExtension($dropSampleCopy)).optimized.hwpx"
+    if (-not (Test-Path -LiteralPath $dropOptimizedPath -PathType Leaf)) {
+      throw "drop-here.bat did not create optimized output beside the sample: $dropOptimizedPath"
+    }
+    $dropReportBesideSample = Get-ChildItem -LiteralPath $dropSampleRoot -Filter "*.report.json" -File -ErrorAction SilentlyContinue
+    if ($dropReportBesideSample.Count -gt 0) {
+      throw "drop-here.bat should not leave report JSON beside the sample in: $dropSampleRoot"
+    }
+
+    $dropBatchRoot = Join-Path $smokeRoot "drop-folder"
+    $dropBatchOutput = Join-Path $dropBatchRoot "optimized"
+    New-Item -ItemType Directory -Path $dropBatchRoot -Force | Out-Null
+    Copy-Item -LiteralPath $resolvedSample -Destination (Join-Path $dropBatchRoot ([System.IO.Path]::GetFileName($resolvedSample)))
+    Push-Location $root
+    try {
+      Invoke-Checked -FilePath $env:ComSpec -Arguments @("/d", "/c", "drop-here.bat", $dropBatchRoot) -Label "drop-here.bat batch folder"
+    } finally {
+      Pop-Location
+    }
+    $dropBatchOutputs = @(Get-ChildItem -LiteralPath $dropBatchOutput -Filter "*.optimized.hwpx" -File)
+    if ($dropBatchOutputs.Count -lt 1) {
+      throw "drop-here.bat batch did not create optimized output in: $dropBatchOutput"
     }
   }
 
