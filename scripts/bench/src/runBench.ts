@@ -22,12 +22,14 @@ import {
 import { isoQualityJpegliBytes, sweepJpegli, sweepMozjpeg } from "./rdCurve.js";
 import { MetricToolMissingError, resolveSsimulacra2Bin } from "./ssimulacra2.js";
 import { budgetsForPackage, decodeResizeToRaw } from "./resizeRaw.js";
+import { emitHangulSpikeArtifacts } from "./spikeHangul.js";
 import { Q_GRID, CORPUS_DIR_ENV, type BenchProfileName } from "./types.js";
 
 const benchRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixturesDir = join(benchRoot, "fixtures");
 const manifestPath = join(benchRoot, "corpus.manifest.json");
 const outDir = join(benchRoot, "out");
+const spikeOutDir = join(outDir, "spike");
 const reportPath = join(outDir, "rd-report.json");
 
 function usage(): string {
@@ -310,8 +312,12 @@ async function main(): Promise<void> {
   }
 
   if (command === "spike") {
-    console.error("spike subcommand is not implemented yet.");
-    process.exit(1);
+    const result = await emitHangulSpikeArtifacts(spikeOutDir);
+    console.log(`Wrote ${result.files.length} spike artifacts to ${result.outDir}`);
+    if (result.avifSkipped) {
+      console.warn(`AVIF spike skipped: ${result.avifSkipReason ?? "encode unavailable"}`);
+    }
+    return;
   }
 
   console.error(usage().trim());
