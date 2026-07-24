@@ -18,6 +18,7 @@
   ],
   "scripts": {
     "build": "npm run clean:build && tsc -b packages/core packages/cli apps/desktop apps/tauri-desktop && npm run desktop:assets",
+    "build:win-portable": "node scripts/build-win-portable.mjs",
     "desktop:assets": "node apps/desktop/scripts/copy-assets.mjs",
     "desktop:icons": "node scripts/generate-desktop-icons.mjs",
     "desktop:dev": "node scripts/run-electron-dev.mjs",
