@@ -195,8 +195,8 @@ npm run release:verify-win-native
 
 This check requires the following files to exist under `release/win-unpacked/resources/app.asar.unpacked`:
 
-- `node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64.node`
-- `node_modules/@img/sharp-win32-x64/lib/libvips-cpp.dll`
+- `node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64-0.35.3.node`
+- `node_modules/@img/sharp-win32-x64/lib/libvips-cpp-8.18.3.dll`
 - `node_modules/@img/sharp-win32-x64/lib/libvips-42.dll`
 
 On a Windows machine, smoke-test the portable artifact:
