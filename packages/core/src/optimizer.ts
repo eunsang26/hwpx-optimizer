@@ -1,6 +1,7 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import sharp from "sharp";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
+import { getDecodedImage } from "./decodedImage.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 
 type PngOptimizationResult = { data: Buffer } | { error: unknown };
@@ -128,7 +129,12 @@ function stripImageMetadataLossless(path: string, data: Buffer): Buffer {
 }
 
 async function optimizePngLosslessly(data: Buffer): Promise<Buffer> {
-  return sharp(data).png({ compressionLevel: 9, adaptiveFiltering: true, palette: false }).toBuffer();
+  const decoded = await getDecodedImage(data, { rotate: false });
+  const png = { compressionLevel: 9, adaptiveFiltering: true, palette: false };
+  if (!decoded) return sharp(data).png(png).toBuffer();
+  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    .png(png)
+    .toBuffer();
 }
 
 export function stripJpegMetadataSegments(data: Buffer): Buffer {

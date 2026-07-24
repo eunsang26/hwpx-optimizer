@@ -2,6 +2,7 @@ export * from "./analyzer.js";
 export * from "./balancedOptimizer.js";
 export * from "./bmp.js";
 export * from "./concurrency.js";
+export * from "./decodedImage.js";
 export * from "./estimateSavings.js";
 export * from "./imageDisplay.js";
 export * from "./imagePreview.js";

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
-import { decodeBmp } from "./bmp.js";
+import { getDecodedImage } from "./decodedImage.js";
 
 const HASH_SIZE = 8;
 const HASH_PIXELS = HASH_SIZE * HASH_SIZE;
@@ -72,27 +72,14 @@ export function hammingDistance(left: AverageHash, right: AverageHash): number {
 }
 
 export async function computeDecodedPixelHash(data: Buffer): Promise<DecodedPixelHash | null> {
-  const bmp = decodeBmp(data);
-  if (bmp) {
-    return hashDecodedPixels({ data: bmp.data, width: bmp.width, height: bmp.height, channels: 3 });
-  }
-
-  try {
-    const decoded = await sharp(data)
-      .rotate()
-      .toColourspace("srgb")
-      .removeAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    return hashDecodedPixels({
-      data: decoded.data,
-      width: decoded.info.width,
-      height: decoded.info.height,
-      channels: decoded.info.channels
-    });
-  } catch {
-    return null;
-  }
+  const decoded = await getDecodedImage(data, { rotate: true });
+  if (!decoded) return null;
+  return hashDecodedPixels({
+    data: decoded.data,
+    width: decoded.width,
+    height: decoded.height,
+    channels: decoded.channels
+  });
 }
 
 function hashDecodedPixels(input: { data: Buffer; width: number; height: number; channels: number }): DecodedPixelHash {

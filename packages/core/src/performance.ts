@@ -1,5 +1,10 @@
 import type { PerformanceStage, PerformanceSummary } from "./types.js";
 
+/**
+ * Stage timer used by optimize/analyze entry points. Summaries are always
+ * attached to reports as `performance`. For stderr stage dumps, CLI/desktop
+ * may honor `HWPX_OPT_TIMINGS=1` at their boundary (core does not read env).
+ */
 export class PerformanceTimer {
   private readonly startedAt = nowMs();
   private readonly stages: PerformanceStage[] = [];

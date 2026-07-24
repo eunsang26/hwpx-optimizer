@@ -1,5 +1,6 @@
 import sharp from "sharp";
-import { decodeBmp, readBmpInfo } from "./bmp.js";
+import { readBmpInfo } from "./bmp.js";
+import { getDecodedImage } from "./decodedImage.js";
 import { findByteIdenticalImageGroups, findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { readImageMetadata } from "./imageMetadata.js";
@@ -456,10 +457,12 @@ async function convertBmpToPng(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<Buffer> {
-  const bmp = decodeBmp(data);
-  const image = bmp ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } }) : sharp(data);
-  const sourceWidth = bmp?.width ?? width;
-  const sourceHeight = bmp?.height ?? height;
+  const decoded = await getDecodedImage(data);
+  const image = decoded
+    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    : sharp(data);
+  const sourceWidth = decoded?.width ?? width;
+  const sourceHeight = decoded?.height ?? height;
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   const resized =
     sourceWidth && sourceHeight && shouldResize(sourceWidth, sourceHeight, budget, profile)
@@ -475,15 +478,14 @@ async function convertBmpToPng(
   // when balanced.pngPalette is false so we do not inflate to truecolor PNG.
   const png = {
     ...pngOptions(profile),
-    palette: profile.pngPalette || Boolean(bmp?.indexed)
+    palette: profile.pngPalette || Boolean(decoded?.indexed)
   };
   try {
     return await resized.png(png).toBuffer();
   } catch (error) {
-    // decodeBmp covers BI_RGB 1/4/8/16/24/32 and BI_BITFIELDS 16/32. Remaining
-    // variants (RLE) fall back to sharp, which may lack BMP input — surface a
-    // named reason instead of a cryptic decode error when that happens.
-    const info = bmp ? null : readBmpInfo(data);
+    // Remaining unsupported BMP variants (e.g. RLE) fall back to sharp, which may
+    // lack BMP input — surface a named reason instead of a cryptic decode error.
+    const info = decoded ? null : readBmpInfo(data);
     if (info && !info.supported) {
       throw new Error(
         `unsupported BMP variant (bitsPerPixel=${info.bitsPerPixel}, compression=${info.compression})`
@@ -503,10 +505,15 @@ async function convertTiffToPng(
   // Bake in any EXIF/TIFF orientation so the PNG matches the dimensions the
   // analyzer and verifier read with auto-orient (otherwise an oriented TIFF's
   // swapped dimensions fail the verifier's aspect-ratio/enlargement checks).
-  const image = sharp(data).rotate();
+  const decoded = await getDecodedImage(data, { rotate: true });
+  const image = decoded
+    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    : sharp(data).rotate();
+  const sourceWidth = decoded?.width ?? width;
+  const sourceHeight = decoded?.height ?? height;
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   const resized =
-    width && height && shouldResize(width, height, budget, profile)
+    sourceWidth && sourceHeight && shouldResize(sourceWidth, sourceHeight, budget, profile)
       ? image.resize({
           width: target.width,
           height: target.height,
@@ -523,6 +530,9 @@ async function resizeJpeg(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<Buffer> {
+  // Warm the shared decode cache for same-visual hashing on this Buffer, but keep
+  // mozjpeg encoding on the original container — raw→JPEG often grows bytes.
+  void getDecodedImage(data, { rotate: true });
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   return sharp(data, { failOn: "none" })
     .resize({
@@ -542,9 +552,12 @@ async function resizePng(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<Buffer> {
+  const decoded = await getDecodedImage(data, { rotate: true });
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
-  return sharp(data)
-    .rotate()
+  const image = decoded
+    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    : sharp(data).rotate();
+  return image
     .resize({
       width: target.width,
       height: target.height,
@@ -557,7 +570,11 @@ async function resizePng(
 }
 
 async function optimizePng(data: Buffer, profile: ImageOptimizationProfile = balancedImageProfile): Promise<Buffer> {
-  return sharp(data).png(pngOptions(profile)).toBuffer();
+  const decoded = await getDecodedImage(data, { rotate: false });
+  if (!decoded) return sharp(data).png(pngOptions(profile)).toBuffer();
+  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    .png(pngOptions(profile))
+    .toBuffer();
 }
 
 function pngOptions(profile: ImageOptimizationProfile) {

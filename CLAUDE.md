@@ -44,6 +44,8 @@ input.hwpx
   → report.ts (JSON report)
 ```
 
+Image decode results are cached per input `Buffer` in [decodedImage.ts](packages/core/src/decodedImage.ts) (same-visual hashing + transforms); this does not change format policy. Opt-in CLI stage dump: `HWPX_OPT_TIMINGS=1`.
+
 Three optimizer modes share infrastructure but differ in policy:
 - **safe** ([optimizer.ts](packages/core/src/optimizer.ts)): XML minify, JPEG metadata strip, lossless PNG, drop unreferenced BinData. No resize, no quality loss, no format change.
 - **balanced** / **aggressive** ([balancedOptimizer.ts](packages/core/src/balancedOptimizer.ts), [opportunities.ts](packages/core/src/opportunities.ts)): BMP/TIFF→PNG, oversized JPEG/PNG resize against display budget, JPEG metadata strip, JPEG quality (~88 / ~80), PNG palette, dup-image consolidation by manifest `href`/`media-type` rewrite.
