@@ -547,7 +547,7 @@ async function optimizePng(data: Buffer, profile: ImageOptimizationProfile = bal
   return sharp(data).png(pngOptions(profile)).toBuffer();
 }
 
-function pngOptions(profile: ImageOptimizationProfile): sharp.PngOptions {
+function pngOptions(profile: ImageOptimizationProfile) {
   return {
     compressionLevel: Math.max(1, Math.min(9, Math.floor(profile.pngCompressionLevel))),
     adaptiveFiltering: true,
