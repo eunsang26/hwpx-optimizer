@@ -60,7 +60,8 @@
     "cli": "tsx --conditions=development packages/cli/src/index.ts",
     "quality:corpus": "tsx --conditions=development scripts/run-regression-corpus.ts",
     "quality:corpus:release": "tsx --conditions=development scripts/run-regression-corpus.ts --require-local-samples",
-    "release:verify-win-portable-smoke": "node scripts/run-windows-portable-smoke.mjs"
+    "release:verify-win-portable-smoke": "node scripts/run-windows-portable-smoke.mjs",
+    "release:verify-cli-portable": "node scripts/verify-cli-portable.mjs"
   },
   "build": {
     "appId": "local.hwpxoptimizer.app",
