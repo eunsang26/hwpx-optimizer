@@ -9,7 +9,8 @@ describe("cli-portable launchers", () => {
     expect(bat).toContain("--mode balanced");
     expect(bat).toContain("optimize");
     expect(bat).toContain("batch");
-    expect(bat).toContain("--report");
+    expect(bat).toContain("EnableDelayedExpansion");
+    expect(bat).toContain('--report "!RPT!"');
     expect(bat).toContain("%TEMP%");
     expect(bat).toContain("pause");
     expect(bat).toContain("HWPX_OPT_NO_PAUSE");

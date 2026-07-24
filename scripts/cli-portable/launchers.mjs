@@ -7,7 +7,7 @@ function joinLines(lines) {
 export function renderDropHereBat() {
   return joinLines([
     "@echo off",
-    "setlocal EnableExtensions",
+    "setlocal EnableExtensions EnableDelayedExpansion",
     "chcp 65001 >nul",
     'set "ROOT=%~dp0"',
     'set "NODE_OPTIONS="',
@@ -38,7 +38,7 @@ export function renderDropHereBat() {
     "  echo.",
     "  echo === 파일 최적화: %~1 ===",
     '  set "RPT=%TEMP%\\hwpx-opt-%RANDOM%-%N%.report.json"',
-    '  "%NODE%" "%CLI%" optimize "%~1" --mode balanced --report "%RPT%"',
+    '  "%NODE%" "%CLI%" optimize "%~1" --mode balanced --report "!RPT!"',
     '  if errorlevel 1 set "FAILED=1"',
     ")",
     "shift",
