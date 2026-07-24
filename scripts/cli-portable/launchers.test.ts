@@ -32,11 +32,20 @@ describe("cli-portable launchers", () => {
     }
   });
 
-  it("hwpx-opt.cmd forwards args via ROOT node", () => {
+  it("hwpx-opt.cmd forwards args via ROOT node and pauses for console UX", () => {
     const cmd = renderHwpxOptCmd();
     expect(cmd).toContain('set "ROOT=%~dp0"');
     expect(cmd).toContain("%*");
     expect(cmd).toContain("app\\cli\\dist\\index.js");
+    expect(cmd).toContain("pause");
+    expect(cmd).toContain('if "%~1"==""');
+  });
+
+  it("drop-here.bat stays ASCII-safe so cmd.exe does not flash-close on Korean Windows", () => {
+    const bat = renderDropHereBat();
+    for (let i = 0; i < bat.length; i += 1) {
+      expect(bat.charCodeAt(i)).toBeLessThan(128);
+    }
   });
 
   it("사용법.txt documents drop-here.bat, modes, and output locations", () => {
@@ -46,5 +55,7 @@ describe("cli-portable launchers", () => {
     expect(txt).toContain("balanced");
     expect(txt).toContain("optimized");
     expect(txt).toContain(".optimized.hwpx");
+    expect(txt).toContain("끌어다");
   });
 });
+
