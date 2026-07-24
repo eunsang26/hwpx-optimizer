@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { cp, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { SHARP_WIN32_PACKAGE } from "./sharpPin.mjs";
 
 const execFileAsync = promisify(execFile);
 const runtimeRoot = join(process.cwd(), ".tmp", "win-sharp-runtime");
@@ -20,7 +21,7 @@ const npmArgs = [
   "--no-package-lock",
   "--cache",
   npmCache,
-  "@img/sharp-win32-x64@0.33.5"
+  SHARP_WIN32_PACKAGE
 ];
 const npmCommand = process.platform === "win32" ? "cmd.exe" : "npm";
 const npmCommandArgs = process.platform === "win32" ? ["/d", "/s", "/c", "npm", ...npmArgs] : npmArgs;

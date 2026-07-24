@@ -6,9 +6,9 @@ export const NODE_VERSION = "20.20.2";
 export const STAGE_DIR_NAME = "hwpx-opt-win-x64";
 export const ZIP_NAME = "hwpx-opt-win-x64.zip";
 export const REQUIRED_WIN_SHARP_FILES = [
-  "sharp-win32-x64.node",
+  "sharp-win32-x64-0.35.3.node",
   "libvips-42.dll",
-  "libvips-cpp.dll"
+  "libvips-cpp-8.18.3.dll"
 ];
 export const FORBIDDEN_SHARP_DIR_SUBSTRINGS = [
   "sharp-linux",

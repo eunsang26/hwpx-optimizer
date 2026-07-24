@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { REQUIRED_WIN_SHARP_FILES } from "./constants.mjs";
 
 const FORBIDDEN_MSVC_DLLS = ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"];
 
@@ -87,7 +88,7 @@ export function assertUcrtOnlyPeImports(buffer, label) {
 
 export async function assertWinSharpUsesUcrtOnly(stageRoot) {
   const sharpLib = join(stageRoot, "app", "node_modules", "@img", "sharp-win32-x64", "lib");
-  for (const file of ["libvips-42.dll", "libvips-cpp.dll", "sharp-win32-x64.node"]) {
+  for (const file of REQUIRED_WIN_SHARP_FILES) {
     assertUcrtOnlyPeImports(await readFile(join(sharpLib, file)), file);
   }
 }

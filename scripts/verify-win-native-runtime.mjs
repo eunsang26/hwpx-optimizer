@@ -1,13 +1,12 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
+import { REQUIRED_WIN_SHARP_FILES } from "./cli-portable/constants.mjs";
 
 const unpackedRoot = join(process.cwd(), "release", "win-unpacked", "resources", "app.asar.unpacked");
 
-const requiredFiles = [
-  "node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64.node",
-  "node_modules/@img/sharp-win32-x64/lib/libvips-cpp.dll",
-  "node_modules/@img/sharp-win32-x64/lib/libvips-42.dll"
-];
+const requiredFiles = REQUIRED_WIN_SHARP_FILES.map(
+  (file) => `node_modules/@img/sharp-win32-x64/lib/${file}`
+);
 
 for (const relativePath of requiredFiles) {
   const filePath = join(unpackedRoot, relativePath);

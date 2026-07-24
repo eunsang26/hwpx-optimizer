@@ -15,8 +15,10 @@ describe("cli-portable constants", () => {
     expect(SHARP_WIN32_PACKAGE).toBe("@img/sharp-win32-x64@0.35.3");
     expect(STAGE_DIR_NAME).toBe("hwpx-opt-win-x64");
     expect(ZIP_NAME).toBe("hwpx-opt-win-x64.zip");
-    expect(REQUIRED_WIN_SHARP_FILES).toEqual(
-      expect.arrayContaining(["sharp-win32-x64.node", "libvips-42.dll", "libvips-cpp.dll"])
-    );
+    expect(REQUIRED_WIN_SHARP_FILES).toEqual([
+      "sharp-win32-x64-0.35.3.node",
+      "libvips-42.dll",
+      "libvips-cpp-8.18.3.dll"
+    ]);
   });
 });
