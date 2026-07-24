@@ -63,8 +63,8 @@
     "release:verify-win-portable-smoke": "node scripts/run-windows-portable-smoke.mjs",
     "release:verify-cli-portable": "node scripts/verify-cli-portable.mjs",
     "release:verify-cli-portable-smoke": "node scripts/run-cli-portable-smoke.mjs",
-    "release:check:cli-portable": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run build:win-portable && npm run release:verify-artifacts && npm run release:verify-cli-portable",
-    "release:check:cli-portable:ci": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run build:win-portable && npm run release:verify-artifacts && npm run release:verify-cli-portable"
+    "release:check:cli-portable": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run build:win-portable && npm run release:verify-artifacts && npm run release:verify-cli-portable && npm run release:manifest && npm run release:verify-manifest",
+    "release:check:cli-portable:ci": "npm run release:clean && npm run release:hygiene && npm test && npm run typecheck && npm run build && npm audit && npm run build:win-portable && npm run release:verify-artifacts && npm run release:verify-cli-portable && npm run release:manifest && npm run release:verify-manifest"
   },
   "build": {
     "appId": "local.hwpxoptimizer.app",

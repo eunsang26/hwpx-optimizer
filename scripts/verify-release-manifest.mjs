@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { ZIP_NAME as CLI_PORTABLE_ZIP_NAME } from "./cli-portable/constants.mjs";
 
 const releaseDir = "release";
 const manifestPath = join(releaseDir, "release-manifest.json");
@@ -40,11 +41,28 @@ for (const artifact of manifest.artifacts) {
 }
 
 const portableExe = manifest.artifacts.find((artifact) => artifact.file.endsWith(".exe"));
+const cliPortableZip = manifest.artifacts.find((artifact) => artifact.file === CLI_PORTABLE_ZIP_NAME);
 const isSigned = portableExe ? await hasAuthenticodeCertificateTable(join(releaseDir, portableExe.file)) : false;
-const expectedSigningText = isSigned ? "자체서명 코드서명 인증서" : "미서명 배포본";
 
-if (!releaseNotice.includes(expectedSigningText) || !releaseNotice.includes("최종 확인 및 사용 책임은 사용자에게 있습니다")) {
-  throw new Error("Release notice is missing signing-status or user-responsibility text.");
+if (portableExe) {
+  const expectedSigningText = isSigned ? "자체서명 코드서명 인증서" : "미서명 배포본";
+  if (!releaseNotice.includes(expectedSigningText)) {
+    throw new Error("Release notice is missing Desktop portable signing-status text.");
+  }
+}
+
+if (cliPortableZip) {
+  if (
+    !releaseNotice.includes(CLI_PORTABLE_ZIP_NAME) ||
+    !releaseNotice.includes("node.exe") ||
+    !releaseNotice.includes(".bat")
+  ) {
+    throw new Error("Release notice is missing CLI portable signing-status text.");
+  }
+}
+
+if (!releaseNotice.includes("최종 확인 및 사용 책임은 사용자에게 있습니다")) {
+  throw new Error("Release notice is missing user-responsibility text.");
 }
 
 console.log(`Verified ${manifest.artifacts.length} release artifact(s).`);

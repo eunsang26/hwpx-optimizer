@@ -106,7 +106,13 @@ npm run build:win-portable
 Artifacts:
 
 - `release/hwpx-opt-win-x64.zip`
-- `release/hwpx-opt-win-x64.SHA256SUMS.txt`
+- `release/hwpx-opt-win-x64.SHA256SUMS.txt` (zip-only checksum from the build script)
+
+When `release:manifest` runs after a CLI portable build, the CLI ZIP is also included in the shared release files:
+
+- `release/release-manifest.json`
+- `release/SHA256SUMS.txt`
+- `release/RELEASE_NOTICE_<version>.txt`
 
 Verify ZIP structure, dependency tree, and launcher scripts on Linux:
 

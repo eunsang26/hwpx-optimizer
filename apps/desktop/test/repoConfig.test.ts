@@ -57,6 +57,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:win-portable:unsigned"]).toContain("npm run desktop:local:win");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run build:win-portable");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-cli-portable");
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:manifest");
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-manifest");
     expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toBe(packageJson.scripts?.["release:check:cli-portable"]);
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
     await expect(access("scripts/run-windows-portable-smoke.mjs")).resolves.toBeUndefined();
@@ -91,9 +93,13 @@ describe("repository runtime and cleanup configuration", () => {
     const releaseManifestWriter = await readFile("scripts/write-release-manifest.mjs", "utf8");
     const releaseManifestVerifier = await readFile("scripts/verify-release-manifest.mjs", "utf8");
     expect(releaseManifestWriter).toContain("RELEASE_NOTICE_${version}.txt");
+    expect(releaseManifestWriter).toContain("cli-portable/constants.mjs");
+    expect(releaseManifestWriter).toContain("CLI portable ZIP");
     expect(releaseManifestWriter).toContain("자체서명 코드서명 인증서");
     expect(releaseManifestWriter).toContain("최종 확인 및 사용 책임은 사용자에게 있습니다");
     expect(releaseManifestVerifier).toContain("RELEASE_NOTICE_${manifest.version}.txt");
+    expect(releaseManifestVerifier).toContain("cli-portable/constants.mjs");
+    expect(releaseManifestVerifier).toContain("CLI portable signing-status text");
     expect(releaseManifestVerifier).toContain("Release notice is missing");
   });
 

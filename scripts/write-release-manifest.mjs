@@ -1,12 +1,17 @@
 import { createHash } from "node:crypto";
 import { access, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { ZIP_NAME as CLI_PORTABLE_ZIP_NAME } from "./cli-portable/constants.mjs";
 
 const releaseDir = "release";
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const productName = packageJson.build?.productName ?? packageJson.name;
 const version = packageJson.version;
-const artifacts = [`${productName}-${version}-x64.exe`, `${productName}-${version}-x64.zip`];
+const artifacts = [
+  `${productName}-${version}-x64.exe`,
+  `${productName}-${version}-x64.zip`,
+  CLI_PORTABLE_ZIP_NAME
+];
 const generatedAt = new Date().toISOString();
 const releaseNoticeFile = `RELEASE_NOTICE_${version}.txt`;
 const portableExePath = join(releaseDir, `${productName}-${version}-x64.exe`);
@@ -47,7 +52,8 @@ await writeFile(
     version,
     generatedAt,
     entries,
-    isSelfSigned: await hasAuthenticodeCertificateTable(portableExePath)
+    isSelfSigned: await hasAuthenticodeCertificateTable(portableExePath),
+    hasCliPortableZip: entries.some((entry) => entry.file === CLI_PORTABLE_ZIP_NAME)
   })
 );
 
@@ -64,15 +70,27 @@ async function exists(path) {
   }
 }
 
-function releaseNoticeText({ productName, version, generatedAt, entries, isSelfSigned }) {
-  const signingText = isSelfSigned
-    ? `- 현재 Windows 배포 파일은 공개 CA 인증서가 아닌 자체서명 코드서명 인증서로 서명된 배포본입니다.
+function releaseNoticeText({ productName, version, generatedAt, entries, isSelfSigned, hasCliPortableZip }) {
+  const hasElectronArtifacts = entries.some(
+    (entry) =>
+      entry.file.endsWith(".exe") ||
+      (entry.file.endsWith(".zip") && entry.file !== CLI_PORTABLE_ZIP_NAME)
+  );
+  const electronSigningText = isSelfSigned
+    ? `- Desktop portable EXE/ZIP은 공개 CA 인증서가 아닌 자체서명 코드서명 인증서로 서명된 배포본입니다.
 - Windows에서 게시자를 신뢰하지 못한다는 경고가 표시될 수 있습니다.
-- 실행 전 배포 파일의 SHA256 값을 이 공지, SHA256SUMS.txt, release-manifest.json과 대조해 확인하세요.
 - 자체서명 인증서 또는 배포 파일이 교체된 경우 릴리즈 담당자가 서명 상태와 SHA256 값을 새 배포 기록에 다시 남겨야 합니다.`
-    : `- 현재 Windows 배포 파일은 코드서명 인증서로 서명되지 않은 미서명 배포본입니다.
-- 실행 전 배포 파일의 SHA256 값을 이 공지, SHA256SUMS.txt, release-manifest.json과 대조해 확인하세요.
-- 코드서명 인증서가 준비된 경우 릴리즈 담당자가 서명 후 서명 상태와 SHA256 값을 새 배포 기록에 다시 남겨야 합니다.`;
+    : hasElectronArtifacts
+      ? `- Desktop portable EXE/ZIP은 코드서명 인증서로 서명되지 않은 미서명 배포본입니다.
+- 코드서명 인증서가 준비된 경우 릴리즈 담당자가 서명 후 서명 상태와 SHA256 값을 새 배포 기록에 다시 남겨야 합니다.`
+      : "";
+  const cliPortableSigningText = hasCliPortableZip
+    ? `- CLI portable ZIP(${CLI_PORTABLE_ZIP_NAME})은 서명되지 않은 node.exe와 .bat 런처를 포함합니다.
+- SmartScreen, 백신, 그룹 정책으로 실행이 차단될 수 있으므로 IT 부서와 허용 목록(allowlist) 및 MotW 처리 절차를 사전에 문서화하세요.`
+    : "";
+  const signingText = [electronSigningText, cliPortableSigningText, `- 실행 전 배포 파일의 SHA256 값을 이 공지, SHA256SUMS.txt, release-manifest.json과 대조해 확인하세요.`]
+    .filter(Boolean)
+    .join("\n");
 
   return `${productName} ${version} 배포 공지
 
