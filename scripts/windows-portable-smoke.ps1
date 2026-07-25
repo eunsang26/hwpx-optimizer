@@ -104,8 +104,10 @@ try {
 
   foreach ($currentMode in $modes) {
     $env:HWPX_OPT_SMOKE_MODE = $currentMode
+    # Packaged Electron rejects unknown --flags as Chromium options; use env trigger.
+    $env:HWPX_OPT_SMOKE_TEST = "1"
     Write-Host "Running desktop smoke: mode=$currentMode"
-    $process = Start-Process -FilePath $artifactPath -ArgumentList "--smoke-test" -Wait -PassThru
+    $process = Start-Process -FilePath $artifactPath -Wait -PassThru
     if ($process.ExitCode -ne 0) {
       throw "Desktop smoke failed with exit code $($process.ExitCode) for mode $currentMode"
     }
@@ -114,6 +116,7 @@ try {
     Write-Host "  - Includes analysis-details width and help manual regression"
   }
 } finally {
+  Remove-Item Env:\HWPX_OPT_SMOKE_TEST -ErrorAction SilentlyContinue
   if ($null -eq $previousInput) {
     Remove-Item Env:\HWPX_OPT_SMOKE_INPUT -ErrorAction SilentlyContinue
   } else {

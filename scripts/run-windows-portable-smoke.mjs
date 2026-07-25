@@ -8,6 +8,11 @@ const checksumsPath = resolve("release", "SHA256SUMS.txt");
 const scriptPath = resolve("scripts", "windows-portable-smoke.ps1");
 const minArtifactBytes = process.env.HWPX_OPT_WINDOWS_SMOKE_MIN_BYTES ?? "50000000";
 
+if (process.env.HWPX_OPT_SKIP_WIN_PORTABLE_SMOKE === "1") {
+  console.log("Skipping Windows portable smoke (HWPX_OPT_SKIP_WIN_PORTABLE_SMOKE=1).");
+  process.exit(0);
+}
+
 if (!existsSync(artifactPath)) {
   throw new Error(`Portable artifact not found: ${artifactPath}`);
 }
@@ -74,6 +79,13 @@ function prepareSmokePaths(input) {
     };
   }
   const tempRoot = windowsTempDirectory();
+  if (!tempRoot) {
+    throw new Error(
+      "Windows portable smoke skipped: no writable Windows-visible temp directory. " +
+        "Ensure /mnt/c/Temp is writable, or run on Windows. " +
+        "Set HWPX_OPT_SKIP_WIN_PORTABLE_SMOKE=1 only when intentionally skipping."
+    );
+  }
   const smokeDir = join(tempRoot, `hwpx-optimizer-smoke-${process.pid}`);
   mkdirSync(smokeDir, { recursive: true });
   const artifactCopy = join(smokeDir, basename(input.artifactPath));
@@ -91,28 +103,46 @@ function isWindowsPowerShellFromWsl(powershell) {
 }
 
 function windowsTempDirectory() {
-  const discovered = discoverMountedWindowsTempDirectory();
-  if (discovered) return discovered;
-  const cmd = existsSync("/mnt/c/Windows/System32/cmd.exe") ? "/mnt/c/Windows/System32/cmd.exe" : "cmd.exe";
-  const temp = spawnSync(cmd, ["/c", "echo", "%TEMP%"], { encoding: "utf8" });
-  if (temp.status !== 0) {
-    throw new Error("Failed to resolve Windows temp directory.");
-  }
-  const windowsPath = temp.stdout.trim();
-  const converted = spawnSync("wslpath", ["-u", windowsPath], { encoding: "utf8" });
-  if (converted.status !== 0) {
-    throw new Error(`Failed to convert Windows temp path: ${windowsPath}`);
-  }
-  return converted.stdout.trim();
-}
-
-function discoverMountedWindowsTempDirectory() {
-  const usersRoot = "/mnt/c/Users";
-  if (!existsSync(usersRoot)) return undefined;
-  for (const userName of readdirSync(usersRoot).sort()) {
-    if (/^(Default|Default User|Public|All Users)$/i.test(userName)) continue;
-    const candidate = join(usersRoot, userName, "AppData", "Local", "Temp");
-    if (existsSync(candidate)) return candidate;
+  for (const candidate of listWindowsTempCandidates()) {
+    if (isWritableDirectory(candidate)) return candidate;
   }
   return undefined;
+}
+
+function listWindowsTempCandidates() {
+  const candidates = [];
+  // Prefer broadly writable Windows mounts before per-user TEMP (sandbox accounts
+  // like CodexSandboxOffline often exist but deny mkdir).
+  candidates.push("/mnt/c/Temp", "/mnt/c/Windows/Temp");
+  const usersRoot = "/mnt/c/Users";
+  if (existsSync(usersRoot)) {
+    for (const userName of readdirSync(usersRoot).sort()) {
+      if (/^(Default|Default User|Public|All Users|CodexSandboxOffline)$/i.test(userName)) continue;
+      candidates.push(join(usersRoot, userName, "AppData", "Local", "Temp"));
+    }
+  }
+  const cmd = existsSync("/mnt/c/Windows/System32/cmd.exe") ? "/mnt/c/Windows/System32/cmd.exe" : "cmd.exe";
+  const temp = spawnSync(cmd, ["/c", "echo", "%TEMP%"], { encoding: "utf8" });
+  if (temp.status === 0) {
+    const converted = spawnSync("wslpath", ["-u", temp.stdout.trim()], { encoding: "utf8" });
+    if (converted.status === 0) candidates.push(converted.stdout.trim());
+  }
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function isWritableDirectory(path) {
+  try {
+    mkdirSync(path, { recursive: true });
+    const probe = join(path, `.hwpx-opt-write-${process.pid}`);
+    mkdirSync(probe, { recursive: true });
+    // Best-effort cleanup; ignore failures on sticky Windows temps.
+    try {
+      spawnSync("rmdir", [probe], { stdio: "ignore" });
+    } catch {
+      /* ignore */
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }

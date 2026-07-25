@@ -36,8 +36,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:win"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:cli-portable"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["release:audit"]).toBe("node scripts/release-audit.mjs");
     expect(packageJson.scripts?.["release:preflight"]).toBe(
-      "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit --audit-level=moderate && npm run desktop:smoke:built"
+      "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm run release:audit && npm run desktop:smoke:built"
     );
     expect(packageJson.scripts?.["quality:corpus"]).toBe("tsx --conditions=development scripts/run-regression-corpus.ts");
     expect(packageJson.scripts?.["quality:corpus:release"]).toBe(
@@ -60,8 +61,10 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:manifest");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-manifest");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("ensure-win-sharp-test-fixtures.mjs");
-    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm audit --audit-level=moderate");
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:audit");
+    expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:audit");
     expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toBe(packageJson.scripts?.["release:check:cli-portable"]);
+    await expect(access("scripts/release-audit.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
     await expect(access("scripts/run-windows-portable-smoke.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/run-cli-portable-smoke.mjs")).resolves.toBeUndefined();

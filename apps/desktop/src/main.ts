@@ -42,7 +42,10 @@ const pendingWorkerRequests = new Map<
 const allowedInputPaths = new Set<string>();
 const allowedOutputDirectories = new Set<string>();
 const allowedGeneratedPaths = new Set<string>();
-const isSmokeTest = process.argv.includes("--smoke-test");
+// Packaged Windows EXEs treat unknown `--flags` as Chromium switches ("bad option").
+// Prefer HWPX_OPT_SMOKE_TEST=1 for packaged smoke; keep argv for Linux `electron` launches.
+const isSmokeTest =
+  process.argv.includes("--smoke-test") || process.env.HWPX_OPT_SMOKE_TEST === "1";
 if (isSmokeTest) {
   app.setPath("userData", join(process.cwd(), ".tmp", "electron-smoke"));
 }
