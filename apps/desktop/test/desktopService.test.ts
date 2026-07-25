@@ -22,9 +22,9 @@ describe("desktop service", () => {
     const settings: DesktopSettings = defaultDesktopSettings;
 
     expect(settings.defaultMode).toBe("balanced");
-    expect(settings.submissionLimit).toEqual({ id: "mb20" });
+    expect(settings.submissionLimit).toEqual({ id: "mb40" });
     expect(settings.preservationPreference).toBe("recommended");
-    expect(settings.batchTargetMode).toBe("aggregate");
+    expect(settings.batchTargetMode).toBe("per-file");
     expect(settings.saveReport).toBe(false);
   });
 
@@ -35,6 +35,14 @@ describe("desktop service", () => {
         preservationPreference: "recommended"
       }).defaultMode
     ).toBe("balanced");
+  });
+
+  it("migrates legacy mb41 submission limit to mb40", () => {
+    expect(
+      normalizeDesktopSettings({
+        submissionLimit: { id: "mb41" }
+      }).submissionLimit
+    ).toEqual({ id: "mb40" });
   });
 
   it("analyzes, optimizes, skips report by default, and preserves the source file", async () => {
@@ -144,7 +152,7 @@ describe("desktop service", () => {
     expect(
       persistentDesktopSettingsPatch({
         saveReport: true,
-        submissionLimit: { id: "mb41" },
+        submissionLimit: { id: "mb40" },
         saveNextToOriginal: false,
         outputDirectory: "/private/reports",
         recentFiles: ["/private/input.hwpx"],
@@ -152,7 +160,7 @@ describe("desktop service", () => {
       })
     ).toEqual({
       saveReport: true,
-      submissionLimit: { id: "mb41" }
+      submissionLimit: { id: "mb40" }
     });
   });
 
@@ -328,6 +336,44 @@ describe("desktop service", () => {
     expect(report.totals.batchTargetMissReason).toContain("aggregate");
     expect(report.totals.totalOriginalSize).toBe(5_000);
     expect(report.totals.totalOptimizedSize).toBe(2_300);
+  });
+
+  it("treats an exact aggregate size as missed under 미만 semantics", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-batch-eq-"));
+
+    const result = await writeDesktopBatchReport({
+      reportDirectory: dir,
+      mode: "balanced",
+      settings: defaultDesktopSettings,
+      batchTargetBytes: 2_300,
+      items: [
+        {
+          input: "a.hwpx",
+          status: "done",
+          output: join(dir, "a_optimized.hwpx"),
+          originalSize: 3_000,
+          optimizedSize: 1_400,
+          savedBytes: 1_600,
+          savedPercent: 53.33
+        },
+        {
+          input: "b.hwpx",
+          status: "done",
+          output: join(dir, "b_optimized.hwpx"),
+          originalSize: 2_000,
+          optimizedSize: 900,
+          savedBytes: 1_100,
+          savedPercent: 55
+        }
+      ]
+    });
+
+    const report = JSON.parse(await readFile(result.reportPath, "utf8")) as {
+      totals: { batchTargetStatus: string; totalOptimizedSize: number; batchTargetBytes: number };
+    };
+    expect(report.totals.totalOptimizedSize).toBe(2_300);
+    expect(report.totals.batchTargetBytes).toBe(2_300);
+    expect(report.totals.batchTargetStatus).toBe("missed");
   });
 
   it("does not mark aggregate desktop batch targets as met when any item is incomplete", async () => {

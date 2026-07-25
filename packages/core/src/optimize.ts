@@ -5,10 +5,14 @@ import {
   aggressiveImageProfile,
   balancedImageProfile,
   detectEstimatedOptimizationOpportunities,
+  detectOptimizationOpportunities,
+  JPEG_QUALITY_CEILING,
+  JPEG_QUALITY_FLOOR
 } from "./opportunities.js";
 import type { ImageOptimizationProfile } from "./opportunities.js";
 import { nowMs, PerformanceTimer } from "./performance.js";
 import { createSafeOptimizationPlan } from "./planner.js";
+import { projectPackageSizeFromOpportunities } from "./projectPackageSize.js";
 import { createAnalysisReport, createOptimizationReport } from "./report.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
@@ -23,10 +27,14 @@ type OptimizeOptions = {
   actions?: string[];
   allowLarger?: boolean;
   targetBytes?: number;
+  /** Manual JPEG quality override (clamped). Skips automatic target search. */
+  jpegQuality?: number;
   onProgress?: OptimizeProgressCallback;
   analysisMode?: AnalysisMode;
   imageConcurrency?: number;
 };
+
+export type { OptimizeOptions };
 type SafeOptimizeOptions = {
   targetBytes?: number;
   onProgress?: OptimizeProgressCallback;
@@ -34,6 +42,15 @@ type SafeOptimizeOptions = {
   imageConcurrency?: number;
 };
 type AnalysisMode = "quick" | "deep";
+
+/** Aggressive auto runs at the JPEG quality floor — project sizes with that encode. */
+const aggressiveProjectionProfile: ImageOptimizationProfile = {
+  ...aggressiveImageProfile,
+  jpegQuality: JPEG_QUALITY_FLOOR,
+  // Keep in sync with maxEdgeForJpegQuality(JPEG_QUALITY_FLOOR, "aggressive").
+  maxEdge: 800,
+  forceJpegRecompress: true
+};
 
 export async function analyzeHwpxBuffer(
   input: Buffer,
@@ -45,14 +62,28 @@ export async function analyzeHwpxBuffer(
   const analysis = await timer.measure("analyze", () =>
     analyzeHwpxPackage(pkg, { ...analysisOptions(options.analysisMode ?? "quick"), imageConcurrency: options.imageConcurrency })
   );
+  const duplicateMode = options.analysisMode === "quick" ? "byte" : "visual";
+  const opportunityOptions = {
+    duplicateMode: duplicateMode as "byte" | "visual",
+    imageConcurrency: options.imageConcurrency
+  };
+  // Measure real encode sizes (exact) so UI projections match optimize output.
   const opportunities = await timer.measure("opportunities", () =>
-    detectEstimatedOptimizationOpportunities(pkg, balancedImageProfile, {
-      duplicateMode: options.analysisMode === "quick" ? "byte" : "visual",
-      imageConcurrency: options.imageConcurrency
-    })
+    detectOptimizationOpportunities(pkg, balancedImageProfile, opportunityOptions)
   );
+  const aggressiveOpportunities = await timer.measure("opportunities-aggressive", () =>
+    detectOptimizationOpportunities(pkg, aggressiveProjectionProfile, opportunityOptions)
+  );
+  const projectedOptimizedSize = projectPackageSizeFromOpportunities(pkg, opportunities);
+  const aggressiveProjectedOptimizedSize = projectPackageSizeFromOpportunities(pkg, aggressiveOpportunities, {
+    palettePng: true
+  });
   return createReportWithPerformance(timer, () =>
-    createAnalysisReport(analysis, input.byteLength, opportunities, { targetBytes })
+    createAnalysisReport(analysis, input.byteLength, opportunities, {
+      targetBytes,
+      projectedOptimizedSize,
+      aggressiveProjectedOptimizedSize
+    })
   );
 }
 
@@ -169,13 +200,10 @@ async function optimizeHwpxBufferAdvanced(
   const analysis = await timer.measure("analyze", () =>
     analyzeHwpxPackage(pkg, { ...analysisOptions(options.analysisMode ?? "quick"), imageConcurrency: options.imageConcurrency })
   );
-  const profiles = createTargetProfileLadder(settings.mode, settings.profile, options.targetBytes, input.byteLength);
-  let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
   const verificationWarnings: string[] = [];
-  const strongestProfileFirst = options.targetBytes !== undefined && profiles[0] !== settings.profile;
-  for (const [profileIndex, profile] of profiles.entries()) {
+  const runProfile = async (profile: ImageOptimizationProfile) => {
     try {
-      const candidate = await optimizeHwpxBufferWithProfile(input, {
+      return await optimizeHwpxBufferWithProfile(input, {
         ...settings,
         options,
         pkg,
@@ -184,19 +212,92 @@ async function optimizeHwpxBufferAdvanced(
         profile,
         warnings: [...(settings.warnings ?? []), ...verificationWarnings]
       });
-      best = chooseBestCandidate(best, candidate, options.targetBytes);
-      const targetMet = candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target";
-      if (!options.targetBytes || (targetMet && !strongestProfileFirst)) {
-        return candidate;
-      }
-      if (strongestProfileFirst && profileIndex === 0 && candidate.report.targetStatus === "missed") {
-        return candidate;
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       verificationWarnings.push(`Candidate profile skipped after verification failure: ${message}`);
+      return undefined;
+    }
+  };
+
+  // Aggressive ("size first"): always the quality floor — ignore manual jpegQuality.
+  if (settings.mode === "aggressive") {
+    const candidate = await runProfile(
+      profileForJpegQuality(settings.profile, JPEG_QUALITY_FLOOR, "aggressive")
+    );
+    if (candidate) return candidate;
+    throw new Error(
+      `No verified optimization candidate could be produced.${
+        verificationWarnings.length > 0 ? ` ${verificationWarnings.join(" ")}` : ""
+      }`
+    );
+  }
+
+  // Manual quality: single shot.
+  if (options.jpegQuality !== undefined) {
+    const candidate = await runProfile(profileForJpegQuality(settings.profile, options.jpegQuality, "balanced"));
+    if (candidate) return candidate;
+    throw new Error(
+      `No verified optimization candidate could be produced.${
+        verificationWarnings.length > 0 ? ` ${verificationWarnings.join(" ")}` : ""
+      }`
+    );
+  }
+
+  // No target: base balanced profile only.
+  if (!options.targetBytes) {
+    const candidate = await runProfile(settings.profile);
+    if (candidate) return candidate;
+    throw new Error(
+      `No verified optimization candidate could be produced.${
+        verificationWarnings.length > 0 ? ` ${verificationWarnings.join(" ")}` : ""
+      }`
+    );
+  }
+
+  // Balanced + target: binary-search the highest JPEG quality that meets the target.
+  // Range is the full [floor, ceiling] so a loose target can keep quality above the
+  // balanced default (88). Try the balanced default first to short-circuit common cases.
+  const baseQuality = clampJpegQuality(settings.profile.jpegQuality);
+  const baseCandidate = await runProfile(profileForJpegQuality(settings.profile, baseQuality, "balanced"));
+  let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
+  if (baseCandidate) {
+    best = chooseBestCandidate(undefined, baseCandidate, options.targetBytes);
+  }
+
+  let lo: number;
+  let hi: number;
+  if (best?.targetMet) {
+    // Already meets at baseline — only search upward for higher quality that still fits.
+    lo = baseQuality + 1;
+    hi = JPEG_QUALITY_CEILING;
+  } else {
+    // Misses at baseline — search downward for the highest quality that can meet.
+    lo = JPEG_QUALITY_FLOOR;
+    hi = baseQuality - 1;
+  }
+
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const candidate = await runProfile(profileForJpegQuality(settings.profile, mid, "balanced"));
+    if (!candidate) {
+      hi = mid - 1;
+      continue;
+    }
+    best = chooseBestCandidate(best, candidate, options.targetBytes);
+    if (candidateMeetsTarget(candidate.output.byteLength, options.targetBytes)) {
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
     }
   }
+
+  // Binary search only samples log(n) qualities; when still unmet, force the floor
+  // so the reported plan settles on the strongest remaining candidate.
+  if (!best?.targetMet) {
+    const floorCandidate = await runProfile(profileForJpegQuality(settings.profile, JPEG_QUALITY_FLOOR, "balanced"));
+    if (floorCandidate) best = chooseBestCandidate(best, floorCandidate, options.targetBytes);
+  }
+
   if (best) return best;
   const suffix = verificationWarnings.length > 0 ? ` ${verificationWarnings.join(" ")}` : "";
   throw new Error(`No verified optimization candidate could be produced.${suffix}`);
@@ -325,6 +426,7 @@ async function optimizeHwpxBufferWithProfile(
       ],
       opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
       targetBytes: settings.options.targetBytes,
+      plannedJpegQuality: settings.profile.jpegQuality,
       warnings: [settings.rollbackWarning, ...(settings.warnings ?? []), ...optimized.warnings]
     }));
     return { output: input, report };
@@ -344,6 +446,7 @@ async function optimizeHwpxBufferWithProfile(
     skipped: optimized.skipped,
     opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
     targetBytes: settings.options.targetBytes,
+    plannedJpegQuality: settings.profile.jpegQuality,
     warnings: combinedWarnings.length > 0 ? combinedWarnings : undefined
   }));
   return { output, report };
@@ -383,7 +486,7 @@ function chooseBestCandidate(
   candidate: { output: Buffer; report: OptimizationReport },
   targetBytes: number | undefined
 ): { output: Buffer; report: OptimizationReport; targetMet: boolean } {
-  const targetMet = candidate.report.targetStatus === "met" || candidate.report.targetStatus === "already-under-target";
+  const targetMet = candidateMeetsTarget(candidate.output.byteLength, targetBytes);
   const current = { ...candidate, targetMet };
   if (!previous) return current;
   if (current.targetMet && !previous.targetMet) return current;
@@ -398,30 +501,41 @@ function chooseBestCandidate(
   return previous;
 }
 
-function createTargetProfileLadder(
-  mode: "balanced" | "aggressive",
-  base: ImageOptimizationProfile,
-  targetBytes?: number,
-  originalBytes?: number
-): ImageOptimizationProfile[] {
-  if (!targetBytes) return [base];
-  const strongestFirst = originalBytes !== undefined && targetBytes / originalBytes <= 0.25;
-  if (mode === "balanced") {
-    const profiles = [
-      base,
-      { ...base, maxEdge: 1600, jpegQuality: 84, pngCompressionLevel: 9, forceJpegRecompress: true },
-      { ...base, maxEdge: 1440, jpegQuality: 80, pngCompressionLevel: 9, forceJpegRecompress: true },
-      { ...base, maxEdge: 1280, jpegQuality: 76, pngCompressionLevel: 9, forceJpegRecompress: true }
-    ];
-    return strongestFirst ? profiles.reverse() : profiles;
+function candidateMeetsTarget(outputBytes: number, targetBytes: number | undefined): boolean {
+  return targetBytes !== undefined && outputBytes < targetBytes;
+}
+
+function clampJpegQuality(value: number): number {
+  if (!Number.isFinite(value)) return JPEG_QUALITY_FLOOR;
+  return Math.max(JPEG_QUALITY_FLOOR, Math.min(JPEG_QUALITY_CEILING, Math.round(value)));
+}
+
+function maxEdgeForJpegQuality(quality: number, mode: "balanced" | "aggressive"): number {
+  const q = clampJpegQuality(quality);
+  if (mode === "aggressive") {
+    // 95 → 1280, 60 → 800
+    const t = (JPEG_QUALITY_CEILING - q) / (JPEG_QUALITY_CEILING - JPEG_QUALITY_FLOOR);
+    return Math.round(1280 - t * (1280 - 800));
   }
-  const profiles = [
-    base,
-    { ...base, maxEdge: 1120, jpegQuality: 74, pngCompressionLevel: 9, forceJpegRecompress: true, pngPalette: true },
-    { ...base, maxEdge: 960, jpegQuality: 68, pngCompressionLevel: 9, forceJpegRecompress: true, pngPalette: true },
-    { ...base, maxEdge: 800, jpegQuality: 62, pngCompressionLevel: 9, forceJpegRecompress: true, pngPalette: true }
-  ];
-  return strongestFirst ? profiles.reverse() : profiles;
+  // 95 → 1920, 60 → 1280
+  const t = (JPEG_QUALITY_CEILING - q) / (JPEG_QUALITY_CEILING - JPEG_QUALITY_FLOOR);
+  return Math.round(1920 - t * (1920 - 1280));
+}
+
+function profileForJpegQuality(
+  base: ImageOptimizationProfile,
+  quality: number,
+  mode: "balanced" | "aggressive"
+): ImageOptimizationProfile {
+  const jpegQuality = clampJpegQuality(quality);
+  return {
+    ...base,
+    jpegQuality,
+    maxEdge: maxEdgeForJpegQuality(jpegQuality, mode),
+    pngCompressionLevel: 9,
+    forceJpegRecompress: jpegQuality < base.jpegQuality || mode === "aggressive",
+    pngPalette: mode === "aggressive" ? true : base.pngPalette
+  };
 }
 
 function createOptimizationOpportunitiesFromAppliedActions(

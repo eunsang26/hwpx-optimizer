@@ -48,32 +48,57 @@ export function submissionActionRowHtml(row: SubmissionActionRow): string {
 export function batchItemRowHtml(item: BatchItemLike, index: number, options: { running: boolean }): string {
   const meta = batchItemMetaText(item);
   const actions = batchItemRowActionsHtml(item, index, options);
-  const attentionClass = item.targetStatusLabel === "목표 미달 가능" ? " class=\"needs-attention\"" : "";
+  const attentionClass =
+    item.targetStatusLabel === "더 압축 필요" || item.targetStatusLabel === "기준 미달"
+      ? " class=\"needs-attention\""
+      : "";
   const statusLabel = batchTableStatusLabel(item);
   const statusClass = batchTableStatusClass(item);
   const selectedAttr = item.selected === false ? "" : " checked";
   const disabledAttr = options.running ? " disabled" : "";
+  const qualityValue =
+    item.jpegQualityDisplay !== undefined
+      ? String(item.jpegQualityDisplay)
+      : item.qualityLabel?.match(/\d+/)?.[0] ?? "";
+  const editableNumber = item.qualityEditable === true || item.jpegQualityOverride !== undefined;
+  let qualityCell = escapeHtml(item.qualityLabel ?? "-");
+  if (item.status === "pending" && !options.running && qualityValue) {
+    qualityCell = editableNumber
+      ? `<label class="row-q"><input type="number" class="batch-quality-input" data-batch-quality-index="${index}" min="60" max="95" step="1" value="${escapeHtml(
+          qualityValue
+        )}" aria-label="${escapeHtml(item.fileName)} JPEG 품질" /><span>%</span></label>`
+      : `<button type="button" class="row-q-btn" data-batch-quality-edit="${index}" title="이 파일만 수동 품질">${escapeHtml(
+          qualityValue
+        )}%</button>`;
+  }
+  const targetSub =
+    item.allocatedTargetLabel ??
+    (item.targetLabel ? `기준 ${item.targetLabel.replace(/\s*미만$/, "")}` : "");
+  const sizeCell =
+    item.originalSizeLabel && item.expectedSizeLabel
+      ? `${escapeHtml(item.originalSizeLabel)} → <strong>${escapeHtml(item.expectedSizeLabel)}</strong>`
+      : escapeHtml(item.originalSizeLabel ?? item.expectedSizeLabel ?? "-");
   return `<tr${attentionClass}><td><input type="checkbox" class="batch-select" data-batch-index="${index}"${selectedAttr}${disabledAttr} aria-label="${escapeHtml(
     item.fileName
-  )} 선택" /></td><td class="name"><strong>${escapeHtml(item.fileName)}</strong></td><td>${escapeHtml(
-    item.originalSizeLabel ?? "-"
-  )}</td><td>${escapeHtml(item.expectedSizeLabel ?? "-")}</td><td>${escapeHtml(
-    item.targetLabel ?? "20MB 이하"
-  )}</td><td class="batch-status-cell"><span class="status-line"><span class="status ${statusClass}">${escapeHtml(
+  )} 선택" /></td><td class="name"><strong>${escapeHtml(item.fileName)}</strong>${
+    targetSub ? `<span class="sub">${escapeHtml(targetSub)}</span>` : ""
+  }</td><td class="batch-size-cell">${sizeCell}</td><td class="batch-quality-cell">${qualityCell}</td><td class="batch-status-cell"><span class="status-line"><span class="status ${statusClass}">${escapeHtml(
     statusLabel
   )}</span><span class="row-meta">${escapeHtml(meta)}</span></span><span class="row-actions">${actions}</span></td></tr>`;
 }
 
 function batchTableStatusLabel(item: BatchItemLike): string {
   if (item.status === "pending" && item.targetStatusLabel) {
-    return item.targetStatusLabel === "목표 미달 가능" ? "주의" : "통과";
+    return item.targetStatusLabel;
   }
   return batchStatusLabel(item.status);
 }
 
 function batchTableStatusClass(item: BatchItemLike): string {
   if (item.status === "pending" && item.targetStatusLabel) {
-    return item.targetStatusLabel === "목표 미달 가능" ? "warning" : "pass";
+    if (item.targetStatusLabel === "기준 미달") return "failed";
+    if (item.targetStatusLabel === "더 압축 필요") return "warning";
+    return "pass";
   }
   return item.status;
 }

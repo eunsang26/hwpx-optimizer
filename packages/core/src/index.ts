@@ -12,6 +12,7 @@ export * from "./optimizer.js";
 export * from "./opportunities.js";
 export * from "./performance.js";
 export * from "./planner.js";
+export * from "./projectPackageSize.js";
 export * from "./reader.js";
 export * from "./referenceGraph.js";
 export * from "./regressionCorpus.js";

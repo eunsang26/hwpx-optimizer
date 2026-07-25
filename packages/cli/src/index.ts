@@ -691,11 +691,12 @@ function createBatchTargetFields(
       batchTargetMissReason: `Batch target status is incomplete because ${incompleteCount} file(s) failed.`
     };
   }
-  if (totalOriginalSize <= batchTargetBytes) {
-    return { batchTargetBytes, batchTargetStatus: "already-under-target" };
-  }
-  if (totalOptimizedSize <= batchTargetBytes) {
-    return { batchTargetBytes, batchTargetStatus: "met" };
+  // Match core "미만" semantics: strict < on the aggregate output.
+  if (totalOptimizedSize < batchTargetBytes) {
+    return {
+      batchTargetBytes,
+      batchTargetStatus: totalOriginalSize < batchTargetBytes ? "already-under-target" : "met"
+    };
   }
   return {
     batchTargetBytes,

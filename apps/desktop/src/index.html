@@ -98,7 +98,7 @@
                 폴더 선택
               </button>
             </div>
-            <p class="drop-hint">파일을 선택하면 자동으로 분석이 시작됩니다.</p>
+            <p class="drop-hint">창 어디에든 놓거나 파일·폴더를 선택하세요. 자동으로 분석합니다.</p>
           </div>
 
           <div id="selected-file-card" class="selected-file-card" hidden>
@@ -134,11 +134,10 @@
                 <thead>
                   <tr>
                     <th><input id="batch-select-all" type="checkbox" checked aria-label="전체 선택" /></th>
-                    <th>파일명</th>
-                    <th>원본 용량</th>
-                    <th>예상 결과</th>
-                    <th>제출 기준</th>
-                    <th>상태</th>
+                    <th>파일</th>
+                    <th>원본 → 예상</th>
+                    <th>예정 품질</th>
+                    <th>판정</th>
                   </tr>
                 </thead>
                 <tbody id="batch-list"></tbody>
@@ -149,16 +148,86 @@
           </section>
         </section>
 
-        <!-- ② RESULT HERO — metrics + target + CTA -->
+        <!-- ② RESULT HERO — gauge first + quality + CTA -->
         <section class="panel summary-panel">
           <div class="section-heading">
             <div class="section-title">
               <span>2.</span>
-              <h2>분석 결과 · 실행</h2>
+              <h2>제출 가능 여부</h2>
             </div>
-            <span class="section-aside-pill" id="summary-target-line">제출 기준: 20MB</span>
+            <span class="section-aside-pill" id="summary-target-line">제출 기준: 40MB 미만</span>
           </div>
-          <div id="summary-grid" class="summary-grid">
+          <div id="policy-toolbar" class="policy-toolbar" aria-label="결재·압축 기준">
+            <label>
+              <strong>결재</strong>
+              <select id="submission-limit-select">
+                <option value="none">제한 없음</option>
+                <option value="mb5">5MB 미만</option>
+                <option value="mb10">10MB 미만</option>
+                <option value="mb20">20MB 미만</option>
+                <option value="mb30">30MB 미만</option>
+                <option value="mb40" selected>40MB 미만</option>
+                <option value="mb50">50MB 미만</option>
+                <option value="mb100">100MB 미만</option>
+                <option value="custom">직접 입력</option>
+              </select>
+            </label>
+            <label id="custom-limit-field" hidden>
+              <strong>직접</strong>
+              <input id="custom-limit-input" type="number" min="1" step="1" inputmode="decimal" />
+            </label>
+            <label>
+              <strong>압축</strong>
+              <select id="preservation-select">
+                <option value="preserve">보수(외형)</option>
+                <option value="recommended" selected>균형 · 목표 맞춤</option>
+                <option value="size">용량 우선 · 최대</option>
+              </select>
+            </label>
+            <label class="policy-toolbar-batch">
+              <strong>판정</strong>
+              <select id="batch-target-mode-select">
+                <option value="per-file" selected>파일별 (기본)</option>
+                <option value="aggregate">전체 합계</option>
+              </select>
+            </label>
+            <span id="policy-live" class="policy-live">자동 · 88%</span>
+          </div>
+          <div class="gauge-hero" id="gauge-hero">
+            <div class="target-row">
+              <div>
+                <strong id="summary-status" class="hero-verdict">
+                  <span class="success-dot" aria-hidden="true"></span>
+                  파일을 선택하면 분석 결과가 표시됩니다.
+                </strong>
+                <span id="summary-result-line">예상 결과: -</span>
+              </div>
+              <span id="summary-verdict" class="verdict-pill" hidden></span>
+            </div>
+            <div id="hero-chips" class="hero-chips" hidden>
+              <span id="chip-policy" class="hero-chip hero-chip--fit">목표 맞춤</span>
+              <span id="chip-limit" class="hero-chip hero-chip--soft">40MB 미만</span>
+              <span id="chip-quality" class="hero-chip hero-chip--soft">자동</span>
+            </div>
+            <div class="target-track" id="target-track">
+              <span id="target-track-fill"></span>
+              <span id="target-track-limit" class="target-limit" hidden aria-hidden="true"></span>
+            </div>
+            <div class="gauge-labels" aria-hidden="true">
+              <span id="gauge-start-label">0</span>
+              <span id="gauge-mid-label" class="gauge-mid">40MB</span>
+              <span id="gauge-end-label">원본</span>
+            </div>
+            <p id="summary-verdict-detail" class="gauge-detail">제출 기준 대비 예상 용량을 보여줍니다.</p>
+          </div>
+          <div id="review-strip" class="review-strip" hidden>
+            <div>
+              <strong id="review-strip-title">자동으로 건드리지 않음</strong>
+              <p id="review-strip-detail">폰트·유사 이미지는 품질 계획에서 제외됩니다.</p>
+            </div>
+            <div id="review-strip-chips" class="review-strip-chips"></div>
+          </div>
+          <div id="summary-grid" class="summary-grid summary-grid--secondary" hidden>
             <div class="summary-card">
               <span class="metric-icon pie-icon" aria-hidden="true"></span>
               <div><span>총 원본 용량</span><strong id="summary-original">-</strong></div>
@@ -176,24 +245,73 @@
               <div><span>예상 절감률</span><strong id="summary-percent">-</strong></div>
             </div>
           </div>
-          <div class="target-row">
-            <div>
-              <strong id="summary-status">
-                <span class="success-dot" aria-hidden="true"></span>
-                파일을 선택하면 분석 결과가 표시됩니다.
-              </strong>
-              <span id="summary-result-line">예상 결과: -</span>
+          <section id="quality-controls" class="quality-controls" hidden>
+            <div class="quality-head">
+              <strong id="quality-head-label">JPEG 품질</strong>
+              <span id="quality-planned-label">자동 · 목표에 맞춤</span>
             </div>
-            <span id="summary-verdict" class="verdict-pill" hidden></span>
-          </div>
-          <div class="target-track" id="target-track">
-            <span id="target-track-fill"></span>
-            <span id="target-track-limit" class="target-limit" hidden aria-hidden="true"></span>
-          </div>
+            <div class="quality-mode-row" role="group" aria-label="JPEG 품질 모드">
+              <button type="button" id="quality-mode-auto" class="quality-mode-btn" aria-pressed="true">자동(목표)</button>
+              <button type="button" id="quality-mode-manual" class="quality-mode-btn" aria-pressed="false">수동</button>
+            </div>
+            <div id="batch-quality-auto" class="batch-quality-auto" hidden>
+              <div class="batch-quality-avg">선택 평균 예정 <b id="batch-quality-avg">-</b>
+                <span>· 행의 %를 누르면 그 파일만 수동</span>
+              </div>
+            </div>
+            <div id="quality-manual" class="quality-manual" hidden>
+              <input id="jpeg-quality-slider" type="range" min="60" max="95" value="88" />
+              <input id="jpeg-quality-input" type="number" min="60" max="95" value="88" inputmode="numeric" aria-label="JPEG 품질" />
+              <span class="quality-unit">%</span>
+            </div>
+            <p id="quality-hint" class="quality-hint">균형 모드: 제출 기준을 넘는 최고 품질을 찾습니다.</p>
+          </section>
           <section class="primary-run-panel">
             <button id="optimize-button" type="button" disabled>파일을 선택해 시작하세요</button>
             <button id="output-button" type="button" class="ghost">저장 위치</button>
+            <button id="toggle-options-button" type="button" class="ghost" aria-expanded="false" aria-controls="detail-options-sheet">세부 옵션</button>
             <p id="output-directory-line" class="output-directory-line">저장 폴더: 원본 문서 폴더</p>
+          </section>
+          <section id="detail-options-sheet" class="detail-options-sheet" hidden>
+            <div class="detail-options-head">
+              <strong>세부 옵션</strong>
+              <span>체크된 항목만 실행 · 품질은 위 자동/수동</span>
+            </div>
+            <div class="cleanup-settings" aria-label="개인정보·숨은 정보 정리">
+              <div>
+                <strong>개인정보·숨은 정보 정리</strong>
+                <span>문서 흔적과 이미지 메타데이터를 별도로 선택합니다.</span>
+              </div>
+              <label>
+                <input id="cleanup-document-toggle" type="checkbox" checked />
+                <span>문서 작성자·편집 흔적 정리</span>
+              </label>
+              <label>
+                <input id="cleanup-image-toggle" type="checkbox" checked />
+                <span>이미지 EXIF/메타데이터 제거</span>
+              </label>
+              <label class="opt-row-disabled" title="유사 이미지는 자동 병합하지 않습니다. 리포트에서만 검토합니다.">
+                <input type="checkbox" disabled />
+                <span>유사 이미지 병합</span>
+                <small>검토만 · 기본 끔</small>
+              </label>
+            </div>
+            <section class="plan-strip" id="plan-sidebar">
+              <div class="section-heading">
+                <div class="section-title">
+                  <h2 id="plan-title">자동 최적화 계획</h2>
+                </div>
+                <span id="plan-count-pill" class="section-aside-pill">작업 3개</span>
+              </div>
+              <p id="plan-summary" class="plan-summary">파일을 분석하면 예상 절감량을 표시합니다.</p>
+              <div id="plan-total" class="plan-total">예상 절감 0 B</div>
+              <ul id="action-checkboxes" class="plan-actions"></ul>
+              <p id="action-panel-hint" class="sr-only">옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.</p>
+            </section>
+            <p class="option-hint">
+              <span class="info-icon" aria-hidden="true"></span>
+              수동이면 슬라이더·숫자(60–95)로 고정. 자동이면 목표 용량에 맞춰 연속 탐색합니다.
+            </p>
           </section>
 
           <section id="batch-result-panel" class="batch-result" hidden>
@@ -234,83 +352,21 @@
           </section>
         </section>
 
-        <!-- ③ BOTTOM ROW — options chips + plan strip -->
+        <!-- ③ BOTTOM — plan summary only (controls live in policy toolbar + 세부 옵션) -->
         <div class="bottom-row">
-          <section class="panel options-panel">
+          <section class="panel options-panel options-panel--summary">
             <div class="section-heading">
               <div class="section-title">
                 <span>3.</span>
-                <h2>제출 기준 및 옵션</h2>
+                <h2>계획 요약</h2>
               </div>
               <span class="section-aside-pill">권장 기본값</span>
             </div>
-            <div class="option-grid">
-              <label>
-                <span>제출 제한</span>
-                <select id="submission-limit-select">
-                  <option value="none">제한 없음</option>
-                  <option value="mb5">5MB 이하</option>
-                  <option value="mb10">10MB 이하</option>
-                  <option value="mb20">20MB 이하</option>
-                  <option value="mb30">30MB 이하</option>
-                  <option value="mb41">41MB 이하</option>
-                  <option value="mb50">50MB 이하</option>
-                  <option value="mb100">100MB 이하</option>
-                  <option value="custom">직접 입력</option>
-                </select>
-              </label>
-              <label id="custom-limit-field" hidden>
-                <span>직접 입력</span>
-                <input id="custom-limit-input" type="number" min="1" step="1" inputmode="decimal" />
-              </label>
-              <label>
-                <span>보존 기준</span>
-                <select id="preservation-select">
-                  <option value="preserve">보수(외형)</option>
-                  <option value="recommended">권장(균형)</option>
-                  <option value="size">용량 우선</option>
-                </select>
-              </label>
-              <label>
-                <span>다중 파일 기준</span>
-                <select id="batch-target-mode-select">
-                  <option value="aggregate">전체 합계 기준</option>
-                  <option value="per-file">파일별 기준</option>
-                </select>
-              </label>
-            </div>
-            <div class="cleanup-settings" aria-label="개인정보·숨은 정보 정리">
-              <div>
-                <strong>개인정보·숨은 정보 정리</strong>
-                <span>문서 흔적과 이미지 메타데이터를 별도로 선택합니다.</span>
-              </div>
-              <label>
-                <input id="cleanup-document-toggle" type="checkbox" checked />
-                <span>문서 작성자·편집 흔적 정리</span>
-              </label>
-              <label>
-                <input id="cleanup-image-toggle" type="checkbox" checked />
-                <span>이미지 EXIF/메타데이터 제거</span>
-              </label>
-            </div>
             <p class="option-hint">
               <span class="info-icon" aria-hidden="true"></span>
-              권장: 품질과 용량 절감의 균형
+              결재·압축 기준은 위 툴바에서, 세부 작업은 CTA의 「세부 옵션」에서 조정합니다.
             </p>
             <p id="option-plan-summary" class="option-plan-summary">파일을 분석하면 선택한 작업의 예상 절감량이 표시됩니다.</p>
-          </section>
-
-          <section class="panel plan-strip" id="plan-sidebar">
-            <div class="section-heading">
-              <div class="section-title">
-                <h2 id="plan-title">자동 최적화 계획</h2>
-              </div>
-              <span id="plan-count-pill" class="section-aside-pill">작업 3개</span>
-            </div>
-            <p id="plan-summary" class="plan-summary">파일을 분석하면 예상 절감량을 표시합니다.</p>
-            <div id="plan-total" class="plan-total">예상 절감 0 B</div>
-            <ul id="action-checkboxes" class="plan-actions"></ul>
-            <p id="action-panel-hint" class="sr-only">옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.</p>
           </section>
         </div>
 

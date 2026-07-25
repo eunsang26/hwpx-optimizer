@@ -17,6 +17,9 @@ const BALANCED_JPEG_QUALITY = 88;
 // scanned pages stays legible without obvious ringing in our test corpus.
 const AGGRESSIVE_MAX_EDGE = 1280;
 const AGGRESSIVE_JPEG_QUALITY = 80;
+/** Inclusive bounds for continuous JPEG quality search / manual override. */
+export const JPEG_QUALITY_FLOOR = 60;
+export const JPEG_QUALITY_CEILING = 95;
 // Skip JPEG metadata stripping when the projected saving is below this floor:
 // the operation has measurable cost (re-walk + repack) and saving fewer than
 // 256 bytes or 0.5% of the file is not worth surfacing as an opportunity.

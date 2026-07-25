@@ -1,8 +1,9 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { basename, join, resolve } from "node:path";
 
-const artifactPath = resolve("release", "HWPX Optimizer-0.1.0-x64.exe");
+const packageVersion = JSON.parse(readFileSync(resolve("package.json"), "utf8")).version;
+const artifactPath = resolve("release", `HWPX Optimizer-${packageVersion}-x64.exe`);
 const checksumsPath = resolve("release", "SHA256SUMS.txt");
 const scriptPath = resolve("scripts", "windows-portable-smoke.ps1");
 const minArtifactBytes = process.env.HWPX_OPT_WINDOWS_SMOKE_MIN_BYTES ?? "50000000";

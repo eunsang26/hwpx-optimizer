@@ -22,6 +22,7 @@ const api = {
     outputMode?: "single" | "batch";
     actions?: string[];
     targetBytes?: number;
+    jpegQuality?: number;
   }) => ipcRenderer.invoke("hwpx:optimize", input),
   cancelAnalyze: () => ipcRenderer.invoke("hwpx:cancel-analyze"),
   cancelOptimize: () => ipcRenderer.invoke("hwpx:cancel-optimize"),

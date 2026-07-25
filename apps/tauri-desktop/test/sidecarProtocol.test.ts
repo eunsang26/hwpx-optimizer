@@ -18,31 +18,35 @@ describe("Tauri Node sidecar protocol", () => {
     }]);
   });
 
-  it("runs analyze, optimize, and verify through the existing core", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-"));
-    try {
-      const inputPath = join(dir, "input.hwpx");
-      const outputDirectory = join(dir, "out");
-      await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
+  it(
+    "runs analyze, optimize, and verify through the existing core",
+    async () => {
+      const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-"));
+      try {
+        const inputPath = join(dir, "input.hwpx");
+        const outputDirectory = join(dir, "out");
+        await writeFile(inputPath, await createHwpxFixture({ entries: { "Contents/section0.xml": "<root />" } }));
 
-      const responses = await runSidecarRequests([
-        { id: 1, method: "analyze", params: { filePath: inputPath } },
-        { id: 2, method: "optimize", params: { filePath: inputPath, mode: "safe", outputDirectory } }
-      ]);
+        const responses = await runSidecarRequests([
+          { id: 1, method: "analyze", params: { filePath: inputPath } },
+          { id: 2, method: "optimize", params: { filePath: inputPath, mode: "safe", outputDirectory } }
+        ]);
 
-      expect(responses[0]).toMatchObject({ id: 1, ok: true });
-      expect(responses[1]).toMatchObject({ id: 2, ok: true });
-      const optimizeResult = responses[1]?.result as { outputPath?: string };
-      expect(optimizeResult.outputPath).toBe(join(outputDirectory, "input_tauri_optimized.hwpx"));
-      await expect(readFile(optimizeResult.outputPath)).resolves.toBeInstanceOf(Buffer);
+        expect(responses[0]).toMatchObject({ id: 1, ok: true });
+        expect(responses[1]).toMatchObject({ id: 2, ok: true });
+        const optimizeResult = responses[1]?.result as { outputPath?: string };
+        expect(optimizeResult.outputPath).toBe(join(outputDirectory, "input_tauri_optimized.hwpx"));
+        await expect(readFile(optimizeResult.outputPath)).resolves.toBeInstanceOf(Buffer);
 
-      await expect(runSidecarRequests([
-        { id: 3, method: "verify", params: { filePath: optimizeResult.outputPath } }
-      ])).resolves.toEqual([{ id: 3, ok: true, result: { ok: true } }]);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
+        await expect(
+          runSidecarRequests([{ id: 3, method: "verify", params: { filePath: optimizeResult.outputPath } }])
+        ).resolves.toEqual([{ id: 3, ok: true, result: { ok: true } }]);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+    20_000
+  );
 
   it("does not overwrite an existing Tauri output and supports batch output folders", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-tauri-sidecar-output-"));

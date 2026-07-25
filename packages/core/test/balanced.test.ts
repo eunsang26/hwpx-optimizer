@@ -778,7 +778,7 @@ describe("balanced optimization", () => {
     );
   });
 
-  it("reports strip-metadata when an oversized JPEG would not shrink by resizing", async () => {
+  it("reports resize-jpeg when display-budget recompress shrinks an oversized wide JPEG", async () => {
     const jpeg = await createJpegWithLargeMetadata({
       width: 4000,
       height: 1,
@@ -790,10 +790,12 @@ describe("balanced optimization", () => {
 
     const report = await analyzeHwpxBuffer(fixture);
 
-    expect(report.opportunities).not.toContainEqual(
+    // Exact opportunity measurement uses the real encode path; if resize+recompress
+    // shrinks the file it wins over strip-metadata-only.
+    expect(report.opportunities).toContainEqual(
       expect.objectContaining({ action: "resize-jpeg", target: "BinData/wide.jpg" })
     );
-    expect(report.opportunities).toContainEqual(
+    expect(report.opportunities).not.toContainEqual(
       expect.objectContaining({ action: "strip-metadata", target: "BinData/wide.jpg" })
     );
   });

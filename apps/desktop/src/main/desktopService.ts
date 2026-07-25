@@ -23,15 +23,15 @@ export type DesktopSettings = {
 export type DesktopSettingsPatch = Partial<DesktopSettings> & Record<string, unknown>;
 
 export const defaultDesktopSettings: DesktopSettings = {
-  settingsVersion: 2,
+  settingsVersion: 3,
   defaultMode: "balanced",
   saveNextToOriginal: true,
   saveReport: false,
   preventOverwrite: true,
   showAggressiveWarning: true,
-  submissionLimit: { id: "mb20" },
+  submissionLimit: { id: "mb40" },
   preservationPreference: "recommended",
-  batchTargetMode: "aggregate"
+  batchTargetMode: "per-file"
 };
 
 const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
@@ -53,6 +53,7 @@ export type DesktopOptimizeInput = {
   outputMode?: "single" | "batch";
   actions?: string[];
   targetBytes?: number;
+  jpegQuality?: number;
   maxInputBytes?: number;
 };
 
@@ -133,7 +134,8 @@ export async function optimizeDesktopFile(
     input.mode,
     input.actions,
     input.targetBytes ?? resolveSubmissionLimitBytes(input.settings.submissionLimit),
-    onProgress
+    onProgress,
+    input.jpegQuality
   );
   source = undefined;
 
@@ -233,11 +235,12 @@ function createBatchTargetFields(
       batchTargetMissReason: `Batch target status is incomplete because ${incompleteCount} file(s) failed or were cancelled.`
     };
   }
-  if (totalOriginalSize <= batchTargetBytes) {
-    return { batchTargetBytes, batchTargetStatus: "already-under-target" };
-  }
-  if (totalOptimizedSize <= batchTargetBytes) {
-    return { batchTargetBytes, batchTargetStatus: "met" };
+  // Match core "미만" semantics: strict < on the aggregate output.
+  if (totalOptimizedSize < batchTargetBytes) {
+    return {
+      batchTargetBytes,
+      batchTargetStatus: totalOriginalSize < batchTargetBytes ? "already-under-target" : "met"
+    };
   }
   return {
     batchTargetBytes,
@@ -278,11 +281,17 @@ export async function optimizeByMode(
   mode: OptimizationMode,
   actions?: string[],
   targetBytes?: number,
-  onProgress?: (progress: DesktopProgress) => void
+  onProgress?: (progress: DesktopProgress) => void,
+  jpegQuality?: number
 ): Promise<{ output: Buffer; report: OptimizationReport }> {
   const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
   if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes, onProgress });
-  const advanced = { ...(actions ? { actions } : {}), targetBytes, onProgress };
+  const advanced = {
+    ...(actions ? { actions } : {}),
+    targetBytes,
+    onProgress,
+    ...(jpegQuality !== undefined ? { jpegQuality } : {})
+  };
   if (mode === "aggressive") return optimizeHwpxBufferAggressive(input, advanced);
   return optimizeHwpxBufferBalanced(input, advanced);
 }
@@ -332,9 +341,14 @@ export function normalizeDesktopSettings(raw: Partial<DesktopSettings> | undefin
     (parsed.preservationPreference ?? defaultDesktopSettings.preservationPreference) === "recommended"
       ? "balanced"
       : parsed.defaultMode;
+  const submissionLimit =
+    parsed.submissionLimit?.id === "mb41"
+      ? { id: "mb40" as const, customBytes: parsed.submissionLimit.customBytes }
+      : parsed.submissionLimit;
   return {
     ...defaultDesktopSettings,
     ...parsed,
+    ...(submissionLimit ? { submissionLimit } : {}),
     defaultMode: migratedMode ?? defaultDesktopSettings.defaultMode,
     settingsVersion: defaultDesktopSettings.settingsVersion
   };
@@ -478,6 +492,7 @@ function isSubmissionLimit(value: unknown): value is SubmissionLimit {
     candidate.id !== "mb10" &&
     candidate.id !== "mb20" &&
     candidate.id !== "mb30" &&
+    candidate.id !== "mb40" &&
     candidate.id !== "mb41" &&
     candidate.id !== "mb50" &&
     candidate.id !== "mb100" &&

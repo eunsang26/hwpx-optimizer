@@ -166,6 +166,8 @@ export type OptimizationReport = {
   targetBytes?: number;
   targetStatus?: "met" | "missed" | "already-under-target";
   targetMissReason?: string;
+  /** Planned/applied JPEG quality (1–100) when advanced image compress ran. */
+  plannedJpegQuality?: number;
   categorySizes: Record<HwpxEntryKind, number>;
   images: ImageInventoryItem[];
   duplicateImages: DuplicateImageGroup[];
@@ -181,6 +183,11 @@ export type OptimizationReport = {
   };
   opportunities: OptimizationOpportunity[];
   opportunityGroups: OptimizationOpportunityGroup[];
+  /**
+   * ZIP-aware package size projection for aggressive/auto floor quality.
+   * Present on analysis reports when exact aggressive opportunities were measured.
+   */
+  aggressiveProjectedOptimizedSize?: number;
   warnings: string[];
   performance?: PerformanceSummary;
 };

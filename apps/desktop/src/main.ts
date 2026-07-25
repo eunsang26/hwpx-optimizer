@@ -209,6 +209,7 @@ function registerIpc(): void {
         outputMode?: "single" | "batch";
         actions?: string[];
         targetBytes?: number;
+        jpegQuality?: number;
       }
     ) => {
       if (pendingDocumentOperation || activeAnalyzeWorker || activeOptimizeWorker) {
@@ -542,7 +543,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
         overlayVisible,
         overlayText,
         statusBannerExists: Boolean(document.getElementById("status-banner")),
-        hasSubmission41Preset: Boolean(document.querySelector("#submission-limit-select option[value='mb41']")),
+        hasSubmission40Preset: Boolean(document.querySelector("#submission-limit-select option[value='mb40']")),
         batchResultDetailsExists: Boolean(document.getElementById("batch-result-details")),
         cleared: document.body.dataset.dragOver !== "true" && overlay?.hidden === true
       };
@@ -552,7 +553,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     overlayVisible?: boolean;
     overlayText?: string;
     statusBannerExists?: boolean;
-    hasSubmission41Preset?: boolean;
+    hasSubmission40Preset?: boolean;
     batchResultDetailsExists?: boolean;
     cleared?: boolean;
   };
@@ -562,7 +563,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     dragUi.overlayVisible !== true ||
     !dragUi.overlayText?.includes("HWPX 파일을 여기에 놓으세요") ||
     dragUi.statusBannerExists !== true ||
-    dragUi.hasSubmission41Preset !== true ||
+    dragUi.hasSubmission40Preset !== true ||
     dragUi.batchResultDetailsExists !== true ||
     dragUi.cleared !== true
   ) {
@@ -654,6 +655,7 @@ function validateOptimizeInput(input: {
   outputMode?: unknown;
   actions?: unknown;
   targetBytes?: unknown;
+  jpegQuality?: unknown;
 }): void {
   if (typeof input.filePath !== "string" || input.filePath.length === 0) {
     throw new Error("Invalid optimize request: filePath must be a non-empty string.");
@@ -666,6 +668,15 @@ function validateOptimizeInput(input: {
   }
   if (input.targetBytes !== undefined && (typeof input.targetBytes !== "number" || !Number.isFinite(input.targetBytes) || input.targetBytes <= 0)) {
     throw new Error("Invalid optimize request: targetBytes must be a positive number.");
+  }
+  if (
+    input.jpegQuality !== undefined &&
+    (typeof input.jpegQuality !== "number" ||
+      !Number.isInteger(input.jpegQuality) ||
+      input.jpegQuality < 60 ||
+      input.jpegQuality > 95)
+  ) {
+    throw new Error("Invalid optimize request: jpegQuality must be an integer between 60 and 95.");
   }
   if (input.outputMode !== undefined && input.outputMode !== "single" && input.outputMode !== "batch") {
     throw new Error("Invalid optimize request: outputMode must be 'single' or 'batch'.");
@@ -689,6 +700,8 @@ function runOptimizeWorker(
     outputDirectory?: string;
     outputMode?: "single" | "batch";
     actions?: string[];
+    targetBytes?: number;
+    jpegQuality?: number;
     settings: DesktopSettings;
   },
   onProgress: (progress: { percent: number; item: string }) => void
@@ -800,6 +813,7 @@ type DocumentWorkerRequest =
         outputMode?: "single" | "batch";
         actions?: string[];
         targetBytes?: number;
+        jpegQuality?: number;
         settings: DesktopSettings;
       };
     };
@@ -816,6 +830,7 @@ type DocumentWorkerRequestInput =
         outputMode?: "single" | "batch";
         actions?: string[];
         targetBytes?: number;
+        jpegQuality?: number;
         settings: DesktopSettings;
       };
     };

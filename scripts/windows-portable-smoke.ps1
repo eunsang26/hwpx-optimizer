@@ -15,10 +15,22 @@ $ErrorActionPreference = "Stop"
 if ($Artifact -eq "") {
   if (Test-Path -LiteralPath ".\HWPX Optimizer.exe") {
     $Artifact = ".\HWPX Optimizer.exe"
-  } elseif (Test-Path -LiteralPath ".\HWPX Optimizer-0.1.0-x64.exe") {
-    $Artifact = ".\HWPX Optimizer-0.1.0-x64.exe"
   } else {
-    $Artifact = "release\HWPX Optimizer-0.1.0-x64.exe"
+    $packageJson = Join-Path $PSScriptRoot "..\package.json"
+    $version = $null
+    if (Test-Path -LiteralPath $packageJson) {
+      $version = (Get-Content -LiteralPath $packageJson -Raw | ConvertFrom-Json).version
+    }
+    $candidates = @()
+    if ($version) {
+      $candidates += ".\HWPX Optimizer-$version-x64.exe"
+      $candidates += "release\HWPX Optimizer-$version-x64.exe"
+    }
+    $candidates += @(Get-ChildItem -Path @(".", "release") -Filter "HWPX Optimizer-*-x64.exe" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | ForEach-Object { $_.FullName })
+    $Artifact = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+    if (-not $Artifact) {
+      throw "Portable artifact not found. Pass -Artifact or build release/HWPX Optimizer-<version>-x64.exe first."
+    }
   }
 }
 
