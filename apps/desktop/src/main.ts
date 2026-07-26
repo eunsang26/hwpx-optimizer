@@ -456,6 +456,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
             appReady: document.body.dataset.appReady,
             preloadApi: document.body.dataset.preloadApi,
             settingsOpen: document.getElementById("settings-panel")?.classList.contains("is-open"),
+            settingsSubmissionLimit: document.getElementById("setting-submission-limit")?.value,
             settingsOutputButton: document.getElementById("setting-output-button")?.textContent,
             settingsOutputResetButton: document.getElementById("setting-output-reset-button")?.textContent
           });
@@ -472,6 +473,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     appReady?: string;
     preloadApi?: string;
     settingsOpen?: boolean;
+    settingsSubmissionLimit?: string;
     settingsOutputButton?: string;
     settingsOutputResetButton?: string;
   };
@@ -490,6 +492,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   }
   if (
     result.settingsOpen !== true ||
+    result.settingsSubmissionLimit !== "mb40" ||
     result.settingsOutputButton !== "폴더 선택" ||
     result.settingsOutputResetButton !== "원본 폴더 사용"
   ) {
@@ -719,6 +722,189 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     Math.abs(selectedUi.workspaceWidth - (selectedUi.detailsWidth ?? 0)) > 1
   ) {
     throw new Error(`Desktop smoke failed: canonical selected layout mismatch ${JSON.stringify(selectedUi)}`);
+  }
+
+  smokeDialogFilePaths = [smokeInputPath, smokeSecondInputPath];
+  const batchUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        const rows = Array.from(document.querySelectorAll("#batch-list tr"));
+        const optimize = document.getElementById("optimize-button");
+        if (
+          document.body.dataset.view === "batch" &&
+          document.body.dataset.busy !== "analysis" &&
+          rows.length === 2 &&
+          optimize?.disabled === false
+        ) {
+          const policyRect = document.getElementById("policy-toolbar")?.getBoundingClientRect();
+          const summaryRect = document.querySelector(".summary-panel")?.getBoundingClientRect();
+          const tableRect = document.querySelector(".file-panel")?.getBoundingClientRect();
+          const reviewRect = document.getElementById("review-strip")?.getBoundingClientRect();
+          const limitRect = document.getElementById("submission-limit-select")?.getBoundingClientRect();
+          const judgeRect = document.getElementById("batch-target-mode-select")?.getBoundingClientRect();
+          const compressionRect = document.getElementById("preservation-select")?.getBoundingClientRect();
+          const perFileState = {
+            canonicalOrder:
+              Boolean(policyRect && summaryRect && tableRect && reviewRect) &&
+              policyRect.top < summaryRect.top &&
+              summaryRect.top < tableRect.top &&
+              tableRect.top < reviewRect.top,
+            toolbarOrder:
+              Boolean(limitRect && judgeRect && compressionRect) &&
+              limitRect.left < judgeRect.left &&
+              judgeRect.left < compressionRect.left,
+            heroMeta: document.getElementById("summary-verdict")?.textContent,
+            optimizeText: optimize.textContent,
+            qualityTitle: document.getElementById("quality-head-label")?.textContent,
+            pendingRemoveActions: document.querySelectorAll('#batch-list [data-action="remove"]').length,
+            selectedRows: rows.filter((row) => row.querySelector(".batch-select")?.checked).length
+          };
+
+          const judge = document.getElementById("batch-target-mode-select");
+          judge.value = "aggregate";
+          judge.dispatchEvent(new Event("change", { bubbles: true }));
+          const aggregateMeta = document.getElementById("summary-verdict")?.textContent;
+          const allocatedRows = Array.from(document.querySelectorAll("#batch-list .name .sub"))
+            .filter((item) => item.textContent?.includes("배분 목표")).length;
+
+          const firstCheckbox = document.querySelector("#batch-list .batch-select");
+          firstCheckbox.checked = false;
+          firstCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+          const firstRow = document.querySelector("#batch-list tr");
+          const excludedState = {
+            status: firstRow?.querySelector(".status")?.textContent,
+            size: firstRow?.querySelector(".batch-size-cell")?.textContent,
+            qualityControls: firstRow?.querySelectorAll(".row-q-btn, .batch-quality-input").length,
+            selectedLive: document.getElementById("policy-live")?.textContent
+          };
+
+          document.getElementById("quality-mode-manual")?.click();
+          const manualState = {
+            title: document.getElementById("quality-head-label")?.textContent,
+            manualVisible: document.getElementById("quality-manual")?.getClientRects().length > 0,
+            selectedQualityInputs: Array.from(document.querySelectorAll("#batch-list tr"))
+              .filter((row) => row.querySelector(".batch-select")?.checked)
+              .filter((row) => row.querySelector(".batch-quality-input")).length,
+            excludedQualityInputs: firstRow?.querySelectorAll(".batch-quality-input").length
+          };
+
+          document.getElementById("toggle-options-button")?.click();
+          const optionsState = {
+            visible: document.getElementById("detail-options-sheet")?.getClientRects().length > 0,
+            beforeTable:
+              (document.getElementById("detail-options-sheet")?.getBoundingClientRect().top ?? 0) <
+              (document.querySelector(".file-panel")?.getBoundingClientRect().top ?? 0)
+          };
+          const selectAll = document.getElementById("batch-select-all");
+          selectAll.checked = false;
+          selectAll.dispatchEvent(new Event("change", { bubbles: true }));
+          const selectNoneState = {
+            hero: document.getElementById("summary-status")?.textContent,
+            optimizeDisabled: document.getElementById("optimize-button")?.disabled,
+            excludedRows: Array.from(document.querySelectorAll("#batch-list .status"))
+              .filter((item) => item.textContent === "제외").length
+          };
+          selectAll.checked = true;
+          selectAll.dispatchEvent(new Event("change", { bubbles: true }));
+          const selectAllState = {
+            selectedLive: document.getElementById("policy-live")?.textContent,
+            optimizeDisabled: document.getElementById("optimize-button")?.disabled,
+            qualityInputs: document.querySelectorAll("#batch-list .batch-quality-input").length
+          };
+          resolve({
+            perFileState,
+            aggregateMeta,
+            allocatedRows,
+            excludedState,
+            manualState,
+            optionsState,
+            selectNoneState,
+            selectAllState
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    timedOut?: boolean;
+    perFileState?: {
+      canonicalOrder?: boolean;
+      toolbarOrder?: boolean;
+      heroMeta?: string;
+      optimizeText?: string;
+      qualityTitle?: string;
+      pendingRemoveActions?: number;
+      selectedRows?: number;
+    };
+    aggregateMeta?: string;
+    allocatedRows?: number;
+    excludedState?: {
+      status?: string;
+      size?: string;
+      qualityControls?: number;
+      selectedLive?: string;
+    };
+    manualState?: {
+      title?: string;
+      manualVisible?: boolean;
+      selectedQualityInputs?: number;
+      excludedQualityInputs?: number;
+    };
+    optionsState?: {
+      visible?: boolean;
+      beforeTable?: boolean;
+    };
+    selectNoneState?: {
+      hero?: string;
+      optimizeDisabled?: boolean;
+      excludedRows?: number;
+    };
+    selectAllState?: {
+      selectedLive?: string;
+      optimizeDisabled?: boolean;
+      qualityInputs?: number;
+    };
+  };
+
+  if (
+    batchUi.timedOut ||
+    batchUi.perFileState?.canonicalOrder !== true ||
+    batchUi.perFileState.toolbarOrder !== true ||
+    !batchUi.perFileState.heroMeta?.includes("파일별 기준") ||
+    !batchUi.perFileState.heroMeta?.includes("40MB") ||
+    batchUi.perFileState.optimizeText !== "선택 파일 일괄 최적화" ||
+    batchUi.perFileState.qualityTitle !== "품질 · 파일별 자동" ||
+    batchUi.perFileState.pendingRemoveActions !== 0 ||
+    batchUi.perFileState.selectedRows !== 2 ||
+    !batchUi.aggregateMeta?.includes("선택 합계 배분") ||
+    batchUi.allocatedRows !== 2 ||
+    batchUi.excludedState?.status !== "제외" ||
+    !batchUi.excludedState.size?.includes("—") ||
+    batchUi.excludedState.qualityControls !== 0 ||
+    !batchUi.excludedState.selectedLive?.includes("선택 1") ||
+    batchUi.manualState?.title !== "일괄 품질 (선택 파일)" ||
+    batchUi.manualState.manualVisible !== true ||
+    batchUi.manualState.selectedQualityInputs !== 1 ||
+    batchUi.manualState.excludedQualityInputs !== 0 ||
+    batchUi.optionsState?.visible !== true ||
+    batchUi.optionsState.beforeTable !== true ||
+    !batchUi.selectNoneState?.hero?.includes("선택·분석 대기") ||
+    batchUi.selectNoneState.optimizeDisabled !== true ||
+    batchUi.selectNoneState.excludedRows !== 2 ||
+    !batchUi.selectAllState?.selectedLive?.includes("선택 2") ||
+    batchUi.selectAllState.optimizeDisabled !== false ||
+    batchUi.selectAllState.qualityInputs !== 2
+  ) {
+    throw new Error(`Desktop smoke failed: canonical batch event flow mismatch ${JSON.stringify(batchUi)}`);
   }
 
   const workflow = (await window.webContents.executeJavaScript(`

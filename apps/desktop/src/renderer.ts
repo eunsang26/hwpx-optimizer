@@ -187,6 +187,7 @@ const batchOpenFolderButton = requireButton("batch-open-folder-button");
 const batchOpenReportButton = requireButton("batch-open-report-button");
 const batchRetryButton = requireButton("batch-retry-button");
 const progressPanel = requireElement("progress-panel");
+const progressTitle = requireElement("progress-title");
 const progressBar = requireElement("progress-bar");
 const progressItem = requireElement("progress-item");
 const analysisGrid = requireElement("analysis-grid");
@@ -214,6 +215,9 @@ const compareSummary = requireElement("compare-summary");
 const compareCloseButton = requireButton("compare-close");
 const cancelButton = requireButton("cancel-button");
 const settingDefaultMode = requireSelect("setting-default-mode");
+const settingSubmissionLimit = requireSelect("setting-submission-limit");
+const settingCustomLimitField = requireElement("setting-custom-limit-field");
+const settingCustomLimitInput = requireInput("setting-custom-limit-input");
 const settingSaveNext = requireInput("setting-save-next");
 const settingSaveReport = requireInput("setting-save-report");
 const settingPreventOverwrite = requireInput("setting-prevent-overwrite");
@@ -606,6 +610,28 @@ async function init(): Promise<void> {
       preservationPreference: state.preservationPreference
     });
   });
+  settingSubmissionLimit.addEventListener("change", () => {
+    state.submissionLimit = {
+      id: settingSubmissionLimit.value as SubmissionLimit["id"],
+      customBytes: state.submissionLimit.customBytes
+    };
+    settingCustomLimitField.hidden = state.submissionLimit.id !== "custom";
+    renderSubmissionControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+    void saveSettings({ submissionLimit: state.submissionLimit });
+  });
+  settingCustomLimitInput.addEventListener("change", () => {
+    const value = Number(settingCustomLimitInput.value);
+    state.submissionLimit = {
+      id: "custom",
+      customBytes: Number.isFinite(value) && value > 0 ? value * 1024 * 1024 : undefined
+    };
+    renderSubmissionControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+    void saveSettings({ submissionLimit: state.submissionLimit });
+  });
   settingSaveNext.addEventListener("change", async () => {
     if (settingSaveNext.checked) {
       state.outputDirectory = undefined;
@@ -756,6 +782,13 @@ async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
 
 function renderSettings(settings: DesktopSettings): void {
   settingDefaultMode.value = settings.defaultMode;
+  const settingLimit = settings.submissionLimit ?? state.submissionLimit;
+  settingSubmissionLimit.value = settingLimit.id;
+  settingCustomLimitField.hidden = settingLimit.id !== "custom";
+  settingCustomLimitInput.value =
+    settingLimit.id === "custom" && settingLimit.customBytes
+      ? String(Math.round((settingLimit.customBytes / (1024 * 1024)) * 100) / 100)
+      : "";
   settingSaveNext.checked = settings.saveNextToOriginal;
   settingSaveReport.checked = settings.saveReport;
   settingPreventOverwrite.checked = settings.preventOverwrite;
@@ -1206,7 +1239,14 @@ function renderBatchSummary(): void {
     ? `${targetModeLabel} · ${targetStatusSummary}`
     : "예상 결과: -";
   summaryTargetLine.textContent = batchTargetSummaryLine(batchTargetBytes);
-  summaryVerdict.textContent = mixVerdict;
+  const batchScopeLine = document.createElement("span");
+  batchScopeLine.textContent =
+    state.batchTargetMode === "aggregate" ? "선택 합계 배분" : "파일별 기준";
+  const batchTargetLine = document.createElement("b");
+  batchTargetLine.textContent = batchTargetBytes
+    ? `${Math.round(batchTargetBytes / (1024 * 1024))}MB`
+    : "제한 없음";
+  summaryVerdict.replaceChildren(batchScopeLine, batchTargetLine);
   summaryVerdict.dataset.status =
     mixClass === "pass" ? "pass" : mixClass === "hard-miss" ? "hard-miss" : "need-more";
   summaryVerdict.hidden = plannedCount === 0;
@@ -1275,6 +1315,7 @@ function renderBatchSummary(): void {
     ? Math.round(qualities.reduce((sum, value) => sum + value, 0) / qualities.length)
     : DEFAULT_JPEG_QUALITY;
   chipQuality.textContent = `평균 예정 ${avgQ}%`;
+  chipQuality.hidden = true;
   policyLive.textContent = `선택 ${state.batchItems.filter((item) => item.selected).length} · 평균 예정 ${avgQ}%`;
   renderBatchReviewStrip(summaryItems);
   optimizeButton.textContent = "선택 파일 일괄 최적화";
@@ -1650,6 +1691,7 @@ function renderHeroChips(plan?: SubmissionPlan): void {
       : plan.plannedJpegQuality ?? (maxMode ? JPEG_QUALITY_FLOOR : DEFAULT_JPEG_QUALITY);
   const atFloor = maxMode || (typeof q === "number" && q <= JPEG_QUALITY_FLOOR);
   chipQuality.textContent = `${q}%${atFloor ? " · 하한" : ""}`;
+  chipQuality.hidden = false;
   heroChips.hidden = false;
   policyLive.textContent = `${state.qualityMode === "manual" ? "수동" : "자동"} · ${q}%`;
 
@@ -1867,6 +1909,7 @@ function renderProgress(percent: number, item: string): void {
 
 function hideProgressPanel(): void {
   document.body.dataset.busy = "";
+  progressTitle.textContent = "진행 상황";
   progressPanel.classList.remove("is-loading");
   progressPanel.hidden = true;
   stopProgressAnimation();
@@ -2222,7 +2265,9 @@ function renderModeWarning(): void {
 
 function setBusy(message: string, options: { cancelable: boolean; kind?: "analysis" | "optimization" }): void {
   setStatus(message);
-  document.body.dataset.busy = options.kind ?? (options.cancelable ? "optimization" : "analysis");
+  const busyKind = options.kind ?? (options.cancelable ? "optimization" : "analysis");
+  document.body.dataset.busy = busyKind;
+  progressTitle.textContent = busyKind === "analysis" ? "분석 중" : "최적화 중";
   resetProgressAnimation();
   progressPanel.hidden = false;
   progressPanel.classList.add("is-loading");

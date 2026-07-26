@@ -43,7 +43,7 @@
 
       <section id="progress-panel" class="panel progress-panel" hidden>
         <div class="panel-header">
-          <h2>진행 상황</h2>
+          <h2 id="progress-title">진행 상황</h2>
           <button id="cancel-button" class="ghost">취소</button>
         </div>
         <div class="progress-track"><div id="progress-bar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
@@ -447,7 +447,7 @@
           </li>
           <li>
             <strong>6. 일괄 처리</strong>
-            <p>목록에서 불필요한 파일은 제거할 수 있습니다. 일괄 목록에 1개만 남으면 단일 모드로 돌아가 세부 옵션을 더 쉽게 조정합니다.</p>
+            <p>목록에서 불필요한 파일은 체크 해제해 이번 실행에서 제외합니다. 체크를 다시 켜면 배분 목표와 예정 품질을 즉시 다시 계산합니다.</p>
           </li>
           <li>
             <strong>7. 세부 분석 보기</strong>
@@ -475,12 +475,30 @@
           <button id="settings-close-button" class="ghost settings-close" type="button" aria-label="설정 닫기"><span aria-hidden="true">×</span></button>
         </div>
         <label class="settings-field">
-          기본 모드
+          기본 압축
           <select id="setting-default-mode">
-            <option value="safe">안전</option>
-            <option value="balanced">균형</option>
-            <option value="aggressive">최대 압축</option>
+            <option value="safe">외형 우선</option>
+            <option value="balanced">균형 · 목표 맞춤</option>
+            <option value="aggressive">용량 우선 · 최대</option>
           </select>
+        </label>
+        <label class="settings-field">
+          기본 결재 기준
+          <select id="setting-submission-limit">
+            <option value="none">제한 없음</option>
+            <option value="mb5">5MB 미만</option>
+            <option value="mb10">10MB 미만</option>
+            <option value="mb20">20MB 미만</option>
+            <option value="mb30">30MB 미만</option>
+            <option value="mb40">40MB 미만</option>
+            <option value="mb50">50MB 미만</option>
+            <option value="mb100">100MB 미만</option>
+            <option value="custom">직접 입력</option>
+          </select>
+        </label>
+        <label id="setting-custom-limit-field" class="settings-field" hidden>
+          직접 입력 (MB)
+          <input id="setting-custom-limit-input" type="number" min="1" step="1" inputmode="decimal" />
         </label>
         <label class="settings-check"><input id="setting-save-next" type="checkbox" /><span>원본 파일 옆에 저장</span></label>
         <label class="settings-check"><input id="setting-save-report" type="checkbox" /><span>JSON 리포트 저장(선택)</span></label>

@@ -86,10 +86,17 @@ describe("template HTML builders", () => {
 
     const pending: BatchItemLike = { path: "/x/b.hwpx", fileName: "b.hwpx", status: "pending" };
     const idleHtml = batchItemRowActionsHtml(pending, 1, { running: false });
-    expect(idleHtml).toContain('data-action="remove"');
+    expect(idleHtml).toBe("");
 
     const busyHtml = batchItemRowActionsHtml(pending, 1, { running: true });
     expect(busyHtml).toBe("");
+
+    const failedHtml = batchItemRowActionsHtml(
+      { path: "/x/failed.hwpx", fileName: "failed.hwpx", status: "failed" },
+      2,
+      { running: false }
+    );
+    expect(failedHtml).toContain('data-action="remove"');
   });
 
   it("renders a per-row selection checkbox that reflects the item's selected state", () => {
@@ -137,6 +144,29 @@ describe("template HTML builders", () => {
     expect(batchItemRowHtml(warning, 0, { running: false })).toContain(
       '<span class="status warning">더 압축 필요</span>'
     );
+  });
+
+  it("renders deselected batch rows as excluded without a projected result or quality control", () => {
+    const excluded: BatchItemLike = {
+      path: "/x/excluded.hwpx",
+      fileName: "excluded.hwpx",
+      selected: false,
+      status: "pending",
+      originalSizeLabel: "89.72 MiB",
+      expectedSizeLabel: "5.15 MiB",
+      targetLabel: "40 MB 미만",
+      targetStatusLabel: "목표 제한 없음",
+      qualityLabel: "95%",
+      jpegQualityDisplay: 95
+    };
+
+    const html = batchItemRowHtml(excluded, 0, { running: false });
+    expect(html).toContain('<span class="sub">선택 제외</span>');
+    expect(html).toContain("89.72 MiB → <strong>—</strong>");
+    expect(html).toContain('class="status excluded">제외</span>');
+    expect(html).not.toContain("row-q-btn");
+    expect(html).not.toContain("batch-quality-input");
+    expect(html).not.toContain("목표 제한 없음");
   });
 
   it("renders an image compare pair with PSNR badge and saving info", () => {

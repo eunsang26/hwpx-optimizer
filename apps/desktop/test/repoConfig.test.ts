@@ -274,12 +274,15 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="drop-overlay"');
     expect(html).toContain("HWPX 파일을 여기에 놓으세요");
     expect(html).toContain('id="status-banner"');
+    expect(html).toContain('id="progress-title"');
     expect(html).toContain('id="batch-result-details"');
     expect(html).toContain('id="plan-count-pill"');
     expect(html).toContain('class="plan-strip" id="plan-sidebar"');
     expect(html).toContain('id="option-plan-summary"');
     expect(html).toContain('id="run-dock"');
     expect(html).toContain('id="settings-close-button"');
+    expect(html).toContain('id="setting-submission-limit"');
+    expect(html).toContain("기본 결재 기준");
     expect(html).toContain('id="help-button"');
     expect(html).toContain('id="help-panel"');
     expect(html).toContain('id="help-backdrop"');
@@ -343,6 +346,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("showPlannedReadOnly");
     expect(renderer).toContain("hero-verdict--mix");
     expect(renderer).toContain("renderBatchReviewStrip");
+    expect(renderer).toContain('progressTitle.textContent = busyKind === "analysis" ? "분석 중" : "최적화 중"');
     expect(renderer).toContain("선택 파일 일괄 최적화");
     expect(renderer).toContain("합계 배분 목표마다 파일별 품질");
     expect(renderer).toContain("gaugeMidLabel.style.left");
@@ -370,6 +374,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("HWPX_OPT_SMOKE_SCREENSHOT");
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
       'document.getElementById("empty-choose-button")?.click()'
+    );
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
+      "canonical batch event flow mismatch"
     );
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
@@ -400,6 +407,11 @@ describe("repository runtime and cleanup configuration", () => {
     );
     expect(css).toMatch(
       /body\[data-view="single"\] \.quality-mode-row\s*{[^}]*position:\s*absolute/s
+    );
+    expect(css).toMatch(/body\[data-view="batch"\] \.summary-panel\s*{[^}]*order:\s*2/s);
+    expect(css).toMatch(/body\[data-view="batch"\] \.file-panel\s*{[^}]*order:\s*3/s);
+    expect(css).toMatch(
+      /body\[data-busy="analysis"\] #status-banner,[\s\S]*body\[data-busy="analysis"\] #single-workspace\s*{[^}]*display:\s*none !important/s
     );
 
     const policyToolbar = html.indexOf('<div id="policy-toolbar"');

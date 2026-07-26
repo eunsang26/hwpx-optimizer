@@ -46,14 +46,15 @@ export function submissionActionRowHtml(row: SubmissionActionRow): string {
 }
 
 export function batchItemRowHtml(item: BatchItemLike, index: number, options: { running: boolean }): string {
-  const meta = batchItemMetaText(item);
+  const excluded = item.selected === false;
+  const meta = excluded ? "" : batchItemMetaText(item);
   const actions = batchItemRowActionsHtml(item, index, options);
   const attentionClass =
     item.targetStatusLabel === "더 압축 필요" || item.targetStatusLabel === "기준 미달"
       ? " class=\"needs-attention\""
       : "";
-  const statusLabel = batchTableStatusLabel(item);
-  const statusClass = batchTableStatusClass(item);
+  const statusLabel = excluded ? "제외" : batchTableStatusLabel(item);
+  const statusClass = excluded ? "excluded" : batchTableStatusClass(item);
   const selectedAttr = item.selected === false ? "" : " checked";
   const disabledAttr = options.running ? " disabled" : "";
   const qualityValue =
@@ -61,8 +62,8 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
       ? String(item.jpegQualityDisplay)
       : item.qualityLabel?.match(/\d+/)?.[0] ?? "";
   const editableNumber = item.qualityEditable === true || item.jpegQualityOverride !== undefined;
-  let qualityCell = escapeHtml(item.qualityLabel ?? "-");
-  if (item.status === "pending" && !options.running && qualityValue) {
+  let qualityCell = excluded ? "—" : escapeHtml(item.qualityLabel ?? "-");
+  if (!excluded && item.status === "pending" && !options.running && qualityValue) {
     qualityCell = editableNumber
       ? `<label class="row-q"><input type="number" class="batch-quality-input" data-batch-quality-index="${index}" min="60" max="95" step="1" value="${escapeHtml(
           qualityValue
@@ -71,11 +72,14 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
           qualityValue
         )}%</button>`;
   }
-  const targetSub =
-    item.allocatedTargetLabel ??
-    (item.targetLabel ? `기준 ${item.targetLabel.replace(/\s*미만$/, "")}` : "");
+  const targetSub = excluded
+    ? "선택 제외"
+    : item.allocatedTargetLabel ??
+      (item.targetLabel ? `기준 ${item.targetLabel.replace(/\s*미만$/, "")}` : "");
   const sizeCell =
-    item.originalSizeLabel && item.expectedSizeLabel
+    excluded && item.originalSizeLabel
+      ? `${escapeHtml(item.originalSizeLabel)} → <strong>—</strong>`
+      : item.originalSizeLabel && item.expectedSizeLabel
       ? `${escapeHtml(item.originalSizeLabel)} → <strong>${escapeHtml(item.expectedSizeLabel)}</strong>`
       : escapeHtml(item.originalSizeLabel ?? item.expectedSizeLabel ?? "-");
   return `<tr${attentionClass}><td><input type="checkbox" class="batch-select" data-batch-index="${index}"${selectedAttr}${disabledAttr} aria-label="${escapeHtml(
@@ -125,7 +129,7 @@ function rowButton(action: string, index: number, label: string): string {
 }
 
 function isRemovable(status: BatchItemStatus): boolean {
-  return status === "pending" || status === "failed" || status === "cancelled";
+  return status === "failed" || status === "cancelled";
 }
 
 export function imageComparePairHtml(pair: ImagePreviewPair): string {
