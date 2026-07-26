@@ -15,7 +15,7 @@ import {
   runBatch,
   runCli
 } from "../src/index.js";
-import type { OptimizationReport } from "@hwpx-optimizer/core";
+import { version as coreVersion, type OptimizationReport } from "@hwpx-optimizer/core";
 
 async function unzipEntryNames(buf: Buffer): Promise<string[]> {
   const zip = await JSZip.loadAsync(buf);
@@ -34,6 +34,19 @@ async function unzipEntryBytes(buf: Buffer): Promise<Record<string, string | nul
 }
 
 describe("runCli", () => {
+  it("prints the embedded core version without requiring an input file", async () => {
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      logs.push(String(message));
+    });
+
+    const code = await runCli(["--version"]);
+    logSpy.mockRestore();
+
+    expect(code).toBe(0);
+    expect(logs).toEqual([coreVersion]);
+  });
+
   it("documents target options anywhere they are accepted", async () => {
     const errors: string[] = [];
     const errorSpy = vi.spyOn(console, "error").mockImplementation((message?: unknown) => {

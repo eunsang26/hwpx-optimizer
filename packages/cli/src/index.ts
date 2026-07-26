@@ -5,7 +5,12 @@ import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "n
 import { availableParallelism } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { analyzeHwpxBuffer, estimateNonOverlappingSavingBytes, verifyHwpxOutput } from "@hwpx-optimizer/core";
+import {
+  analyzeHwpxBuffer,
+  estimateNonOverlappingSavingBytes,
+  verifyHwpxOutput,
+  version as coreVersion
+} from "@hwpx-optimizer/core";
 import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
 import { ACTION_CATALOG, optimizeByMode, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
 import type { OptimizationMode } from "./optimizeByMode.js";
@@ -20,6 +25,10 @@ const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
 
 export async function runCli(argv: string[]): Promise<number> {
   const [command, inputPath, ...rest] = argv;
+  if (command === "--version" || command === "version") {
+    console.log(coreVersion);
+    return 0;
+  }
   if (command === "list-actions") {
     printActionList();
     return 0;
@@ -238,6 +247,7 @@ function pathsReferToSameFile(left: string, right: string): boolean {
 
 function printUsage(): void {
   console.error("Usage:");
+  console.error("  hwpx-opt --version");
   console.error("  hwpx-opt analyze <file.hwpx> [--report report.json] [--analysis-mode quick|deep] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
   console.error("  hwpx-opt report <file.hwpx> [--report report.txt|--out report.txt] [--analysis-mode quick|deep] [--target-bytes bytes|--target-mb mb] [--max-input-bytes bytes]");
   console.error("  hwpx-opt verify <file.hwpx> [--max-input-bytes bytes]");
