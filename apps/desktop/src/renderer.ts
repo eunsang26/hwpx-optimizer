@@ -15,14 +15,24 @@ import {
 import { createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
+import { allocateAggregateTargetBytes } from "./shared/batchTargetAlloc.js";
 import { resultGuidanceText } from "./shared/resultGuidance.js";
-import { createSubmissionPlan, modeForPreservation, resolveSubmissionLimitBytes } from "./shared/submissionPlan.js";
+import {
+  createSubmissionPlan,
+  modeForPreservation,
+  preservationForMode,
+  resolveSubmissionLimitBytes
+} from "./shared/submissionPlan.js";
 import type {
   PreservationPreference,
   SubmissionActionId,
   SubmissionLimit,
   SubmissionPlan
 } from "./shared/submissionPlan.js";
+
+const JPEG_QUALITY_FLOOR = 60;
+const JPEG_QUALITY_CEILING = 95;
+const DEFAULT_JPEG_QUALITY = 88;
 
 declare global {
   interface Window {
@@ -44,6 +54,10 @@ type BatchItem = {
   expectedSizeLabel?: string;
   targetLabel?: string;
   targetStatusLabel?: string;
+  qualityLabel?: string;
+  jpegQualityDisplay?: number;
+  qualityEditable?: boolean;
+  jpegQualityOverride?: number;
   allocatedTargetLabel?: string;
   savedBytes?: number;
   savedPercent?: number;
@@ -64,6 +78,8 @@ type AppState = {
   submissionLimit: SubmissionLimit;
   preservationPreference: PreservationPreference;
   batchTargetMode: BatchTargetMode;
+  qualityMode: "auto" | "manual";
+  jpegQuality: number;
   currentPlan?: SubmissionPlan;
   batchItems: BatchItem[];
   batchAnalyzing: boolean;
@@ -100,9 +116,11 @@ type BatchPlanSummary = {
 const state: AppState = {
   mode: "safe",
   actionSelections: new Map(),
-  submissionLimit: { id: "mb20" },
+  submissionLimit: { id: "mb40" },
   preservationPreference: "recommended",
-  batchTargetMode: "aggregate",
+  batchTargetMode: "per-file",
+  qualityMode: "auto",
+  jpegQuality: DEFAULT_JPEG_QUALITY,
   batchItems: [],
   batchAnalyzing: false,
   batchRunning: false,
@@ -238,6 +256,34 @@ const summaryTargetLine = requireElement("summary-target-line");
 const targetTrackFill = requireElement("target-track-fill");
 const targetTrackLimit = requireElement("target-track-limit");
 const summaryVerdict = requireElement("summary-verdict");
+const summaryVerdictDetail = requireElement("summary-verdict-detail");
+const targetRow = requireElement("gauge-hero").querySelector(".target-row") as HTMLElement;
+const qualityControls = requireElement("quality-controls");
+const qualityModeAuto = requireButton("quality-mode-auto");
+const qualityModeManual = requireButton("quality-mode-manual");
+const qualityManual = requireElement("quality-manual");
+const batchQualityAuto = requireElement("batch-quality-auto");
+const batchQualityAvg = requireElement("batch-quality-avg");
+const qualityHeadLabel = requireElement("quality-head-label");
+const jpegQualitySlider = requireInput("jpeg-quality-slider");
+const jpegQualityInput = requireInput("jpeg-quality-input");
+const qualityPlannedLabel = requireElement("quality-planned-label");
+const qualityHint = requireElement("quality-hint");
+const heroChips = requireElement("hero-chips");
+const chipPolicy = requireElement("chip-policy");
+const chipLimit = requireElement("chip-limit");
+const chipQuality = requireElement("chip-quality");
+const gaugeMidLabel = requireElement("gauge-mid-label");
+const gaugeStartLabel = requireElement("gauge-start-label");
+const gaugeEndLabel = requireElement("gauge-end-label");
+const reviewStrip = requireElement("review-strip");
+const reviewStripTitle = requireElement("review-strip-title");
+const reviewStripDetail = requireElement("review-strip-detail");
+const reviewStripChips = requireElement("review-strip-chips");
+const summaryGrid = requireElement("summary-grid");
+const detailOptionsSheet = requireElement("detail-options-sheet");
+const toggleOptionsButton = requireButton("toggle-options-button");
+const policyLive = requireElement("policy-live");
 const runDock = requireElement("run-dock");
 const runDockStatus = requireElement("run-dock-status");
 const runDockSummary = requireElement("run-dock-summary");
@@ -248,13 +294,19 @@ void init();
 async function init(): Promise<void> {
   const settings = (await window.hwpxOptimizer.loadSettings()) as DesktopSettings;
   state.settings = settings;
-  state.mode = settings.defaultMode ?? "safe";
-  state.submissionLimit = settings.submissionLimit ?? { id: "mb20" };
+  // Toolbar preservation is the product control; keep mode / 기본 모드 in sync with it.
   state.preservationPreference = settings.preservationPreference ?? "recommended";
-  state.batchTargetMode = settings.batchTargetMode ?? "aggregate";
-  renderSettings(settings);
+  state.mode = modeForPreservation(state.preservationPreference);
+  state.submissionLimit = settings.submissionLimit ?? { id: "mb40" };
+  state.batchTargetMode = settings.batchTargetMode ?? "per-file";
+  renderSettings({ ...settings, defaultMode: state.mode });
   renderSubmissionControls();
-  modeInputs.find((input) => input.value === state.mode)?.click();
+  renderQualityControls();
+  const modeInput = modeInputs.find((input) => input.value === state.mode);
+  if (modeInput) modeInput.checked = true;
+  if (settings.defaultMode !== state.mode) {
+    void saveSettings({ defaultMode: state.mode });
+  }
 
   const selectFiles = async () => {
     const selected = await window.hwpxOptimizer.selectHwpxMany();
@@ -286,16 +338,27 @@ async function init(): Promise<void> {
     void runBatch();
   });
   batchList.addEventListener("click", (event) => {
+    const editButton = (event.target as Element | null)?.closest<HTMLButtonElement>("button[data-batch-quality-edit]");
+    if (editButton) {
+      handleBatchQualityEditClick(editButton);
+      return;
+    }
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>("button[data-action]");
     if (button) handleBatchRowAction(button);
   });
   batchList.addEventListener("change", (event) => {
     const target = event.target as HTMLInputElement | null;
-    if (!target || !target.classList.contains("batch-select")) return;
+    if (!target) return;
+    if (target.classList.contains("batch-quality-input")) {
+      handleBatchQualityInput(target);
+      return;
+    }
+    if (!target.classList.contains("batch-select")) return;
     const index = Number(target.dataset.batchIndex);
     const item = Number.isInteger(index) ? state.batchItems[index] : undefined;
     if (!item) return;
     item.selected = target.checked;
+    refreshBatchPlans();
     renderBatchList();
   });
   batchSelectAll.addEventListener("change", () => {
@@ -303,6 +366,7 @@ async function init(): Promise<void> {
     for (const item of state.batchItems) {
       if (item.status === "pending") item.selected = batchSelectAll.checked;
     }
+    refreshBatchPlans();
     renderBatchList();
   });
 
@@ -386,9 +450,17 @@ async function init(): Promise<void> {
   for (const input of modeInputs) {
     input.addEventListener("change", () => {
       state.mode = input.value as AppState["mode"];
-      void saveSettings({ defaultMode: state.mode });
+      state.preservationPreference = preservationForMode(state.mode);
+      settingDefaultMode.value = state.mode;
+      void saveSettings({
+        defaultMode: state.mode,
+        preservationPreference: state.preservationPreference
+      });
       renderModeWarning();
+      renderSubmissionControls();
+      renderQualityControls();
       refreshSubmissionPlan();
+      refreshBatchPlans();
     });
   }
 
@@ -437,17 +509,70 @@ async function init(): Promise<void> {
   });
   preservationSelect.addEventListener("change", () => {
     state.preservationPreference = preservationSelect.value as PreservationPreference;
+    state.mode = modeForPreservation(state.preservationPreference);
     state.actionSelections.clear();
+    if (state.preservationPreference === "size") {
+      state.qualityMode = "auto";
+      for (const item of state.batchItems) delete item.jpegQualityOverride;
+    }
+    const modeInput = modeInputs.find((input) => input.value === state.mode);
+    if (modeInput) modeInput.checked = true;
+    settingDefaultMode.value = state.mode;
     renderSubmissionControls();
+    renderQualityControls();
     refreshSubmissionPlan();
     refreshBatchPlans();
-    void saveSettings({ preservationPreference: state.preservationPreference });
+    void saveSettings({
+      preservationPreference: state.preservationPreference,
+      defaultMode: state.mode
+    });
   });
   batchTargetModeSelect.addEventListener("change", () => {
     state.batchTargetMode = batchTargetModeSelect.value as BatchTargetMode;
     renderSubmissionControls();
     refreshBatchPlans();
     void saveSettings({ batchTargetMode: state.batchTargetMode });
+  });
+
+  qualityModeAuto.addEventListener("click", () => {
+    state.qualityMode = "auto";
+    for (const item of state.batchItems) delete item.jpegQualityOverride;
+    renderQualityControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+  });
+  qualityModeManual.addEventListener("click", () => {
+    if (state.preservationPreference === "size") return;
+    state.qualityMode = "manual";
+    // Seed bulk % from selected planned average when entering manual.
+    const selectedQualities = state.batchItems
+      .filter((item) => item.selected && item.jpegQualityDisplay !== undefined)
+      .map((item) => item.jpegQualityDisplay as number);
+    if (selectedQualities.length > 0) {
+      state.jpegQuality = clampJpegQuality(
+        Math.round(selectedQualities.reduce((sum, value) => sum + value, 0) / selectedQualities.length)
+      );
+    }
+    for (const item of state.batchItems) delete item.jpegQualityOverride;
+    renderQualityControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+  });
+  const syncManualQuality = (raw: number) => {
+    if (state.preservationPreference === "size") return;
+    state.jpegQuality = clampJpegQuality(raw);
+    state.qualityMode = "manual";
+    renderQualityControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+  };
+  jpegQualitySlider.addEventListener("input", () => syncManualQuality(Number(jpegQualitySlider.value)));
+  jpegQualityInput.addEventListener("change", () => syncManualQuality(Number(jpegQualityInput.value)));
+  toggleOptionsButton.addEventListener("click", () => {
+    const open = detailOptionsSheet.hidden;
+    detailOptionsSheet.hidden = !open;
+    toggleOptionsButton.setAttribute("aria-expanded", open ? "true" : "false");
+    toggleOptionsButton.classList.toggle("is-active", open);
   });
 
   cleanupDocumentToggle.addEventListener("change", () => {
@@ -464,8 +589,22 @@ async function init(): Promise<void> {
   settingDefaultMode.addEventListener("change", () => {
     const nextMode = settingDefaultMode.value as AppState["mode"];
     state.mode = nextMode;
-    modeInputs.find((input) => input.value === nextMode)?.click();
-    void saveSettings({ defaultMode: nextMode });
+    state.preservationPreference = preservationForMode(nextMode);
+    state.actionSelections.clear();
+    if (state.preservationPreference === "size") {
+      state.qualityMode = "auto";
+      for (const item of state.batchItems) delete item.jpegQualityOverride;
+    }
+    const modeInput = modeInputs.find((input) => input.value === nextMode);
+    if (modeInput) modeInput.checked = true;
+    renderSubmissionControls();
+    renderQualityControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+    void saveSettings({
+      defaultMode: nextMode,
+      preservationPreference: state.preservationPreference
+    });
   });
   settingSaveNext.addEventListener("change", async () => {
     if (settingSaveNext.checked) {
@@ -717,7 +856,12 @@ function refreshSubmissionPlan(): void {
   const plan = createSubmissionPlan(state.report, {
     submissionLimit: state.submissionLimit,
     preservationPreference: state.preservationPreference,
-    actionOverrides: state.actionSelections
+    actionOverrides: state.actionSelections,
+    ...(state.qualityMode === "manual" &&
+    state.preservationPreference !== "preserve" &&
+    state.preservationPreference !== "size"
+      ? { jpegQuality: state.jpegQuality }
+      : {})
   });
   state.currentPlan = plan;
   state.mode = plan.mode;
@@ -936,54 +1080,68 @@ function renderSingleSummary(plan: SubmissionPlan): void {
   summaryExpected.textContent = plan.expectedSizeLabel.replace(/^약 /, "");
   summarySaving.textContent = plan.expectedSavingLabel.replace(/^최대 /, "");
   summaryPercent.textContent = `${savingPercent.toFixed(2)}%`;
-  summaryStatus.innerHTML = `<span class="success-dot" aria-hidden="true"></span>${singleStatusText(plan)}`;
+  summaryStatus.innerHTML = `<span class="success-dot" aria-hidden="true"></span>${plan.verdictLabel}`;
+  summaryStatus.classList.remove("hero-verdict--mix", "hero-verdict--bad");
   summaryResultLine.textContent = `예상 결과: ${plan.expectedSizeLabel.replace(/^약 /, "")}`;
   summaryTargetLine.textContent = `제출 기준: ${targetLabelForDisplay()}`;
   renderTargetGauge(plan);
+  renderHeroChips(plan);
+  renderReviewStrip(plan);
+  renderQualityControls(plan);
+  summaryGrid.hidden = true;
   optimizeButton.textContent = "제출 기준에 맞게 줄이기";
   renderSelectionClearButton();
   renderRunDock(plan);
 }
 
-// P2 signature: draw the submission-limit gauge — reduction achieved (fill) vs
-// reduction required to pass (limit marker) — plus a pass/over verdict pill.
+// A안: capacity gauge — fill = expected/original, tick = target/original.
 function renderTargetGauge(plan: SubmissionPlan): void {
-  targetTrackFill.style.width = `${progressForPlan(plan)}%`;
   const original = state.report?.originalSize ?? 0;
-  const overLimit = plan.targetStatus === "target-missed";
-  targetTrackFill.dataset.status = overLimit ? "over" : "pass";
+  const expectedRatio =
+    original > 0 ? Math.min(100, Math.max(0, (plan.expectedSizeBytes / original) * 100)) : 0;
+  targetTrackFill.style.width = `${expectedRatio}%`;
+  const fillStatus =
+    plan.verdict === "hard-miss" ? "hard-miss" : plan.verdict === "need-more" ? "over" : "pass";
+  targetTrackFill.dataset.status = fillStatus;
+  targetRow.dataset.verdict = plan.verdict;
 
   if (plan.targetBytes && plan.targetBytes > 0 && original > 0) {
-    const requiredReductionPercent = Math.min(100, Math.max(0, ((original - plan.targetBytes) / original) * 100));
-    targetTrackLimit.style.left = `${requiredReductionPercent}%`;
+    const targetPercent = Math.min(100, Math.max(0, (plan.targetBytes / original) * 100));
+    targetTrackLimit.style.left = `${targetPercent}%`;
     targetTrackLimit.hidden = false;
+    gaugeMidLabel.style.left = `${targetPercent}%`;
   } else {
     targetTrackLimit.hidden = true;
+    gaugeMidLabel.style.left = "50%";
   }
 
-  if (plan.targetStatus === "no-target") {
+  if (plan.verdict === "no-target") {
     summaryVerdict.hidden = true;
     delete summaryVerdict.dataset.status;
+    summaryVerdictDetail.textContent = "제출 기준이 없습니다.";
     return;
   }
-  const expectedLabel = plan.expectedSizeLabel.replace(/^약 /, "");
-  if (overLimit) {
-    const over = plan.targetBytes ? Math.max(0, plan.expectedSizeBytes - plan.targetBytes) : 0;
-    summaryVerdict.textContent = over > 0 ? `초과 +${formatBytes(over)}` : "기준 초과";
-    summaryVerdict.dataset.status = "over";
-  } else {
-    summaryVerdict.textContent = `통과 ${expectedLabel}`;
-    summaryVerdict.dataset.status = "pass";
-  }
+  summaryVerdict.textContent = plan.verdictLabel;
+  summaryVerdict.dataset.status = plan.verdict === "pass" ? "pass" : plan.verdict;
   summaryVerdict.hidden = false;
+  summaryVerdictDetail.textContent = plan.verdictDetail;
 }
 
 function clearTargetGauge(): void {
   targetTrackFill.style.width = "0%";
   delete targetTrackFill.dataset.status;
+  delete targetRow.dataset.verdict;
   targetTrackLimit.hidden = true;
+  gaugeStartLabel.textContent = "0";
+  gaugeMidLabel.textContent = "40MB";
+  gaugeMidLabel.style.left = "50%";
+  gaugeEndLabel.textContent = "원본";
   summaryVerdict.hidden = true;
   delete summaryVerdict.dataset.status;
+  summaryVerdictDetail.textContent = "제출 기준 대비 예상 용량을 보여줍니다.";
+  heroChips.hidden = true;
+  reviewStrip.hidden = true;
+  summaryGrid.hidden = true;
 }
 
 function renderBatchSummary(): void {
@@ -996,36 +1154,170 @@ function renderBatchSummary(): void {
   const analyzed = state.batchItems.filter(
     (item) => item.originalSizeBytes !== undefined && item.expectedSizeBytes !== undefined
   );
-  const originalTotal = analyzed.reduce((sum, item) => sum + (item.originalSizeBytes ?? 0), 0);
-  const expectedTotal = analyzed.reduce((sum, item) => sum + (item.expectedSizeBytes ?? item.originalSizeBytes ?? 0), 0);
+  // Hero/pass-rate always describe files that will actually run (selected).
+  const summaryItems = analyzed.filter((item) => item.selected !== false);
+  const originalTotal = summaryItems.reduce((sum, item) => sum + (item.originalSizeBytes ?? 0), 0);
+  const expectedTotal = summaryItems.reduce((sum, item) => sum + (item.expectedSizeBytes ?? item.originalSizeBytes ?? 0), 0);
   const saving = Math.max(0, originalTotal - expectedTotal);
   const savingPercent = originalTotal > 0 ? (saving / originalTotal) * 100 : 0;
-  const passed = analyzed.filter((item) => item.targetStatusLabel !== "목표 미달 가능").length;
-  const warning = Math.max(0, analyzed.length - passed);
+  const passed = summaryItems.filter((item) => item.targetStatusLabel === "제출 가능").length;
+  const needMore = summaryItems.filter((item) => item.targetStatusLabel === "더 압축 필요").length;
+  const hardMiss = summaryItems.filter((item) => item.targetStatusLabel === "기준 미달").length;
+  const warning = needMore + hardMiss;
+  const plannedCount = summaryItems.length;
   const batchTargetBytes = resolveBatchTargetBytes();
   const targetModeLabel = state.batchTargetMode === "aggregate" ? "전체 합계 기준" : "파일별 기준";
   const targetStatusSummary = state.batchTargetMode === "aggregate"
     ? aggregateTargetStatusText(originalTotal, expectedTotal, batchTargetBytes)
     : fileTargetStatusText(passed, warning, batchTargetBytes);
-  summaryOriginal.textContent = analyzed.length ? formatBytes(originalTotal) : "-";
-  summaryExpected.textContent = analyzed.length ? formatBytes(expectedTotal) : "-";
-  summarySaving.textContent = analyzed.length ? formatBytes(saving) : "-";
-  summaryPercent.textContent = analyzed.length ? `${savingPercent.toFixed(1)}%` : "-";
-  summaryStatus.innerHTML = `<span class="success-dot" aria-hidden="true"></span>${
-    analyzed.length ? `${targetModeLabel} · ${targetStatusSummary} · 통과 ${passed}개 · 주의 ${warning}개` : "파일을 분석하는 중입니다."
-  }`;
-  summaryResultLine.textContent = analyzed.length ? `예상 결과: ${formatBytes(expectedTotal)}` : "예상 결과: -";
+  // Aggregate hero must mirror the summed-total status — not per-file allocation pass/fail.
+  let mixVerdict = "선택·분석 대기";
+  let mixClass: "pass" | "need-more" | "hard-miss" | "mix" = "pass";
+  if (plannedCount === 0) {
+    mixVerdict = "선택·분석 대기";
+  } else if (state.batchTargetMode === "aggregate") {
+    mixVerdict = targetStatusSummary;
+    mixClass = targetStatusSummary === "전체 목표 주의 필요" ? "mix" : "pass";
+  } else if (!needMore && !hardMiss) {
+    mixVerdict = `${passed}통과`;
+    mixClass = "pass";
+  } else if (hardMiss > 0 && passed === 0 && needMore === 0) {
+    mixVerdict = `${hardMiss}미달`;
+    mixClass = "hard-miss";
+  } else {
+    mixVerdict = `${passed}통과`;
+    if (needMore) mixVerdict += ` · ${needMore}더압축`;
+    if (hardMiss) mixVerdict += ` · ${hardMiss}미달`;
+    mixClass = "mix";
+  }
+  summaryOriginal.textContent = summaryItems.length ? formatBytes(originalTotal) : "-";
+  summaryExpected.textContent = summaryItems.length ? formatBytes(expectedTotal) : "-";
+  summarySaving.textContent = summaryItems.length ? formatBytes(saving) : "-";
+  summaryPercent.textContent = summaryItems.length ? `${savingPercent.toFixed(1)}%` : "-";
+  summaryStatus.innerHTML = `<span class="success-dot" aria-hidden="true"></span>${mixVerdict}`;
+  summaryStatus.classList.toggle("hero-verdict--mix", mixClass === "mix");
+  summaryStatus.classList.toggle("hero-verdict--bad", mixClass === "hard-miss");
+  summaryResultLine.textContent = summaryItems.length
+    ? `${targetModeLabel} · ${targetStatusSummary}`
+    : "예상 결과: -";
   summaryTargetLine.textContent = batchTargetSummaryLine(batchTargetBytes);
-  targetTrackFill.style.width = `${Math.min(100, Math.max(0, savingPercent))}%`;
-  optimizeButton.textContent = "제출 기준에 맞게 일괄 최적화";
-  optimizeButton.disabled = state.batchAnalyzing || !state.batchItems.some((item) => item.status === "pending");
+  summaryVerdict.textContent = mixVerdict;
+  summaryVerdict.dataset.status =
+    mixClass === "pass" ? "pass" : mixClass === "hard-miss" ? "hard-miss" : "need-more";
+  summaryVerdict.hidden = plannedCount === 0;
+  const aggregatePass =
+    state.batchTargetMode === "aggregate" &&
+    Boolean(batchTargetBytes) &&
+    expectedTotal < (batchTargetBytes as number);
+  summaryVerdictDetail.textContent =
+    plannedCount === 0
+      ? "선택된 분석 파일이 없습니다."
+      : state.batchTargetMode === "aggregate"
+        ? aggregatePass || !batchTargetBytes
+          ? `합계 ${formatBytes(expectedTotal)}`
+          : `합계 초과 · 파일 ${passed}/${plannedCount}`
+        : `통과 ${passed}/${plannedCount}`;
+  const passRate =
+    plannedCount === 0
+      ? 0
+      : state.batchTargetMode === "aggregate"
+        ? !batchTargetBytes || originalTotal < batchTargetBytes || expectedTotal < batchTargetBytes
+          ? 100
+          : Math.min(99, Math.round((batchTargetBytes / Math.max(expectedTotal, 1)) * 100))
+        : (passed / plannedCount) * 100;
+  targetTrackFill.style.width = `${passRate}%`;
+  targetTrackFill.dataset.status =
+    state.batchTargetMode === "aggregate"
+      ? mixClass === "mix"
+        ? "over"
+        : "pass"
+      : hardMiss > 0
+        ? "hard-miss"
+        : warning > 0
+          ? "over"
+          : "pass";
+  targetTrackLimit.style.left = `${passRate}%`;
+  targetTrackLimit.hidden = plannedCount === 0;
+  gaugeStartLabel.textContent = state.batchTargetMode === "aggregate" ? "합계" : "통과율";
+  gaugeMidLabel.textContent =
+    plannedCount === 0
+      ? state.batchTargetMode === "aggregate"
+        ? "합계"
+        : "통과율"
+      : state.batchTargetMode === "aggregate"
+        ? `${Math.round(passRate)}%`
+        : `${passed}/${plannedCount}`;
+  gaugeMidLabel.style.left = `${passRate}%`;
+  gaugeEndLabel.textContent = "";
+  summaryGrid.hidden = false;
+  heroChips.hidden = false;
+  chipPolicy.textContent =
+    state.preservationPreference === "size"
+      ? "최대 압축"
+      : state.batchTargetMode === "aggregate"
+        ? "합계 배분 맞춤"
+        : "파일별 목표 맞춤";
+  chipPolicy.className = `hero-chip ${
+    state.preservationPreference === "size" ? "hero-chip--max" : "hero-chip--fit"
+  }`;
+  chipLimit.textContent = state.batchTargetMode === "aggregate" ? "체크 시 배분·품질% 갱신" : "체크=실행 대상";
+  chipLimit.className = "hero-chip hero-chip--soft";
+  const qualities = summaryItems
+    .map((item) => item.jpegQualityDisplay)
+    .filter((value): value is number => value !== undefined);
+  const avgQ = qualities.length
+    ? Math.round(qualities.reduce((sum, value) => sum + value, 0) / qualities.length)
+    : DEFAULT_JPEG_QUALITY;
+  chipQuality.textContent = `평균 예정 ${avgQ}%`;
+  policyLive.textContent = `선택 ${state.batchItems.filter((item) => item.selected).length} · 평균 예정 ${avgQ}%`;
+  renderBatchReviewStrip(summaryItems);
+  optimizeButton.textContent = "선택 파일 일괄 최적화";
+  optimizeButton.disabled =
+    state.batchAnalyzing || !state.batchItems.some((item) => item.selected !== false && item.status === "pending");
+  renderQualityControls();
   renderRunDock();
   renderBatchPlanSummary();
   renderBatchResultPanel();
 }
 
+function renderBatchReviewStrip(
+  summaryItems: Array<{ report?: OptimizationReport | null; targetStatusLabel?: string }>
+): void {
+  if (summaryItems.length === 0) {
+    reviewStrip.hidden = true;
+    return;
+  }
+  let near = 0;
+  let fonts = 0;
+  let ole = 0;
+  for (const item of summaryItems) {
+    const report = item.report;
+    if (!report) continue;
+    near += report.nearDuplicateImages?.length ?? 0;
+    fonts += (report.resourceDiagnostics ?? []).filter((entry) => entry.kind === "font").length;
+    ole += (report.resourceDiagnostics ?? []).filter((entry) => entry.kind === "ole").length;
+  }
+  const hardMiss = summaryItems.some((item) => item.targetStatusLabel === "기준 미달");
+  reviewStripTitle.textContent = hardMiss
+    ? "최대 압축으로도 부족"
+    : state.qualityMode === "auto"
+      ? "품질 %는 자동"
+      : "품질 %는 일괄 수동";
+  reviewStripDetail.textContent = hardMiss
+    ? "폰트/유사 병합·원본 이미지 교체 등 수동 검토가 필요합니다."
+    : "세부 옵션에서 작업만 on/off · 유사 병합 기본 끔";
+  const chips: string[] = [];
+  if (fonts > 0) chips.push(`폰트 ${fonts}`);
+  if (near > 0) chips.push(`유사 ${near}`);
+  if (ole > 0) chips.push(`OLE ${ole}`);
+  reviewStripChips.innerHTML = chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join("");
+  reviewStrip.hidden = false;
+}
+
 function createBatchPlanSummary(): BatchPlanSummary | undefined {
-  const analyzedItems = state.batchItems.filter((item) => item.report);
+  const analyzedItems = state.batchItems.filter(
+    (item) => item.report && item.selected !== false
+  );
   if (analyzedItems.length === 0) return undefined;
   const rowMap = new Map<SubmissionActionId, DisplayPlanRow & { savingBytes: number; count: number }>();
   let expectedSizeBytes = 0;
@@ -1036,10 +1328,31 @@ function createBatchPlanSummary(): BatchPlanSummary | undefined {
 
   for (const item of analyzedItems) {
     if (!item.report) continue;
+    // Finished rows: use actual optimize outcome already stored on the item.
+    if (item.status === "done") {
+      expectedSizeBytes += item.expectedSizeBytes ?? item.report.optimizedSize ?? 0;
+      expectedSavingBytes += item.savedBytes ?? 0;
+      if (
+        item.targetStatusLabel === "제출 가능" ||
+        item.targetStatusLabel === "목표 제한 없음"
+      ) {
+        metCount += 1;
+      } else if (item.targetStatusLabel) {
+        warningCount += 1;
+      }
+      continue;
+    }
+    if (item.status === "failed" || item.status === "cancelled") continue;
+    const jpegQuality =
+      state.preservationPreference === "size" || state.preservationPreference === "preserve"
+        ? undefined
+        : item.jpegQualityOverride ??
+          (state.qualityMode === "manual" ? state.jpegQuality : undefined);
     const plan = createSubmissionPlan(item.report, {
       submissionLimit: batchSubmissionLimitForItem(item),
       preservationPreference: state.preservationPreference,
-      actionOverrides: state.actionSelections
+      actionOverrides: state.actionSelections,
+      ...(jpegQuality !== undefined ? { jpegQuality } : {})
     });
     expectedSizeBytes += plan.expectedSizeBytes;
     expectedSavingBytes += Math.max(0, item.report.originalSize - plan.expectedSizeBytes);
@@ -1136,15 +1449,7 @@ function targetLabelForDisplay(): string {
 
 function resolveTargetBytesForDisplay(): number | undefined {
   if (state.currentPlan?.targetBytes) return state.currentPlan.targetBytes;
-  if (state.submissionLimit.id === "mb5") return 5 * 1024 * 1024;
-  if (state.submissionLimit.id === "mb10") return 10 * 1024 * 1024;
-  if (state.submissionLimit.id === "mb20") return 20 * 1024 * 1024;
-  if (state.submissionLimit.id === "mb30") return 30 * 1024 * 1024;
-  if (state.submissionLimit.id === "mb41") return 41 * 1024 * 1024;
-  if (state.submissionLimit.id === "mb50") return 50 * 1024 * 1024;
-  if (state.submissionLimit.id === "mb100") return 100 * 1024 * 1024;
-  if (state.submissionLimit.id === "custom") return state.submissionLimit.customBytes;
-  return undefined;
+  return resolveSubmissionLimitBytes(state.submissionLimit);
 }
 
 function resolveBatchTargetBytes(): number | undefined {
@@ -1164,8 +1469,8 @@ function aggregateTargetStatusText(
   targetBytes: number | undefined
 ): string {
   if (!targetBytes) return "전체 목표 제한 없음";
-  if (originalTotal <= targetBytes) return "이미 전체 목표 이하";
-  if (expectedTotal <= targetBytes) return "전체 목표 달성 예상";
+  if (originalTotal < targetBytes) return "이미 전체 목표 미만";
+  if (expectedTotal < targetBytes) return "전체 목표 달성 예상";
   return "전체 목표 주의 필요";
 }
 
@@ -1186,14 +1491,21 @@ function batchTargetBytesForItem(item: BatchItem): number | undefined {
   const batchTargetBytes = resolveBatchTargetBytes();
   if (!batchTargetBytes || !item.originalSizeBytes) return undefined;
   if (state.batchTargetMode === "per-file") return batchTargetBytes;
-  const totalOriginalSize = state.batchItems.reduce((sum, current) => sum + (current.originalSizeBytes ?? 0), 0);
-  if (totalOriginalSize <= 0) return undefined;
-  return Math.max(1, Math.floor((batchTargetBytes * item.originalSizeBytes) / totalOriginalSize));
+  if (!item.selected) return undefined;
+  const selectedOriginalTotal = state.batchItems
+    .filter((current) => current.selected && current.originalSizeBytes)
+    .reduce((sum, current) => sum + (current.originalSizeBytes ?? 0), 0);
+  return allocateAggregateTargetBytes({
+    batchTargetBytes,
+    itemOriginalBytes: item.originalSizeBytes,
+    selectedOriginalTotal
+  });
 }
 
 function batchTargetLabelForItem(item: BatchItem): string {
+  if (state.batchTargetMode === "aggregate" && !item.selected) return "선택 제외";
   const targetBytes = batchTargetBytesForItem(item);
-  return targetBytes ? `${formatBytes(targetBytes)} 이하` : "제한 없음";
+  return targetBytes ? `${formatBytes(targetBytes)} 미만` : "제한 없음";
 }
 
 function batchAllocatedTargetLabelForItem(item: BatchItem): string | undefined {
@@ -1214,10 +1526,220 @@ function progressForPlan(plan: SubmissionPlan): number {
 }
 
 function singleStatusText(plan: SubmissionPlan): string {
-  if (plan.targetStatus === "target-met") return "제출 기준 충족 가능";
-  if (plan.targetStatus === "already-under-target") return "이미 제출 기준 이하";
-  if (plan.targetStatus === "target-missed") return "제출 기준 주의 필요";
-  return "목표 제한 없음";
+  return plan.verdictLabel;
+}
+
+function clampJpegQuality(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_JPEG_QUALITY;
+  return Math.max(JPEG_QUALITY_FLOOR, Math.min(JPEG_QUALITY_CEILING, Math.round(value)));
+}
+
+function jpegQualityForOptimize(item?: BatchItem): number | undefined {
+  // Aggressive always runs at the engine floor — never forward a manual %.
+  if (
+    state.mode === "safe" ||
+    state.preservationPreference === "preserve" ||
+    state.preservationPreference === "size"
+  ) {
+    return undefined;
+  }
+  if (item?.jpegQualityOverride !== undefined) return clampJpegQuality(item.jpegQualityOverride);
+  if (state.qualityMode === "manual") return clampJpegQuality(state.jpegQuality);
+  return undefined;
+}
+
+function renderQualityControls(plan?: SubmissionPlan): void {
+  const showQuality = state.preservationPreference !== "preserve" && state.mode !== "safe";
+  qualityControls.hidden = !showQuality;
+  if (!showQuality) {
+    batchQualityAuto.hidden = true;
+    return;
+  }
+
+  const isBatch = document.body.dataset.view === "batch";
+  const maxMode = state.preservationPreference === "size";
+  const effectiveQualityMode = maxMode ? "auto" : state.qualityMode;
+  qualityModeAuto.setAttribute("aria-pressed", effectiveQualityMode === "auto" ? "true" : "false");
+  qualityModeManual.setAttribute("aria-pressed", effectiveQualityMode === "manual" ? "true" : "false");
+  qualityModeAuto.textContent = isBatch ? "자동" : "자동(목표)";
+  qualityModeManual.textContent = isBatch ? "일괄 수동" : "수동";
+  qualityModeManual.disabled = maxMode;
+  qualityModeAuto.disabled = maxMode;
+  qualityHeadLabel.textContent = maxMode
+    ? "JPEG 품질 · 최대 압축"
+    : isBatch
+      ? effectiveQualityMode === "auto"
+        ? "품질 · 파일별 자동"
+        : "일괄 품질 (선택 파일)"
+      : "JPEG 품질";
+  jpegQualitySlider.value = String(state.jpegQuality);
+  jpegQualityInput.value = String(state.jpegQuality);
+
+  const showManual = !maxMode && effectiveQualityMode === "manual";
+  const showFloorReadOnly = maxMode;
+  const showPlannedReadOnly =
+    !maxMode && !isBatch && effectiveQualityMode === "auto" && plan?.plannedJpegQuality !== undefined;
+  qualityManual.hidden = !(showManual || showPlannedReadOnly || showFloorReadOnly);
+  jpegQualitySlider.disabled = !showManual;
+  jpegQualityInput.disabled = !showManual;
+  if (showFloorReadOnly) {
+    jpegQualitySlider.value = String(JPEG_QUALITY_FLOOR);
+    jpegQualityInput.value = String(JPEG_QUALITY_FLOOR);
+  } else if (showPlannedReadOnly && plan?.plannedJpegQuality !== undefined) {
+    jpegQualitySlider.value = String(plan.plannedJpegQuality);
+    jpegQualityInput.value = String(plan.plannedJpegQuality);
+  }
+  batchQualityAuto.hidden = !(isBatch && effectiveQualityMode === "auto" && !maxMode);
+  if (isBatch && effectiveQualityMode === "auto") {
+    const qualities = state.batchItems
+      .filter((item) => item.selected && item.report && item.jpegQualityDisplay !== undefined)
+      .map((item) => item.jpegQualityDisplay as number);
+    const avg =
+      qualities.length > 0
+        ? Math.round(qualities.reduce((sum, value) => sum + value, 0) / qualities.length)
+        : plan?.plannedJpegQuality ?? (maxMode ? JPEG_QUALITY_FLOOR : DEFAULT_JPEG_QUALITY);
+    batchQualityAvg.textContent = `${avg}%`;
+  }
+
+  if (maxMode) {
+    qualityPlannedLabel.textContent = `최대 압축 · ${JPEG_QUALITY_FLOOR}%`;
+    qualityHint.textContent = "용량 우선: 제출 기준과 무관하게 하한 품질까지 압축합니다. 수동 %는 사용할 수 없습니다.";
+  } else if (effectiveQualityMode === "manual") {
+    qualityPlannedLabel.textContent = `직접 지정 · ${state.jpegQuality}%`;
+    qualityHint.textContent = isBatch
+      ? "슬라이더·숫자는 선택된 모든 파일에 같은 %를 넣습니다. 행에서 숫자를 바꾸면 그 파일만 덮어씁니다."
+      : plan?.targetBytes
+        ? `수동 ${state.jpegQuality}%. 기준을 넘으면 「더 압축 필요」(하한 품질까지 여지 있을 때) 또는 「기준 미달」(여지 없을 때).`
+        : "지정한 JPEG 품질로 압축합니다.";
+  } else {
+    const planned = plan?.plannedJpegQuality;
+    qualityPlannedLabel.textContent =
+      planned !== undefined ? `자동 · 예정 ${planned}%` : "자동 · 목표에 맞춤";
+    qualityHint.textContent = isBatch
+      ? state.batchTargetMode === "aggregate"
+        ? "상단 슬라이더 없음. 합계 배분 목표마다 파일별 품질을 따로 탐색합니다."
+        : "상단 슬라이더 없음. 각 파일이 제출 기준에 맞춰 품질을 따로 정합니다."
+      : plan?.targetBytes
+        ? `자동: 목표에 맞춰 품질 이분 탐색 → 예정 ${planned ?? DEFAULT_JPEG_QUALITY}%. 하한 품질까지 해도 안 되면 기준 미달.`
+        : "목표가 없으면 기본 균형 품질을 사용합니다.";
+  }
+}
+
+function renderHeroChips(plan?: SubmissionPlan): void {
+  if (!plan) {
+    heroChips.hidden = true;
+    return;
+  }
+  const maxMode = state.preservationPreference === "size";
+  const policy =
+    maxMode ? "최대 압축" : state.qualityMode === "manual" ? "품질 수동" : "목표 맞춤";
+  chipPolicy.textContent = policy;
+  chipPolicy.className = `hero-chip ${maxMode || state.qualityMode === "manual" ? "hero-chip--max" : "hero-chip--fit"}`;
+  chipLimit.textContent = plan.targetBytes
+    ? `개별 · ${Math.round(plan.targetBytes / (1024 * 1024))}MB`
+    : "제한 없음";
+  const q =
+    state.qualityMode === "manual"
+      ? state.jpegQuality
+      : plan.plannedJpegQuality ?? (maxMode ? JPEG_QUALITY_FLOOR : DEFAULT_JPEG_QUALITY);
+  const atFloor = maxMode || (typeof q === "number" && q <= JPEG_QUALITY_FLOOR);
+  chipQuality.textContent = `${q}%${atFloor ? " · 하한" : ""}`;
+  heroChips.hidden = false;
+  policyLive.textContent = `${state.qualityMode === "manual" ? "수동" : "자동"} · ${q}%`;
+
+  const original = state.report?.originalSize ?? 0;
+  gaugeStartLabel.textContent = "0";
+  gaugeMidLabel.textContent = plan.targetBytes
+    ? `${Math.round(plan.targetBytes / (1024 * 1024))}MB`
+    : "목표";
+  gaugeEndLabel.textContent = original > 0 ? formatBytes(original) : "원본";
+}
+
+function renderReviewStrip(plan?: SubmissionPlan): void {
+  if (!plan || !state.report) {
+    reviewStrip.hidden = true;
+    return;
+  }
+  const near = state.report.nearDuplicateImages?.length ?? 0;
+  const fonts = (state.report.resourceDiagnostics ?? []).filter((item) => item.kind === "font").length;
+  const ole = (state.report.resourceDiagnostics ?? []).filter((item) => item.kind === "ole").length;
+  const reviewNotes = plan.planNotes.filter((note) => note.kind === "review");
+  if (near === 0 && fonts === 0 && ole === 0 && reviewNotes.length === 0) {
+    reviewStrip.hidden = true;
+    return;
+  }
+  const hardMiss = plan.verdict === "hard-miss";
+  reviewStripTitle.textContent = hardMiss ? "최대 압축으로도 부족" : "자동으로 건드리지 않음";
+  reviewStripDetail.textContent = hardMiss
+    ? "폰트/유사 병합·원본 이미지 교체 등 수동 검토가 필요합니다."
+    : "폰트·유사 이미지는 품질 계획에서 제외됩니다.";
+  const chips: string[] = [];
+  if (fonts > 0) chips.push(`폰트 ${fonts}`);
+  if (near > 0) chips.push(`유사 ${near}`);
+  if (ole > 0) chips.push(`OLE ${ole}`);
+  for (const note of reviewNotes) {
+    if (note.label && !chips.includes(note.label)) chips.push(note.label);
+  }
+  reviewStripChips.innerHTML = chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join("");
+  reviewStrip.hidden = false;
+}
+
+function handleBatchQualityEditClick(button: HTMLButtonElement): void {
+  if (state.batchRunning || state.batchAnalyzing) return;
+  if (state.preservationPreference === "size" || state.preservationPreference === "preserve") return;
+  const index = Number(button.dataset.batchQualityEdit);
+  const item = Number.isInteger(index) ? state.batchItems[index] : undefined;
+  if (!item || !item.report) return;
+  const current = item.jpegQualityDisplay ?? DEFAULT_JPEG_QUALITY;
+  item.jpegQualityOverride = clampJpegQuality(current);
+  refreshBatchPlans();
+  requestAnimationFrame(() => {
+    const input = batchList.querySelector<HTMLInputElement>(
+      `input.batch-quality-input[data-batch-quality-index="${index}"]`
+    );
+    input?.focus();
+    input?.select();
+  });
+}
+
+function handleBatchQualityInput(input: HTMLInputElement): void {
+  if (state.batchRunning || state.batchAnalyzing) return;
+  if (state.preservationPreference === "size" || state.preservationPreference === "preserve") return;
+  const index = Number(input.dataset.batchQualityIndex);
+  const item = Number.isInteger(index) ? state.batchItems[index] : undefined;
+  if (!item || !item.report) return;
+  const raw = input.value.trim();
+  if (raw === "") {
+    delete item.jpegQualityOverride;
+  } else {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      setStatus("JPEG 품질은 60–95 사이 숫자여야 합니다.");
+      refreshBatchPlans();
+      return;
+    }
+    item.jpegQualityOverride = clampJpegQuality(value);
+  }
+  refreshBatchPlans();
+}
+
+function qualityDisplayForBatchItem(item: BatchItem, plan: SubmissionPlan): number | undefined {
+  if (state.preservationPreference === "preserve") return undefined;
+  if (state.preservationPreference === "size") return JPEG_QUALITY_FLOOR;
+  if (item.jpegQualityOverride !== undefined) return item.jpegQualityOverride;
+  if (state.qualityMode === "manual") return state.jpegQuality;
+  return plan.plannedJpegQuality;
+}
+
+function qualityLabelForBatchItem(item: BatchItem, plan: SubmissionPlan): string {
+  const display = qualityDisplayForBatchItem(item, plan);
+  if (display === undefined) return "-";
+  if (state.preservationPreference === "size") return `${display}% · 하한`;
+  if (item.jpegQualityOverride !== undefined || state.qualityMode === "manual") return `${display}%`;
+  if (state.qualityMode === "auto" && state.preservationPreference === "recommended" && plan.verdict === "need-more") {
+    return `~${display}%↓`;
+  }
+  return `${display}%`;
 }
 
 async function loadFile(path: string): Promise<void> {
@@ -1270,7 +1792,7 @@ async function analyzeFile(path: string): Promise<void> {
     renderProgress(18, "파일을 불러와 분석을 준비하는 중입니다");
     const response = await window.hwpxOptimizer.analyze(path);
     if (runId !== analysisSequence || state.filePath !== path) return;
-    renderProgress(82, "예상 용량과 제출 기준 충족 여부를 계산하는 중입니다");
+    renderProgress(82, "문서 구조 · 이미지 · 목표 맞춤 품질 추정…");
     state.report = response.report;
     state.actionSelections.clear();
     renderAnalysis(response.report);
@@ -1309,7 +1831,8 @@ async function optimizeCurrentFile(): Promise<void> {
       outputDirectory: state.outputDirectory,
       outputMode: "single",
       actions: selectedActionsForOptimize(),
-      targetBytes: state.currentPlan?.targetBytes ?? resolveSubmissionLimitBytes(state.submissionLimit)
+      targetBytes: state.currentPlan?.targetBytes ?? resolveSubmissionLimitBytes(state.submissionLimit),
+      ...(jpegQualityForOptimize() !== undefined ? { jpegQuality: jpegQualityForOptimize() } : {})
     });
     if (state.filePath !== requestFilePath) return;
     state.result = response;
@@ -1594,7 +2117,7 @@ function renderVerificationFailure(error: unknown): void {
 
 function targetStatusText(status: OptimizationReport["targetStatus"]): string {
   if (status === "met") return "목표 달성";
-  if (status === "already-under-target") return "이미 목표 이하";
+  if (status === "already-under-target") return "이미 목표 미만";
   if (status === "missed") return "목표 미달 가능 / 추가 수동 확인 필요";
   return "목표 확인 필요";
 }
@@ -1959,13 +2482,22 @@ async function analyzeBatchItems(): Promise<void> {
         const plan = createSubmissionPlan(response.report, {
           submissionLimit: batchSubmissionLimitForItem(item),
           preservationPreference: state.preservationPreference,
-          actionOverrides: state.actionSelections
+          actionOverrides: state.actionSelections,
+          ...(state.qualityMode === "manual" && state.preservationPreference !== "preserve"
+            ? { jpegQuality: state.jpegQuality }
+            : {})
         });
         item.expectedSizeBytes = plan.expectedSizeBytes;
         item.originalSizeLabel = plan.originalSizeLabel;
-        item.expectedSizeLabel = plan.expectedSizeLabel;
+        item.expectedSizeLabel = plan.expectedSizeLabel.replace(/^약 /, "");
         item.targetLabel = batchTargetLabelForItem(item);
-        item.targetStatusLabel = plan.targetStatusLabel;
+        item.targetStatusLabel = plan.verdictLabel;
+        item.qualityLabel = qualityLabelForBatchItem(item, plan);
+        item.jpegQualityDisplay = qualityDisplayForBatchItem(item, plan);
+        item.qualityEditable =
+          state.preservationPreference !== "size" &&
+          state.preservationPreference !== "preserve" &&
+          (state.qualityMode === "manual" || item.jpegQualityOverride !== undefined);
         item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item);
         analyzedCount += 1;
         renderProgress(
@@ -2005,15 +2537,29 @@ function refreshBatchPlans(): void {
 function refreshBatchPlanItems(): void {
   for (const item of state.batchItems) {
     if (!item.report) continue;
+    // Terminal rows keep the actual optimize outcome — do not re-estimate from the result report.
+    if (item.status === "done" || item.status === "failed" || item.status === "cancelled") continue;
+    const jpegQuality =
+      state.preservationPreference === "size" || state.preservationPreference === "preserve"
+        ? undefined
+        : item.jpegQualityOverride ??
+          (state.qualityMode === "manual" ? state.jpegQuality : undefined);
     const plan = createSubmissionPlan(item.report, {
       submissionLimit: batchSubmissionLimitForItem(item),
       preservationPreference: state.preservationPreference,
-      actionOverrides: state.actionSelections
+      actionOverrides: state.actionSelections,
+      ...(jpegQuality !== undefined ? { jpegQuality } : {})
     });
     item.expectedSizeBytes = plan.expectedSizeBytes;
-    item.expectedSizeLabel = plan.expectedSizeLabel;
+    item.expectedSizeLabel = plan.expectedSizeLabel.replace(/^약 /, "");
     item.targetLabel = batchTargetLabelForItem(item);
-    item.targetStatusLabel = plan.targetStatusLabel;
+    item.targetStatusLabel = plan.verdictLabel;
+    item.qualityLabel = qualityLabelForBatchItem(item, plan);
+    item.jpegQualityDisplay = qualityDisplayForBatchItem(item, plan);
+    item.qualityEditable =
+      state.preservationPreference !== "size" &&
+      state.preservationPreference !== "preserve" &&
+      (state.qualityMode === "manual" || item.jpegQualityOverride !== undefined);
     item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item);
   }
 }
@@ -2085,13 +2631,15 @@ async function runBatch(): Promise<void> {
             actionOverrides: state.actionSelections
           })
         : undefined;
+      const jpegQuality = jpegQualityForOptimize(item);
       const response = await window.hwpxOptimizer.optimize({
         filePath: item.path,
         mode: plan?.mode ?? modeForPreservation(state.preservationPreference),
         outputDirectory: state.outputDirectory,
         outputMode: "batch",
         actions: selectedActionsForPlan(plan),
-        targetBytes: batchTargetBytesForItem(item)
+        targetBytes: batchTargetBytesForItem(item),
+        ...(jpegQuality !== undefined ? { jpegQuality } : {})
       });
       Object.assign(item, applyOptimizationResultToBatchItem(item, response));
     } catch (error) {
@@ -2112,6 +2660,7 @@ async function runBatch(): Promise<void> {
   const batchReportPath = await saveBatchSummaryReport();
   state.batchReportPath = batchReportPath;
   renderBatchList();
+  renderBatchResultPanel();
   const completed = state.batchItems.filter((item) => item.status === "done").length;
   const failed = state.batchItems.filter((item) => item.status === "failed").length;
   setStatus(

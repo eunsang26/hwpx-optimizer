@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAnalysisReport } from "../src/report.js";
+import { createAnalysisReport, createOptimizationReport } from "../src/report.js";
 import type { OptimizationOpportunity, PackageAnalysis } from "../src/types.js";
 
 describe("optimization reports", () => {
@@ -46,6 +46,32 @@ describe("optimization reports", () => {
     expect(report.targetMissReason).toBeUndefined();
     expect(report.nearDuplicateImages).toHaveLength(1);
     expect(report.resourceDiagnostics).toHaveLength(1);
+  });
+
+  it("marks already-under only when the optimized output also stays under the target", () => {
+    const under = createOptimizationReport({
+      analysis: analysisFixture,
+      originalSize: 8_000,
+      optimizedSize: 7_500,
+      planned: [],
+      applied: [],
+      skipped: [],
+      targetBytes: 10_000
+    });
+    expect(under.targetStatus).toBe("already-under-target");
+
+    const grewPastTarget = createOptimizationReport({
+      analysis: analysisFixture,
+      originalSize: 8_000,
+      optimizedSize: 12_000,
+      planned: [],
+      applied: [],
+      skipped: [],
+      targetBytes: 10_000,
+      targetMissReason: "Candidate grew past the submission target."
+    });
+    expect(grewPastTarget.targetStatus).toBe("missed");
+    expect(grewPastTarget.targetMissReason).toContain("grew past");
   });
 
   it("groups opportunities by action and sorts the largest savings first", () => {

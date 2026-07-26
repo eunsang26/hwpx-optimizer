@@ -146,7 +146,7 @@ HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run release:verify-cli-portable-smoke
 
 Root-level `sample*.hwpx` files stay local-only and are not uploaded to CI. A green Linux gate alone is insufficient for a Windows support claim once the workflow ships.
 
-The gate uses `npm audit --audit-level=moderate`, matching `release:preflight`. After the sharp 0.35 upgrade, the prior high-severity sharp/libvips advisory is cleared; a residual low-severity esbuild dev-server advisory may remain and does not block the gate.
+The gate uses `npm run release:audit` (`scripts/release-audit.mjs`), matching `release:preflight`. That check requires a clean **production** dependency tree (`npm audit --omit=dev --audit-level=moderate`). Packaging/dev advisories under `electron-builder` / `@electron/asar` / `esbuild` may still appear in a full `npm audit` and are documented in [Known Limitations](KNOWN_LIMITATIONS.md); they do not block the gate because they are not shipped in the optimized HWPX runtime.
 
 GitHub Actions runs the CI-safe Linux gate on `ubuntu-latest` (`release:check:cli-portable:ci`) and the Windows smoke job on `windows-latest` via `.github/workflows/cli-portable-release.yml`. Tag builds and manual runs with `upload_artifact: true` upload the ZIP, zip-only checksum file, shared `release-manifest.json`, `SHA256SUMS.txt`, and `RELEASE_NOTICE_<version>.txt`.
 

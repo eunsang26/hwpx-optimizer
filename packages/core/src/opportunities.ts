@@ -1,5 +1,6 @@
 import sharp from "sharp";
-import { decodeBmp, readBmpInfo } from "./bmp.js";
+import { readBmpInfo } from "./bmp.js";
+import { getDecodedImage } from "./decodedImage.js";
 import { findByteIdenticalImageGroups, findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { readImageMetadata } from "./imageMetadata.js";
@@ -16,6 +17,9 @@ const BALANCED_JPEG_QUALITY = 88;
 // scanned pages stays legible without obvious ringing in our test corpus.
 const AGGRESSIVE_MAX_EDGE = 1280;
 const AGGRESSIVE_JPEG_QUALITY = 80;
+/** Inclusive bounds for continuous JPEG quality search / manual override. */
+export const JPEG_QUALITY_FLOOR = 60;
+export const JPEG_QUALITY_CEILING = 95;
 // Skip JPEG metadata stripping when the projected saving is below this floor:
 // the operation has measurable cost (re-walk + repack) and saving fewer than
 // 256 bytes or 0.5% of the file is not worth surfacing as an opportunity.
@@ -37,7 +41,8 @@ export const balancedImageProfile: ImageOptimizationProfile = {
   maxEdge: BALANCED_MAX_EDGE,
   displayScale: 2,
   jpegQuality: BALANCED_JPEG_QUALITY,
-  pngCompressionLevel: 6,
+  // Match safe-mode lossless PNG compression; CPU cost is acceptable vs package bytes.
+  pngCompressionLevel: 9,
   pngPalette: false,
   opportunityLabel: "Resize JPEG to document display budget"
 };
@@ -46,7 +51,7 @@ export const aggressiveImageProfile: ImageOptimizationProfile = {
   maxEdge: AGGRESSIVE_MAX_EDGE,
   displayScale: 1,
   jpegQuality: AGGRESSIVE_JPEG_QUALITY,
-  pngCompressionLevel: 6,
+  pngCompressionLevel: 9,
   pngPalette: true,
   opportunityLabel: "Resize JPEG to aggressive document display budget"
 };
@@ -91,7 +96,10 @@ async function collectOpportunities(
 
     const metadata = await readMetadata(entry.data);
     const resizeBudget = normalizeResizeBudget(resizeBudgets.get(entry.path), profile);
-    if (isJpeg(entry.path) && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
+    // Hangul packages sometimes store JPEG payloads under a .png href. Drive the
+    // JPEG pipeline from decoded format so we never re-encode those as PNG.
+    const jpegPayload = isJpeg(entry.path) || isJpegFormat(metadata.format);
+    if (jpegPayload && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
       const afterSize = await measureOrEstimateImageSize({
         confidence,
         size: entry.size,
@@ -117,7 +125,7 @@ async function collectOpportunities(
       }
     }
 
-    if (isJpeg(entry.path)) {
+    if (jpegPayload) {
       addJpegMetadataOpportunity(opportunities, entry.path, entry.data, entry.size, confidence);
       continue;
     }
@@ -368,13 +376,16 @@ export async function transformImageBalancedWithBudget(
       data: await convertTiffToPng(data, metadata.width, metadata.height, resizeBudget, profile)
     };
   }
-  if (isJpeg(path) && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
+  if (
+    (isJpeg(path) || isJpegFormat(metadata.format)) &&
+    shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)
+  ) {
     return {
-      outputPath: replaceExtension(path, ".jpg"),
+      outputPath: jpegOutputPath(path),
       data: await resizeJpeg(data, resizeBudget, profile)
     };
   }
-  if (isJpeg(path)) {
+  if (isJpeg(path) || isJpegFormat(metadata.format)) {
     return {
       outputPath: path,
       data: stripJpegMetadataSegments(data)
@@ -417,7 +428,7 @@ export async function transformImageActionWithBudget(
     };
   }
   if (action === "resize-jpeg") {
-    return { outputPath: replaceExtension(path, ".jpg"), data: await resizeJpeg(data, resizeBudget, profile) };
+    return { outputPath: jpegOutputPath(path), data: await resizeJpeg(data, resizeBudget, profile) };
   }
   if (action === "resize-png") {
     return { outputPath: path, data: await resizePng(data, resizeBudget, profile) };
@@ -449,10 +460,12 @@ async function convertBmpToPng(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<Buffer> {
-  const bmp = decodeBmp(data);
-  const image = bmp ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } }) : sharp(data);
-  const sourceWidth = bmp?.width ?? width;
-  const sourceHeight = bmp?.height ?? height;
+  const decoded = await getDecodedImage(data);
+  const image = decoded
+    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    : sharp(data);
+  const sourceWidth = decoded?.width ?? width;
+  const sourceHeight = decoded?.height ?? height;
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   const resized =
     sourceWidth && sourceHeight && shouldResize(sourceWidth, sourceHeight, budget, profile)
@@ -464,13 +477,18 @@ async function convertBmpToPng(
           kernel: "lanczos3"
         })
       : image;
+  // Indexed BMPs stay ≤256 colors after expand→encode; force palette PNG even
+  // when balanced.pngPalette is false so we do not inflate to truecolor PNG.
+  const png = {
+    ...pngOptions(profile),
+    palette: profile.pngPalette || Boolean(decoded?.indexed)
+  };
   try {
-    return await resized.png(pngOptions(profile)).toBuffer();
+    return await resized.png(png).toBuffer();
   } catch (error) {
-    // decodeBmp handles 24/32-bit and 8-bit palette BI_RGB; other variants
-    // (RLE, BI_BITFIELDS, 1/4-bit) fall back to sharp, which may lack BMP input.
-    // Surface a named reason instead of a cryptic decode error when that happens.
-    const info = bmp ? null : readBmpInfo(data);
+    // Remaining unsupported BMP variants (e.g. RLE) fall back to sharp, which may
+    // lack BMP input — surface a named reason instead of a cryptic decode error.
+    const info = decoded ? null : readBmpInfo(data);
     if (info && !info.supported) {
       throw new Error(
         `unsupported BMP variant (bitsPerPixel=${info.bitsPerPixel}, compression=${info.compression})`
@@ -490,10 +508,15 @@ async function convertTiffToPng(
   // Bake in any EXIF/TIFF orientation so the PNG matches the dimensions the
   // analyzer and verifier read with auto-orient (otherwise an oriented TIFF's
   // swapped dimensions fail the verifier's aspect-ratio/enlargement checks).
-  const image = sharp(data).rotate();
+  const decoded = await getDecodedImage(data, { rotate: true });
+  const image = decoded
+    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    : sharp(data).rotate();
+  const sourceWidth = decoded?.width ?? width;
+  const sourceHeight = decoded?.height ?? height;
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   const resized =
-    width && height && shouldResize(width, height, budget, profile)
+    sourceWidth && sourceHeight && shouldResize(sourceWidth, sourceHeight, budget, profile)
       ? image.resize({
           width: target.width,
           height: target.height,
@@ -510,6 +533,9 @@ async function resizeJpeg(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<Buffer> {
+  // Warm the shared decode cache for same-visual hashing on this Buffer, but keep
+  // mozjpeg encoding on the original container — raw→JPEG often grows bytes.
+  void getDecodedImage(data, { rotate: true });
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   return sharp(data, { failOn: "none" })
     .resize({
@@ -529,9 +555,12 @@ async function resizePng(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<Buffer> {
+  const decoded = await getDecodedImage(data, { rotate: true });
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
-  return sharp(data)
-    .rotate()
+  const image = decoded
+    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    : sharp(data).rotate();
+  return image
     .resize({
       width: target.width,
       height: target.height,
@@ -544,7 +573,11 @@ async function resizePng(
 }
 
 async function optimizePng(data: Buffer, profile: ImageOptimizationProfile = balancedImageProfile): Promise<Buffer> {
-  return sharp(data).png(pngOptions(profile)).toBuffer();
+  const decoded = await getDecodedImage(data, { rotate: false });
+  if (!decoded) return sharp(data).png(pngOptions(profile)).toBuffer();
+  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    .png(pngOptions(profile))
+    .toBuffer();
 }
 
 function pngOptions(profile: ImageOptimizationProfile) {
@@ -555,9 +588,9 @@ function pngOptions(profile: ImageOptimizationProfile) {
   };
 }
 
-async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number }> {
+async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number; format?: string }> {
   const metadata = await readImageMetadata("", data);
-  return { width: metadata.width, height: metadata.height };
+  return { width: metadata.width, height: metadata.height, format: metadata.format };
 }
 
 function addOpportunityIfSmaller(
@@ -653,6 +686,16 @@ function isBmp(path: string): boolean {
 
 function isJpeg(path: string): boolean {
   return /\.jpe?g$/i.test(path);
+}
+
+function isJpegFormat(format: string | undefined): boolean {
+  const normalized = format?.toLowerCase();
+  return normalized === "jpeg" || normalized === "jpg";
+}
+
+function jpegOutputPath(path: string): string {
+  // Keep non-.jpg/.jpeg hrefs stable (e.g. JPEG bytes stored as *.png).
+  return isJpeg(path) ? replaceExtension(path, ".jpg") : path;
 }
 
 function isPng(path: string): boolean {

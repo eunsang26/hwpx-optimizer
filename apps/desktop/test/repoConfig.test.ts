@@ -36,8 +36,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:win"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:cli-portable"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["release:audit"]).toBe("node scripts/release-audit.mjs");
     expect(packageJson.scripts?.["release:preflight"]).toBe(
-      "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm audit --audit-level=moderate && npm run desktop:smoke:built"
+      "npm run release:hygiene && npm test && npm run typecheck && npm run build && npm run quality:corpus:release && npm run release:audit && npm run desktop:smoke:built"
     );
     expect(packageJson.scripts?.["quality:corpus"]).toBe("tsx --conditions=development scripts/run-regression-corpus.ts");
     expect(packageJson.scripts?.["quality:corpus:release"]).toBe(
@@ -60,8 +61,10 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:manifest");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-manifest");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("ensure-win-sharp-test-fixtures.mjs");
-    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm audit --audit-level=moderate");
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:audit");
+    expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:audit");
     expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toBe(packageJson.scripts?.["release:check:cli-portable"]);
+    await expect(access("scripts/release-audit.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
     await expect(access("scripts/run-windows-portable-smoke.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/run-cli-portable-smoke.mjs")).resolves.toBeUndefined();
@@ -240,8 +243,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('<span aria-hidden="true">×</span>');
     expect(html).toContain('id="cleanup-document-toggle"');
     expect(html).toContain('id="cleanup-image-toggle"');
-    expect(html).toContain('<option value="mb41">41MB 이하</option>');
-    expect(html).toContain('<option value="mb100">100MB 이하</option>');
+    expect(html).toContain('<option value="mb40" selected>40MB 미만</option>');
+    expect(html).toContain('<option value="mb100">100MB 미만</option>');
     expect(html.match(/id="single-saving-ring"/g)?.length).toBe(1);
     expect(renderer).not.toContain("chooseManyButton");
     expect(renderer).not.toContain("verificationDetails");
@@ -270,7 +273,39 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("settingSaveReport.checked = settings.saveReport");
     expect(renderer).toContain("batchResultDetails.textContent");
     expect(renderer).toContain("statusBannerText.textContent");
-    expect(renderer).toContain('state.submissionLimit.id === "mb41"');
+    expect(html).toContain('id="policy-toolbar"');
+    expect(html).toContain('id="toggle-options-button"');
+    expect(html).toContain('id="detail-options-sheet"');
+    expect(html).toContain('id="hero-chips"');
+    expect(html).toContain('id="review-strip"');
+    expect(html).toContain('id="quality-mode-auto"');
+    expect(html).toContain("유사 이미지 병합");
+    expect(html).toContain("검토만 · 기본 끔");
+    expect(html).toContain("예정 품질");
+    expect(html).toContain("원본 → 예상");
+    expect(html).toContain(">판정<");
+    expect(html).toContain('id="quality-head-label"');
+    expect(renderer).toContain('qualityMode: "auto"');
+    expect(renderer).toContain("showPlannedReadOnly");
+    expect(renderer).toContain("hero-verdict--mix");
+    expect(renderer).toContain("renderBatchReviewStrip");
+    expect(renderer).toContain("선택 파일 일괄 최적화");
+    expect(renderer).toContain("합계 배분 목표마다 파일별 품질");
+    expect(renderer).toContain("gaugeMidLabel.style.left");
+    expect(renderer).toContain("하한 품질까지 여지");
+    expect(renderer).toContain('preservationPreference === "size"');
+    expect(renderer).toContain("analyzed.filter((item) => item.selected !== false)");
+    expect(renderer).toContain("item.report && item.selected !== false");
+    expect(renderer).toContain("createBatchPlanSummary");
+    expect(css).toContain(".gauge-labels .gauge-mid");
+    expect(css).toContain("body[data-view=\"batch\"] .policy-toolbar-batch");
+    expect(css).toContain("button.ghost.is-active");
+    expect(html).toContain('id="gauge-start-label"');
+    expect(renderer).toContain("renderHeroChips");
+    expect(renderer).toContain("renderReviewStrip");
+    expect(renderer).toContain("handleBatchQualityInput");
+    expect(css).toContain('body[data-view="batch"] .target-limit::after');
+    expect(css).toMatch(/\.policy-toolbar\s*{/s);
     expect(renderer).toContain('from "./shared/resultGuidance.js"');
     expect(renderer).toContain("resultGuidanceText(report, plan)");
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.manualStepCount !== 10");
@@ -296,7 +331,7 @@ describe("repository runtime and cleanup configuration", () => {
 
     const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');
     const resultPanel = html.indexOf('id="result-panel"');
-    const bottomRow = html.indexOf("<!-- ③ BOTTOM ROW");
+    const bottomRow = html.indexOf("<!-- ③ BOTTOM");
     const bottomAccordions = html.indexOf('<section class="bottom-accordions">');
     const actionPanel = html.indexOf('<div id="action-panel"');
     expect(summaryPanelStart).toBeGreaterThanOrEqual(0);

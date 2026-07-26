@@ -94,6 +94,7 @@ export async function runCli(argv: string[]): Promise<number> {
       await writeOptimizationArtifacts(outputPath, result.output, reportPath, JSON.stringify(result.report, null, 2), { exclusive: !overwrite });
       console.log(`Optimized ${inputPath}`);
       printOptimizationSummary(result.report);
+      logOptimizeTimings(result.report);
       console.log(`Output: ${outputPath}`);
       console.log(`Report: ${reportPath}`);
       return 0;
@@ -690,11 +691,12 @@ function createBatchTargetFields(
       batchTargetMissReason: `Batch target status is incomplete because ${incompleteCount} file(s) failed.`
     };
   }
-  if (totalOriginalSize <= batchTargetBytes) {
-    return { batchTargetBytes, batchTargetStatus: "already-under-target" };
-  }
-  if (totalOptimizedSize <= batchTargetBytes) {
-    return { batchTargetBytes, batchTargetStatus: "met" };
+  // Match core "미만" semantics: strict < on the aggregate output.
+  if (totalOptimizedSize < batchTargetBytes) {
+    return {
+      batchTargetBytes,
+      batchTargetStatus: totalOriginalSize < batchTargetBytes ? "already-under-target" : "met"
+    };
   }
   return {
     batchTargetBytes,
@@ -797,6 +799,13 @@ function printTargetSummary(report: OptimizationReport): void {
   if (!report.targetBytes) return;
   console.log(`Target: ${formatBytes(report.targetBytes)} (${report.targetStatus ?? "unknown"})`);
   if (report.targetMissReason) console.log(`Target note: ${report.targetMissReason}`);
+}
+
+/** Opt-in stage dump for decode-once / perf work. Core never reads this env. */
+function logOptimizeTimings(report: OptimizationReport): void {
+  if (process.env.HWPX_OPT_TIMINGS !== "1" || !report.performance) return;
+  const stages = report.performance.stages.map((stage) => `${stage.name}=${stage.durationMs.toFixed(1)}`).join(" ");
+  console.error(`[HWPX_OPT_TIMINGS] totalMs=${report.performance.totalMs.toFixed(1)} ${stages}`);
 }
 
 function countAppliedActions(actions: AppliedAction[]): Array<[AppliedAction["type"], number]> {

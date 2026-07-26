@@ -30,7 +30,8 @@ This file separates release blockers from non-blockers so the project does not o
 - Some safe-mode rewrites can make an individual entry slightly larger. The optimizer records skipped or applied actions so this can be audited.
 - Desktop settings controls are functional. Output folder selection is session-only by policy, and final visual QA on the target Windows desktop environment is still required.
 - Desktop analysis and optimization run off the main UI path. Progress includes analysis, planning, per-image transform counts, verification, and file-write stages, but it is still estimated progress rather than byte-accurate package progress.
-- `npm audit` currently reports 0 vulnerabilities after dependency updates on 2026-05-08.
+- Release gates use `npm run release:audit`, which requires **0 production** vulnerabilities (`npm audit --omit=dev`). A full `npm audit` may still report packaging/dev advisories inside `electron-builder` / nested `@electron/asar` (`brace-expansion`) and a residual low `esbuild` dev-server advisory; those are build-toolchain only and are non-blockers.
+- Windows portable smoke from WSL needs a writable Windows-visible temp (prefers `/mnt/c/Temp`). If none is available, the script fails with a clear error; set `HWPX_OPT_SKIP_WIN_PORTABLE_SMOKE=1` only when intentionally skipping on a locked-down host.
 
 ## CLI Portable Windows ZIP
 

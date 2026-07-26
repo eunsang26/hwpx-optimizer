@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendUniquePaths,
   applyOptimizationResultToBatchItem,
+  actualTargetStatusLabel,
   batchItemMetaText,
   selectionModeForPaths,
   summarizeBatchItems
@@ -57,9 +58,9 @@ describe("batchView helpers", () => {
         status: "pending",
         originalSizeLabel: "61.80 MiB",
         expectedSizeLabel: "27.40 MiB",
-        targetStatusLabel: "목표 미달 가능"
+        targetStatusLabel: "더 압축 필요"
       })
-    ).toBe("61.80 MiB → 27.40 MiB · 목표 미달 가능");
+    ).toBe("");
   });
 
   it("renders allocated aggregate target in pending row meta", () => {
@@ -70,10 +71,10 @@ describe("batchView helpers", () => {
         status: "pending",
         originalSizeLabel: "61.80 MiB",
         expectedSizeLabel: "27.40 MiB",
-        targetStatusLabel: "목표 달성 가능",
+        targetStatusLabel: "제출 가능",
         allocatedTargetLabel: "배분 목표 18.00 MiB"
       })
-    ).toBe("61.80 MiB → 27.40 MiB · 목표 달성 가능 · 배분 목표 18.00 MiB");
+    ).toBe("배분 목표 18.00 MiB");
   });
 
   it("returns a placeholder summary when the queue is empty", () => {
@@ -133,8 +134,22 @@ describe("batchView helpers", () => {
   });
 
   it("merges optimize response fields into the batch item", () => {
-    const item: BatchItemLike = { path: "/x/a.hwpx", fileName: "a.hwpx", status: "running" };
-    const report = { optimizedSize: 8192, savedBytes: 4096, savedPercent: 12.5 } as OptimizationReport;
+    const item: BatchItemLike = {
+      path: "/x/a.hwpx",
+      fileName: "a.hwpx",
+      status: "running",
+      expectedSizeBytes: 20_000,
+      expectedSizeLabel: "약 20 KiB",
+      targetStatusLabel: "제출 가능"
+    };
+    const report = {
+      optimizedSize: 12_000,
+      savedBytes: 4096,
+      savedPercent: 12.5,
+      targetBytes: 10_000,
+      targetStatus: "missed",
+      plannedJpegQuality: 60
+    } as OptimizationReport;
     const updated = applyOptimizationResultToBatchItem(item, {
       outputPath: "/x/a.optimized.hwpx",
       reportPath: "/x/a.optimized.hwpx.report.json",
@@ -146,8 +161,51 @@ describe("batchView helpers", () => {
       reportPath: "/x/a.optimized.hwpx.report.json",
       report,
       savedBytes: 4096,
-      savedPercent: 12.5
+      savedPercent: 12.5,
+      expectedSizeBytes: 12_000,
+      targetStatusLabel: "기준 미달",
+      jpegQualityDisplay: 60,
+      qualityEditable: false
     });
     expect(item.status).toBe("running");
+    expect(item.targetStatusLabel).toBe("제출 가능");
+  });
+
+  it("maps actual optimize targetStatus onto submission verdict labels", () => {
+    expect(
+      actualTargetStatusLabel({
+        targetBytes: 10_000,
+        targetStatus: "met",
+        optimizedSize: 9_000
+      } as OptimizationReport)
+    ).toBe("제출 가능");
+    expect(
+      actualTargetStatusLabel({
+        targetBytes: 10_000,
+        targetStatus: "already-under-target",
+        optimizedSize: 8_000
+      } as OptimizationReport)
+    ).toBe("제출 가능");
+    expect(
+      actualTargetStatusLabel({
+        targetBytes: 10_000,
+        targetStatus: "missed",
+        optimizedSize: 12_000,
+        plannedJpegQuality: 60
+      } as OptimizationReport)
+    ).toBe("기준 미달");
+    expect(
+      actualTargetStatusLabel({
+        targetBytes: 10_000,
+        targetStatus: "missed",
+        optimizedSize: 12_000,
+        plannedJpegQuality: 85
+      } as OptimizationReport)
+    ).toBe("더 압축 필요");
+    expect(
+      actualTargetStatusLabel({
+        optimizedSize: 12_000
+      } as OptimizationReport)
+    ).toBe("목표 제한 없음");
   });
 });

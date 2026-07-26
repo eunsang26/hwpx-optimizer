@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "relativePath": "sample2.hwpx",
+      "size": 94078344,
+      "sha256": "8ab4d8ce3016be11180e38f586ddca6dc426321ba637553e3ee4ffd6581c9cff"
+    },
+    {
+      "relativePath": "sample3.hwpx",
+      "size": 23052827,
+      "sha256": "daedbc1feaac5a4d75bdf0639a01cdbfeda21e98ff3f7a1c2d041a34d1a74212"
+    }
+  ]
+}

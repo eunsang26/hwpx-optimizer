@@ -10,9 +10,9 @@ import type { HwpxPackage, OptimizationPlan } from "../src/types.js";
 import { createHwpxFixture } from "./fixtures.js";
 
 describe("balanced optimization", () => {
-  it("uses faster PNG compression by default while preserving max compression for target profiles", () => {
-    expect(balancedImageProfile.pngCompressionLevel).toBe(6);
-    expect(aggressiveImageProfile.pngCompressionLevel).toBe(6);
+  it("uses max PNG compression by default for advanced modes", () => {
+    expect(balancedImageProfile.pngCompressionLevel).toBe(9);
+    expect(aggressiveImageProfile.pngCompressionLevel).toBe(9);
   });
 
   it("reports dry-run opportunities for oversized JPEG and BMP resources", async () => {
@@ -68,6 +68,31 @@ describe("balanced optimization", () => {
         confidence: "exact"
       })
     );
+  });
+
+  it("converts 8-bit paletted BMP to palette PNG under balanced mode", async () => {
+    const bmp = createBmp8(128, 96, [
+      [0xcc, 0xcc, 0xcc],
+      [0x33, 0x66, 0x99]
+    ]);
+    const fixture = await createReferencedImageFixture({
+      image1: { path: "BinData/image1.bmp", mediaType: "image/bmp", data: bmp }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const pngEntry = output.entries.find((entry) => entry.path === "BinData/image1.png");
+    expect(pngEntry).toBeDefined();
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "convert-bmp-to-png", target: "BinData/image1.bmp" })
+    );
+    const meta = await sharp(pngEntry!.data, { failOn: "none" }).metadata();
+    expect(meta.format).toBe("png");
+    // PNG IHDR color type 3 = indexed-colour (palette).
+    expect(pngEntry!.data[25]).toBe(3);
+    const truecolor = await sharp(pngEntry!.data).png({ compressionLevel: 9, palette: false }).toBuffer();
+    expect(pngEntry!.size).toBeLessThan(truecolor.byteLength);
+    expect(pngEntry!.size).toBeLessThan(bmp.byteLength);
   });
 
   it("updates direct XML package-path attributes when image conversion changes the file path", async () => {
@@ -277,6 +302,111 @@ describe("balanced optimization", () => {
     expect(section).not.toContain('binaryItemIDRef="image2"');
     expect(result.report.actions.applied).toContainEqual(
       expect.objectContaining({ type: "consolidate-duplicate-images", target: "BinData/image2.png" })
+    );
+  });
+
+  it("does not shrink a consolidated canonical below a duplicate that lacked display size", async () => {
+    // Same pixels: one copy has a small on-page box, the other is referenced without
+    // parseable hp:sz (common in real docs). Consolidation must not resize using only
+    // the small box, or verifier rejects "dimensions collapsed" for the no-sz copy.
+    const jpeg = await sharp({
+      create: { width: 480, height: 640, channels: 3, background: "#336699" }
+    })
+      .jpeg({ quality: 92, mozjpeg: true })
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": [
+          '<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest>',
+          '<opf:item id="image157" href="BinData/image157.jpg" media-type="image/jpeg" isEmbeded="1"/>',
+          '<opf:item id="image19" href="BinData/image19.jpg" media-type="image/jpeg" isEmbeded="1"/>',
+          "</opf:manifest></opf:package>"
+        ].join(""),
+        "Contents/section0.xml":
+          '<root><hp:pic><hc:img binaryItemIDRef="image19"/></hp:pic></root>',
+        "Contents/section2.xml":
+          '<root><hp:pic><hp:sz width="17007" height="10488"/><hc:img binaryItemIDRef="image157"/></hp:pic></root>',
+        "BinData/image157.jpg": jpeg,
+        "BinData/image19.jpg": Buffer.from(jpeg)
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, {
+      allowLarger: true,
+      targetBytes: Math.floor(fixture.byteLength * 0.3)
+    });
+    const output = await readHwpxPackage(result.output);
+    const kept = output.entries.find((entry) => entry.path === "BinData/image157.jpg");
+    expect(kept).toBeDefined();
+    expect(output.entries.some((entry) => entry.path === "BinData/image19.jpg")).toBe(false);
+    const meta = await sharp(kept!.data, { failOn: "none" }).metadata();
+    expect(meta.width).toBeGreaterThanOrEqual(432);
+    expect(meta.height).toBeGreaterThanOrEqual(576);
+  });
+
+  it("resizes JPEG payloads stored under a .png href without converting format", async () => {
+    // Real Hangul docs sometimes embed JPEG bytes with a .png manifest href.
+    // Treating the path as PNG would re-encode to PNG and fail verifier format gates.
+    const jpeg = await sharp({
+      create: { width: 1200, height: 900, channels: 3, background: "#336699" }
+    })
+      .jpeg({ quality: 92, mozjpeg: true })
+      .toBuffer();
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": [
+          '<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest>',
+          '<opf:item id="image65" href="BinData/image65.png" media-type="image/png"/>',
+          "</opf:manifest></opf:package>"
+        ].join(""),
+        "Contents/section0.xml":
+          '<root><hp:pic><hp:sz width="7370" height="5952"/><hc:img binaryItemIDRef="image65"/></hp:pic></root>',
+        "BinData/image65.png": jpeg
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    const kept = output.entries.find((entry) => entry.path === "BinData/image65.png");
+    expect(kept).toBeDefined();
+    expect(output.entries.some((entry) => entry.path === "BinData/image65.jpg")).toBe(false);
+    const meta = await sharp(kept!.data, { failOn: "none" }).metadata();
+    expect(meta.format).toBe("jpeg");
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "resize-jpeg", target: "BinData/image65.png" })
+    );
+  });
+
+  it("verifies consolidated BMP duplicates after the canonical converts to PNG", async () => {
+    // Two same-visual BMPs: consolidate removes one, then convert-bmp-to-png rewrites the
+    // survivor extension. Verifier must resolve the removed path to the .png survivor.
+    const bmp = createBmp24(64, 48, [0x44, 0xaa, 0x88]);
+    const fixture = await createHwpxFixture({
+      entries: {
+        "Contents/content.hpf": [
+          '<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest>',
+          '<opf:item id="image163" href="BinData/image163.bmp" media-type="image/bmp"/>',
+          '<opf:item id="image24" href="BinData/image24.bmp" media-type="image/bmp"/>',
+          "</opf:manifest></opf:package>"
+        ].join(""),
+        "Contents/section0.xml": '<root><hc:img binaryItemIDRef="image24"/></root>',
+        "Contents/section2.xml": '<root><hc:img binaryItemIDRef="image163"/></root>',
+        "BinData/image163.bmp": bmp,
+        "BinData/image24.bmp": Buffer.from(bmp)
+      }
+    });
+
+    const result = await optimizeHwpxBufferBalanced(fixture, { allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+
+    expect(output.entries.some((entry) => entry.path === "BinData/image24.bmp")).toBe(false);
+    expect(output.entries.some((entry) => entry.path === "BinData/image24.png")).toBe(false);
+    expect(output.entries.some((entry) => entry.path === "BinData/image163.png")).toBe(true);
+    const section0 = output.entries.find((entry) => entry.path === "Contents/section0.xml")?.data.toString("utf8");
+    expect(section0).toContain('binaryItemIDRef="image163"');
+    expect(section0).not.toContain('binaryItemIDRef="image24"');
+    expect(result.report.actions.applied).toContainEqual(
+      expect.objectContaining({ type: "consolidate-duplicate-images", target: "BinData/image24.bmp" })
     );
   });
 
@@ -648,7 +778,7 @@ describe("balanced optimization", () => {
     );
   });
 
-  it("reports strip-metadata when an oversized JPEG would not shrink by resizing", async () => {
+  it("reports resize-jpeg when display-budget recompress shrinks an oversized wide JPEG", async () => {
     const jpeg = await createJpegWithLargeMetadata({
       width: 4000,
       height: 1,
@@ -660,10 +790,12 @@ describe("balanced optimization", () => {
 
     const report = await analyzeHwpxBuffer(fixture);
 
-    expect(report.opportunities).not.toContainEqual(
+    // Exact opportunity measurement uses the real encode path; if resize+recompress
+    // shrinks the file it wins over strip-metadata-only.
+    expect(report.opportunities).toContainEqual(
       expect.objectContaining({ action: "resize-jpeg", target: "BinData/wide.jpg" })
     );
-    expect(report.opportunities).toContainEqual(
+    expect(report.opportunities).not.toContainEqual(
       expect.objectContaining({ action: "strip-metadata", target: "BinData/wide.jpg" })
     );
   });
@@ -828,7 +960,7 @@ describe("balanced optimization", () => {
 });
 
 describe("balanced optimization path collisions", () => {
-  it("skips a format conversion whose output path collides with an existing entry", async () => {
+  it("renames a format conversion when the default output path collides with an existing entry", async () => {
     const bmp = createBmp24(64, 48, [0x20, 0x40, 0x60]);
     const png = await sharp({ create: { width: 12, height: 12, channels: 3, background: "#654321" } }).png().toBuffer();
     const fixture = await createReferencedImageFixture({
@@ -849,11 +981,14 @@ describe("balanced optimization path collisions", () => {
     });
 
     const paths = result.pkg.entries.map((entry) => entry.path);
-    // Neither image is lost: the BMP is not renamed onto the existing PNG.
-    expect(paths).toContain("BinData/image1.bmp");
+    // Existing PNG kept; BMP lands on a unique sibling path instead of being skipped.
+    expect(paths).not.toContain("BinData/image1.bmp");
     expect(paths).toContain("BinData/image1.png");
-    expect(result.applied.some((action) => action.type === "convert-bmp-to-png")).toBe(false);
-    expect(result.warnings.some((warning) => /collides/.test(warning))).toBe(true);
+    expect(paths).toContain("BinData/image1-opt.png");
+    expect(result.applied.some((action) => action.type === "convert-bmp-to-png")).toBe(true);
+    expect(result.warnings.some((warning) => /collided; wrote BinData\/image1-opt\.png/.test(warning))).toBe(true);
+    const content = result.pkg.entries.find((entry) => entry.path === "Contents/content.hpf")?.data.toString("utf8");
+    expect(content).toContain('href="BinData/image1-opt.png"');
   });
 });
 
@@ -927,6 +1062,40 @@ function createBmp24(width: number, height: number, rgb: [number, number, number
       buffer[offset + 2] = rgb[0];
     }
   }
+  return buffer;
+}
+
+/** Checkerboard 8-bit BI_RGB BMP using the given palette colors. */
+function createBmp8(width: number, height: number, palette: Array<[number, number, number]>): Buffer {
+  const paletteEntries = Math.max(2, palette.length);
+  const paletteBytes = Buffer.alloc(paletteEntries * 4);
+  for (let index = 0; index < paletteEntries; index += 1) {
+    const rgb = palette[index % palette.length]!;
+    paletteBytes[index * 4] = rgb[2];
+    paletteBytes[index * 4 + 1] = rgb[1];
+    paletteBytes[index * 4 + 2] = rgb[0];
+  }
+  const rowSize = Math.ceil(width / 4) * 4;
+  const pixelData = Buffer.alloc(rowSize * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      pixelData[y * rowSize + x] = (x + y) % Math.min(palette.length, 256);
+    }
+  }
+  const pixelOffset = 14 + 40 + paletteBytes.length;
+  const buffer = Buffer.alloc(pixelOffset + pixelData.length);
+  buffer.write("BM", 0, "ascii");
+  buffer.writeUInt32LE(buffer.length, 2);
+  buffer.writeUInt32LE(pixelOffset, 10);
+  buffer.writeUInt32LE(40, 14);
+  buffer.writeInt32LE(width, 18);
+  buffer.writeInt32LE(height, 22);
+  buffer.writeUInt16LE(1, 26);
+  buffer.writeUInt16LE(8, 28);
+  buffer.writeUInt32LE(0, 30);
+  buffer.writeUInt32LE(paletteEntries, 46);
+  paletteBytes.copy(buffer, 54);
+  pixelData.copy(buffer, pixelOffset);
   return buffer;
 }
 

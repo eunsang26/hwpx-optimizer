@@ -1,13 +1,34 @@
 import type { OptimizationOpportunityGroup, OptimizationReport } from "@hwpx-optimizer/core";
 import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
+import {
+  classifyTargetVerdict,
+  estimateSizeAtJpegQuality,
+  jpegBaselineBytesFromGroups,
+  planJpegQualityForTarget,
+  type TargetVerdict
+} from "./targetPlan.js";
 import { createActionToggles, formatBytes, type OptimizationMode } from "./viewModel.js";
 
-export type SubmissionLimitId = "none" | "mb5" | "mb10" | "mb20" | "mb30" | "mb41" | "mb50" | "mb100" | "custom";
+export type SubmissionLimitId =
+  | "none"
+  | "mb5"
+  | "mb10"
+  | "mb20"
+  | "mb30"
+  | "mb40"
+  | "mb41"
+  | "mb50"
+  | "mb100"
+  | "custom";
 export type PreservationPreference = "preserve" | "recommended" | "size";
 export type PlanStatus = "target-met" | "target-missed" | "already-under-target" | "no-target";
 export type PlanKind = "automatic" | "custom";
 export type SubmissionActionBucket = "image" | "metadata" | "author";
 export type SubmissionActionId = OptimizationOpportunityGroup["action"];
+
+const JPEG_QUALITY_FLOOR = 60;
+const JPEG_QUALITY_CEILING = 95;
+const BASELINE_JPEG_QUALITY_BALANCED = 88;
 
 export type SubmissionLimit = {
   id: SubmissionLimitId;
@@ -18,6 +39,8 @@ export type SubmissionPlanInput = {
   submissionLimit: SubmissionLimit;
   preservationPreference: PreservationPreference;
   actionOverrides: Map<SubmissionActionId, boolean>;
+  /** Manual JPEG quality (60–95). When set, expected size/verdict use this quality. */
+  jpegQuality?: number;
 };
 
 export type SubmissionActionRow = {
@@ -56,6 +79,11 @@ export type SubmissionPlan = {
   targetLabel: string;
   targetStatus: PlanStatus;
   targetStatusLabel: string;
+  verdict: TargetVerdict;
+  verdictLabel: string;
+  verdictDetail: string;
+  floorExpectedBytes: number;
+  plannedJpegQuality?: number;
   selectedActions: SubmissionActionId[];
   actionRows: SubmissionActionRow[];
   planNotes: SubmissionPlanNote[];
@@ -68,17 +96,19 @@ type CompactSubmissionPlanInput = {
   limit: SubmissionLimit;
   preservation: PreservationPreference;
   actionOverrides: ActionOverrideRecord;
+  jpegQuality?: number;
 };
 
 export const SUBMISSION_LIMIT_LABELS: Record<SubmissionLimitId, string> = {
   none: "제한 없음",
-  mb5: "5 MB 이하",
-  mb10: "10 MB 이하",
-  mb20: "20 MB 이하",
-  mb30: "30 MB 이하",
-  mb41: "41 MB 이하",
-  mb50: "50 MB 이하",
-  mb100: "100 MB 이하",
+  mb5: "5 MB 미만",
+  mb10: "10 MB 미만",
+  mb20: "20 MB 미만",
+  mb30: "30 MB 미만",
+  mb40: "40 MB 미만",
+  mb41: "41 MB 미만",
+  mb50: "50 MB 미만",
+  mb100: "100 MB 미만",
   custom: "직접 입력"
 };
 
@@ -121,7 +151,6 @@ const ACTION_PRIORITY_ORDER: Partial<Record<SubmissionActionId, number>> = {
   "resize-png": 80
 };
 
-const SUMMARY_SAVING_GRANULARITY_BYTES = 1024 * 1024;
 const ESTIMATED_SAVING_DISPLAY_RATIO = 0.95;
 
 export function modeForPreservation(preference: PreservationPreference): OptimizationMode {
@@ -130,11 +159,19 @@ export function modeForPreservation(preference: PreservationPreference): Optimiz
   return "balanced";
 }
 
+/** Inverse of modeForPreservation — keeps settings "기본 모드" aligned with the toolbar. */
+export function preservationForMode(mode: OptimizationMode): PreservationPreference {
+  if (mode === "safe") return "preserve";
+  if (mode === "aggressive") return "size";
+  return "recommended";
+}
+
 export function resolveSubmissionLimitBytes(limit: SubmissionLimit): number | undefined {
   if (limit.id === "mb5") return 5 * 1024 * 1024;
   if (limit.id === "mb10") return 10 * 1024 * 1024;
   if (limit.id === "mb20") return 20 * 1024 * 1024;
   if (limit.id === "mb30") return 30 * 1024 * 1024;
+  if (limit.id === "mb40") return 40 * 1024 * 1024;
   if (limit.id === "mb41") return 41 * 1024 * 1024;
   if (limit.id === "mb50") return 50 * 1024 * 1024;
   if (limit.id === "mb100") return 100 * 1024 * 1024;
@@ -182,38 +219,129 @@ export function createSubmissionPlan(
     return override !== undefined && override !== toggle.defaultEnabledForMode;
   });
   const selectedActions = actionRows.filter((row) => row.checked).map((row) => row.action);
-  const rawExpectedSavingBytes = estimateNonOverlappingSavingBytes(
-    rawActionRows.flatMap((row) => (row.checked && row.group ? [row.group] : []))
-  );
+  const selectedGroups = rawActionRows.flatMap((row) => (row.checked && row.group ? [row.group] : []));
+  const allGroups = rawActionRows.flatMap((row) => (row.group ? [row.group] : []));
+  const rawExpectedSavingBytes = estimateNonOverlappingSavingBytes(selectedGroups);
   const savingCapBytes =
     report.originalSize > 0
       ? Math.max(0, Math.floor(report.originalSize * ESTIMATED_SAVING_DISPLAY_RATIO))
       : rawExpectedSavingBytes;
   const expectedSavingBytes = Math.min(rawExpectedSavingBytes, savingCapBytes);
   const wasCapped = rawExpectedSavingBytes > expectedSavingBytes;
-  const expectedSizeBytes = Math.max(0, report.originalSize - expectedSavingBytes);
-  const summarySavingBytes = floorToGranularity(expectedSavingBytes, SUMMARY_SAVING_GRANULARITY_BYTES);
-  const summarySizeBytes = Math.max(0, report.originalSize - summarySavingBytes);
+  const rawJpegBaselineBytes = jpegBaselineBytesFromGroups(selectedGroups);
+  const fullSavingBytes = estimateNonOverlappingSavingBytes(allGroups);
+  const selectedSavingBytes = estimateNonOverlappingSavingBytes(selectedGroups);
+  const selectionRatio = fullSavingBytes > 0 ? clampRatio(selectedSavingBytes / fullSavingBytes) : 1;
+  // Prefer ZIP-aware analysis projection when it belongs to these opportunity groups.
+  // Fixtures/overrides that keep a stale optimizedSize fall back to entry savings.
+  const entryBaselineSizeBytes = Math.max(0, report.originalSize - expectedSavingBytes);
+  const baselineSummarySizeBytes =
+    resolveProjectedBaselineBytes({
+      originalSize: report.originalSize,
+      projectedSize: report.optimizedSize,
+      fullSavingBytes,
+      selectedSavingBytes,
+      fallbackSizeBytes: entryBaselineSizeBytes
+    }) ?? entryBaselineSizeBytes;
+  const jpegBaselineBytes = Math.round(rawJpegBaselineBytes * Math.max(0.25, selectionRatio || 1));
   const targetBytes = resolveSubmissionLimitBytes(input.submissionLimit);
-  const savedPercent = report.originalSize > 0 ? (summarySavingBytes / report.originalSize) * 100 : 0;
-  const targetStatus = targetStatusFor(report.originalSize, summarySizeBytes, targetBytes);
-  const expectedSavingFormatted = formatBytes(summarySavingBytes);
+  const sizeEstimate = (quality: number): number =>
+    estimateSizeAtJpegQuality({
+      originalBytes: report.originalSize,
+      baselineExpectedBytes: baselineSummarySizeBytes,
+      baselineQuality: BASELINE_JPEG_QUALITY_BALANCED,
+      quality,
+      floor: JPEG_QUALITY_FLOOR,
+      ceiling: JPEG_QUALITY_CEILING,
+      jpegBaselineBytes
+    });
+  const projectedAggressive = resolveProjectedBaselineBytes({
+    originalSize: report.originalSize,
+    projectedSize: report.aggressiveProjectedOptimizedSize,
+    fullSavingBytes,
+    selectedSavingBytes,
+    fallbackSizeBytes: undefined
+  });
+  const floorExpectedBytes =
+    mode === "safe"
+      ? baselineSummarySizeBytes
+      : (projectedAggressive ?? sizeEstimate(JPEG_QUALITY_FLOOR));
+
+  // Aggressive always uses the quality floor (manual JPEG % is ignored).
+  const manualQuality =
+    mode !== "aggressive" && input.jpegQuality !== undefined
+      ? clamp(input.jpegQuality, JPEG_QUALITY_FLOOR, JPEG_QUALITY_CEILING)
+      : undefined;
+  // Aggressive auto always executes at the quality floor — estimate at floor.
+  // Manual override (balanced) estimates at the chosen quality.
+  // Balanced auto + target: binary-search highest quality that meets 미만.
+  let displaySizeBytes = baselineSummarySizeBytes;
+  let atFloor = mode === "safe";
+  let plannedQuality: number | undefined;
+  if (mode === "safe") {
+    plannedQuality = undefined;
+  } else if (manualQuality !== undefined) {
+    plannedQuality = manualQuality;
+    atFloor = manualQuality <= JPEG_QUALITY_FLOOR;
+    displaySizeBytes = sizeEstimate(manualQuality);
+  } else if (mode === "aggressive") {
+    plannedQuality = JPEG_QUALITY_FLOOR;
+    atFloor = true;
+    displaySizeBytes = floorExpectedBytes;
+  } else if (targetBytes) {
+    const planned = planJpegQualityForTarget({
+      originalBytes: report.originalSize,
+      baselineExpectedBytes: baselineSummarySizeBytes,
+      baselineQuality: BASELINE_JPEG_QUALITY_BALANCED,
+      targetBytes,
+      floor: JPEG_QUALITY_FLOOR,
+      ceiling: JPEG_QUALITY_CEILING,
+      jpegBaselineBytes
+    });
+    plannedQuality = planned.quality;
+    displaySizeBytes = planned.expectedBytes;
+    atFloor = planned.quality <= JPEG_QUALITY_FLOOR;
+  } else {
+    plannedQuality = BASELINE_JPEG_QUALITY_BALANCED;
+    atFloor = false;
+  }
+
+  const displaySavingBytes = Math.max(0, report.originalSize - displaySizeBytes);
+  const savedPercent = report.originalSize > 0 ? (displaySavingBytes / report.originalSize) * 100 : 0;
+  const targetStatus = targetStatusFor(report.originalSize, displaySizeBytes, targetBytes);
+  const expectedSavingFormatted = formatBytes(displaySavingBytes);
+  const verdictResult = classifyTargetVerdict({
+    expectedBytes: displaySizeBytes,
+    floorExpectedBytes,
+    targetBytes,
+    atFloor
+  });
   return {
     kind: changed ? "custom" : "automatic",
     mode,
     originalSizeLabel: formatBytes(report.originalSize),
-    expectedSavingBytes,
-    expectedSavingLabel: wasCapped ? `최대 ${expectedSavingFormatted}` : expectedSavingFormatted,
-    expectedSizeBytes,
-    expectedSizeLabel: wasCapped ? `약 ${formatBytes(summarySizeBytes)}` : formatBytes(summarySizeBytes),
+    expectedSavingBytes: displaySavingBytes,
+    expectedSavingLabel: wasCapped && manualQuality === undefined && mode !== "aggressive"
+      ? `최대 ${expectedSavingFormatted}`
+      : expectedSavingFormatted,
+    expectedSizeBytes: displaySizeBytes,
+    expectedSizeLabel:
+      wasCapped && manualQuality === undefined && mode !== "aggressive"
+        ? `약 ${formatBytes(displaySizeBytes)}`
+        : formatBytes(displaySizeBytes),
     savedPercentLabel: `약 ${Math.min(99, Math.round(savedPercent))}% 감소`,
     targetBytes,
-    targetLabel: targetBytes ? `${formatBytes(targetBytes)} 이하` : "제한 없음",
+    targetLabel: targetBytes ? `${formatBytes(targetBytes)} 미만` : "제한 없음",
     targetStatus,
-    targetStatusLabel: targetStatusLabel(targetStatus),
+    targetStatusLabel: verdictResult.label,
+    verdict: verdictResult.verdict,
+    verdictLabel: verdictResult.label,
+    verdictDetail: verdictResult.detail,
+    floorExpectedBytes,
+    plannedJpegQuality: plannedQuality,
     selectedActions,
     actionRows,
-    planNotes: createPlanNotes({ report, mode, targetBytes, targetStatus })
+    planNotes: createPlanNotes({ report, mode, targetBytes, targetStatus, verdict: verdictResult.verdict })
   };
 }
 
@@ -222,13 +350,22 @@ function createPlanNotes(input: {
   mode: OptimizationMode;
   targetBytes?: number;
   targetStatus: PlanStatus;
+  verdict: TargetVerdict;
 }): SubmissionPlanNote[] {
   const notes: SubmissionPlanNote[] = [];
-  if (input.targetBytes && input.targetStatus === "target-missed" && input.mode !== "safe") {
+  if (input.targetBytes && input.verdict !== "pass" && input.verdict !== "no-target" && input.mode === "balanced") {
     notes.push({
       kind: "target",
-      label: "목표 용량 기반 추가 압축",
-      detail: `${formatBytes(input.targetBytes)} 목표까지 JPEG 품질/크기 후보를 순차 검토`,
+      label: "목표 용량에 맞춘 품질 탐색",
+      detail: `${formatBytes(input.targetBytes)} 미만을 만족하는 최고 JPEG 품질(60–95)을 자동 탐색`,
+      count: 1
+    });
+  }
+  if (input.targetBytes && input.mode === "aggressive") {
+    notes.push({
+      kind: "target",
+      label: "용량 우선 최대 압축",
+      detail: "제출 기준과 무관하게 JPEG 품질 하한까지 압축합니다",
       count: 1
     });
   }
@@ -290,9 +427,34 @@ function actionPriority(action: SubmissionActionId): number {
   return ACTION_PRIORITY_ORDER[action] ?? 100;
 }
 
-function floorToGranularity(value: number, granularity: number): number {
-  if (value <= 0) return 0;
-  return Math.floor(value / granularity) * granularity;
+function clampRatio(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * Use analysis ZIP projection when its implied savings roughly match the current
+ * opportunity groups; otherwise fall back (stale optimizedSize on overrides).
+ */
+function resolveProjectedBaselineBytes(input: {
+  originalSize: number;
+  projectedSize: number | undefined;
+  fullSavingBytes: number;
+  selectedSavingBytes: number;
+  fallbackSizeBytes: number | undefined;
+}): number | undefined {
+  const { originalSize, projectedSize, fullSavingBytes, selectedSavingBytes, fallbackSizeBytes } = input;
+  if (projectedSize === undefined || projectedSize <= 0 || projectedSize >= originalSize) {
+    return fallbackSizeBytes;
+  }
+  const projectedSaving = originalSize - projectedSize;
+  const compatible =
+    fullSavingBytes > 0 &&
+    projectedSaving > 0 &&
+    Math.abs(projectedSaving - fullSavingBytes) / Math.max(projectedSaving, fullSavingBytes) <= 0.55;
+  if (!compatible) return fallbackSizeBytes;
+  const ratio = fullSavingBytes > 0 ? clampRatio(selectedSavingBytes / fullSavingBytes) : 1;
+  return Math.round(originalSize - projectedSaving * ratio);
 }
 
 function normalizeInput(
@@ -306,19 +468,28 @@ function normalizeInput(
   return {
     submissionLimit: reportOrInput.limit,
     preservationPreference: reportOrInput.preservation,
-    actionOverrides: new Map(Object.entries(reportOrInput.actionOverrides) as Array<[SubmissionActionId, boolean]>)
+    actionOverrides: new Map(Object.entries(reportOrInput.actionOverrides) as Array<[SubmissionActionId, boolean]>),
+    ...(reportOrInput.jpegQuality !== undefined ? { jpegQuality: reportOrInput.jpegQuality } : {})
   };
+}
+
+/** "미만" semantics: strictly under the limit. */
+function meetsTarget(sizeBytes: number, targetBytes: number): boolean {
+  return sizeBytes < targetBytes;
 }
 
 function targetStatusFor(originalSize: number, expectedSize: number, targetBytes: number | undefined): PlanStatus {
   if (!targetBytes) return "no-target";
-  if (originalSize <= targetBytes) return "already-under-target";
-  return expectedSize <= targetBytes ? "target-met" : "target-missed";
+  if (meetsTarget(originalSize, targetBytes)) return "already-under-target";
+  return meetsTarget(expectedSize, targetBytes) ? "target-met" : "target-missed";
 }
 
-function targetStatusLabel(status: PlanStatus): string {
-  if (status === "target-met") return "목표 달성 가능";
-  if (status === "target-missed") return "목표 미달 가능";
-  if (status === "already-under-target") return "이미 목표 이하";
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+export function targetStatusLabel(status: PlanStatus): string {
+  if (status === "target-met" || status === "already-under-target") return "제출 가능";
+  if (status === "target-missed") return "더 압축 필요";
   return "목표 제한 없음";
 }

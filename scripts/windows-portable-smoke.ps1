@@ -15,10 +15,22 @@ $ErrorActionPreference = "Stop"
 if ($Artifact -eq "") {
   if (Test-Path -LiteralPath ".\HWPX Optimizer.exe") {
     $Artifact = ".\HWPX Optimizer.exe"
-  } elseif (Test-Path -LiteralPath ".\HWPX Optimizer-0.1.0-x64.exe") {
-    $Artifact = ".\HWPX Optimizer-0.1.0-x64.exe"
   } else {
-    $Artifact = "release\HWPX Optimizer-0.1.0-x64.exe"
+    $packageJson = Join-Path $PSScriptRoot "..\package.json"
+    $version = $null
+    if (Test-Path -LiteralPath $packageJson) {
+      $version = (Get-Content -LiteralPath $packageJson -Raw | ConvertFrom-Json).version
+    }
+    $candidates = @()
+    if ($version) {
+      $candidates += ".\HWPX Optimizer-$version-x64.exe"
+      $candidates += "release\HWPX Optimizer-$version-x64.exe"
+    }
+    $candidates += @(Get-ChildItem -Path @(".", "release") -Filter "HWPX Optimizer-*-x64.exe" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | ForEach-Object { $_.FullName })
+    $Artifact = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+    if (-not $Artifact) {
+      throw "Portable artifact not found. Pass -Artifact or build release/HWPX Optimizer-<version>-x64.exe first."
+    }
   }
 }
 
@@ -92,8 +104,10 @@ try {
 
   foreach ($currentMode in $modes) {
     $env:HWPX_OPT_SMOKE_MODE = $currentMode
+    # Packaged Electron rejects unknown --flags as Chromium options; use env trigger.
+    $env:HWPX_OPT_SMOKE_TEST = "1"
     Write-Host "Running desktop smoke: mode=$currentMode"
-    $process = Start-Process -FilePath $artifactPath -ArgumentList "--smoke-test" -Wait -PassThru
+    $process = Start-Process -FilePath $artifactPath -Wait -PassThru
     if ($process.ExitCode -ne 0) {
       throw "Desktop smoke failed with exit code $($process.ExitCode) for mode $currentMode"
     }
@@ -102,6 +116,7 @@ try {
     Write-Host "  - Includes analysis-details width and help manual regression"
   }
 } finally {
+  Remove-Item Env:\HWPX_OPT_SMOKE_TEST -ErrorAction SilentlyContinue
   if ($null -eq $previousInput) {
     Remove-Item Env:\HWPX_OPT_SMOKE_INPUT -ErrorAction SilentlyContinue
   } else {

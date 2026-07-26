@@ -21,3 +21,5 @@ build/
 /sample*.txt
 /결과/
 *:Zone.Identifier
+scripts/bench/out/
+scripts/bench/RESULT.md

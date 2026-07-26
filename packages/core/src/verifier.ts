@@ -372,23 +372,18 @@ function normalizeFormat(format: string): string {
 }
 
 function allowedAdvancedImagePaths(image: ImageInventoryItem, duplicatePaths: string[] = []): string[] {
-  const paths = new Set([image.path]);
-  for (const duplicatePath of duplicatePaths) {
-    paths.add(duplicatePath);
-  }
-  paths.add(replaceExtension(image.path, ".bmp"));
-  paths.add(replaceExtension(image.path, ".png"));
-  paths.add(replaceExtension(image.path, ".jpg"));
-  paths.add(replaceExtension(image.path, ".jpeg"));
-  if (normalizeFormat(image.format) === "bmp") {
-    paths.add(replaceExtension(image.path, ".png"));
-  }
-  if (normalizeFormat(image.format) === "tiff") {
-    paths.add(replaceExtension(image.path, ".png"));
-  }
-  if (normalizeFormat(image.format) === "jpeg") {
-    paths.add(replaceExtension(image.path, ".jpg"));
-    paths.add(replaceExtension(image.path, ".jpeg"));
+  // Include extension variants for every seed path. After same-visual consolidation the
+  // canonical may also be converted (BMP/TIFF→PNG), so a removed duplicate like
+  // image24.bmp must still resolve to the surviving image163.png.
+  const paths = new Set<string>();
+  for (const seed of [image.path, ...duplicatePaths]) {
+    paths.add(seed);
+    paths.add(replaceExtension(seed, ".bmp"));
+    paths.add(replaceExtension(seed, ".png"));
+    paths.add(replaceExtension(seed, ".jpg"));
+    paths.add(replaceExtension(seed, ".jpeg"));
+    paths.add(replaceExtension(seed, ".tif"));
+    paths.add(replaceExtension(seed, ".tiff"));
   }
   return [...paths];
 }

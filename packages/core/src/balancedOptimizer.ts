@@ -2,12 +2,15 @@ import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
+import { readImageMetadata } from "./imageMetadata.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageActionWithBudget } from "./opportunities.js";
 import type { ImageOptimizationProfile, TransformImageAction } from "./opportunities.js";
 import { normalizePackagePath } from "./packagePath.js";
 import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan } from "./types.js";
 import { getStringAttribute, getXmlAttributes, isXmlNode, setAttribute } from "./xmlNode.js";
 import type { XmlNode } from "./xmlNode.js";
+
+type PixelBudget = { width: number; height: number };
 
 export async function applyBalancedOptimizationPlan(input: {
   pkg: HwpxPackage;
@@ -35,7 +38,20 @@ export async function applyBalancedOptimizationPlan(input: {
   );
   const pathUpdates = new Map<string, string>();
   const mediaTypeUpdates = new Map<string, string>();
+  // Budgets from the post-consolidation package can under-estimate needs: a
+  // removed duplicate may have been shown larger (or with unparseable display
+  // size) than the canonical's remaining pic. Raise the canonical floor using
+  // pre-consolidation member budgets / source pixels so verifier collapse gates
+  // and on-page sharpness stay valid for every former placement.
+  const preConsolidationBudgets = getRecommendedImagePixelBudgets(input.pkg, profile.displayScale);
   const resizeBudgets = getRecommendedImagePixelBudgets(consolidated.pkg, profile.displayScale);
+  await expandResizeBudgetsForConsolidatedDuplicates({
+    originalPkg: input.pkg,
+    resizeBudgets,
+    preConsolidationBudgets,
+    profile,
+    imageConcurrency: input.imageConcurrency
+  });
 
   type TransformTask = { index: number; entry: HwpxEntry; action: TransformImageAction };
   type TransformOutcome =
@@ -84,8 +100,9 @@ export async function applyBalancedOptimizationPlan(input: {
 
   // Every existing entry path starts out occupied. A transform that changes an
   // extension (BMP/TIFF->PNG, JPEG->.jpg) must not land on a path already used by
-  // another entry, or repackaging would collapse two entries onto one zip name and
-  // lose an image / mis-point its manifest href. Colliding transforms are skipped.
+  // another entry, or repackaging would collapse two entries onto one zip name.
+  // On collision, allocate a unique sibling path (e.g. image1-opt.png) and rewrite
+  // manifest/XML refs to that path instead of skipping the conversion.
   const occupiedPaths = new Set(consolidated.pkg.entries.map((entry) => entry.path));
 
   for (const outcome of outcomes) {
@@ -102,23 +119,22 @@ export async function applyBalancedOptimizationPlan(input: {
       });
       continue;
     }
-    if (outcome.outputPath !== outcome.entry.path && occupiedPaths.has(outcome.outputPath)) {
-      transformedEntries[outcome.index] = outcome.entry;
-      skipped.push({ type: outcome.action, target: outcome.entry.path, beforeSize: outcome.entry.size });
+    let outputPath = outcome.outputPath;
+    if (outputPath !== outcome.entry.path && occupiedPaths.has(outputPath)) {
+      outputPath = allocateUniqueOutputPath(outputPath, occupiedPaths);
       warnings.push(
-        `${outcome.action} skipped for ${outcome.entry.path}: output path ${outcome.outputPath} collides with an existing entry`
+        `${outcome.action} for ${outcome.entry.path}: output path ${outcome.outputPath} collided; wrote ${outputPath}`
       );
-      continue;
     }
-    if (outcome.outputPath !== outcome.entry.path) {
+    if (outputPath !== outcome.entry.path) {
       occupiedPaths.delete(outcome.entry.path);
-      occupiedPaths.add(outcome.outputPath);
+      occupiedPaths.add(outputPath);
     }
-    pathUpdates.set(outcome.entry.path, outcome.outputPath);
-    mediaTypeUpdates.set(outcome.outputPath, outputMediaType(outcome.outputPath));
+    pathUpdates.set(outcome.entry.path, outputPath);
+    mediaTypeUpdates.set(outputPath, outputMediaType(outputPath));
     transformedEntries[outcome.index] = {
       ...outcome.entry,
-      path: outcome.outputPath,
+      path: outputPath,
       data: outcome.data,
       size: outcome.data.byteLength,
       kind: "image"
@@ -162,6 +178,61 @@ function isTransformImageAction(action: string): action is TransformImageAction 
     action === "strip-metadata" ||
     action === "optimize-png"
   );
+}
+
+function allocateUniqueOutputPath(desiredPath: string, occupiedPaths: Set<string>): string {
+  if (!occupiedPaths.has(desiredPath)) return desiredPath;
+  const match = /^(.*?)(\.[^./]+)$/.exec(desiredPath);
+  const base = match?.[1] ?? desiredPath;
+  const extension = match?.[2] ?? "";
+  for (let index = 1; index < 10_000; index += 1) {
+    const suffix = index === 1 ? "-opt" : `-opt${index}`;
+    const candidate = `${base}${suffix}${extension}`;
+    if (!occupiedPaths.has(candidate)) return candidate;
+  }
+  throw new Error(`Unable to allocate unique output path for ${desiredPath}`);
+}
+
+async function expandResizeBudgetsForConsolidatedDuplicates(input: {
+  originalPkg: HwpxPackage;
+  resizeBudgets: Map<string, PixelBudget>;
+  preConsolidationBudgets: Map<string, PixelBudget>;
+  profile: ImageOptimizationProfile;
+  imageConcurrency?: number;
+}): Promise<void> {
+  const entriesByPath = new Map(
+    input.originalPkg.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry])
+  );
+  const groups = await findImageConsolidationGroups(input.originalPkg, {
+    imageConcurrency: input.imageConcurrency
+  });
+
+  await mapLimit(groups, resolveImageConcurrency(input.imageConcurrency), async (group) => {
+    let maxWidth = 0;
+    let maxHeight = 0;
+    for (const path of group.paths) {
+      const displayBudget = input.preConsolidationBudgets.get(path);
+      if (displayBudget) {
+        maxWidth = Math.max(maxWidth, displayBudget.width);
+        maxHeight = Math.max(maxHeight, displayBudget.height);
+        continue;
+      }
+      const entry = entriesByPath.get(path);
+      if (!entry) continue;
+      const metadata = await readImageMetadata(path, entry.data, { rotate: true });
+      if (!metadata.width || !metadata.height) continue;
+      // No parseable display size: keep source pixels (capped by mode maxEdge).
+      maxWidth = Math.max(maxWidth, Math.min(metadata.width, input.profile.maxEdge));
+      maxHeight = Math.max(maxHeight, Math.min(metadata.height, input.profile.maxEdge));
+    }
+    if (maxWidth <= 0 || maxHeight <= 0) return;
+
+    const current = input.resizeBudgets.get(group.canonicalPath);
+    input.resizeBudgets.set(group.canonicalPath, {
+      width: Math.max(current?.width ?? 0, maxWidth),
+      height: Math.max(current?.height ?? 0, maxHeight)
+    });
+  });
 }
 
 async function consolidateDuplicateImages(

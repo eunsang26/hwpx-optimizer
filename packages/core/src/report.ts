@@ -13,11 +13,27 @@ export function createAnalysisReport(
   analysis: PackageAnalysis,
   originalSize = analysis.totalSize,
   opportunities: OptimizationOpportunity[] = [],
-  options: { targetBytes?: number; performance?: PerformanceSummary } = {}
+  options: {
+    targetBytes?: number;
+    performance?: PerformanceSummary;
+    /** Prefer ZIP-aware projection from `projectPackageSizeFromOpportunities`. */
+    projectedOptimizedSize?: number;
+    aggressiveProjectedOptimizedSize?: number;
+  } = {}
 ): OptimizationReport {
-  const projectedOptimizedSize = Math.max(0, originalSize - estimateNonOverlappingSavingBytes(groupOpportunities(opportunities)));
+  const fallbackProjected = Math.max(
+    0,
+    originalSize - estimateNonOverlappingSavingBytes(groupOpportunities(opportunities))
+  );
+  const projectedOptimizedSize =
+    options.projectedOptimizedSize !== undefined
+      ? Math.max(0, Math.min(originalSize, Math.round(options.projectedOptimizedSize)))
+      : fallbackProjected;
   return {
     originalSize,
+    optimizedSize: projectedOptimizedSize,
+    savedBytes: Math.max(0, originalSize - projectedOptimizedSize),
+    savedPercent: originalSize === 0 ? 0 : ((originalSize - projectedOptimizedSize) / originalSize) * 100,
     ...createTargetFields({
       originalSize,
       optimizedSize: projectedOptimizedSize,
@@ -35,6 +51,14 @@ export function createAnalysisReport(
     actions: { planned: [], applied: [], skipped: [] },
     opportunities,
     opportunityGroups: groupOpportunities(opportunities),
+    ...(options.aggressiveProjectedOptimizedSize !== undefined
+      ? {
+          aggressiveProjectedOptimizedSize: Math.max(
+            0,
+            Math.min(originalSize, Math.round(options.aggressiveProjectedOptimizedSize))
+          )
+        }
+      : {}),
     warnings: createWarnings(analysis),
     ...(options.performance ? { performance: options.performance } : {})
   };
@@ -51,6 +75,7 @@ export function createOptimizationReport(input: {
   warnings?: string[];
   targetBytes?: number;
   targetMissReason?: string;
+  plannedJpegQuality?: number;
   performance?: PerformanceSummary;
 }): OptimizationReport {
   const savedBytes = input.originalSize - input.optimizedSize;
@@ -65,6 +90,7 @@ export function createOptimizationReport(input: {
       targetBytes: input.targetBytes,
       missReason: input.targetMissReason ?? "No quality-preserving optimization candidate reached the target."
     }),
+    ...(input.plannedJpegQuality !== undefined ? { plannedJpegQuality: input.plannedJpegQuality } : {}),
     categorySizes: input.analysis.categorySizes,
     images: input.analysis.images,
     duplicateImages: input.analysis.duplicateImages,
@@ -92,11 +118,14 @@ function createTargetFields(input: {
   missReason: string;
 }): Pick<OptimizationReport, "targetBytes" | "targetStatus" | "targetMissReason"> {
   if (!input.targetBytes) return {};
-  if (input.originalSize <= input.targetBytes) {
-    return { targetBytes: input.targetBytes, targetStatus: "already-under-target" };
-  }
-  if (input.optimizedSize <= input.targetBytes) {
-    return { targetBytes: input.targetBytes, targetStatus: "met" };
+  // Submission "미만" is always judged on the candidate output size.
+  // already-under-target only when the original was already under AND the output stayed under —
+  // never label a grown/over-target output as already-under.
+  if (input.optimizedSize < input.targetBytes) {
+    return {
+      targetBytes: input.targetBytes,
+      targetStatus: input.originalSize < input.targetBytes ? "already-under-target" : "met"
+    };
   }
   return {
     targetBytes: input.targetBytes,

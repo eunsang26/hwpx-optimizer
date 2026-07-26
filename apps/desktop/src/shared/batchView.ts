@@ -16,6 +16,11 @@ export type BatchItemLike = {
   expectedSizeLabel?: string;
   targetLabel?: string;
   targetStatusLabel?: string;
+  qualityLabel?: string;
+  jpegQualityDisplay?: number;
+  /** When true, row shows an editable number instead of a planned-% button. */
+  qualityEditable?: boolean;
+  jpegQualityOverride?: number;
   allocatedTargetLabel?: string;
   savedBytes?: number;
   savedPercent?: number;
@@ -97,12 +102,8 @@ export function batchItemMetaText(item: BatchItemLike): string {
   }
   if (item.status === "failed") return item.error ?? "실패";
   if (item.status === "cancelled") return "취소됨";
-  if (item.originalSizeLabel && item.expectedSizeLabel && item.targetStatusLabel) {
-    return [
-      `${item.originalSizeLabel} → ${item.expectedSizeLabel}`,
-      item.targetStatusLabel,
-      item.allocatedTargetLabel
-    ].filter(Boolean).join(" · ");
+  if (item.status === "pending" && item.targetStatusLabel) {
+    return item.allocatedTargetLabel ?? "";
   }
   return item.path;
 }
@@ -111,15 +112,50 @@ export function applyOptimizationResultToBatchItem(
   item: BatchItemLike,
   response: { outputPath: string; reportPath?: string; report: OptimizationReport }
 ): BatchItemLike {
+  const { report } = response;
+  const optimizedSize = report.optimizedSize;
+  const targetStatusLabel = actualTargetStatusLabel(report);
   return {
     ...item,
     status: "done",
     outputPath: response.outputPath,
     reportPath: response.reportPath,
-    report: response.report,
-    savedBytes: response.report.savedBytes,
-    savedPercent: response.report.savedPercent
+    report,
+    savedBytes: report.savedBytes,
+    savedPercent: report.savedPercent,
+    ...(optimizedSize !== undefined
+      ? {
+          expectedSizeBytes: optimizedSize,
+          expectedSizeLabel: formatBytes(optimizedSize)
+        }
+      : {}),
+    ...(targetStatusLabel ? { targetStatusLabel } : {}),
+    ...(report.plannedJpegQuality !== undefined
+      ? {
+          jpegQualityDisplay: report.plannedJpegQuality,
+          qualityLabel: `${report.plannedJpegQuality}%`,
+          qualityEditable: false
+        }
+      : { qualityEditable: false })
   };
+}
+
+const JPEG_QUALITY_FLOOR = 60;
+
+/** Map a finished optimization report onto the batch table/hero verdict labels. */
+export function actualTargetStatusLabel(report: OptimizationReport): string | undefined {
+  if (!report.targetBytes) return "목표 제한 없음";
+  if (report.targetStatus === "met" || report.targetStatus === "already-under-target") {
+    return "제출 가능";
+  }
+  if (report.targetStatus === "missed") {
+    // Manual single-shot runs can miss without ever trying the floor — that is
+    // recoverable ("더 압축 필요"), not a hard miss at the quality floor.
+    const atFloor =
+      report.plannedJpegQuality === undefined || report.plannedJpegQuality <= JPEG_QUALITY_FLOOR;
+    return atFloor ? "기준 미달" : "더 압축 필요";
+  }
+  return undefined;
 }
 
 function emptyCounts(): Record<BatchItemStatus, number> {

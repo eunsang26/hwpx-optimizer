@@ -4,71 +4,136 @@ function joinLines(lines) {
   return lines.join(CRLF) + CRLF;
 }
 
+/**
+ * Batch files must stay ASCII-only in executable lines.
+ * UTF-8 Korean inside .bat (without OEM/CP949) breaks cmd.exe parsing on
+ * many Windows installs — the window flashes and closes before `pause`.
+ * Put Korean docs in 사용법.txt instead.
+ *
+ * Paths with parentheses (common in Korean Hangul filenames) also break
+ * cmd.exe when expanded unquoted inside `(...)` blocks. Keep this bat as a
+ * thin wrapper that forwards `%*` to a Node runner without echoing paths.
+ */
 export function renderDropHereBat() {
   return joinLines([
     "@echo off",
     "setlocal EnableExtensions",
-    "chcp 65001 >nul",
     'set "ROOT=%~dp0"',
     'set "NODE_OPTIONS="',
-    'set "CLI=%ROOT%app\\cli\\dist\\index.js"',
     'set "NODE=%ROOT%node\\node.exe"',
+    'set "RUN=%ROOT%app\\drop-here.mjs"',
+    'set "EC=0"',
+    "echo HWPX Optimizer portable CLI",
+    "echo.",
     'if not exist "%NODE%" (',
-    "  echo [오류] node.exe 가 없습니다: %NODE%",
+    "  echo [ERROR] Missing node.exe:",
+    '  echo   %NODE%',
+    "  set \"EC=1\"",
     "  goto :end",
     ")",
-    'if not exist "%CLI%" (',
-    "  echo [오류] CLI 가 없습니다: %CLI%",
+    'if not exist "%RUN%" (',
+    "  echo [ERROR] Missing drop-here runner:",
+    '  echo   %RUN%',
+    "  set \"EC=1\"",
     "  goto :end",
     ")",
     'if "%~1"=="" (',
-    "  echo 사용법: HWPX 파일 또는 폴더를 이 배치 파일에 끌어다 놓으세요.",
+    "  echo Usage: drag and drop an HWPX file or folder onto this bat.",
+    "  echo Korean help: open the usage .txt file in this folder.",
+    "  set \"EC=1\"",
     "  goto :end",
     ")",
-    "set /a N=0",
-    ":loop",
-    'if "%~1"=="" goto :done',
-    "set /a N+=1",
-    'if exist "%~1\\" (',
-    "  echo.",
-    "  echo === 폴더 배치: %~1 ===",
-    '  "%NODE%" "%CLI%" batch "%~1" --mode balanced',
-    '  if errorlevel 1 set "FAILED=1"',
-    ") else (",
-    "  echo.",
-    "  echo === 파일 최적화: %~1 ===",
-    '  call :optimize_file "%~1"',
-    ")",
-    "shift",
-    "goto :loop",
-    ":done",
-    "if defined FAILED exit /b 1",
-    "goto :end",
-    "",
-    ":optimize_file",
-    'set "RPT=%TEMP%\\hwpx-opt-%RANDOM%-%N%.report.json"',
-    '"%NODE%" "%CLI%" optimize "%~1" --mode balanced --report "%RPT%"',
-    'if errorlevel 1 set "FAILED=1"',
-    "exit /b 0",
-    "",
+    '"%NODE%" "%RUN%" %*',
+    'set "EC=%ERRORLEVEL%"',
     ":end",
-    'if /i "%HWPX_OPT_NO_PAUSE%"=="1" goto :eof',
+    'if /i "%HWPX_OPT_NO_PAUSE%"=="1" exit /b %EC%',
     "echo.",
-    "pause"
+    "pause",
+    "exit /b %EC%"
   ]);
+}
+
+/** Node drop runner — handles Unicode paths and parentheses safely. */
+export function renderDropHereMjs() {
+  return `import { spawnSync } from "node:child_process";
+import { mkdirSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const nodeExe = join(root, "node", "node.exe");
+const cli = join(root, "app", "cli", "dist", "index.js");
+const targets = process.argv.slice(2);
+
+if (targets.length === 0) {
+  console.log("Usage: drag and drop an HWPX file or folder onto drop-here.bat.");
+  process.exit(1);
+}
+
+let failed = false;
+let index = 0;
+for (const target of targets) {
+  index += 1;
+  let isDir = false;
+  try {
+    isDir = statSync(target).isDirectory();
+  } catch {
+    console.error(\`[ERROR] Path not found: \${target}\`);
+    failed = true;
+    continue;
+  }
+
+  if (isDir) {
+    console.log("");
+    console.log(\`=== batch folder (\${index}): \${target} ===\`);
+    const result = spawnSync(nodeExe, [cli, "batch", target, "--mode", "balanced"], {
+      stdio: "inherit",
+      windowsHide: true
+    });
+    if ((result.status ?? 1) !== 0) failed = true;
+    continue;
+  }
+
+  console.log("");
+  console.log(\`=== optimize file (\${index}): \${target} ===\`);
+  const report = join(tmpdir(), \`hwpx-opt-\${process.pid}-\${index}.report.json\`);
+  const result = spawnSync(
+    nodeExe,
+    [cli, "optimize", target, "--mode", "balanced", "--report", report],
+    { stdio: "inherit", windowsHide: true }
+  );
+  if ((result.status ?? 1) !== 0) failed = true;
+}
+
+if (failed) {
+  console.log("");
+  console.log("Finished with errors.");
+  process.exit(1);
+}
+console.log("");
+console.log("Done.");
+`;
 }
 
 export function renderHwpxOptCmd() {
   return joinLines([
     "@echo off",
     "setlocal EnableExtensions",
-    "chcp 65001 >nul",
     'set "ROOT=%~dp0"',
     'set "NODE_OPTIONS="',
+    'if "%~1"=="" (',
+    "  echo HWPX Optimizer CLI",
+    "  echo Usage: hwpx-opt.cmd optimize file.hwpx --mode balanced",
+    "  echo Korean help: open the usage .txt file in this folder.",
+    '  if /i not "%HWPX_OPT_NO_PAUSE%"=="1" pause',
+    "  exit /b 1",
+    ")",
     '"%ROOT%node\\node.exe" "%ROOT%app\\cli\\dist\\index.js" %*',
     'set "EC=%ERRORLEVEL%"',
     'if /i "%HWPX_OPT_NO_PAUSE%"=="1" exit /b %EC%',
-    'if not "%EC%"=="0" pause',
+    "echo.",
+    "pause",
     "exit /b %EC%"
   ]);
 }
@@ -78,8 +143,17 @@ export function renderUsageTxt() {
     "HWPX Optimizer — Windows 휴대용 CLI 사용법",
     "",
     "■ 빠른 시작",
-    "  drop-here.bat 을 더블클릭하거나, HWPX 파일·폴더를 drop-here.bat 위로 끌어다 놓으세요.",
+    "  1) 이 ZIP을 폴더에 압축 해제합니다 (ZIP 안에서 바로 실행하지 마세요).",
+    "  2) HWPX 파일 또는 폴더를 drop-here.bat 위로 끌어다 놓으세요.",
+    "  3) 검은 창이 뜨면 진행 로그가 보이고, 끝나면 '계속하려면...' 에서 아무 키나 누르세요.",
     "  기본 최적화 모드는 balanced 입니다.",
+    "",
+    "■ 파일명에 괄호 ( ) 가 있어도 됩니다",
+    "  drop-here.bat 은 Node 런너로 경로를 넘기므로 한글·괄호 파일명을 지원합니다.",
+    "",
+    "■ drop-here.bat 만 더블클릭하면?",
+    "  사용법 안내가 잠깐 뜨고 키 입력을 기다립니다. 창이 바로 닫히면",
+    "  압축을 풀었는지, drop-here.bat 이 node 폴더와 같은 위치에 있는지 확인하세요.",
     "",
     "■ 출력 위치",
     "  • 단일 파일: 원본과 같은 폴더에 .optimized.hwpx 로 저장됩니다.",

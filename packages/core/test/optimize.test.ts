@@ -126,7 +126,7 @@ describe("optimizeHwpxBufferSafe", () => {
     }
   });
 
-  it("does not run weaker target profiles after the strongest verified candidate still misses", async () => {
+  it("binary-searches JPEG quality when a balanced target remains unmet", async () => {
     const jpeg = await sharp({
       create: { width: 640, height: 480, channels: 3, background: "#99aabb" }
     })
@@ -141,10 +141,13 @@ describe("optimizeHwpxBufferSafe", () => {
     });
 
     const result = await optimizeHwpxBufferBalanced(input, { targetBytes: 1 });
-    const opportunityPasses = result.report.performance?.stages.filter((stage) => stage.name === "opportunities").length;
+    const opportunityPasses = result.report.performance?.stages.filter((stage) => stage.name === "opportunities").length ?? 0;
 
     expect(result.report.targetStatus).toBe("missed");
-    expect(opportunityPasses).toBe(1);
+    expect(opportunityPasses).toBeGreaterThan(1);
+    expect(result.report.plannedJpegQuality).toBeTypeOf("number");
+    expect(result.report.plannedJpegQuality).toBeGreaterThanOrEqual(60);
+    expect(result.report.plannedJpegQuality).toBeLessThanOrEqual(95);
   });
 
   it("prefers the least aggressive verified profile that still reaches a tight target", async () => {
@@ -257,6 +260,7 @@ describe("optimizeHwpxBufferSafe", () => {
       "read",
       "analyze",
       "opportunities",
+      "opportunities-aggressive",
       "report"
     ]);
   });

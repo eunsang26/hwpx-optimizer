@@ -5,7 +5,12 @@ export default defineConfig({
     conditions: ["development"]
   },
   test: {
-    include: ["packages/**/*.test.ts", "apps/**/*.test.ts", "scripts/cli-portable/**/*.test.ts"],
+    include: [
+      "packages/**/*.test.ts",
+      "apps/**/*.test.ts",
+      "scripts/cli-portable/**/*.test.ts",
+      "scripts/bench/**/*.test.ts"
+    ],
     environment: "node"
   }
 });

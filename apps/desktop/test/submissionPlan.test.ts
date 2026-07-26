@@ -3,6 +3,7 @@ import type { OptimizationReport } from "@hwpx-optimizer/core";
 import {
   createSubmissionPlan,
   modeForPreservation,
+  preservationForMode,
   resolveSubmissionLimitBytes
 } from "../src/shared/submissionPlan.js";
 
@@ -14,6 +15,9 @@ describe("submission optimization plan", () => {
     expect(modeForPreservation("preserve")).toBe("safe");
     expect(modeForPreservation("recommended")).toBe("balanced");
     expect(modeForPreservation("size")).toBe("aggressive");
+    expect(preservationForMode("safe")).toBe("preserve");
+    expect(preservationForMode("balanced")).toBe("recommended");
+    expect(preservationForMode("aggressive")).toBe("size");
   });
 
   it("resolves submission limits to bytes", () => {
@@ -22,26 +26,94 @@ describe("submission optimization plan", () => {
     expect(resolveSubmissionLimitBytes({ id: "mb10" })).toBe(10 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "mb20" })).toBe(20 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "mb30" })).toBe(30 * MIB);
+    expect(resolveSubmissionLimitBytes({ id: "mb40" })).toBe(40 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "mb41" })).toBe(41 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "mb50" })).toBe(50 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "mb100" })).toBe(100 * MIB);
     expect(resolveSubmissionLimitBytes({ id: "custom", customBytes: 12_345 })).toBe(12_345);
   });
 
-  it("creates an automatic submission plan from report opportunities", () => {
+  it("estimates aggressive auto plans at the quality floor", () => {
+    const recommended = createSubmissionPlan({
+      report: reportFixture,
+      limit: { id: "mb20" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+    const aggressive = createSubmissionPlan({
+      report: reportFixture,
+      limit: { id: "mb20" },
+      preservation: "size",
+      actionOverrides: {}
+    });
+    expect(aggressive.plannedJpegQuality).toBe(60);
+    expect(aggressive.expectedSizeBytes).toBeLessThan(recommended.expectedSizeBytes);
+    expect(aggressive.floorExpectedBytes).toBe(aggressive.expectedSizeBytes);
+  });
+
+  it("re-estimates expected size and verdict for manual JPEG quality", () => {
+    const auto = createSubmissionPlan({
+      report: reportFixture,
+      limit: { id: "mb10" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+    const manual = createSubmissionPlan({
+      report: reportFixture,
+      limit: { id: "mb10" },
+      preservation: "recommended",
+      actionOverrides: {},
+      jpegQuality: 60
+    });
+    expect(manual.plannedJpegQuality).toBe(60);
+    expect(manual.expectedSizeBytes).toBeLessThanOrEqual(auto.expectedSizeBytes);
+  });
+
+  it("plans balanced auto quality via target-fit search instead of a fixed 88", () => {
+    const loose = createSubmissionPlan({
+      report: reportFixture,
+      limit: { id: "mb40" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+    const tight = createSubmissionPlan({
+      report: reportFixture,
+      limit: { id: "mb10" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+    expect(loose.plannedJpegQuality).toBeGreaterThanOrEqual(88);
+    expect(tight.plannedJpegQuality).toBeLessThan(loose.plannedJpegQuality!);
+    expect(tight.expectedSizeBytes).toBeLessThan(loose.expectedSizeBytes);
+  });
+
+  it("ignores manual jpeg quality in aggressive/size mode", () => {
     const plan = createSubmissionPlan({
       report: reportFixture,
       limit: { id: "mb20" },
+      preservation: "size",
+      actionOverrides: {},
+      jpegQuality: 90
+    });
+    expect(plan.plannedJpegQuality).toBe(60);
+    expect(plan.expectedSizeBytes).toBe(plan.floorExpectedBytes);
+  });
+
+  it("creates an automatic submission plan from report opportunities", () => {
+    const plan = createSubmissionPlan({
+      report: reportFixture,
+      limit: { id: "none" },
       preservation: "recommended",
       actionOverrides: {}
     });
 
     expect(plan.kind).toBe("automatic");
     expect(plan.mode).toBe("balanced");
-    expect(plan.expectedSavingLabel).toBe("11.00 MiB");
-    expect(plan.expectedSizeLabel).toBe("17.00 MiB");
-    expect(plan.targetStatus).toBe("target-met");
-    expect(plan.targetStatusLabel).toBe("목표 달성 가능");
+    // Baseline is padded toward real encodes, so claimed savings are <= raw opportunity sum.
+    expect(plan.expectedSavingBytes).toBeLessThanOrEqual(11 * MIB);
+    expect(plan.expectedSizeBytes).toBeGreaterThanOrEqual(17 * MIB);
+    expect(plan.plannedJpegQuality).toBe(88);
+    expect(plan.targetStatus).toBe("no-target");
     expect(plan.actionRows.every((row) => row.checked)).toBe(true);
     expect(plan.actionRows.map((row) => [row.priority, row.action, row.savingLabel])).toEqual([
       [1, "consolidate-duplicate-images", "3.00 MiB"],
@@ -65,9 +137,9 @@ describe("submission optimization plan", () => {
       "strip-metadata",
       "clean-shape-comment"
     ]);
-    expect(plan.expectedSizeLabel).toBe("25.00 MiB");
-    expect(plan.targetStatus).toBe("target-missed");
-    expect(plan.targetStatusLabel).toBe("목표 미달 가능");
+    expect(plan.plannedJpegQuality).toBeDefined();
+    expect(plan.expectedSizeBytes).toBeLessThanOrEqual(28 * MIB);
+    expect(["제출 가능", "더 압축 필요", "기준 미달"]).toContain(plan.targetStatusLabel);
   });
 
   it("keeps automatic plan kind when action overrides match defaults", () => {
@@ -91,22 +163,25 @@ describe("submission optimization plan", () => {
     });
 
     expect(plan.targetStatus).toBe("already-under-target");
-    expect(plan.targetStatusLabel).toBe("이미 목표 이하");
+    expect(plan.targetStatusLabel).toBe("제출 가능");
+    expect(plan.verdict).toBe("pass");
   });
 
-  it("does not mark the target met when the displayed expected size misses it", () => {
+  it("marks hard-miss when even the floor estimate stays over the target", () => {
     const plan = createSubmissionPlan({
       report: {
         ...reportFixture,
-        originalSize: 20.1 * MIB,
+        originalSize: 80 * MIB,
+        optimizedSize: undefined,
+        aggressiveProjectedOptimizedSize: undefined,
         opportunityGroups: [
           {
             action: "strip-metadata",
             label: "Strip metadata",
             count: 1,
-            estimatedSavingBytes: 100 * KIB,
+            estimatedSavingBytes: 200 * KIB,
             beforeSize: MIB,
-            afterSize: MIB - 100 * KIB,
+            afterSize: MIB - 200 * KIB,
             confidence: "estimated",
             risk: "safe",
             visualImpact: "none",
@@ -120,10 +195,10 @@ describe("submission optimization plan", () => {
       actionOverrides: {}
     });
 
-    expect(plan.expectedSavingLabel).toBe("0 B");
-    expect(plan.expectedSizeLabel).toBe("20.10 MiB");
+    expect(plan.plannedJpegQuality).toBe(60);
+    expect(plan.verdict).toBe("hard-miss");
     expect(plan.targetStatus).toBe("target-missed");
-    expect(plan.targetStatusLabel).toBe("목표 미달 가능");
+    expect(plan.targetStatusLabel).toBe("기준 미달");
   });
 
   it("renders individual priority rows instead of hiding work inside broad buckets", () => {
@@ -212,7 +287,7 @@ describe("submission optimization plan", () => {
           }
         ]
       },
-      limit: { id: "mb20" },
+      limit: { id: "none" },
       preservation: "recommended",
       actionOverrides: {}
     });
@@ -236,7 +311,9 @@ describe("submission optimization plan", () => {
         savingLabel: "1.00 MiB"
       })
     );
-    expect(plan.expectedSavingBytes).toBe(2 * MIB);
+    // Live total uses only checked rows (resize-jpeg); pad may reduce claimed package savings.
+    expect(plan.expectedSavingBytes).toBeGreaterThan(0);
+    expect(plan.expectedSavingBytes).toBeLessThanOrEqual(2 * MIB);
     expect(plan.selectedActions).toEqual(["resize-jpeg"]);
   });
 
@@ -304,6 +381,8 @@ describe("submission optimization plan", () => {
       report: {
         ...reportFixture,
         originalSize: 20 * MIB,
+        optimizedSize: undefined,
+        aggressiveProjectedOptimizedSize: undefined,
         opportunityGroups: [
           {
             action: "resize-jpeg",
@@ -333,14 +412,16 @@ describe("submission optimization plan", () => {
           }
         ]
       },
-      limit: { id: "custom", customBytes: 5 * MIB },
+      limit: { id: "none" },
       preservation: "recommended",
       actionOverrides: {}
     });
 
-    expect(plan.expectedSavingBytes).toBe(10 * MIB);
-    expect(plan.expectedSizeLabel).toBe("10.00 MiB");
-    expect(plan.targetStatus).toBe("target-missed");
+    // Overlapping BinData/a.jpg opportunities must not sum to 19 MiB — max per target wins.
+    expect(plan.expectedSavingBytes).toBeLessThanOrEqual(10 * MIB);
+    expect(plan.expectedSavingBytes).toBeGreaterThan(5 * MIB);
+    expect(plan.expectedSizeBytes).toBeGreaterThanOrEqual(10 * MIB);
+    expect(plan.targetStatus).toBe("no-target");
   });
 
   it("surfaces target-aware and review-only diagnostics in the automatic plan", () => {
@@ -373,33 +454,37 @@ describe("submission optimization plan", () => {
       actionOverrides: {}
     });
 
-    expect(plan.planNotes).toEqual([
-      expect.objectContaining({
-        kind: "target",
-        label: "목표 용량 기반 추가 압축",
-        detail: expect.stringContaining("JPEG 품질")
-      }),
-      expect.objectContaining({
-        kind: "quality",
-        label: "이미지 품질 자동 검증",
-        detail: expect.stringContaining("PSNR/SSIM")
-      }),
-      expect.objectContaining({
-        kind: "review",
-        label: "유사 이미지 확인 필요",
-        detail: expect.stringContaining("자동 병합하지 않음")
-      }),
-      expect.objectContaining({
-        kind: "review",
-        label: "폰트/OLE 용량 확인",
-        detail: expect.stringContaining("자동 제거하지 않음")
-      })
-    ]);
+    expect(plan.planNotes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "target",
+          label: "목표 용량에 맞춘 품질 탐색",
+          detail: expect.stringContaining("JPEG 품질")
+        }),
+        expect.objectContaining({
+          kind: "quality",
+          label: "이미지 품질 자동 검증",
+          detail: expect.stringContaining("PSNR/SSIM")
+        }),
+        expect.objectContaining({
+          kind: "review",
+          label: "유사 이미지 확인 필요",
+          detail: expect.stringContaining("자동 병합하지 않음")
+        }),
+        expect.objectContaining({
+          kind: "review",
+          label: "폰트/OLE 용량 확인",
+          detail: expect.stringContaining("자동 제거하지 않음")
+        })
+      ])
+    );
   });
 });
 
 const reportFixture: OptimizationReport = {
   originalSize: 28 * MIB,
+  optimizedSize: 17 * MIB,
+  aggressiveProjectedOptimizedSize: 6 * MIB,
   categorySizes: {
     xml: 100,
     image: 200,

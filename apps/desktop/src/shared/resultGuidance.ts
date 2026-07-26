@@ -8,7 +8,7 @@ export function resultGuidanceText(report: OptimizationReport, plan: SubmissionP
   } else if (report.targetStatus === "met") {
     notes.push("제출 목표를 충족했습니다. 제출 전 결과 파일을 열어 문서 외형을 확인하세요.");
   } else if (report.targetStatus === "already-under-target") {
-    notes.push("원본부터 제출 목표 이하입니다. 최적화 결과는 보조 절감으로 확인하세요.");
+    notes.push("원본부터 제출 목표 미만입니다. 최적화 결과는 보조 절감으로 확인하세요.");
   } else {
     notes.push("제출 전 결과 파일을 열어 문서 외형과 첨부 리소스를 확인하세요.");
   }
@@ -37,7 +37,7 @@ function targetMissReasonLabel(reason: string | undefined): string | undefined {
     return "품질 보존 가능한 후보만 적용했습니다.";
   }
   if (/already under target/i.test(reason)) {
-    return "원본이 이미 목표 이하입니다.";
+    return "원본이 이미 목표 미만입니다.";
   }
   return "품질 또는 문서 보존 기준 때문에 추가 압축을 적용하지 않았습니다.";
 }
