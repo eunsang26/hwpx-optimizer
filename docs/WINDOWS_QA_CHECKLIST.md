@@ -13,8 +13,8 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 - A local HWPX sample file. Do not commit sample files.
 - A protected or signed HWPX-like test package, if available, for rejection-path confirmation. Do not use real confidential documents as test fixtures.
 - A release artifact from `release/`, either:
-  - `HWPX Optimizer-0.1.4-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
-  - `HWPX Optimizer-0.1.4-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
+  - `HWPX Optimizer-0.1.5-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
+  - `HWPX Optimizer-0.1.5-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
   - the NSIS installer produced by `npm run release:check:win`.
 
 ## Artifact Integrity
@@ -22,8 +22,8 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 From a PowerShell prompt in the project root:
 
 ```powershell
-Get-FileHash ".\release\HWPX Optimizer-0.1.4-x64.exe" -Algorithm SHA256
-Get-FileHash ".\release\HWPX Optimizer-0.1.4-x64.zip" -Algorithm SHA256
+Get-FileHash ".\release\HWPX Optimizer-0.1.5-x64.exe" -Algorithm SHA256
+Get-FileHash ".\release\HWPX Optimizer-0.1.5-x64.zip" -Algorithm SHA256
 ```
 
 Compare the hash with `release/SHA256SUMS.txt`.
@@ -244,7 +244,7 @@ Environment: WSL2 + `C:\Temp`, Node 20, artifact `HWPX Optimizer-0.1.3-x64.exe` 
 
 ### Operator checklist (Hancom / clean PC) — do manually
 
-1. Extract `HWPX Optimizer-0.1.4-x64.zip` on a clean Windows 10/11 PC.
+1. Extract `HWPX Optimizer-0.1.5-x64.zip` on a clean Windows 10/11 PC.
 2. Drag/drop a real local `.hwpx`, run balanced, confirm original untouched.
 3. Open `*_optimized.hwpx` in 한글(Hancom) and spot-check text/images/tables.
 4. Restart app; confirm no recent-file/history restore.

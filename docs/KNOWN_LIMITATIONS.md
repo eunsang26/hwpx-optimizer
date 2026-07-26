@@ -4,7 +4,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Final Product Release
 
-- Desktop drag/drop uses Electron `webUtils.getPathForFile`. Automated portable smoke and local Windows-path hands-on checks are recorded in `docs/WINDOWS_QA_CHECKLIST.md` (2026-07-26 quality tracks and v0.1.4). Remaining gaps on a dedicated clean institutional PC: Hancom viewer open of optimized outputs, very large packages, and long-running zero-history restart sign-off. These gaps permit a clearly labeled prerelease, but not a final product-ready claim.
+- Desktop drag/drop uses Electron `webUtils.getPathForFile`. Automated portable smoke and local Windows-path hands-on checks are recorded in `docs/WINDOWS_QA_CHECKLIST.md` (2026-07-26 quality tracks and v0.1.4/v0.1.5). Remaining gaps on a dedicated clean institutional PC: Hancom viewer open of optimized outputs, very large packages, and long-running zero-history restart sign-off. These gaps permit a clearly labeled prerelease, but not a final product-ready claim.
 
 ## Verified Release Infrastructure
 

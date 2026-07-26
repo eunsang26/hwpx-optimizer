@@ -1,7 +1,7 @@
 # Completion Audit
 
 Date: 2026-07-26
-Status: Feature complete; v0.1.4 prerelease candidate verified; final clean-PC/Hancom sign-off pending
+Status: Feature complete; v0.1.5 prerelease candidate in verification; final clean-PC/Hancom sign-off pending
 
 ## Objective
 
@@ -63,8 +63,8 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Desktop icon resources | `scripts/generate-desktop-icons.mjs`, `npm run desktop:icons`, generated `build/icon.png` and `build/icon.ico` | Implemented |
 | Linux unpacked build | `npm run desktop:pack` passed on 2026-05-08 | Verified |
 | Windows unpacked build | `npm run desktop:pack:win` passed on 2026-05-08 | Verified as build artifact only |
-| Windows portable artifact | `npm run desktop:portable:win`, `release/HWPX Optimizer-0.1.4-x64.exe` | Verified build artifact and Windows runtime smoke |
-| Windows fast-start ZIP artifact | `npm run desktop:zip:win`, `release/HWPX Optimizer-0.1.4-x64.zip` | Verified build artifact |
+| Windows portable artifact | `npm run desktop:portable:win`, `release/HWPX Optimizer-0.1.5-x64.exe` | Release verification in progress |
+| Windows fast-start ZIP artifact | `npm run desktop:zip:win`, `release/HWPX Optimizer-0.1.5-x64.zip` | Release verification in progress |
 | Windows portable release gate | `npm run release:check:win-portable` | Verified |
 | Release artifact hygiene | `scripts/check-release-artifacts.mjs`, `package.json` `release:verify-artifacts` | Implemented: packaged app/ZIP are checked for source maps, type declarations, tests, docs, git/editor metadata, samples, generated reports, optimized outputs, settings, history, logs, and smoke workspaces |
 | Windows sharp native runtime packaging | `package.json` `asarUnpack`, `scripts/prepare-win-sharp-runtime.mjs`, `scripts/verify-win-native-runtime.mjs`, `npm run release:verify-win-native` | Verified: `sharp-win32-x64.node`, `libvips-cpp.dll`, and `libvips-42.dll` are unpacked outside `app.asar` |
