@@ -6,36 +6,76 @@ import { spawnFile } from "./lib/spawn-file.mjs";
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const productName = packageJson.build?.productName ?? packageJson.name;
 const version = packageJson.version;
-const certPath = join(".tmp", "codesign", "hwpx-optimizer-selfsigned.pfx");
-const passwordPath = join(".tmp", "codesign", "hwpx-optimizer-selfsigned.password");
+const codesignDir = join(".tmp", "codesign");
+const selfSignedCertPath = join(codesignDir, "hwpx-optimizer-selfsigned.pfx");
+const selfSignedPasswordPath = join(codesignDir, "hwpx-optimizer-selfsigned.password");
+const signKindPath = join(codesignDir, "last-sign-kind.txt");
 const appExePath = join("release", "win-unpacked", `${productName}.exe`);
 const portableExePath = join("release", `${productName}-${version}-x64.exe`);
 const zipPath = join("release", `${productName}-${version}-x64.zip`);
 
-await spawnFile(process.execPath, ["scripts/ensure-self-signed-codesign-cert.mjs"]);
-
-const password = (await readFile(passwordPath, "utf8")).trim();
+const material = await resolveSigningMaterial();
 const osslsigncode = await resolveOsslSigncode();
 
-await signPe(osslsigncode, appExePath, password);
-await signPe(osslsigncode, portableExePath, password);
+await signPe(osslsigncode, appExePath, material);
+await signPe(osslsigncode, portableExePath, material);
 await writeZipFromDirectory(join("release", "win-unpacked"), zipPath);
+await mkdir(codesignDir, { recursive: true });
+await writeFile(signKindPath, `${material.kind}\n`, "utf8");
 
-console.log(`Self-signed ${appExePath}`);
-console.log(`Self-signed ${portableExePath}`);
+const label = material.kind === "organization" ? "Org-signed" : "Self-signed";
+console.log(`${label} ${appExePath}`);
+console.log(`${label} ${portableExePath}`);
 console.log(`Repacked ${zipPath} from signed win-unpacked directory`);
+console.log(`Wrote ${signKindPath} (${material.kind})`);
 
-async function signPe(osslsigncodePath, inputPath, password) {
-  const outputDir = join(".tmp", "codesign", "signed");
+async function resolveSigningMaterial() {
+  const link = process.env.HWPX_WIN_CSC_LINK || process.env.CSC_LINK;
+  const password = process.env.HWPX_WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD;
+  if (link) {
+    if (!password) {
+      throw new Error(
+        "HWPX_WIN_CSC_LINK (or CSC_LINK) is set but HWPX_WIN_CSC_KEY_PASSWORD (or CSC_KEY_PASSWORD) is missing."
+      );
+    }
+    const certPath = await materializePfx(link);
+    return { kind: "organization", certPath, password };
+  }
+
+  await spawnFile(process.execPath, ["scripts/ensure-self-signed-codesign-cert.mjs"]);
+  return {
+    kind: "self-signed",
+    certPath: selfSignedCertPath,
+    password: (await readFile(selfSignedPasswordPath, "utf8")).trim()
+  };
+}
+
+async function materializePfx(link) {
+  await mkdir(codesignDir, { recursive: true });
+  try {
+    await stat(link);
+    return resolve(link);
+  } catch {
+    // not a readable path — treat as base64 PFX payload
+  }
+
+  const outPath = join(codesignDir, "organization.pfx");
+  const normalized = link.replace(/^base64,/, "").replace(/\s+/g, "");
+  await writeFile(outPath, Buffer.from(normalized, "base64"));
+  return outPath;
+}
+
+async function signPe(osslsigncodePath, inputPath, material) {
+  const outputDir = join(codesignDir, "signed");
   await mkdir(outputDir, { recursive: true });
   const outputPath = join(outputDir, `${basename(inputPath)}.signed`);
 
   await spawnFile(osslsigncodePath, [
     "sign",
     "-pkcs12",
-    certPath,
+    material.certPath,
     "-pass",
-    password,
+    material.password,
     "-n",
     productName,
     "-i",

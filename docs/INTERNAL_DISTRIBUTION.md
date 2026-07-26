@@ -54,7 +54,10 @@ HWPX Optimizer는 사용자의 PC 안에서 HWPX 문서 용량 원인을 분석�
 5. 배포 파일명, 버전, 배포일, 담당자, SHA256 값, 자체서명 상태, `TERMS.txt` 사용 조건, 보증 부인 및 사용자 책임 문구를 배포 공지에 포함한다.
 6. 승인된 사내 공유 위치 또는 소프트웨어 배포 시스템으로만 배포한다.
 7. 직원 간 공유 시에도 사용 후 폴더가 아니라 릴리즈 게이트를 통과한 원본 ZIP 또는 portable EXE만 공유한다.
-8. 공개 CA 코드서명 인증서가 준비된 경우 자체서명 대신 공개 CA 서명 절차를 수행하고 서명 결과를 배포 기록에 남긴다.
+8. 공개 CA / 조직 코드서명 PFX가 준비된 경우, 서명 전에 환경 변수를 설정한다:
+   - `HWPX_WIN_CSC_LINK` — PFX 파일 경로 또는 base64 PFX (electron-builder `CSC_LINK`도 허용)
+   - `HWPX_WIN_CSC_KEY_PASSWORD` — PFX 암호 (`CSC_KEY_PASSWORD`도 허용)
+   그다음 `npm run desktop:local:win:self-signed` 또는 `release:check:win-portable`를 실행한다. 스크립트가 조직 PFX로 서명하고 `.tmp/codesign/last-sign-kind.txt`에 `organization`을 기록하며, 배포 공지가 자체서명 문구 대신 조직 서명 문구를 쓴다. 변수가 없으면 기존 자체서명 경로를 유지한다.
 
 ## Desktop vs CLI Portable 선택
 

@@ -39,6 +39,16 @@ const args = [
 
 if (process.env.HWPX_OPT_WINDOWS_SMOKE_ALL_MODES === "1") {
   args.push("-AllModes");
+} else if (process.env.HWPX_OPT_SMOKE_MODE) {
+  args.push("-Mode", process.env.HWPX_OPT_SMOKE_MODE);
+}
+
+if (process.env.HWPX_OPT_SMOKE_INPUT) {
+  const samplePath = resolve(process.env.HWPX_OPT_SMOKE_INPUT);
+  if (!existsSync(samplePath)) {
+    throw new Error(`Smoke sample not found: ${samplePath}`);
+  }
+  args.push("-Sample", toPowerShellPath(samplePath, powershell));
 }
 
 const result = spawnSync(powershell, args, { stdio: "inherit", env: process.env });

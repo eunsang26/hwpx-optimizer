@@ -189,3 +189,23 @@ Windows QA passes only when:
 - Internal distribution evidence references `docs/INTERNAL_DISTRIBUTION.md` and `docs/SECURITY_REVIEW.md`.
 
 Do not mark the product release complete if any item above is unverified.
+
+## Evidence log — 2026-07-26 (quality tracks)
+
+Environment: WSL2 + Windows-visible temp (`C:\Temp`), Node 20, packaged `HWPX Optimizer-0.1.2-x64.exe` from `release/`, plus source-built Electron smoke for post-0.1.2 code changes.
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Artifact SHA256 vs `SHA256SUMS.txt` | Pass | Matched during portable smoke |
+| Portable smoke synthetic (prior gate) | Pass | `release:check:win-portable` on 0.1.2 |
+| Portable smoke `sample2.hwpx` safe | Pass | Drag/drop overlay + analysis-details regressions included |
+| Portable smoke `sample2.hwpx` balanced | Pass | After wiring `HWPX_OPT_SMOKE_MODE`/`INPUT` into PS1 args |
+| Portable smoke `sample2.hwpx` aggressive | Pass | Same wrapper path |
+| Source `npm run desktop:smoke` (xvfb) | Pass | Includes quality-track Desktop build |
+| Unit/integration `npm test` | Pass | 423 passed, 1 skipped |
+| `npm run typecheck` | Pass | |
+| Manual batch UI on packaged EXE | Partial | Automated smoke covers optimize path; full multi-select UI not separately filmed |
+| Settings persistence / zero-history restart | 미실시 | Needs dedicated clean PC soak |
+| Open optimized output in Hancom | 미실시 | Hancom not available in this environment |
+| NSIS installer gate | Pass (CI) | `windows-release.yml` on `main` after audit fix |
+| Institutional clean-PC sign-off | 미실시 | Documented remaining gap in `KNOWN_LIMITATIONS.md` |

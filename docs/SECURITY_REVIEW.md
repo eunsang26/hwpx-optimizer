@@ -52,7 +52,7 @@ npm run release:check:win-portable:self-signed
 - 결과물 제출·배포·보관 전 사용자 직접 확인, 원본 보존, 최종 사용 책임을 공지한다.
 - 직원 간 공유가 필요한 경우 사용 후 폴더가 아니라 릴리즈 게이트를 통과한 원본 ZIP 또는 portable EXE만 공유한다.
 - 공개 CA 코드서명 인증서가 없는 경우 자체서명 코드서명 인증서로 Windows artifact에 서명하고, Windows 게시자 신뢰 경고 가능성을 승인 기록에 명시한다.
-- 공개 CA 코드서명 인증서가 준비된 경우 자체서명 대신 공개 CA 서명을 수행하고 서명 결과를 배포 기록에 남긴다.
+- 공개 CA / 조직 PFX가 준비된 경우 `HWPX_WIN_CSC_LINK` + `HWPX_WIN_CSC_KEY_PASSWORD`(또는 `CSC_LINK` / `CSC_KEY_PASSWORD`)를 설정한 뒤 동일 서명 스크립트로 서명하고, `release/RELEASE_NOTICE_*.txt`의 서명 종류와 SHA256을 배포 기록에 남긴다.
 
 ## 5. 운영 문서
 

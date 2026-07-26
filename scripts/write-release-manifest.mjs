@@ -45,6 +45,7 @@ await writeFile(
   join(releaseDir, "SHA256SUMS.txt"),
   `${entries.map((entry) => `${entry.sha256}  ${entry.file}`).join("\n")}\n`
 );
+const signingKind = await resolveSigningKind(portableExePath);
 await writeFile(
   join(releaseDir, releaseNoticeFile),
   releaseNoticeText({
@@ -52,7 +53,7 @@ await writeFile(
     version,
     generatedAt,
     entries,
-    isSelfSigned: await hasAuthenticodeCertificateTable(portableExePath),
+    signingKind,
     hasCliPortableZip: entries.some((entry) => entry.file === CLI_PORTABLE_ZIP_NAME)
   })
 );
@@ -70,20 +71,26 @@ async function exists(path) {
   }
 }
 
-function releaseNoticeText({ productName, version, generatedAt, entries, isSelfSigned, hasCliPortableZip }) {
+function releaseNoticeText({ productName, version, generatedAt, entries, signingKind, hasCliPortableZip }) {
   const hasElectronArtifacts = entries.some(
     (entry) =>
       entry.file.endsWith(".exe") ||
       (entry.file.endsWith(".zip") && entry.file !== CLI_PORTABLE_ZIP_NAME)
   );
-  const electronSigningText = isSelfSigned
-    ? `- Desktop portable EXE/ZIP은 공개 CA 인증서가 아닌 자체서명 코드서명 인증서로 서명된 배포본입니다.
+  const electronSigningText =
+    signingKind === "organization"
+      ? `- Desktop portable EXE/ZIP은 조직/공개 CA PFX(\`HWPX_WIN_CSC_LINK\`)로 코드서명된 배포본입니다.
+- SmartScreen 평판은 인증서 종류(표준/EV)와 다운로드 이력에 따라 달라질 수 있습니다.
+- 인증서 또는 배포 파일이 교체된 경우 릴리즈 담당자가 서명 상태와 SHA256 값을 새 배포 기록에 다시 남겨야 합니다.`
+      : signingKind === "self-signed"
+        ? `- Desktop portable EXE/ZIP은 공개 CA 인증서가 아닌 자체서명 코드서명 인증서로 서명된 배포본입니다.
 - Windows에서 게시자를 신뢰하지 못한다는 경고가 표시될 수 있습니다.
-- 자체서명 인증서 또는 배포 파일이 교체된 경우 릴리즈 담당자가 서명 상태와 SHA256 값을 새 배포 기록에 다시 남겨야 합니다.`
-    : hasElectronArtifacts
-      ? `- Desktop portable EXE/ZIP은 코드서명 인증서로 서명되지 않은 미서명 배포본입니다.
+- 자체서명 인증서 또는 배포 파일이 교체된 경우 릴리즈 담당자가 서명 상태와 SHA256 값을 새 배포 기록에 다시 남겨야 합니다.
+- 공개 CA PFX가 준비되면 \`HWPX_WIN_CSC_LINK\` / \`HWPX_WIN_CSC_KEY_PASSWORD\`로 전환할 수 있습니다.`
+        : hasElectronArtifacts
+          ? `- Desktop portable EXE/ZIP은 코드서명 인증서로 서명되지 않은 미서명 배포본입니다.
 - 코드서명 인증서가 준비된 경우 릴리즈 담당자가 서명 후 서명 상태와 SHA256 값을 새 배포 기록에 다시 남겨야 합니다.`
-      : "";
+          : "";
   const cliPortableSigningText = hasCliPortableZip
     ? `- CLI portable ZIP(${CLI_PORTABLE_ZIP_NAME})은 서명되지 않은 node.exe와 .bat 런처를 포함합니다.
 - SmartScreen, 백신, 그룹 정책으로 실행이 차단될 수 있으므로 IT 부서와 허용 목록(allowlist) 및 MotW 처리 절차를 사전에 문서화하세요.`
@@ -117,6 +124,17 @@ ${signingText}
 - 사용자는 원본 문서를 보존하고, 생성된 결과물을 제출, 배포, 보관하기 전에 직접 열람하여 내용, 서식, 이미지, 표, 첨부 리소스 이상 여부를 확인해야 합니다.
 - 본 소프트웨어의 사용 또는 사용 불능, 최적화 결과물의 오류, 문서 손상, 데이터 손실, 제출 지연, 업무상 손해 등으로 발생하는 문제에 대한 최종 확인 및 사용 책임은 사용자에게 있습니다.
 	`;
+}
+
+async function resolveSigningKind(portablePath) {
+  try {
+    const kind = (await readFile(join(".tmp", "codesign", "last-sign-kind.txt"), "utf8")).trim();
+    if (kind === "organization" || kind === "self-signed") return kind;
+  } catch {
+    // fall through to PE table probe
+  }
+  if (await hasAuthenticodeCertificateTable(portablePath)) return "self-signed";
+  return "unsigned";
 }
 
 async function hasAuthenticodeCertificateTable(path) {

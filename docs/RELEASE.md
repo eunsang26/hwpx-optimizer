@@ -261,7 +261,7 @@ Before treating a build as releasable:
 8. Complete [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) on a clean Windows machine.
 9. Attach [Internal Distribution Guide](INTERNAL_DISTRIBUTION.md), [Security Review Checklist](SECURITY_REVIEW.md), SHA256 checksums, and test evidence to the internal approval record.
 10. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
-11. Use `npm run desktop:local:win:self-signed` or the self-signed release gate for internal distribution; replace it with approved public CA code signing when a certificate is available.
+11. Use `npm run desktop:local:win:self-signed` or the self-signed release gate for internal distribution. When an organization/public-CA PFX is available, set `HWPX_WIN_CSC_LINK` and `HWPX_WIN_CSC_KEY_PASSWORD` (aliases: `CSC_LINK`, `CSC_KEY_PASSWORD`) before the same scripts; omit them to keep the self-signed path.
 12. Install or launch the generated artifact on a clean Windows machine.
 
 Suggested future scripts:
