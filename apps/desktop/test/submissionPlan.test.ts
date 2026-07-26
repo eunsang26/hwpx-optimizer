@@ -142,6 +142,56 @@ describe("submission optimization plan", () => {
     expect(["제출 가능", "더 압축 필요", "기준 미달"]).toContain(plan.targetStatusLabel);
   });
 
+  it("surfaces safe structural actions in balanced plans", () => {
+    const plan = createSubmissionPlan({
+      report: {
+        ...reportFixture,
+        opportunityGroups: [
+          ...reportFixture.opportunityGroups,
+          {
+            action: "remove-unused",
+            label: "Remove unused BinData",
+            count: 2,
+            estimatedSavingBytes: 2 * MIB,
+            beforeSize: 2 * MIB,
+            afterSize: 0,
+            confidence: "exact",
+            risk: "safe",
+            visualImpact: "none",
+            defaultEnabledIn: ["safe", "balanced", "aggressive"],
+            targets: ["BinData/unused1.bin", "BinData/unused2.bin"]
+          },
+          {
+            action: "minify-xml",
+            label: "Minify document XML",
+            count: 3,
+            estimatedSavingBytes: 100 * KIB,
+            beforeSize: 500 * KIB,
+            afterSize: 400 * KIB,
+            confidence: "exact",
+            risk: "safe",
+            visualImpact: "none",
+            defaultEnabledIn: ["safe", "balanced", "aggressive"],
+            targets: ["Contents/content.hpf", "Contents/header.xml", "Contents/section0.xml"]
+          }
+        ]
+      },
+      limit: { id: "mb40" },
+      preservation: "recommended",
+      actionOverrides: {}
+    });
+
+    expect(plan.selectedActions).toEqual(
+      expect.arrayContaining(["remove-unused", "minify-xml"])
+    );
+    expect(plan.actionRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "remove-unused", label: "사용하지 않는 파일 제거", checked: true }),
+        expect.objectContaining({ action: "minify-xml", label: "문서 XML 정리", checked: true })
+      ])
+    );
+  });
+
   it("keeps automatic plan kind when action overrides match defaults", () => {
     const plan = createSubmissionPlan({
       report: reportFixture,

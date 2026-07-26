@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
+import {
+  analyzeHwpxBuffer,
+  optimizeHwpxBufferAggressive,
+  optimizeHwpxBufferBalanced,
+  optimizeHwpxBufferSafe
+} from "../src/optimize.js";
 import { readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture, createReportLikeHwpxFixture } from "./fixtures.js";
 
@@ -210,6 +215,40 @@ describe("optimizeHwpxBufferSafe", () => {
     );
   });
 
+  it.each([
+    ["balanced", optimizeHwpxBufferBalanced],
+    ["aggressive", optimizeHwpxBufferAggressive]
+  ] as const)("%s mode composes the safe structural baseline", async (_mode, optimize) => {
+    const input = await createHwpxFixture({
+      entries: {
+        "Contents/section0.xml": [
+          "<root>",
+          "                                                ",
+          '<img href="BinData/used.bin" />',
+          "                                                ",
+          "<text>kept</text>",
+          "                                                ",
+          "</root>"
+        ].join("\n"),
+        "BinData/used.bin": Buffer.from("used"),
+        "BinData/unused.bin": Buffer.alloc(8 * 1024, 7)
+      }
+    });
+
+    const result = await optimize(input);
+    const output = await readHwpxPackage(result.output);
+    const outputXml = output.entries.find((entry) => entry.path === "Contents/section0.xml");
+
+    expect(output.entries.some((entry) => entry.path === "BinData/unused.bin")).toBe(false);
+    expect(outputXml?.data.toString("utf8")).not.toContain("                                                ");
+    expect(result.report.actions.applied).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "minify-xml", target: "Contents/section0.xml" }),
+        expect.objectContaining({ type: "remove-unused", target: "BinData/unused.bin" })
+      ])
+    );
+  });
+
   it("analyzes without optimizing", async () => {
     const input = await createHwpxFixture({
       entries: {
@@ -259,6 +298,7 @@ describe("optimizeHwpxBufferSafe", () => {
     expect(report.performance?.stages.map((stage) => stage.name)).toEqual([
       "read",
       "analyze",
+      "opportunities-structure",
       "opportunities",
       "opportunities-aggressive",
       "report"

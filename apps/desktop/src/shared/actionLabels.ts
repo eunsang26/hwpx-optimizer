@@ -1,6 +1,8 @@
 import type { AppliedAction, OptimizationOpportunityGroup } from "@hwpx-optimizer/core";
 
 export const OPPORTUNITY_ACTION_LABELS: Record<OptimizationOpportunityGroup["action"], string> = {
+  "minify-xml": "문서 XML 정리",
+  "remove-unused": "사용하지 않는 파일 제거",
   "strip-metadata": "EXIF 제외 이미지 메타데이터 제거",
   "optimize-png": "PNG 무손실 최적화",
   "convert-bmp-to-png": "BMP를 PNG로 변환",

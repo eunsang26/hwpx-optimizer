@@ -119,6 +119,8 @@ export const PRESERVATION_LABELS: Record<PreservationPreference, string> = {
 };
 
 const ACTION_DISPLAY_LABELS: Partial<Record<OptimizationOpportunityGroup["action"], string>> = {
+  "minify-xml": "문서 XML 정리",
+  "remove-unused": "사용하지 않는 파일 제거",
   "resize-jpeg": "큰 JPEG 리사이즈",
   "resize-png": "큰 PNG 리사이즈",
   "convert-bmp-to-png": "BMP를 PNG로 변환",
@@ -130,6 +132,8 @@ const ACTION_DISPLAY_LABELS: Partial<Record<OptimizationOpportunityGroup["action
 };
 
 const ACTION_BUCKETS: Partial<Record<OptimizationOpportunityGroup["action"], SubmissionActionBucket>> = {
+  "minify-xml": "metadata",
+  "remove-unused": "metadata",
   "resize-jpeg": "image",
   "resize-png": "image",
   "convert-bmp-to-png": "image",
@@ -142,13 +146,15 @@ const ACTION_BUCKETS: Partial<Record<OptimizationOpportunityGroup["action"], Sub
 
 const ACTION_PRIORITY_ORDER: Partial<Record<SubmissionActionId, number>> = {
   "consolidate-duplicate-images": 10,
-  "strip-metadata": 20,
-  "optimize-png": 30,
-  "clean-shape-comment": 40,
-  "convert-bmp-to-png": 50,
-  "convert-tiff-to-png": 60,
-  "resize-jpeg": 70,
-  "resize-png": 80
+  "remove-unused": 20,
+  "minify-xml": 30,
+  "strip-metadata": 40,
+  "optimize-png": 50,
+  "clean-shape-comment": 60,
+  "convert-bmp-to-png": 70,
+  "convert-tiff-to-png": 80,
+  "resize-jpeg": 90,
+  "resize-png": 100
 };
 
 const ESTIMATED_SAVING_DISPLAY_RATIO = 0.95;

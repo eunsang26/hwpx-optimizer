@@ -17,9 +17,11 @@ export * from "./reader.js";
 export * from "./referenceGraph.js";
 export * from "./regressionCorpus.js";
 export * from "./report.js";
+export * from "./structuralOpportunities.js";
 export * from "./types.js";
 export * from "./verifier.js";
 export * from "./writer.js";
+export * from "./xmlMinify.js";
 export * from "./xmlNode.js";
 
 export const version = "0.1.0";

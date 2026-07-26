@@ -16,6 +16,7 @@ import { projectPackageSizeFromOpportunities } from "./projectPackageSize.js";
 import { createAnalysisReport, createOptimizationReport } from "./report.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
+import { detectStructuralOptimizationOpportunities } from "./structuralOpportunities.js";
 import { verifyHwpxOutput } from "./verifier.js";
 import { writeHwpxPackage } from "./writer.js";
 import type { AppliedAction, HwpxPackage, OptimizationOpportunity, OptimizationReport, PackageAnalysis } from "./types.js";
@@ -68,12 +69,23 @@ export async function analyzeHwpxBuffer(
     imageConcurrency: options.imageConcurrency
   };
   // Measure real encode sizes (exact) so UI projections match optimize output.
-  const opportunities = await timer.measure("opportunities", () =>
-    detectOptimizationOpportunities(pkg, balancedImageProfile, opportunityOptions)
+  const structuralOpportunities = await timer.measure("opportunities-structure", () =>
+    detectStructuralOptimizationOpportunities(pkg, analysis, {
+      imageConcurrency: options.imageConcurrency
+    })
   );
-  const aggressiveOpportunities = await timer.measure("opportunities-aggressive", () =>
-    detectOptimizationOpportunities(pkg, aggressiveProjectionProfile, opportunityOptions)
-  );
+  const opportunities = [
+    ...structuralOpportunities,
+    ...await timer.measure("opportunities", () =>
+      detectOptimizationOpportunities(pkg, balancedImageProfile, opportunityOptions)
+    )
+  ];
+  const aggressiveOpportunities = [
+    ...structuralOpportunities,
+    ...await timer.measure("opportunities-aggressive", () =>
+      detectOptimizationOpportunities(pkg, aggressiveProjectionProfile, opportunityOptions)
+    )
+  ];
   const projectedOptimizedSize = projectPackageSizeFromOpportunities(pkg, opportunities);
   const aggressiveProjectedOptimizedSize = projectPackageSizeFromOpportunities(pkg, aggressiveOpportunities, {
     palettePng: true
@@ -343,11 +355,16 @@ async function optimizeHwpxBufferWithProfile(
 }> {
   const pkg = settings.pkg;
   const analysis = settings.analysis;
-  const opportunities = await settings.timer.measure("opportunities", () =>
-    detectEstimatedOptimizationOpportunities(pkg, settings.profile, {
+  const opportunities = [
+    ...await detectStructuralOptimizationOpportunities(pkg, analysis, {
       imageConcurrency: settings.options.imageConcurrency
-    })
-  );
+    }),
+    ...await settings.timer.measure("opportunities", () =>
+      detectEstimatedOptimizationOpportunities(pkg, settings.profile, {
+        imageConcurrency: settings.options.imageConcurrency
+      })
+    )
+  ];
   const selectedOpportunities =
     settings.options.actions !== undefined
       ? opportunities.filter((opportunity) => settings.options.actions?.includes(opportunity.action))
@@ -576,6 +593,22 @@ function createOptimizationOpportunityFromAppliedAction(
       risk: action.type === "optimize-png" && profile.pngPalette ? "medium" : "safe",
       visualImpact: action.type === "optimize-png" && profile.pngPalette ? "low" : "none",
       defaultEnabledIn: action.type === "optimize-png" && profile.pngPalette ? ["aggressive"] : ["safe", "balanced", "aggressive"]
+    };
+  }
+
+  if (action.type === "minify-xml" || action.type === "remove-unused") {
+    return {
+      id: `${action.type}:${action.target}`,
+      label: action.type === "minify-xml" ? "Minify document XML" : "Remove unused BinData",
+      action: action.type,
+      target: action.target,
+      estimatedSavingBytes,
+      beforeSize: action.beforeSize,
+      afterSize: action.afterSize,
+      confidence: "exact",
+      risk: "safe",
+      visualImpact: "none",
+      defaultEnabledIn: ["safe", "balanced", "aggressive"]
     };
   }
 

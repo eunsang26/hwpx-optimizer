@@ -3,6 +3,7 @@ import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
 import { readImageMetadata } from "./imageMetadata.js";
+import { applySafeOptimizationPlan } from "./optimizer.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageActionWithBudget } from "./opportunities.js";
 import type { ImageOptimizationProfile, TransformImageAction } from "./opportunities.js";
 import { normalizePackagePath } from "./packagePath.js";
@@ -20,13 +21,28 @@ export async function applyBalancedOptimizationPlan(input: {
   imageConcurrency?: number;
 }): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[] }> {
   const profile = input.profile ?? balancedImageProfile;
+  const structuralPlan: OptimizationPlan = {
+    mode: input.plan.mode,
+    actions: input.plan.actions.filter(
+      (action) => action.type === "minify-xml" || action.type === "remove-unused"
+    )
+  };
+  const structurallyOptimized = await applySafeOptimizationPlan({
+    pkg: input.pkg,
+    plan: structuralPlan,
+    imageConcurrency: input.imageConcurrency
+  });
   const duplicateTargets = new Set(
     input.plan.actions.filter((action) => action.type === "consolidate-duplicate-images").map((action) => action.target)
   );
-  const consolidated = await consolidateDuplicateImages(input.pkg, duplicateTargets, input.imageConcurrency);
-  const applied: AppliedAction[] = [...consolidated.applied];
-  const skipped: AppliedAction[] = [...consolidated.skipped];
-  const warnings: string[] = [];
+  const consolidated = await consolidateDuplicateImages(
+    structurallyOptimized.pkg,
+    duplicateTargets,
+    input.imageConcurrency
+  );
+  const applied: AppliedAction[] = [...structurallyOptimized.applied, ...consolidated.applied];
+  const skipped: AppliedAction[] = [...structurallyOptimized.skipped, ...consolidated.skipped];
+  const warnings: string[] = [...structurallyOptimized.warnings];
   const transformActionByTarget = new Map<string, TransformImageAction>();
   for (const action of input.plan.actions) {
     if (isTransformImageAction(action.type) && !transformActionByTarget.has(action.target)) {
@@ -43,10 +59,10 @@ export async function applyBalancedOptimizationPlan(input: {
   // size) than the canonical's remaining pic. Raise the canonical floor using
   // pre-consolidation member budgets / source pixels so verifier collapse gates
   // and on-page sharpness stay valid for every former placement.
-  const preConsolidationBudgets = getRecommendedImagePixelBudgets(input.pkg, profile.displayScale);
+  const preConsolidationBudgets = getRecommendedImagePixelBudgets(structurallyOptimized.pkg, profile.displayScale);
   const resizeBudgets = getRecommendedImagePixelBudgets(consolidated.pkg, profile.displayScale);
   await expandResizeBudgetsForConsolidatedDuplicates({
-    originalPkg: input.pkg,
+    originalPkg: structurallyOptimized.pkg,
     resizeBudgets,
     preConsolidationBudgets,
     profile,

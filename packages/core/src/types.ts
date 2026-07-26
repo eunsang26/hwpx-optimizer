@@ -119,6 +119,8 @@ export type OptimizationOpportunity = {
   id: string;
   label: string;
   action:
+    | "minify-xml"
+    | "remove-unused"
     | "strip-metadata"
     | "convert-bmp-to-png"
     | "resize-jpeg"

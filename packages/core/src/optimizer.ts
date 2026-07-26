@@ -1,8 +1,8 @@
-import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import sharp from "sharp";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { getDecodedImage } from "./decodedImage.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
+import { minifyXmlBuffer } from "./xmlMinify.js";
 
 type PngOptimizationResult = { data: Buffer } | { error: unknown };
 
@@ -91,8 +91,7 @@ export async function applySafeOptimizationPlan(input: {
 
     if (minifyXmlTargets.has(entry.path)) {
       try {
-        const minified = minifyXml(entry.data.toString("utf8"));
-        const data = Buffer.from(minified);
+        const data = minifyXmlBuffer(entry.data);
         if (data.byteLength < entry.data.byteLength) {
           entries.push({ ...entry, data, size: data.byteLength });
           applied.push({ type: "minify-xml", target: entry.path, beforeSize: entry.size, afterSize: data.byteLength });
@@ -113,12 +112,6 @@ export async function applySafeOptimizationPlan(input: {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function minifyXml(xml: string): string {
-  const parser = new XMLParser({ ignoreAttributes: false, preserveOrder: true });
-  const builder = new XMLBuilder({ ignoreAttributes: false, preserveOrder: true, suppressEmptyNode: false });
-  return builder.build(parser.parse(xml));
 }
 
 function stripImageMetadataLossless(path: string, data: Buffer): Buffer {
