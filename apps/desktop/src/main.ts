@@ -454,6 +454,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   await writeFile(smokeSecondInputPath, await createSmokeHwpxFixture());
   await writeFile(smokeThirdInputPath, await createSmokeHwpxFixture());
   await writeFile(smokeFourthInputPath, await createSmokeHwpxFixture());
+  const smokeInputExceedsDefaultTarget = (await stat(smokeInputPath)).size > 40 * 1024 * 1024;
   await registerAllowedInputPath(smokeInputPath);
   await registerAllowedInputPath(smokeSecondInputPath);
   await registerAllowedInputPath(smokeThirdInputPath);
@@ -707,9 +708,10 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
             ).length,
             singleBatchPolicyHidden:
               document.querySelector(".policy-toolbar-batch")?.getClientRects().length === 0,
-            tinyFileTargetMarkerHidden:
-              document.getElementById("target-track-limit")?.getClientRects().length === 0 &&
-              document.getElementById("gauge-mid-label")?.getClientRects().length === 0,
+            targetMarkerVisible:
+              document.getElementById("target-track-limit")?.getClientRects().length > 0,
+            targetLabelVisible:
+              document.getElementById("gauge-mid-label")?.getClientRects().length > 0,
             workspaceWidth: workspaceRect?.width ?? 0,
             detailsWidth: detailsRect?.width ?? 0,
             selectedFileName: document.getElementById("selected-file-name")?.textContent
@@ -737,7 +739,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     optimizeText?: string;
     visiblePolicyControls?: number;
     singleBatchPolicyHidden?: boolean;
-    tinyFileTargetMarkerHidden?: boolean;
+    targetMarkerVisible?: boolean;
+    targetLabelVisible?: boolean;
     workspaceWidth?: number;
     detailsWidth?: number;
     selectedFileName?: string;
@@ -755,7 +758,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     selectedUi.optimizeText !== "최적화 실행" ||
     selectedUi.visiblePolicyControls !== 2 ||
     selectedUi.singleBatchPolicyHidden !== true ||
-    selectedUi.tinyFileTargetMarkerHidden !== true ||
+    selectedUi.targetMarkerVisible !== smokeInputExceedsDefaultTarget ||
+    selectedUi.targetLabelVisible !== smokeInputExceedsDefaultTarget ||
     !selectedUi.selectedFileName?.endsWith(".hwpx") ||
     !selectedUi.workspaceWidth ||
     Math.abs(selectedUi.workspaceWidth - (selectedUi.detailsWidth ?? 0)) > 1
