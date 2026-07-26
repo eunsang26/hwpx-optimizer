@@ -370,5 +370,5 @@ wine is required, please see https://electron.build/multi-platform-build#linux
 - Progress updates now include analysis, planning, per-image transform counts, verification, and file-write stages. They remain estimates rather than byte-accurate package progress.
 - Desktop UI is functional, but final visual QA should happen on the target Windows desktop environment.
 - Future reference graph additions should be driven by real HWPX samples that expose new forms beyond relative, percent-encoded, direct, and id-valued XML references.
-- Balanced and aggressive mode verification now includes PSNR quality gating plus package integrity, references, image dimensions, and image format invariants. Decoded pixel hash based same-visual duplicate detection is implemented for exact decoded-pixel matches across lossless encodings. SSIM scoring remains a future enhancement, not a current release blocker.
+- Balanced and aggressive mode verification includes PSNR and SSIM quality gating (512×512 aspect-preserving samples) plus package integrity, references, image dimensions, and image format invariants. Decoded pixel hash based same-visual duplicate detection is implemented for exact decoded-pixel matches across lossless encodings.
 - Continue routine dependency monitoring before each release.

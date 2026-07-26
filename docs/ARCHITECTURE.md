@@ -136,7 +136,7 @@ Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a strong
 - Rejects balanced/aggressive outputs that enlarge referenced image dimensions.
 - Rejects balanced/aggressive outputs whose referenced image PSNR and SSIM scores fall below the per-mode quality thresholds.
 
-Current limitation: advanced mode verification uses PSNR and SSIM quality gates plus structural invariants; it does not prove every visual detail is perceptually identical.
+Current limitation: advanced mode verification uses PSNR and SSIM on 512×512 aspect-preserving (`fit: contain`) samples plus structural invariants; it does not prove every visual detail is perceptually identical. BMP/TIFF→PNG is allowed in advanced modes; JPEG stays JPEG and PNG stays PNG.
 
 ### Report
 

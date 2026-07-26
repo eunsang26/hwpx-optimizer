@@ -212,6 +212,28 @@ describe("computeVisualMetrics", () => {
     expect(metrics.ssim).not.toBeNull();
     expect(metrics.ssim).toBeGreaterThan(0.9);
   });
+
+  it("returns metrics for wide and tall images without distorting-fit length mismatch", async () => {
+    const wide = await sharp({
+      create: { width: 400, height: 100, channels: 3, background: "#2255aa" }
+    })
+      .png()
+      .toBuffer();
+    const tall = await sharp({
+      create: { width: 100, height: 400, channels: 3, background: "#2255aa" }
+    })
+      .png()
+      .toBuffer();
+
+    const identical = await computeVisualMetrics(wide, wide);
+    expect(identical.psnr).not.toBeNull();
+    expect(identical.psnr).toBeGreaterThan(40);
+    expect(identical.ssim).not.toBeNull();
+
+    const crossAspect = await computeVisualMetrics(wide, tall);
+    expect(crossAspect.psnr).not.toBeNull();
+    expect(crossAspect.ssim).not.toBeNull();
+  });
 });
 
 function createBmp24(width: number, height: number, rgb: [number, number, number]): Buffer {

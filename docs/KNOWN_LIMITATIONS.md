@@ -4,7 +4,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Blockers Before Product Release
 
-- Desktop drag/drop now uses Electron `webUtils.getPathForFile`, but final hands-on QA on a clean Windows machine for drag/drop, non-sensitive settings persistence, zero-history restart behavior, repeated files, very large packages, and representative real-world documents remains pending.
+- Desktop drag/drop uses Electron `webUtils.getPathForFile`. Automated portable smoke and local Windows-path hands-on checks are recorded in `docs/WINDOWS_QA_CHECKLIST.md` (2026-07-26 quality tracks). Remaining gaps on a dedicated clean institutional PC: Hancom viewer open of optimized outputs, very large packages, and long-running zero-history restart sign-off.
 
 ## Verified Release Infrastructure
 
@@ -13,7 +13,7 @@ This file separates release blockers from non-blockers so the project does not o
 - GitHub Actions Windows release gate passes on `windows-latest` when artifact upload is disabled for manual runs.
 - Artifact upload is optional for manual workflow runs to avoid Actions storage quota failures. Tag builds still upload release artifacts.
 - Local Windows portable packaging verifies that the `sharp` Windows native runtime is unpacked outside `app.asar`.
-- Verifier checks mode-specific image format and dimension invariants and rejects balanced/aggressive outputs whose per-image PSNR and SSIM scores fall below the per-mode thresholds. The reject error includes the original/output dimensions, format, and EXIF orientation to make catastrophic regressions (rotation bake, dimension swap) self-explanatory. Quality scoring lives in `packages/core/src/imagePreview.ts`. The 8x8 average hash in `packages/core/src/visualSimilarity.ts` is used for near-duplicate candidate reporting, not as a release gate.
+- Verifier checks mode-specific image format and dimension invariants and rejects balanced/aggressive outputs whose per-image PSNR and SSIM scores fall below the per-mode thresholds (512×512 `contain` samples). The reject error includes the original/output dimensions, format, and EXIF orientation to make catastrophic regressions (rotation bake, dimension swap) self-explanatory. Quality scoring lives in `packages/core/src/imagePreview.ts`. The 8x8 average hash in `packages/core/src/visualSimilarity.ts` is used for near-duplicate candidate reporting in Desktop deep analyze (review-only; never auto-merged), not as a release gate.
 - Reference graph detection resolves manifest `id -> href` links, generic id-valued XML attributes, relative or percent-encoded BinData paths, and direct BinData path attributes. This keeps unused-resource deletion conservative when unfamiliar XML reference forms appear.
 - Duplicate image consolidation handles byte-identical image files and exact decoded-pixel same-visual duplicates across lossless encodings, such as BMP and PNG resources that decode to identical pixels. Near-duplicate images are reported as review-only candidates and are not automatically merged.
 - HWPX zip-slip defense: reader rejects entries whose path contains `..`, `.`, drive letters, leading slash, or empty segments.

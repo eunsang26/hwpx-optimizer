@@ -29,9 +29,9 @@ export type VisualMetrics = {
   ssim: number | null;
 };
 
-const PSNR_DEFAULT_SAMPLE_SIZE = 256;
+const PSNR_DEFAULT_SAMPLE_SIZE = 512;
 const PSNR_MAX_DB = 80;
-const SSIM_DEFAULT_SAMPLE_SIZE = 256;
+const SSIM_DEFAULT_SAMPLE_SIZE = 512;
 
 export async function extractImageDiffPreviews(
   originalBuffer: Buffer,
@@ -177,10 +177,16 @@ async function decodeForMetrics(data: Buffer, sampleSize: number): Promise<Buffe
     const pipeline = bmp
       ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } })
       : sharp(data);
+    // contain + letterbox keeps aspect ratio while producing equal-sized RGB
+    // samples so PSNR/SSIM length checks stay valid across differing shapes.
     return await pipeline
       .rotate()
       .removeAlpha()
-      .resize(sampleSize, sampleSize, { fit: "fill", kernel: "lanczos3" })
+      .resize(sampleSize, sampleSize, {
+        fit: "contain",
+        background: { r: 0, g: 0, b: 0 },
+        kernel: "lanczos3"
+      })
       .raw()
       .toBuffer();
   } catch {
