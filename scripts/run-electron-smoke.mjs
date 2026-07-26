@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
 
 const needsVirtualDisplay = process.platform === "linux" && !process.env.DISPLAY;
+rmSync(resolve(".tmp", "electron-smoke"), { recursive: true, force: true });
 const command = needsVirtualDisplay ? "xvfb-run" : process.execPath;
 const args = needsVirtualDisplay
   ? ["-a", process.execPath, "scripts/run-electron-app.mjs", "--smoke-test"]

@@ -182,8 +182,8 @@ describe("runCli", () => {
       ]
     });
 
-    expect(text).toContain("Potential saving (non-overlap): 10.00 MiB");
-    expect(text).not.toContain("Potential saving (non-overlap): 19.00 MiB");
+    expect(text).toContain("Projected package saving: 10.00 MiB");
+    expect(text).not.toContain("Projected package saving: 19.00 MiB");
   });
 
   it("prints non-overlapping total potential savings in analyze summaries", () => {
@@ -227,8 +227,35 @@ describe("runCli", () => {
     logSpy.mockRestore();
 
     const text = logs.join("\n");
-    expect(text).toContain("Potential saving (non-overlap): 10.00 MiB");
-    expect(text).not.toContain("Potential saving (non-overlap): 19.00 MiB");
+    expect(text).toContain("Projected package saving: 10.00 MiB");
+    expect(text).not.toContain("Projected package saving: 19.00 MiB");
+  });
+
+  it("prefers ZIP-aware projected package savings over raw entry-byte totals", () => {
+    const text = renderHumanReport("/x/input.hwpx", {
+      ...minimalReport,
+      originalSize: 20 * 1024 * 1024,
+      optimizedSize: 4 * 1024 * 1024,
+      opportunityGroups: [
+        {
+          action: "convert-bmp-to-png",
+          label: "Convert BMP",
+          count: 2,
+          estimatedSavingBytes: 30 * 1024 * 1024,
+          beforeSize: 40 * 1024 * 1024,
+          afterSize: 10 * 1024 * 1024,
+          confidence: "exact",
+          risk: "medium",
+          visualImpact: "low",
+          defaultEnabledIn: ["balanced", "aggressive"],
+          targets: ["BinData/a.bmp", "BinData/b.bmp"]
+        }
+      ]
+    });
+
+    expect(text).toContain("Projected package saving: 16.00 MiB");
+    expect(text).not.toContain("Projected package saving: 30.00 MiB");
+    expect(text).toContain("~30.00 MiB entry bytes");
   });
 
   it("rejects files over the configured input size limit before reading them", async () => {

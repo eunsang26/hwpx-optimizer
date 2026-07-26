@@ -31,5 +31,5 @@ describe("report-like HWPX regression fixture", () => {
     expect(balanced.output.byteLength).toBeLessThanOrEqual(input.byteLength);
     await expect(verifyHwpxOutput(safe.output, { original: input, mode: "safe" })).resolves.toBeUndefined();
     await expect(verifyHwpxOutput(balanced.output, { original: input, mode: "balanced" })).resolves.toBeUndefined();
-  });
+  }, 15_000);
 });

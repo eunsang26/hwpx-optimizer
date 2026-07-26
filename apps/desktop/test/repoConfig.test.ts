@@ -90,6 +90,9 @@ describe("repository runtime and cleanup configuration", () => {
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/prune-electron-locales.cjs")).resolves.toBeUndefined();
     await expect(access("scripts/run-electron-smoke.mjs")).resolves.toBeUndefined();
+    const electronSmokeRunner = await readFile("scripts/run-electron-smoke.mjs", "utf8");
+    expect(electronSmokeRunner).toContain('resolve(".tmp", "electron-smoke")');
+    expect(electronSmokeRunner).toContain("{ recursive: true, force: true }");
     await expect(access("TERMS.txt")).resolves.toBeUndefined();
 
     const releaseArtifactCheck = await readFile("scripts/check-release-artifacts.mjs", "utf8");

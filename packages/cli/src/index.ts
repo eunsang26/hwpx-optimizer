@@ -263,11 +263,11 @@ function printAnalysisSummary(inputPath: string, report: OptimizationReport): vo
     return;
   }
 
-  console.log(`Potential saving (non-overlap): ${formatBytes(estimateNonOverlappingSavingBytes(report.opportunityGroups))}`);
+  console.log(`Projected package saving: ${formatBytes(projectedPackageSavingBytes(report))}`);
   console.log("Opportunities:");
   for (const group of report.opportunityGroups) {
     console.log(
-      `- ${group.action}: ${formatTargetCount(group.count)}, ~${formatBytes(group.estimatedSavingBytes)} potential saving`
+      `- ${group.action}: ${formatTargetCount(group.count)}, ~${formatBytes(group.estimatedSavingBytes)} entry bytes`
     );
   }
   console.log(`Suggested: hwpx-opt optimize ${inputPath} --mode balanced`);
@@ -730,7 +730,7 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
     `Risky resources: ${report.riskyResources.length}`,
     `Near-duplicate image candidates: ${report.nearDuplicateImages?.length ?? 0}`,
     `Resource diagnostics: ${report.resourceDiagnostics?.length ?? 0}`,
-    `Potential saving (non-overlap): ${formatBytes(estimateNonOverlappingSavingBytes(report.opportunityGroups))}`
+    `Projected package saving: ${formatBytes(projectedPackageSavingBytes(report))}`
   ];
   const insights = createHumanReportInsights(report);
   if (insights.length > 0) {
@@ -740,7 +740,7 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
   if (report.opportunityGroups.length > 0) {
     lines.push("Opportunities:");
     for (const group of report.opportunityGroups) {
-      lines.push(`- ${group.action}: ${formatTargetCount(group.count)}, ~${formatBytes(group.estimatedSavingBytes)}`);
+      lines.push(`- ${group.action}: ${formatTargetCount(group.count)}, ~${formatBytes(group.estimatedSavingBytes)} entry bytes`);
     }
   } else {
     lines.push("Opportunities: none");
@@ -793,6 +793,16 @@ function createHumanReportInsights(report: OptimizationReport): string[] {
     }
   }
   return insights;
+}
+
+function projectedPackageSavingBytes(report: OptimizationReport): number {
+  if (report.optimizedSize !== undefined && Number.isFinite(report.optimizedSize)) {
+    return Math.max(0, Math.min(report.originalSize, report.originalSize - report.optimizedSize));
+  }
+  return Math.max(
+    0,
+    Math.min(report.originalSize, estimateNonOverlappingSavingBytes(report.opportunityGroups))
+  );
 }
 
 function printTargetSummary(report: OptimizationReport): void {
