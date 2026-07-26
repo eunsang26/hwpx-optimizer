@@ -13,8 +13,8 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 - A local HWPX sample file. Do not commit sample files.
 - A protected or signed HWPX-like test package, if available, for rejection-path confirmation. Do not use real confidential documents as test fixtures.
 - A release artifact from `release/`, either:
-  - `HWPX Optimizer-0.1.4-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
-  - `HWPX Optimizer-0.1.4-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
+  - `HWPX Optimizer-0.1.5-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
+  - `HWPX Optimizer-0.1.5-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
   - the NSIS installer produced by `npm run release:check:win`.
 
 ## Artifact Integrity
@@ -22,8 +22,8 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 From a PowerShell prompt in the project root:
 
 ```powershell
-Get-FileHash ".\release\HWPX Optimizer-0.1.4-x64.exe" -Algorithm SHA256
-Get-FileHash ".\release\HWPX Optimizer-0.1.4-x64.zip" -Algorithm SHA256
+Get-FileHash ".\release\HWPX Optimizer-0.1.5-x64.exe" -Algorithm SHA256
+Get-FileHash ".\release\HWPX Optimizer-0.1.5-x64.zip" -Algorithm SHA256
 ```
 
 Compare the hash with `release/SHA256SUMS.txt`.
@@ -190,6 +190,27 @@ Windows QA passes only when:
 
 Do not mark the product release complete if any item above is unverified.
 
+## Evidence log — 2026-07-26 (v0.1.5 prerelease)
+
+Environment: WSL2 + Windows-local `C:\Temp`, Node 24.13.0, self-signed Electron artifacts and CLI portable ZIP built from commit `a0ec3f0`.
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Approved `#single-pass` desktop layout | Pass | 960px single-column Gauge First flow; optimization plan remains inside `세부 옵션`; Electron DOM/geometry smoke passed |
+| Full test suite | Pass | 65 files, 429 passed, 1 skipped |
+| Typecheck / build | Pass | Electron, CLI, core, and Tauri workspaces |
+| Local sample regression corpus | Pass | 4/4, including `sample2.hwpx` and `sample3.hwpx` balanced optimization |
+| Production dependency audit | Pass | 0 vulnerabilities at moderate+ under `--omit=dev`; 21 build/dev advisories documented |
+| Electron artifact hygiene / native runtime / signature | Pass | EXE and ZIP clean; Windows `sharp` unpack verified; PE certificate table verified |
+| Electron portable smoke `sample2.hwpx` AllModes | Pass | Windows-local copy passed safe, balanced, and aggressive through Windows PowerShell |
+| CLI portable Windows smoke `sample2.hwpx` | Pass | optimize, verify, batch, dropped-file, and dropped-folder launchers; 82.99MiB / 92.50% saved |
+| Combined release manifest | Pass | Three artifacts verified by `release:verify-manifest` |
+| Electron EXE | Pass | 101,976,048 bytes; SHA256 `1bbd12e231a81452409c6dba5862a6c1f0290172909accb109bbaa9ad885d15b` |
+| Electron ZIP | Pass | 148,685,751 bytes; SHA256 `d200bd385291aaf1e69a317ec38326dde84a2c1d714ec7f72dd1652e69aaad0d` |
+| CLI Windows ZIP | Pass | 37,038,211 bytes; SHA256 `8e10d6e8b8bf0b703152bedd0db6cb5f6f6df43be32952d2be5e10b86eea45b3` |
+| Open optimized output in Hancom | 미실시 | Hancom Office not installed in this environment |
+| Clean institutional PC soak | 미실시 | Required before changing prerelease to final product-ready release |
+
 ## Evidence log — 2026-07-26 (v0.1.4 release candidate)
 
 Environment: WSL2 + Windows-local `C:\Temp`, Node 20.20.2, self-signed Electron artifacts and CLI portable ZIP built from commit `a4a6f6c`.
@@ -244,7 +265,7 @@ Environment: WSL2 + `C:\Temp`, Node 20, artifact `HWPX Optimizer-0.1.3-x64.exe` 
 
 ### Operator checklist (Hancom / clean PC) — do manually
 
-1. Extract `HWPX Optimizer-0.1.4-x64.zip` on a clean Windows 10/11 PC.
+1. Extract `HWPX Optimizer-0.1.5-x64.zip` on a clean Windows 10/11 PC.
 2. Drag/drop a real local `.hwpx`, run balanced, confirm original untouched.
 3. Open `*_optimized.hwpx` in 한글(Hancom) and spot-check text/images/tables.
 4. Restart app; confirm no recent-file/history restore.

@@ -56,17 +56,17 @@ if (process.platform === "win32") {
 async function createWindow(): Promise<BrowserWindow> {
   Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindowClass({
-    width: 1240,
-    height: 820,
-    minWidth: 1024,
-    minHeight: 720,
-    maxWidth: 1600,
+    width: 960,
+    height: 780,
+    minWidth: 920,
+    minHeight: 700,
+    maxWidth: 1360,
     useContentSize: true,
     show: !isSmokeTest,
     title: "HWPX 보고서 용량 최적화",
     icon: join(import.meta.dirname, "app-icon.png"),
     autoHideMenuBar: true,
-    backgroundColor: "#f3f5f8",
+    backgroundColor: "#e5e9f0",
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,
@@ -493,30 +493,21 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       document.getElementById("settings-close-button")?.click();
       document.getElementById("help-button")?.click();
       const workspace = document.getElementById("single-workspace");
-      const workflowMain = document.querySelector(".workflow-main");
       const planSidebar = document.getElementById("plan-sidebar");
+      const optionsSheet = document.getElementById("detail-options-sheet");
       const details = document.getElementById("analysis-details");
-      const safeLine = document.querySelector(".safe-line");
       const helpPanel = document.getElementById("help-panel");
       const workspaceRect = workspace?.getBoundingClientRect();
-      const workflowRect = workflowMain?.getBoundingClientRect();
-      const planRect = planSidebar?.getBoundingClientRect();
       const detailsWidth = details?.getBoundingClientRect().width ?? 0;
       return {
         detailsInsideWorkspace: workspace?.contains(details) ?? false,
-        planInsideWorkspace: workspace?.contains(planSidebar) ?? false,
-        safeLineInsidePlan: planSidebar?.contains(safeLine) ?? false,
+        planInsideOptions: optionsSheet?.contains(planSidebar) ?? false,
+        planHiddenWithOptions: planSidebar?.getClientRects().length === 0,
+        singleColumn: getComputedStyle(workspace ?? document.body).gridTemplateColumns.split(" ").length === 1,
         detailsWidth,
         workspaceWidth: workspaceRect?.width ?? 0,
         detailsWidthDelta: Math.abs(detailsWidth - (workspaceRect?.width ?? 0)),
         viewportWidth: window.innerWidth,
-        twoColumn:
-          Boolean(workflowRect && planRect) &&
-          (planRect?.left ?? 0) > (workflowRect?.right ?? Number.POSITIVE_INFINITY) &&
-          Math.abs((planRect?.top ?? 0) - (workflowRect?.top ?? Number.POSITIVE_INFINITY)) <= 1,
-        stacked:
-          Boolean(workflowRect && planRect) &&
-          (planRect?.top ?? 0) >= (workflowRect?.bottom ?? Number.POSITIVE_INFINITY),
         helpOpen: helpPanel?.classList.contains("is-open") ?? false,
         helpTitle: document.getElementById("help-title")?.textContent,
         manualStepCount: document.querySelectorAll(".manual-steps li").length
@@ -524,14 +515,13 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     })()
   `)) as {
     detailsInsideWorkspace?: boolean;
-    planInsideWorkspace?: boolean;
-    safeLineInsidePlan?: boolean;
+    planInsideOptions?: boolean;
+    planHiddenWithOptions?: boolean;
+    singleColumn?: boolean;
     detailsWidth?: number;
     workspaceWidth?: number;
     detailsWidthDelta?: number;
     viewportWidth?: number;
-    twoColumn?: boolean;
-    stacked?: boolean;
     helpOpen?: boolean;
     helpTitle?: string;
     manualStepCount?: number;
@@ -540,14 +530,13 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (layout.detailsInsideWorkspace !== true) {
     throw new Error("Desktop smoke failed: analysis details are outside the primary workspace");
   }
-  const expectsTwoColumns = (layout.viewportWidth ?? 0) > 1100;
   if (
-    layout.planInsideWorkspace !== true ||
-    layout.safeLineInsidePlan !== true ||
-    (expectsTwoColumns ? layout.twoColumn !== true : layout.stacked !== true)
+    layout.planInsideOptions !== true ||
+    layout.planHiddenWithOptions !== true ||
+    layout.singleColumn !== true
   ) {
     throw new Error(
-      `Desktop smoke failed: approved responsive plan layout did not render at ${String(layout.viewportWidth)}px`
+      `Desktop smoke failed: approved single-pass options layout did not render at ${String(layout.viewportWidth)}px`
     );
   }
   if (
