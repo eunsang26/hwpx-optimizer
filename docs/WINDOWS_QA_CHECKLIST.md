@@ -204,8 +204,8 @@ Environment: WSL2 + Windows-local `C:\Temp`, Node 20.20.2, self-signed Electron 
 | Electron portable smoke `sample2.hwpx` AllModes | Pass | Final EXE passed safe, balanced, and aggressive through Windows PowerShell |
 | CLI portable Windows smoke `sample2.hwpx` | Pass | optimize, verify, batch, dropped-file, and dropped-folder launchers; 82.99MiB / 92.50% saved |
 | Combined release manifest | Pass | Three artifacts verified by `release:verify-manifest` |
-| Electron EXE | Pass | 101,973,880 bytes; SHA256 `eece548dc2d0ffe83c50afdacc15b49c70ac7af08047f892505706ca7f682d86` |
-| Electron ZIP | Pass | 148,686,417 bytes; SHA256 `a8a6fe60d9833842a5ee86a42b3fe2e6a7559835371bb5f4c548002543b86b35` |
+| Electron EXE | Pass | 101,971,616 bytes; SHA256 `56559812749474ecf37b48bc628a5c55c9dd6246eef0e99967e8f8c77f9ca2bf` |
+| Electron ZIP | Pass | 148,686,450 bytes; SHA256 `78b0871e95e35aa832d178344da526c2d067749681c269955b25bde7b4005db5` |
 | CLI Windows ZIP | Pass | 37,038,211 bytes; SHA256 `86068faa186b3e5a1ff42213d3d234d0620343c8a52d0af9ac02dcdf6d06f1b3` |
 | Open optimized output in Hancom | 미실시 | Hancom Office not installed in this environment |
 | Clean institutional PC soak | 미실시 | Required before changing prerelease to final product-ready release |
