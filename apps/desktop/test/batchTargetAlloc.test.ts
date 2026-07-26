@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { allocateAggregateTargetBytes } from "../src/shared/batchTargetAlloc.js";
+import {
+  allocateAggregateTargetBytes,
+  allocateRemainingAggregateTargetBytes
+} from "../src/shared/batchTargetAlloc.js";
 
 describe("allocateAggregateTargetBytes", () => {
   it("allocates proportional budgets from selected totals only", () => {
@@ -26,5 +29,27 @@ describe("allocateAggregateTargetBytes", () => {
         selectedOriginalTotal: 0
       })
     ).toBeUndefined();
+  });
+
+  it("allocates only the aggregate budget left after completed outputs", () => {
+    const allocated = allocateRemainingAggregateTargetBytes({
+      batchTargetBytes: 40 * 1024 * 1024,
+      completedOutputBytes: 39 * 1024 * 1024,
+      itemOriginalBytes: 10 * 1024 * 1024,
+      pendingOriginalTotal: 10 * 1024 * 1024
+    });
+
+    expect(allocated).toBe(1 * 1024 * 1024);
+  });
+
+  it("keeps a minimum target when completed outputs already exceed the aggregate budget", () => {
+    expect(
+      allocateRemainingAggregateTargetBytes({
+        batchTargetBytes: 40 * 1024 * 1024,
+        completedOutputBytes: 41 * 1024 * 1024,
+        itemOriginalBytes: 10 * 1024 * 1024,
+        pendingOriginalTotal: 10 * 1024 * 1024
+      })
+    ).toBe(1);
   });
 });

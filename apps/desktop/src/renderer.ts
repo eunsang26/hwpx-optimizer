@@ -1,6 +1,7 @@
 import {
   appendUniquePaths,
   applyOptimizationResultToBatchItem,
+  batchResultTitleForCounts,
   selectionModeForPaths,
   summarizeBatchItems
 } from "./shared/batchView.js";
@@ -15,7 +16,7 @@ import {
 import { createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
-import { allocateAggregateTargetBytes } from "./shared/batchTargetAlloc.js";
+import { allocateRemainingAggregateTargetBytes } from "./shared/batchTargetAlloc.js";
 import { resultGuidanceText } from "./shared/resultGuidance.js";
 import {
   createSubmissionPlan,
@@ -392,14 +393,19 @@ async function init(): Promise<void> {
   runDockButton.addEventListener("click", () => optimizeButton.click());
   cancelButton.addEventListener("click", async () => {
     if (state.analysisRunning || state.batchAnalyzing) {
-      state.batchCancelled = state.batchAnalyzing;
+      const cancellingBatchAnalysis = state.batchAnalyzing;
+      state.batchCancelled = cancellingBatchAnalysis;
       // Invalidate the in-flight analyze so a late resolve can't overwrite the
       // cancelled status with a normal result (best-effort backend cancel).
       analysisSequence += 1;
       state.analysisRunning = false;
       await window.hwpxOptimizer.cancelAnalyze();
       setStatus("분석을 취소했습니다.");
-      setIdle();
+      if (!cancellingBatchAnalysis) {
+        setIdle();
+        hideProgressPanel();
+        return;
+      }
       return;
     }
     if (state.batchRunning) {
@@ -1550,13 +1556,26 @@ function batchTargetBytesForItem(item: BatchItem): number | undefined {
   if (!batchTargetBytes || !item.originalSizeBytes) return undefined;
   if (state.batchTargetMode === "per-file") return batchTargetBytes;
   if (!item.selected) return undefined;
-  const selectedOriginalTotal = state.batchItems
-    .filter((current) => current.selected && current.originalSizeBytes)
+  const completedOutputBytes = state.batchItems
+    .filter((current) => current.selected && current.status === "done")
+    .reduce(
+      (sum, current) =>
+        sum + (current.report?.optimizedSize ?? current.expectedSizeBytes ?? 0),
+      0
+    );
+  const pendingOriginalTotal = state.batchItems
+    .filter(
+      (current) =>
+        current.selected &&
+        (current.status === "pending" || current.status === "running") &&
+        current.originalSizeBytes
+    )
     .reduce((sum, current) => sum + (current.originalSizeBytes ?? 0), 0);
-  return allocateAggregateTargetBytes({
+  return allocateRemainingAggregateTargetBytes({
     batchTargetBytes,
+    completedOutputBytes,
     itemOriginalBytes: item.originalSizeBytes,
-    selectedOriginalTotal
+    pendingOriginalTotal
   });
 }
 
@@ -2076,7 +2095,10 @@ function renderBatchResultPanel(): void {
     failed.length > 0 || cancelled.length > 0
       ? `${done.length}개 파일 완료 · 실패 ${failed.length} · 취소 ${cancelled.length}`
       : `${done.length}개 파일 완료 · 총 절감 ${formatBytes(totalSavedBytes)}`;
-  batchResultTitle.textContent = failed.length > 0 ? "일괄 최적화 확인 필요" : "일괄 최적화 완료";
+  batchResultTitle.textContent = batchResultTitleForCounts({
+    failed: failed.length,
+    cancelled: cancelled.length
+  });
   batchResultLine.textContent = batchStatusLine;
   batchResultStats.innerHTML = [
     metricHtml("완료", `${done.length}개`),
@@ -2571,7 +2593,7 @@ async function analyzeBatchItems(): Promise<void> {
         renderBatchList();
       }
     }
-    if (pendingItems.length > 0) {
+    if (pendingItems.length > 0 && !state.batchCancelled) {
       renderProgress(100, "일괄 분석 완료");
       setStatus("일괄 분석이 완료되었습니다. 제출 기준에 맞게 최적화할 수 있습니다.");
       refreshBatchPlanItems();
@@ -2579,6 +2601,7 @@ async function analyzeBatchItems(): Promise<void> {
   } finally {
     if (pendingItems.length > 0) {
       state.batchAnalyzing = false;
+      setIdle();
       hideProgressPanel();
     }
     renderBatchList();

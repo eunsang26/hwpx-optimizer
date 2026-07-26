@@ -50,7 +50,7 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
   const meta = excluded ? "" : batchItemMetaText(item);
   const actions = batchItemRowActionsHtml(item, index, options);
   const attentionClass =
-    item.targetStatusLabel === "더 압축 필요" || item.targetStatusLabel === "기준 미달"
+    !excluded && (item.targetStatusLabel === "더 압축 필요" || item.targetStatusLabel === "기준 미달")
       ? " class=\"needs-attention\""
       : "";
   const statusLabel = excluded ? "제외" : batchTableStatusLabel(item);

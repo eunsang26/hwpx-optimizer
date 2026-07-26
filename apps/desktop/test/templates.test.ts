@@ -155,7 +155,7 @@ describe("template HTML builders", () => {
       originalSizeLabel: "89.72 MiB",
       expectedSizeLabel: "5.15 MiB",
       targetLabel: "40 MB 미만",
-      targetStatusLabel: "목표 제한 없음",
+      targetStatusLabel: "기준 미달",
       qualityLabel: "95%",
       jpegQualityDisplay: 95
     };
@@ -166,7 +166,8 @@ describe("template HTML builders", () => {
     expect(html).toContain('class="status excluded">제외</span>');
     expect(html).not.toContain("row-q-btn");
     expect(html).not.toContain("batch-quality-input");
-    expect(html).not.toContain("목표 제한 없음");
+    expect(html).not.toContain("기준 미달");
+    expect(html).not.toContain("needs-attention");
   });
 
   it("renders an image compare pair with PSNR badge and saving info", () => {

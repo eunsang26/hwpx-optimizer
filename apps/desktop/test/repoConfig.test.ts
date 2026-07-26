@@ -326,6 +326,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("verificationBody.textContent");
     expect(renderer).toContain("renderAnalysisVerification(report);");
     expect(renderer).toContain("renderVerificationFailure(error);");
+    expect(renderer).toMatch(
+      /if \(!cancellingBatchAnalysis\) \{[\s\S]*?setIdle\(\);[\s\S]*?hideProgressPanel\(\);[\s\S]*?return;/
+    );
     expect(renderer).toContain("planCountPill.textContent");
     expect(renderer).toContain("optionPlanSummary.textContent");
     expect(renderer).toContain('const CLEANUP_ACTIONS = ["clean-shape-comment", "strip-metadata"]');
