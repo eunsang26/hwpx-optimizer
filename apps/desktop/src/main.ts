@@ -509,10 +509,14 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
         detailsWidth,
         workspaceWidth: workspaceRect?.width ?? 0,
         detailsWidthDelta: Math.abs(detailsWidth - (workspaceRect?.width ?? 0)),
+        viewportWidth: window.innerWidth,
         twoColumn:
           Boolean(workflowRect && planRect) &&
           (planRect?.left ?? 0) > (workflowRect?.right ?? Number.POSITIVE_INFINITY) &&
           Math.abs((planRect?.top ?? 0) - (workflowRect?.top ?? Number.POSITIVE_INFINITY)) <= 1,
+        stacked:
+          Boolean(workflowRect && planRect) &&
+          (planRect?.top ?? 0) >= (workflowRect?.bottom ?? Number.POSITIVE_INFINITY),
         helpOpen: helpPanel?.classList.contains("is-open") ?? false,
         helpTitle: document.getElementById("help-title")?.textContent,
         manualStepCount: document.querySelectorAll(".manual-steps li").length
@@ -525,7 +529,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     detailsWidth?: number;
     workspaceWidth?: number;
     detailsWidthDelta?: number;
+    viewportWidth?: number;
     twoColumn?: boolean;
+    stacked?: boolean;
     helpOpen?: boolean;
     helpTitle?: string;
     manualStepCount?: number;
@@ -534,12 +540,15 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (layout.detailsInsideWorkspace !== true) {
     throw new Error("Desktop smoke failed: analysis details are outside the primary workspace");
   }
+  const expectsTwoColumns = (layout.viewportWidth ?? 0) > 1100;
   if (
     layout.planInsideWorkspace !== true ||
     layout.safeLineInsidePlan !== true ||
-    layout.twoColumn !== true
+    (expectsTwoColumns ? layout.twoColumn !== true : layout.stacked !== true)
   ) {
-    throw new Error("Desktop smoke failed: approved two-column plan layout did not render");
+    throw new Error(
+      `Desktop smoke failed: approved responsive plan layout did not render at ${String(layout.viewportWidth)}px`
+    );
   }
   if (
     !layout.detailsWidth ||
