@@ -10,24 +10,26 @@
  */
 import { spawnSync } from "node:child_process";
 
-const prod = spawnSync(
-  "npm",
-  ["audit", "--omit=dev", "--audit-level=moderate", "--json"],
-  { encoding: "utf8" }
-);
-const prodReport = safeJson(prod.stdout);
+const MAX_ATTEMPTS = 3;
+
+const prodReport = runNpmAudit(["audit", "--omit=dev", "--audit-level=moderate", "--json"]);
 const prodVulns = countVulns(prodReport);
-if (prod.status !== 0 || prodVulns.total > 0) {
+const prodModeratePlus =
+  prodVulns.moderate + prodVulns.high + prodVulns.critical;
+
+if (prodModeratePlus > 0) {
   console.error("Release audit failed: production dependencies have vulnerabilities.");
-  if (prod.stdout) process.stderr.write(prod.stdout);
-  if (prod.stderr) process.stderr.write(prod.stderr);
-  process.exit(prod.status && prod.status !== 0 ? prod.status : 1);
+  console.error(JSON.stringify(prodReport.metadata?.vulnerabilities ?? prodVulns, null, 2));
+  const names = Object.keys(prodReport.vulnerabilities ?? {});
+  if (names.length > 0) {
+    console.error(`Packages: ${names.join(", ")}`);
+  }
+  process.exit(1);
 }
 
 console.log("Release audit passed: production dependencies have 0 vulnerabilities at moderate+.");
 
-const all = spawnSync("npm", ["audit", "--json"], { encoding: "utf8" });
-const allReport = safeJson(all.stdout);
+const allReport = runNpmAudit(["audit", "--json"], { optional: true });
 const allVulns = countVulns(allReport);
 if (allVulns.total > 0) {
   console.log(
@@ -39,12 +41,74 @@ if (allVulns.total > 0) {
 
 process.exit(0);
 
+function runNpmAudit(args, { optional = false } = {}) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const result = spawnNpm(args);
+    if (result.error) {
+      lastError = `Failed to spawn npm: ${result.error.message}`;
+    } else {
+      const report = safeJson(result.stdout);
+      if (isAuditEndpointError(report) || isAuditEndpointErrorText(result.stderr)) {
+        lastError =
+          report.error?.summary ||
+          report.message ||
+          result.stderr?.trim() ||
+          "npm audit endpoint returned an error";
+      } else if (!report.metadata?.vulnerabilities && result.status !== 0) {
+        lastError =
+          result.stderr?.trim() ||
+          result.stdout?.trim() ||
+          `npm audit exited with status ${result.status}`;
+      } else {
+        return report;
+      }
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      console.warn(`npm audit attempt ${attempt}/${MAX_ATTEMPTS} failed (${lastError}); retrying...`);
+    }
+  }
+
+  if (optional) {
+    console.warn(`Skipping non-blocking full audit note: ${lastError}`);
+    return {};
+  }
+
+  console.error(`Release audit failed: could not complete npm audit (${lastError}).`);
+  process.exit(1);
+}
+
+function spawnNpm(args) {
+  // On Windows, npm is a .cmd shim; Node cannot spawn it without a shell
+  // (ENOENT / EINVAL after CVE-2024-27980 mitigations).
+  const command = process.platform === "win32" ? "npm.cmd" : "npm";
+  return spawnSync(command, args, {
+    encoding: "utf8",
+    shell: process.platform === "win32",
+    env: process.env
+  });
+}
+
 function safeJson(text) {
   try {
     return JSON.parse(text || "{}");
   } catch {
     return {};
   }
+}
+
+function isAuditEndpointError(report) {
+  if (!report || typeof report !== "object") return false;
+  if (report.error) return true;
+  if (typeof report.message === "string" && /audit endpoint|request to .* failed/i.test(report.message)) {
+    return true;
+  }
+  return false;
+}
+
+function isAuditEndpointErrorText(text) {
+  return typeof text === "string" && /audit endpoint|request to .* failed/i.test(text);
 }
 
 function countVulns(report) {
