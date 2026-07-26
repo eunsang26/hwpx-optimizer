@@ -34,10 +34,10 @@ describe("repository runtime and cleanup configuration", () => {
 
     expect(coreIndex).toContain(`export const version = "${rootPackage.version}"`);
     expect(cargoToml).toMatch(
-      new RegExp(`name = "hwpx-tauri-desktop"\\nversion = "${rootPackage.version?.replaceAll(".", "\\.")}"`)
+      new RegExp(`name = "hwpx-tauri-desktop"\\r?\\nversion = "${rootPackage.version?.replaceAll(".", "\\.")}"`)
     );
     expect(cargoLock).toMatch(
-      new RegExp(`name = "hwpx-tauri-desktop"\\nversion = "${rootPackage.version?.replaceAll(".", "\\.")}"`)
+      new RegExp(`name = "hwpx-tauri-desktop"\\r?\\nversion = "${rootPackage.version?.replaceAll(".", "\\.")}"`)
     );
     expect(tauriConfig.version).toBe(rootPackage.version);
   });
