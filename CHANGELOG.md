@@ -12,6 +12,7 @@ All notable changes are documented here. Dates are local to the project (KST).
 - Structural cleanup protects duplicate-image members and treats embedded font/OLE resources conservatively.
 - CLI projected savings now use ZIP-aware package estimates, preventing opportunity entry totals from overstating savings beyond the input package size.
 - Release tests no longer rewrite the tracked benchmark fixture, and Electron smoke starts from a clean temporary state.
+- Image-encoding and CLI batch integration tests use explicit bounded timeouts, avoiding false failures under parallel release-gate load.
 
 ### Changed
 

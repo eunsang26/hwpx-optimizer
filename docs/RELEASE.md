@@ -183,7 +183,7 @@ On Linux/WSL without Wine, run the portable Windows release gate:
 npm run release:check:win-portable:self-signed
 ```
 
-This gate builds `release/HWPX Optimizer-0.1.0-x64.exe` as a self-signed portable Windows artifact and `release/HWPX Optimizer-0.1.0-x64.zip` as a faster-starting extracted-folder distribution. It verifies that packaged artifacts do not contain development files or user-history files, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, verifies the Windows PE Authenticode certificate table, writes `release/release-manifest.json`, `release/SHA256SUMS.txt`, and `release/RELEASE_NOTICE_0.1.0.txt`, and verifies that the checksum files and release notice match the artifacts. It does not replace a clean Windows runtime test.
+This gate builds `release/HWPX Optimizer-<version>-x64.exe` as a self-signed portable Windows artifact and `release/HWPX Optimizer-<version>-x64.zip` as a faster-starting extracted-folder distribution. It verifies that packaged artifacts do not contain development files or user-history files, verifies that the Windows `sharp` native runtime files are unpacked outside `app.asar`, verifies the Windows PE Authenticode certificate table, writes `release/release-manifest.json`, `release/SHA256SUMS.txt`, and `release/RELEASE_NOTICE_<version>.txt`, and verifies that the checksum files and release notice match the artifacts. It does not replace a clean Windows runtime test.
 
 The package also includes `TERMS.txt` with the producer, permitted-use, self-signed-status, SHA256-check, warranty-disclaimer, and user-responsibility notice. The generated release notice must repeat the artifact SHA256 values, self-signed status, permitted-use terms, warranty disclaimer, and user responsibility. It must also state that optimized outputs must be reviewed by the user before submission, distribution, or retention, and that final use responsibility remains with the user.
 
@@ -207,7 +207,7 @@ powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sam
 powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sample sample2.hwpx -AllModes
 ```
 
-For the ZIP artifact, extract `HWPX Optimizer-0.1.0-x64.zip`, open PowerShell in the extracted folder, and run the same script. The script defaults to `.\HWPX Optimizer.exe` when it is present.
+For the ZIP artifact, extract `HWPX Optimizer-<version>-x64.zip`, open PowerShell in the extracted folder, and run the same script. The script defaults to `.\HWPX Optimizer.exe` when it is present.
 
 Use [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) for the full clean-machine manual and CLI verification pass before treating a Windows artifact as product-ready.
 
@@ -302,4 +302,4 @@ Do include:
 - Lockfile.
 - Release configuration once packaging is added.
 
-Generated release artifacts, checksum files, and `RELEASE_NOTICE_0.1.0.txt` live under `release/` and are ignored by git.
+Generated release artifacts, checksum files, and `RELEASE_NOTICE_<version>.txt` live under `release/` and are ignored by git.
