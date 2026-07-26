@@ -56,6 +56,43 @@
       </section>
 
       <section id="single-workspace" class="workspace-grid">
+        <div id="policy-toolbar" class="policy-toolbar" aria-label="결재·압축 기준">
+          <label>
+            <strong>결재</strong>
+            <select id="submission-limit-select">
+              <option value="none">제한 없음</option>
+              <option value="mb5">5MB 미만</option>
+              <option value="mb10">10MB 미만</option>
+              <option value="mb20">20MB 미만</option>
+              <option value="mb30">30MB 미만</option>
+              <option value="mb40" selected>40MB 미만</option>
+              <option value="mb50">50MB 미만</option>
+              <option value="mb100">100MB 미만</option>
+              <option value="custom">직접 입력</option>
+            </select>
+          </label>
+          <label id="custom-limit-field" hidden>
+            <strong>직접</strong>
+            <input id="custom-limit-input" type="number" min="1" step="1" inputmode="decimal" />
+          </label>
+          <label>
+            <strong>압축</strong>
+            <select id="preservation-select">
+              <option value="preserve">보수(외형)</option>
+              <option value="recommended" selected>균형 · 목표 맞춤</option>
+              <option value="size">용량 우선 · 최대</option>
+            </select>
+          </label>
+          <label class="policy-toolbar-batch">
+            <strong>판정</strong>
+            <select id="batch-target-mode-select">
+              <option value="per-file" selected>파일별 (기본)</option>
+              <option value="aggregate">전체 합계</option>
+            </select>
+          </label>
+          <span id="policy-live" class="policy-live">자동 · 88%</span>
+        </div>
+
         <!-- ① IMPORT — single compact row -->
         <section class="panel import-row file-panel">
           <div class="file-toolbar">
@@ -144,45 +181,16 @@
           </section>
         </section>
 
+        <section id="empty-policy-review" class="empty-policy-review" aria-label="기본 최적화 정책">
+          <div>
+            <strong>결재 기본값 40MB 미만</strong>
+            <p>파일별 판정 · 균형은 목표에 맞춰 필요한 만큼만 줄입니다.</p>
+          </div>
+        </section>
+
         <!-- RESULT HERO — gauge first + quality + CTA -->
         <section class="panel summary-panel">
           <p id="summary-target-line" class="sr-only">제출 기준: 40MB 미만</p>
-          <div id="policy-toolbar" class="policy-toolbar" aria-label="결재·압축 기준">
-            <label>
-              <strong>결재</strong>
-              <select id="submission-limit-select">
-                <option value="none">제한 없음</option>
-                <option value="mb5">5MB 미만</option>
-                <option value="mb10">10MB 미만</option>
-                <option value="mb20">20MB 미만</option>
-                <option value="mb30">30MB 미만</option>
-                <option value="mb40" selected>40MB 미만</option>
-                <option value="mb50">50MB 미만</option>
-                <option value="mb100">100MB 미만</option>
-                <option value="custom">직접 입력</option>
-              </select>
-            </label>
-            <label id="custom-limit-field" hidden>
-              <strong>직접</strong>
-              <input id="custom-limit-input" type="number" min="1" step="1" inputmode="decimal" />
-            </label>
-            <label>
-              <strong>압축</strong>
-              <select id="preservation-select">
-                <option value="preserve">보수(외형)</option>
-                <option value="recommended" selected>균형 · 목표 맞춤</option>
-                <option value="size">용량 우선 · 최대</option>
-              </select>
-            </label>
-            <label class="policy-toolbar-batch">
-              <strong>판정</strong>
-              <select id="batch-target-mode-select">
-                <option value="per-file" selected>파일별 (기본)</option>
-                <option value="aggregate">전체 합계</option>
-              </select>
-            </label>
-            <span id="policy-live" class="policy-live">자동 · 88%</span>
-          </div>
           <div class="gauge-hero" id="gauge-hero">
             <div class="target-row">
               <div>
@@ -209,13 +217,6 @@
               <span id="gauge-end-label">원본</span>
             </div>
             <p id="summary-verdict-detail" class="gauge-detail">제출 기준 대비 예상 용량을 보여줍니다.</p>
-          </div>
-          <div id="review-strip" class="review-strip" hidden>
-            <div>
-              <strong id="review-strip-title">자동으로 건드리지 않음</strong>
-              <p id="review-strip-detail">폰트·유사 이미지는 품질 계획에서 제외됩니다.</p>
-            </div>
-            <div id="review-strip-chips" class="review-strip-chips"></div>
           </div>
           <div id="summary-grid" class="summary-grid summary-grid--secondary" hidden>
             <div class="summary-card">
@@ -341,6 +342,14 @@
             <p id="report-path"></p>
           </section>
         </section>
+
+        <div id="review-strip" class="review-strip" hidden>
+          <div>
+            <strong id="review-strip-title">자동으로 건드리지 않음</strong>
+            <p id="review-strip-detail">폰트·유사 이미지는 품질 계획에서 제외됩니다.</p>
+          </div>
+          <div id="review-strip-chips" class="review-strip-chips"></div>
+        </div>
 
         <p id="option-plan-summary" class="option-plan-summary option-plan-summary--quiet">
           결재·압축은 위 툴바에서, 세부 작업은 「세부 옵션」에서 조정합니다.

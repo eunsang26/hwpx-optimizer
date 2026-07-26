@@ -1091,7 +1091,7 @@ function renderSingleSummary(plan: SubmissionPlan): void {
   renderReviewStrip(plan);
   renderQualityControls(plan);
   summaryGrid.hidden = true;
-  optimizeButton.textContent = "제출 기준에 맞게 줄이기";
+  optimizeButton.textContent = "최적화 실행";
   renderSelectionClearButton();
   renderRunDock(plan);
 }
@@ -1107,7 +1107,7 @@ function renderTargetGauge(plan: SubmissionPlan): void {
   targetTrackFill.dataset.status = fillStatus;
   targetRow.dataset.verdict = plan.verdict;
 
-  if (plan.targetBytes && plan.targetBytes > 0 && original > 0) {
+  if (plan.targetBytes && plan.targetBytes > 0 && original > plan.targetBytes) {
     const targetPercent = Math.min(100, Math.max(0, (plan.targetBytes / original) * 100));
     targetTrackLimit.style.left = `${targetPercent}%`;
     targetTrackLimit.hidden = false;
@@ -1117,16 +1117,18 @@ function renderTargetGauge(plan: SubmissionPlan): void {
     gaugeMidLabel.style.left = "50%";
   }
 
-  if (plan.verdict === "no-target") {
-    summaryVerdict.hidden = true;
-    delete summaryVerdict.dataset.status;
-    summaryVerdictDetail.textContent = "제출 기준이 없습니다.";
-    return;
-  }
-  summaryVerdict.textContent = plan.verdictLabel;
+  const expectedLine = document.createElement("span");
+  expectedLine.append("예상 ");
+  const expectedValue = document.createElement("b");
+  expectedValue.textContent = plan.expectedSizeLabel.replace(/^약 /, "");
+  expectedLine.append(expectedValue);
+  const roomLine = document.createElement("small");
+  roomLine.textContent = plan.verdict === "no-target" ? "제출 기준 없음" : plan.verdictDetail;
+  summaryVerdict.replaceChildren(expectedLine, roomLine);
   summaryVerdict.dataset.status = plan.verdict === "pass" ? "pass" : plan.verdict;
   summaryVerdict.hidden = false;
-  summaryVerdictDetail.textContent = plan.verdictDetail;
+  summaryVerdictDetail.textContent =
+    plan.verdict === "no-target" ? "제출 기준이 없습니다." : plan.verdictDetail;
 }
 
 function clearTargetGauge(): void {
@@ -1135,6 +1137,7 @@ function clearTargetGauge(): void {
   delete targetRow.dataset.verdict;
   targetTrackLimit.hidden = true;
   gaugeStartLabel.textContent = "0";
+  gaugeMidLabel.hidden = false;
   gaugeMidLabel.textContent = "40MB";
   gaugeMidLabel.style.left = "50%";
   gaugeEndLabel.textContent = "원본";
@@ -1249,6 +1252,7 @@ function renderBatchSummary(): void {
       : state.batchTargetMode === "aggregate"
         ? `${Math.round(passRate)}%`
         : `${passed}/${plannedCount}`;
+  gaugeMidLabel.hidden = false;
   gaugeMidLabel.style.left = `${passRate}%`;
   gaugeEndLabel.textContent = "";
   summaryGrid.hidden = false;
@@ -1654,6 +1658,7 @@ function renderHeroChips(plan?: SubmissionPlan): void {
   gaugeMidLabel.textContent = plan.targetBytes
     ? `${Math.round(plan.targetBytes / (1024 * 1024))}MB`
     : "목표";
+  gaugeMidLabel.hidden = !plan.targetBytes || original <= plan.targetBytes;
   gaugeEndLabel.textContent = original > 0 ? formatBytes(original) : "원본";
 }
 
@@ -1666,10 +1671,6 @@ function renderReviewStrip(plan?: SubmissionPlan): void {
   const fonts = (state.report.resourceDiagnostics ?? []).filter((item) => item.kind === "font").length;
   const ole = (state.report.resourceDiagnostics ?? []).filter((item) => item.kind === "ole").length;
   const reviewNotes = plan.planNotes.filter((note) => note.kind === "review");
-  if (near === 0 && fonts === 0 && ole === 0 && reviewNotes.length === 0) {
-    reviewStrip.hidden = true;
-    return;
-  }
   const hardMiss = plan.verdict === "hard-miss";
   reviewStripTitle.textContent = hardMiss ? "최대 압축으로도 부족" : "자동으로 건드리지 않음";
   reviewStripDetail.textContent = hardMiss
@@ -1913,7 +1914,7 @@ function stopProgressAnimation(): void {
 
 function renderAnalysis(report: OptimizationReport): void {
   const view = createAnalysisViewModel(report);
-  selectedOriginalMeta.textContent = `원본 크기: ${view.originalSizeLabel}`;
+  selectedOriginalMeta.textContent = `원본 ${view.originalSizeLabel}`;
   selectedModifiedMeta.textContent = `수정일: ${new Date().toISOString().slice(0, 16).replace("T", " ")}`;
   analysisDetails.open = false;
   analysisDetailSummary.innerHTML = `<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>예상 절감 ${escapeHtml(
@@ -2430,7 +2431,7 @@ function promoteRemainingBatchItemToSingle(item: BatchItem): void {
   fileMeta.textContent = "선택한 경로는 현재 실행에서만 사용하며 저장하지 않습니다.";
   selectedFileName.textContent = item.fileName;
   selectedFilePath.textContent = "파일 경로는 앱 기록으로 저장하지 않습니다.";
-  selectedOriginalMeta.textContent = item.originalSizeLabel ? `원본 크기: ${item.originalSizeLabel}` : "원본 크기: 분석 대기";
+  selectedOriginalMeta.textContent = item.originalSizeLabel ? `원본 ${item.originalSizeLabel}` : "원본 분석 대기";
   selectedModifiedMeta.textContent = "수정일: 분석 대기";
   resetVerificationPanel();
   compareButton.disabled = true;

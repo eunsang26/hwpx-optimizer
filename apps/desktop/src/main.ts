@@ -42,6 +42,7 @@ const pendingWorkerRequests = new Map<
 const allowedInputPaths = new Set<string>();
 const allowedOutputDirectories = new Set<string>();
 const allowedGeneratedPaths = new Set<string>();
+let smokeDialogFilePaths: string[] | undefined;
 // Packaged Windows EXEs treat unknown `--flags` as Chromium switches ("bad option").
 // Prefer HWPX_OPT_SMOKE_TEST=1 for packaged smoke; keep argv for Linux `electron` launches.
 const isSmokeTest =
@@ -133,6 +134,12 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("dialog:select-hwpx-many", async () => {
+    if (isSmokeTest && smokeDialogFilePaths) {
+      for (const filePath of smokeDialogFilePaths) {
+        await registerAllowedInputPath(filePath);
+      }
+      return [...smokeDialogFilePaths];
+    }
     const options: OpenDialogOptions = {
       properties: ["openFile", "multiSelections"],
       filters: [{ name: "HWPX 문서", extensions: ["hwpx"] }]
@@ -433,6 +440,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   await registerAllowedInputPath(smokeInputPath);
   await registerAllowedInputPath(smokeSecondInputPath);
   await registerAllowedOutputDirectory(smokeDir);
+  smokeDialogFilePaths = [smokeInputPath];
 
   const result = (await window.webContents.executeJavaScript(`
     new Promise((resolve) => {
@@ -493,20 +501,30 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       document.getElementById("settings-close-button")?.click();
       document.getElementById("help-button")?.click();
       const workspace = document.getElementById("single-workspace");
+      const shell = document.querySelector(".shell");
       const planSidebar = document.getElementById("plan-sidebar");
       const optionsSheet = document.getElementById("detail-options-sheet");
-      const details = document.getElementById("analysis-details");
+      const summaryPanel = document.querySelector(".summary-panel");
+      const emptyReview = document.getElementById("empty-policy-review");
       const helpPanel = document.getElementById("help-panel");
       const workspaceRect = workspace?.getBoundingClientRect();
-      const detailsWidth = details?.getBoundingClientRect().width ?? 0;
+      const shellRect = shell?.getBoundingClientRect();
+      const shellStyle = shell ? getComputedStyle(shell) : undefined;
+      const shellContentWidth = shellRect
+        ? shellRect.width -
+          Number.parseFloat(shellStyle?.paddingLeft ?? "0") -
+          Number.parseFloat(shellStyle?.paddingRight ?? "0")
+        : 0;
       return {
-        detailsInsideWorkspace: workspace?.contains(details) ?? false,
         planInsideOptions: optionsSheet?.contains(planSidebar) ?? false,
         planHiddenWithOptions: planSidebar?.getClientRects().length === 0,
         singleColumn: getComputedStyle(workspace ?? document.body).gridTemplateColumns.split(" ").length === 1,
-        detailsWidth,
+        emptySummaryHidden: summaryPanel?.getClientRects().length === 0,
+        emptyReviewVisible: (emptyReview?.getBoundingClientRect().width ?? 0) > 0,
         workspaceWidth: workspaceRect?.width ?? 0,
-        detailsWidthDelta: Math.abs(detailsWidth - (workspaceRect?.width ?? 0)),
+        shellWidth: shellRect?.width ?? 0,
+        shellContentWidth,
+        workspaceWidthDelta: Math.abs((workspaceRect?.width ?? 0) - shellContentWidth),
         viewportWidth: window.innerWidth,
         helpOpen: helpPanel?.classList.contains("is-open") ?? false,
         helpTitle: document.getElementById("help-title")?.textContent,
@@ -514,38 +532,39 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       };
     })()
   `)) as {
-    detailsInsideWorkspace?: boolean;
     planInsideOptions?: boolean;
     planHiddenWithOptions?: boolean;
     singleColumn?: boolean;
-    detailsWidth?: number;
+    emptySummaryHidden?: boolean;
+    emptyReviewVisible?: boolean;
     workspaceWidth?: number;
-    detailsWidthDelta?: number;
+    shellWidth?: number;
+    shellContentWidth?: number;
+    workspaceWidthDelta?: number;
     viewportWidth?: number;
     helpOpen?: boolean;
     helpTitle?: string;
     manualStepCount?: number;
   };
 
-  if (layout.detailsInsideWorkspace !== true) {
-    throw new Error("Desktop smoke failed: analysis details are outside the primary workspace");
-  }
   if (
     layout.planInsideOptions !== true ||
     layout.planHiddenWithOptions !== true ||
-    layout.singleColumn !== true
+    layout.singleColumn !== true ||
+    layout.emptySummaryHidden !== true ||
+    layout.emptyReviewVisible !== true
   ) {
     throw new Error(
-      `Desktop smoke failed: approved single-pass options layout did not render at ${String(layout.viewportWidth)}px`
+      `Desktop smoke failed: canonical empty layout did not render at ${String(layout.viewportWidth)}px`
     );
   }
   if (
-    !layout.detailsWidth ||
+    !layout.shellWidth ||
     !layout.workspaceWidth ||
-    (layout.detailsWidthDelta ?? Number.POSITIVE_INFINITY) > 1
+    (layout.workspaceWidthDelta ?? Number.POSITIVE_INFINITY) > 1
   ) {
     throw new Error(
-      `Desktop smoke failed: analysis details width ${String(layout.detailsWidth)} does not match workspace width ${String(layout.workspaceWidth)}`
+      `Desktop smoke failed: workspace width ${String(layout.workspaceWidth)} does not fill shell width ${String(layout.shellWidth)}`
     );
   }
   if (layout.helpOpen !== true || layout.helpTitle !== "사용 매뉴얼" || layout.manualStepCount !== 10) {
@@ -593,6 +612,113 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     dragUi.cleared !== true
   ) {
     throw new Error("Desktop smoke failed: full-window drag overlay did not respond to drag/drop events");
+  }
+
+  const selectedUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("empty-choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        const selected = document.getElementById("selected-file-card");
+        const optimize = document.getElementById("optimize-button");
+        const status = document.getElementById("summary-status");
+        if (
+          document.body.dataset.view === "single" &&
+          selected?.hidden === false &&
+          optimize?.disabled === false &&
+          status?.textContent?.includes("제출")
+        ) {
+          const policyRect = document.getElementById("policy-toolbar")?.getBoundingClientRect();
+          const fileRect = document.querySelector(".file-panel")?.getBoundingClientRect();
+          const summaryRect = document.querySelector(".summary-panel")?.getBoundingClientRect();
+          const optimizeRect = optimize.getBoundingClientRect();
+          const outputRect = document.getElementById("output-button")?.getBoundingClientRect();
+          const optionsRect = document.getElementById("toggle-options-button")?.getBoundingClientRect();
+          const detailsRect = document.getElementById("analysis-details")?.getBoundingClientRect();
+          const workspaceRect = document.getElementById("single-workspace")?.getBoundingClientRect();
+          resolve({
+            policyBeforeFile: Boolean(policyRect && fileRect && policyRect.top < fileRect.top),
+            fileBeforeHero: Boolean(fileRect && summaryRect && fileRect.top < summaryRect.top),
+            ctaSingleRow:
+              Boolean(outputRect && optionsRect) &&
+              Math.abs(
+                optimizeRect.top + optimizeRect.height / 2 -
+                  ((outputRect?.top ?? 0) + (outputRect?.height ?? 0) / 2)
+              ) <= 1 &&
+              Math.abs(
+                optimizeRect.top + optimizeRect.height / 2 -
+                  ((optionsRect?.top ?? 0) + (optionsRect?.height ?? 0) / 2)
+              ) <= 1,
+            ctaVisible: [
+              optimize.getClientRects().length > 0,
+              document.getElementById("output-button")?.getClientRects().length > 0,
+              document.getElementById("toggle-options-button")?.getClientRects().length > 0
+            ],
+            reviewVisible: (document.getElementById("review-strip")?.getBoundingClientRect().width ?? 0) > 0,
+            emptyReviewHidden: document.getElementById("empty-policy-review")?.getClientRects().length === 0,
+            expectedMeta: document.getElementById("summary-verdict")?.textContent,
+            heroText: status.textContent,
+            optimizeText: optimize.textContent,
+            visiblePolicyControls: document.querySelectorAll(
+              '#policy-toolbar label:not([hidden]):not(.policy-toolbar-batch)'
+            ).length,
+            singleBatchPolicyHidden:
+              document.querySelector(".policy-toolbar-batch")?.getClientRects().length === 0,
+            tinyFileTargetMarkerHidden:
+              document.getElementById("target-track-limit")?.getClientRects().length === 0 &&
+              document.getElementById("gauge-mid-label")?.getClientRects().length === 0,
+            workspaceWidth: workspaceRect?.width ?? 0,
+            detailsWidth: detailsRect?.width ?? 0,
+            selectedFileName: document.getElementById("selected-file-name")?.textContent
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    timedOut?: boolean;
+    policyBeforeFile?: boolean;
+    fileBeforeHero?: boolean;
+    ctaSingleRow?: boolean;
+    ctaVisible?: Array<boolean | undefined>;
+    reviewVisible?: boolean;
+    emptyReviewHidden?: boolean;
+    expectedMeta?: string;
+    heroText?: string;
+    optimizeText?: string;
+    visiblePolicyControls?: number;
+    singleBatchPolicyHidden?: boolean;
+    tinyFileTargetMarkerHidden?: boolean;
+    workspaceWidth?: number;
+    detailsWidth?: number;
+    selectedFileName?: string;
+  };
+
+  if (
+    selectedUi.timedOut ||
+    selectedUi.policyBeforeFile !== true ||
+    selectedUi.fileBeforeHero !== true ||
+    selectedUi.ctaSingleRow !== true ||
+    selectedUi.reviewVisible !== true ||
+    selectedUi.emptyReviewHidden !== true ||
+    !selectedUi.expectedMeta?.includes("예상") ||
+    !selectedUi.heroText?.includes("제출") ||
+    selectedUi.optimizeText !== "최적화 실행" ||
+    selectedUi.visiblePolicyControls !== 2 ||
+    selectedUi.singleBatchPolicyHidden !== true ||
+    selectedUi.tinyFileTargetMarkerHidden !== true ||
+    !selectedUi.selectedFileName?.endsWith(".hwpx") ||
+    !selectedUi.workspaceWidth ||
+    Math.abs(selectedUi.workspaceWidth - (selectedUi.detailsWidth ?? 0)) > 1
+  ) {
+    throw new Error(`Desktop smoke failed: canonical selected layout mismatch ${JSON.stringify(selectedUi)}`);
   }
 
   const workflow = (await window.webContents.executeJavaScript(`

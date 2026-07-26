@@ -346,6 +346,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("선택 파일 일괄 최적화");
     expect(renderer).toContain("합계 배분 목표마다 파일별 품질");
     expect(renderer).toContain("gaugeMidLabel.style.left");
+    expect(renderer).toContain("original > plan.targetBytes");
+    expect(renderer).toContain("gaugeMidLabel.hidden = !plan.targetBytes || original <= plan.targetBytes");
     expect(renderer).toContain("하한 품질까지 여지");
     expect(renderer).toContain('preservationPreference === "size"');
     expect(renderer).toContain("analyzed.filter((item) => item.selected !== false)");
@@ -357,6 +359,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="gauge-start-label"');
     expect(renderer).toContain("renderHeroChips");
     expect(renderer).toContain("renderReviewStrip");
+    expect(renderer).toContain('optimizeButton.textContent = "최적화 실행"');
     expect(renderer).toContain("handleBatchQualityInput");
     expect(css).toContain('body[data-view="batch"] .target-limit::after');
     expect(css).toMatch(/\.policy-toolbar\s*{/s);
@@ -365,6 +368,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.manualStepCount !== 10");
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.planInsideOptions !== true");
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("HWPX_OPT_SMOKE_SCREENSHOT");
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
+      'document.getElementById("empty-choose-button")?.click()'
+    );
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, var\(--app-max\)\)/s);
@@ -384,14 +390,35 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("plan-priority");
     expect(renderer).toContain("중복 제외 기준");
     expect(css).not.toContain(".plan-card .plan-saving { display: none; }");
+    expect(css).toMatch(/\.workspace-grid\s*{[^}]*width:\s*100%/s);
+    expect(css).toMatch(
+      /body\[data-view="empty"\] \.summary-panel,[\s\S]*body\[data-view="empty"\] \.bottom-accordions\s*{[^}]*display:\s*none !important/s
+    );
+    expect(css).toMatch(/\.primary-run-panel #optimize-button\s*{[^}]*grid-column:\s*1/s);
+    expect(css).toMatch(
+      /body\[data-view="single"\] \.policy-toolbar-batch\s*{[^}]*display:\s*none !important/s
+    );
+    expect(css).toMatch(
+      /body\[data-view="single"\] \.quality-mode-row\s*{[^}]*position:\s*absolute/s
+    );
 
+    const policyToolbar = html.indexOf('<div id="policy-toolbar"');
+    const filePanel = html.indexOf('<section class="panel import-row file-panel"');
+    const emptyPolicyReview = html.indexOf('id="empty-policy-review"');
     const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');
+    const reviewStrip = html.indexOf('id="review-strip"');
     const resultPanel = html.indexOf('id="result-panel"');
     const optionsSheet = html.indexOf('id="detail-options-sheet"');
     const planSidebar = html.indexOf('class="plan-strip" id="plan-sidebar"');
     const bottomAccordions = html.indexOf('<section class="bottom-accordions">');
     const actionPanel = html.indexOf('<div id="action-panel"');
+    expect(policyToolbar).toBeGreaterThanOrEqual(0);
+    expect(filePanel).toBeGreaterThan(policyToolbar);
+    expect(emptyPolicyReview).toBeGreaterThan(filePanel);
     expect(summaryPanelStart).toBeGreaterThanOrEqual(0);
+    expect(summaryPanelStart).toBeGreaterThan(emptyPolicyReview);
+    expect(reviewStrip).toBeGreaterThan(summaryPanelStart);
+    expect(reviewStrip).toBeLessThan(bottomAccordions);
     expect(optionsSheet).toBeGreaterThan(summaryPanelStart);
     expect(planSidebar).toBeGreaterThan(optionsSheet);
     expect(planSidebar).toBeLessThan(resultPanel);
