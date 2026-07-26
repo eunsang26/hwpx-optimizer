@@ -56,10 +56,10 @@ if (process.platform === "win32") {
 async function createWindow(): Promise<BrowserWindow> {
   Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindowClass({
-    width: 1040,
-    height: 820,
-    minWidth: 960,
-    minHeight: 720,
+    width: 960,
+    height: 780,
+    minWidth: 920,
+    minHeight: 700,
     maxWidth: 1360,
     useContentSize: true,
     show: !isSmokeTest,

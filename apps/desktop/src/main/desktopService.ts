@@ -118,7 +118,9 @@ export async function analyzeDesktopFile(
 ): Promise<DesktopAnalysisResult> {
   const input = await readSupportedInput(filePath, options);
   const { analyzeHwpxBuffer } = await loadCoreModule();
-  const report = await analyzeHwpxBuffer(input.data, { analysisMode: options.analysisMode ?? "quick" });
+  // Deep analysis enables near-duplicate review groups for Desktop chips/warnings.
+  // Auto-merge remains unavailable; optimize paths never consolidate by aHash.
+  const report = await analyzeHwpxBuffer(input.data, { analysisMode: options.analysisMode ?? "deep" });
   return { filePath, report };
 }
 

@@ -66,7 +66,47 @@ describe("desktop service", () => {
     await expect(verifyDesktopFile(result.outputPath)).resolves.toEqual({ ok: true });
   });
 
-  it("uses quick analysis by default for lower-latency desktop planning", async () => {
+  it("uses deep analysis by default so near-dup review groups can populate", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
+    const inputPath = join(dir, "input.hwpx");
+    const sharp = (await import("sharp")).default;
+    const raw = Buffer.alloc(96 * 96 * 3);
+    for (let y = 0; y < 96; y += 1) {
+      for (let x = 0; x < 96; x += 1) {
+        const offset = (y * 96 + x) * 3;
+        raw[offset] = (x * 2) % 256;
+        raw[offset + 1] = (y * 2) % 256;
+        raw[offset + 2] = 128;
+      }
+    }
+    const base = await sharp(raw, { raw: { width: 96, height: 96, channels: 3 } }).png().toBuffer();
+    const similar = await sharp(base).modulate({ brightness: 1.03 }).jpeg({ quality: 92 }).toBuffer();
+    await writeFile(
+      inputPath,
+      await createHwpxFixture({
+        entries: {
+          "Contents/content.hpf":
+            '<opf:package xmlns:opf="http://www.idpf.org/2007/opf/"><opf:manifest><opf:item id="image1" href="BinData/a.png" media-type="image/png"/><opf:item id="image2" href="BinData/b.jpg" media-type="image/jpeg"/></opf:manifest></opf:package>',
+          "Contents/section0.xml":
+            '<root><hc:img binaryItemIDRef="image1" /><hc:img binaryItemIDRef="image2" /></root>',
+          "BinData/a.png": base,
+          "BinData/b.jpg": similar
+        }
+      })
+    );
+
+    const analysis = await analyzeDesktopFile(inputPath);
+
+    expect(analysis.report.performance?.stages.map((stage) => stage.name)).toContain("analyze");
+    expect(analysis.report.nearDuplicateImages).toEqual([
+      expect.objectContaining({
+        paths: ["BinData/a.png", "BinData/b.jpg"],
+        count: 2
+      })
+    ]);
+  });
+
+  it("still allows quick analysis when callers opt out of deep diagnostics", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
     const png = await import("sharp").then(({ default: sharp }) =>
@@ -92,9 +132,8 @@ describe("desktop service", () => {
       })
     );
 
-    const analysis = await analyzeDesktopFile(inputPath);
+    const analysis = await analyzeDesktopFile(inputPath, { analysisMode: "quick" });
 
-    expect(analysis.report.performance?.stages.map((stage) => stage.name)).toContain("analyze");
     expect(analysis.report.sameVisualDuplicateImages).toEqual([]);
     expect(analysis.report.nearDuplicateImages).toEqual([]);
   });

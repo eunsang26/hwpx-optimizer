@@ -151,10 +151,10 @@ describe("repository runtime and cleanup configuration", () => {
 
     expect(main).toContain('app.setAppUserModelId("local.hwpxoptimizer.app")');
     expect(main).toContain('icon: join(import.meta.dirname, "app-icon.png")');
-    expect(main).toContain("width: 1040");
-    expect(main).toContain("height: 820");
-    expect(main).toContain("minWidth: 960");
-    expect(main).toContain("minHeight: 720");
+    expect(main).toContain("width: 960");
+    expect(main).toContain("height: 780");
+    expect(main).toContain("minWidth: 920");
+    expect(main).toContain("minHeight: 700");
     expect(main).toContain("maxWidth: 1360");
     expect(main).toContain('backgroundColor: "#f6f8fb"');
     expect(styles).toMatch(/\.shell\s*{[^}]*padding:\s*0 6px 80px/s);
@@ -280,7 +280,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="review-strip"');
     expect(html).toContain('id="quality-mode-auto"');
     expect(html).toContain("유사 이미지 병합");
-    expect(html).toContain("검토만 · 기본 끔");
+    expect(html).toContain("검토만 · 자동 병합 안 함");
     expect(html).toContain("예정 품질");
     expect(html).toContain("원본 → 예상");
     expect(html).toContain(">판정<");
