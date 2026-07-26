@@ -17,11 +17,11 @@
 - Modify: `packages/core/src/opportunities.ts` (export quality bounds if needed)
 - Test: `packages/core/test/balanced.test.ts` or new `targetQuality.test.ts`
 
-- [ ] Add `QUALITY_FLOOR=60`, `QUALITY_CEILING=95` (or mode-specific)
-- [ ] Balanced + `targetBytes`: binary-search jpegQuality (couple maxEdge lightly or keep display budget)
-- [ ] Aggressive: always use aggressive profile floor; do not early-return on target met
-- [ ] Optional `options.jpegQuality` manual override skips search
-- [ ] Tests for fit stop / max continues
+- [x] Add `QUALITY_FLOOR=60`, `QUALITY_CEILING=95` (or mode-specific)
+- [x] Balanced + `targetBytes`: binary-search jpegQuality (couple maxEdge lightly or keep display budget)
+- [x] Aggressive: always use aggressive profile floor; do not early-return on target met
+- [x] Optional `options.jpegQuality` manual override skips search
+- [x] Tests for fit stop / max continues
 
 ### Task 2: Planner estimate + verdict
 
@@ -30,8 +30,8 @@
 - Prefer desktop-shared first using `OptimizationReport` to avoid heavy encode in analyze UI
 - Test: `apps/desktop/test/targetPlan.test.ts`
 
-- [ ] `planTargetOutcome({ original, expectedAtQuality, expectedAtFloor, target })` → pass|need|miss
-- [ ] Estimate curve from opportunity savings × quality ratio (reuse opportunities helpers)
+- [x] `planTargetOutcome({ original, expectedAtQuality, expectedAtFloor, target })` → pass|need|miss
+- [x] Estimate curve from opportunity savings × quality ratio (reuse opportunities helpers)
 
 ### Task 3: Desktop defaults + allocation
 
@@ -41,17 +41,21 @@
 - `apps/desktop/src/renderer.ts` — per-file default, selected-only aggregate alloc
 - `apps/desktop/src/index.html` — limit option
 
+- [x] Default submission limit to 40MB and migrate the legacy 41MB value
+- [x] Default batch allocation to per-file and support selected-only aggregate allocation
+- [x] Keep Desktop service, renderer, and browser preview defaults aligned
+
 ### Task 4: UI A — gauge, quality, batch rows
 
 **Files:**
 - `apps/desktop/src/index.html`, `styles.css`, `renderer.ts`, `viewModel`/`templates` as needed
 
-- [ ] Hero verdict + gauge
-- [ ] Quality auto/manual controls
-- [ ] Batch: no top slider in auto; bulk manual; row override
-- [ ] Options sheet under CTA
+- [x] Hero verdict + gauge
+- [x] Quality auto/manual controls
+- [x] Batch: no top slider in auto; bulk manual; row override
+- [x] Options sheet under CTA
 
 ### Task 5: Verify
 
-- [ ] `npm test --` targeted then broader
-- [ ] `npm run typecheck`
+- [x] `npm test --` targeted then broader
+- [x] `npm run typecheck`

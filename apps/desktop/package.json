@@ -1,6 +1,6 @@
 {
   "name": "@hwpx-optimizer/desktop",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "main": "dist/main.js",
@@ -9,6 +9,6 @@
     "start": "electron dist/main.js"
   },
   "dependencies": {
-    "@hwpx-optimizer/core": "0.1.0"
+    "@hwpx-optimizer/core": "0.1.4"
   }
 }

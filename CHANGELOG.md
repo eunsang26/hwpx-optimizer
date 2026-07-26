@@ -4,6 +4,27 @@ All notable changes are documented here. Dates are local to the project (KST).
 
 ## Unreleased
 
+## 0.1.4 — 2026-07-26
+
+### Fixed
+
+- Balanced and aggressive optimization now compose the safe structural baseline: XML minification and conservative unused BinData removal are applied alongside image optimization instead of being silently omitted.
+- Structural cleanup protects duplicate-image members and treats embedded font/OLE resources conservatively.
+- CLI projected savings now use ZIP-aware package estimates, preventing opportunity entry totals from overstating savings beyond the input package size.
+- Release tests no longer rewrite the tracked benchmark fixture, and Electron smoke starts from a clean temporary state.
+
+### Changed
+
+- Desktop workspace now matches the approved two-column Gauge Target Planner mockup: the workflow stays on the left, the optimization plan remains visible on the right, and verification details span the bottom.
+- Fresh Desktop and browser-preview defaults are aligned to balanced mode, a 40MB per-file target, and five visible plan actions.
+- All shipped version sources now resolve to `0.1.4`, including Electron, Tauri, CLI, core, npm lockfile, and Rust metadata.
+
+### Added
+
+- CLI `hwpx-opt --version` and `hwpx-opt version` commands expose the embedded engine version.
+- Repository regression coverage prevents release version sources from drifting apart.
+- Electron smoke can capture a local release-layout screenshot through `HWPX_OPT_SMOKE_SCREENSHOT`.
+
 ### Added
 
 - PSNR (Peak Signal-to-Noise Ratio) estimation for each image preview pair. The compare modal now shows a per-pair PSNR badge with a Korean tier (동일 / 매우 좋음 / 좋음 / 보통 / 차이 인지 / 측정 불가). Computed in `packages/core/src/imagePreview.ts` via 256×256 raw-pixel resampling; capped at 80 dB. Exposed `computePsnr()` for direct callers.

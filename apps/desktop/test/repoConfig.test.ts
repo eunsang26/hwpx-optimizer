@@ -2,6 +2,46 @@ import { access, readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("repository runtime and cleanup configuration", () => {
+  it("keeps every shipped version source aligned with the root package", async () => {
+    const rootPackage = JSON.parse(await readFile("package.json", "utf8")) as {
+      version?: string;
+    };
+    const workspacePaths = [
+      "packages/core/package.json",
+      "packages/cli/package.json",
+      "apps/desktop/package.json",
+      "apps/tauri-desktop/package.json"
+    ];
+
+    expect(rootPackage.version).toMatch(/^\d+\.\d+\.\d+$/);
+    for (const path of workspacePaths) {
+      const workspacePackage = JSON.parse(await readFile(path, "utf8")) as {
+        version?: string;
+        dependencies?: Record<string, string>;
+      };
+      expect(workspacePackage.version, path).toBe(rootPackage.version);
+      if (workspacePackage.dependencies?.["@hwpx-optimizer/core"]) {
+        expect(workspacePackage.dependencies["@hwpx-optimizer/core"], path).toBe(rootPackage.version);
+      }
+    }
+
+    const coreIndex = await readFile("packages/core/src/index.ts", "utf8");
+    const cargoToml = await readFile("apps/tauri-desktop/src-tauri/Cargo.toml", "utf8");
+    const cargoLock = await readFile("apps/tauri-desktop/src-tauri/Cargo.lock", "utf8");
+    const tauriConfig = JSON.parse(
+      await readFile("apps/tauri-desktop/src-tauri/tauri.conf.json", "utf8")
+    ) as { version?: string };
+
+    expect(coreIndex).toContain(`export const version = "${rootPackage.version}"`);
+    expect(cargoToml).toMatch(
+      new RegExp(`name = "hwpx-tauri-desktop"\\nversion = "${rootPackage.version?.replaceAll(".", "\\.")}"`)
+    );
+    expect(cargoLock).toMatch(
+      new RegExp(`name = "hwpx-tauri-desktop"\\nversion = "${rootPackage.version?.replaceAll(".", "\\.")}"`)
+    );
+    expect(tauriConfig.version).toBe(rootPackage.version);
+  });
+
   it("pins the Node runtime used by current Vitest and Electron tooling", async () => {
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
       engines?: { node?: string };
