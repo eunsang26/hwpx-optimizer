@@ -209,3 +209,23 @@ Environment: WSL2 + Windows-visible temp (`C:\Temp`), Node 20, packaged `HWPX Op
 | Open optimized output in Hancom | 미실시 | Hancom not available in this environment |
 | NSIS installer gate | Pass (CI) | `windows-release.yml` on `main` after audit fix |
 | Institutional clean-PC sign-off | 미실시 | Documented remaining gap in `KNOWN_LIMITATIONS.md` |
+
+## Evidence log — 2026-07-26 (v0.1.3)
+
+Environment: WSL2 + `C:\Temp`, Node 20, artifact `HWPX Optimizer-0.1.3-x64.exe` (self-signed). Hancom Office not detected on this machine.
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `release:check:win-portable` | Pass | Includes audit, pack, signature, manifest, smoke |
+| SHA256 match | Pass | `f2a239cd…` EXE / `3b9eb440…` ZIP |
+| Portable smoke `sample2.hwpx` AllModes | Pass | safe / balanced / aggressive |
+| Open optimized output in Hancom | 미실시 | No Hnc/Hancom install found under Program Files |
+| Clean institutional PC soak | 미실시 | Operator: extract ZIP on clean PC, drag/drop, restart, confirm no history |
+
+### Operator checklist (Hancom / clean PC) — do manually
+
+1. Extract `HWPX Optimizer-0.1.3-x64.zip` on a clean Windows 10/11 PC.
+2. Drag/drop a real local `.hwpx`, run balanced, confirm original untouched.
+3. Open `*_optimized.hwpx` in 한글(Hancom) and spot-check text/images/tables.
+4. Restart app; confirm no recent-file/history restore.
+5. Tick the corresponding rows above and attach hashes from `SHA256SUMS.txt` to the approval record.
