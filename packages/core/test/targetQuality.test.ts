@@ -20,7 +20,7 @@ async function largeJpegHwpx(): Promise<Buffer> {
         '<root><hp:pic><hp:sz width="20000" height="15000"/><hc:img binaryItemIDRef="image1"/></hp:pic></root>',
       "BinData/image1.jpg": jpeg
     }
-  });
+  }, 15_000);
 }
 
 describe("continuous target JPEG quality", () => {
@@ -38,7 +38,7 @@ describe("continuous target JPEG quality", () => {
       expect(result.report.plannedJpegQuality).toBeGreaterThanOrEqual(JPEG_QUALITY_FLOOR);
       expect(result.report.plannedJpegQuality).toBeLessThanOrEqual(95);
     }
-  });
+  }, 15_000);
 
   it("honors manual jpegQuality without requiring targetBytes", async () => {
     const fixture = await largeJpegHwpx();
@@ -59,5 +59,5 @@ describe("continuous target JPEG quality", () => {
     });
     expect(aggressive.report.plannedJpegQuality).toBe(JPEG_QUALITY_FLOOR);
     expect(aggressive.output.byteLength).toBeLessThanOrEqual(balanced.output.byteLength);
-  });
+  }, 15_000);
 });

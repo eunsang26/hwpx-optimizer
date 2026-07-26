@@ -651,10 +651,12 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (screenshotPath) {
     await window.webContents.executeJavaScript(`
       (() => {
-        for (const id of ["settings-backdrop", "help-backdrop", "drop-overlay", "progress-panel"]) {
+        for (const id of ["settings-backdrop", "help-backdrop", "drop-overlay", "progress-panel", "status-banner"]) {
           const element = document.getElementById(id);
           if (element) element.hidden = true;
         }
+        document.body.dataset.dragOver = "false";
+        document.getElementById("drop-zone")?.classList.remove("is-over");
         document.getElementById("settings-panel")?.classList.remove("is-open");
         document.getElementById("help-panel")?.classList.remove("is-open");
       })()

@@ -133,6 +133,9 @@ describe("repository runtime and cleanup configuration", () => {
     const electronSmokeRunner = await readFile("scripts/run-electron-smoke.mjs", "utf8");
     expect(electronSmokeRunner).toContain('resolve(".tmp", "electron-smoke")');
     expect(electronSmokeRunner).toContain("{ recursive: true, force: true }");
+    const desktopMain = await readFile("apps/desktop/src/main.ts", "utf8");
+    expect(desktopMain).toContain('"status-banner"');
+    expect(desktopMain).toContain('document.body.dataset.dragOver = "false"');
     await expect(access("TERMS.txt")).resolves.toBeUndefined();
 
     const releaseArtifactCheck = await readFile("scripts/check-release-artifacts.mjs", "utf8");

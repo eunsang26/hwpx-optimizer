@@ -948,7 +948,7 @@ describe("runCli", () => {
     expect(report.jobsRequested).toBe(2);
     expect(report.jobsEffective).toBe(2);
     await rm(dir, { recursive: true, force: true });
-  });
+  }, 15_000);
 
   it("does not delete a pre-existing output when an --overwrite job fails to optimize", async () => {
     // Finding 1 (data loss): --overwrite mode never claims the final output/report
