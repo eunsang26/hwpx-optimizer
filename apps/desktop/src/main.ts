@@ -56,17 +56,17 @@ if (process.platform === "win32") {
 async function createWindow(): Promise<BrowserWindow> {
   Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindowClass({
-    width: 960,
-    height: 780,
-    minWidth: 920,
-    minHeight: 700,
-    maxWidth: 1360,
+    width: 1240,
+    height: 820,
+    minWidth: 1024,
+    minHeight: 720,
+    maxWidth: 1600,
     useContentSize: true,
     show: !isSmokeTest,
     title: "HWPX 보고서 용량 최적화",
     icon: join(import.meta.dirname, "app-icon.png"),
     autoHideMenuBar: true,
-    backgroundColor: "#e5e9f0",
+    backgroundColor: "#f3f5f8",
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,
@@ -493,16 +493,26 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       document.getElementById("settings-close-button")?.click();
       document.getElementById("help-button")?.click();
       const workspace = document.getElementById("single-workspace");
+      const workflowMain = document.querySelector(".workflow-main");
+      const planSidebar = document.getElementById("plan-sidebar");
       const details = document.getElementById("analysis-details");
       const safeLine = document.querySelector(".safe-line");
       const helpPanel = document.getElementById("help-panel");
+      const workspaceRect = workspace?.getBoundingClientRect();
+      const workflowRect = workflowMain?.getBoundingClientRect();
+      const planRect = planSidebar?.getBoundingClientRect();
       const detailsWidth = details?.getBoundingClientRect().width ?? 0;
-      const safeLineWidth = safeLine?.getBoundingClientRect().width ?? 0;
       return {
         detailsInsideWorkspace: workspace?.contains(details) ?? false,
+        planInsideWorkspace: workspace?.contains(planSidebar) ?? false,
+        safeLineInsidePlan: planSidebar?.contains(safeLine) ?? false,
         detailsWidth,
-        safeLineWidth,
-        widthDelta: Math.abs(detailsWidth - safeLineWidth),
+        workspaceWidth: workspaceRect?.width ?? 0,
+        detailsWidthDelta: Math.abs(detailsWidth - (workspaceRect?.width ?? 0)),
+        twoColumn:
+          Boolean(workflowRect && planRect) &&
+          (planRect?.left ?? 0) > (workflowRect?.right ?? Number.POSITIVE_INFINITY) &&
+          Math.abs((planRect?.top ?? 0) - (workflowRect?.top ?? Number.POSITIVE_INFINITY)) <= 1,
         helpOpen: helpPanel?.classList.contains("is-open") ?? false,
         helpTitle: document.getElementById("help-title")?.textContent,
         manualStepCount: document.querySelectorAll(".manual-steps li").length
@@ -510,9 +520,12 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     })()
   `)) as {
     detailsInsideWorkspace?: boolean;
+    planInsideWorkspace?: boolean;
+    safeLineInsidePlan?: boolean;
     detailsWidth?: number;
-    safeLineWidth?: number;
-    widthDelta?: number;
+    workspaceWidth?: number;
+    detailsWidthDelta?: number;
+    twoColumn?: boolean;
     helpOpen?: boolean;
     helpTitle?: string;
     manualStepCount?: number;
@@ -521,9 +534,20 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (layout.detailsInsideWorkspace !== true) {
     throw new Error("Desktop smoke failed: analysis details are outside the primary workspace");
   }
-  if (!layout.detailsWidth || !layout.safeLineWidth || (layout.widthDelta ?? Number.POSITIVE_INFINITY) > 1) {
+  if (
+    layout.planInsideWorkspace !== true ||
+    layout.safeLineInsidePlan !== true ||
+    layout.twoColumn !== true
+  ) {
+    throw new Error("Desktop smoke failed: approved two-column plan layout did not render");
+  }
+  if (
+    !layout.detailsWidth ||
+    !layout.workspaceWidth ||
+    (layout.detailsWidthDelta ?? Number.POSITIVE_INFINITY) > 1
+  ) {
     throw new Error(
-      `Desktop smoke failed: analysis details width ${String(layout.detailsWidth)} does not match workspace width ${String(layout.safeLineWidth)}`
+      `Desktop smoke failed: analysis details width ${String(layout.detailsWidth)} does not match workspace width ${String(layout.workspaceWidth)}`
     );
   }
   if (layout.helpOpen !== true || layout.helpTitle !== "사용 매뉴얼" || layout.manualStepCount !== 10) {
@@ -621,6 +645,22 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   }
   if (!workflow.progressCount || workflow.progressCount < 1) {
     throw new Error("Desktop smoke failed: no optimization progress was emitted");
+  }
+
+  const screenshotPath = process.env.HWPX_OPT_SMOKE_SCREENSHOT;
+  if (screenshotPath) {
+    await window.webContents.executeJavaScript(`
+      (() => {
+        for (const id of ["settings-backdrop", "help-backdrop", "drop-overlay", "progress-panel"]) {
+          const element = document.getElementById(id);
+          if (element) element.hidden = true;
+        }
+        document.getElementById("settings-panel")?.classList.remove("is-open");
+        document.getElementById("help-panel")?.classList.remove("is-open");
+      })()
+    `);
+    const screenshot = await window.webContents.capturePage();
+    await writeFile(resolve(screenshotPath), screenshot.toPNG());
   }
 
   const spoofedDropRegistration = (await window.webContents.executeJavaScript(`

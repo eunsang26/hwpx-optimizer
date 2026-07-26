@@ -56,6 +56,7 @@
       </section>
 
       <section id="single-workspace" class="workspace-grid">
+        <div class="workflow-main">
         <!-- ① IMPORT — single compact row -->
         <section class="panel import-row file-panel">
           <div class="file-toolbar">
@@ -286,18 +287,6 @@
                 <span class="opt-tag">검토만 · 자동 병합 안 함</span>
               </label>
             </div>
-            <section class="plan-strip" id="plan-sidebar">
-              <div class="section-heading">
-                <div class="section-title">
-                  <h2 id="plan-title">자동 최적화 계획</h2>
-                </div>
-                <span id="plan-count-pill" class="section-aside-pill">작업 3개</span>
-              </div>
-              <p id="plan-summary" class="plan-summary">파일을 분석하면 예상 절감량을 표시합니다.</p>
-              <div id="plan-total" class="plan-total">예상 절감 0 B</div>
-              <ul id="action-checkboxes" class="plan-actions"></ul>
-              <p id="action-panel-hint" class="sr-only">옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.</p>
-            </section>
             <p class="option-hint">
               <span class="info-icon" aria-hidden="true"></span>
               수동이면 슬라이더·숫자(60–95)로 고정. 자동이면 목표 용량에 맞춰 연속 탐색합니다.
@@ -341,10 +330,36 @@
             <p id="report-path"></p>
           </section>
         </section>
+        </div>
 
-        <p id="option-plan-summary" class="option-plan-summary option-plan-summary--quiet">
-          결재·압축은 위 툴바에서, 세부 작업은 「세부 옵션」에서 조정합니다.
-        </p>
+        <aside class="panel plan-sidebar" id="plan-sidebar" aria-labelledby="plan-title">
+          <div class="section-heading">
+            <div class="section-title">
+              <h2 id="plan-title">자동 최적화 계획</h2>
+            </div>
+            <span id="plan-count-pill" class="section-aside-pill">작업 5개</span>
+          </div>
+          <div class="plan-verdict">
+            <span class="success-dot" aria-hidden="true"></span>
+            <div>
+              <strong>분석 후 목표 달성 가능성을 계산합니다.</strong>
+              <p id="plan-summary" class="plan-summary">파일을 선택하면 예상 절감량을 표시합니다.</p>
+            </div>
+          </div>
+          <div id="plan-total" class="plan-total">예상 절감 0 B</div>
+          <ul id="action-checkboxes" class="plan-actions"></ul>
+          <p id="action-panel-hint" class="sr-only">옵션을 바꾸면 사용자 지정 계획으로 전환됩니다.</p>
+          <p id="option-plan-summary" class="option-plan-summary">
+            결재·압축은 왼쪽에서, 세부 작업은 각 계획 항목에서 조정합니다.
+          </p>
+          <div class="safe-card safe-line">
+            <span class="large-shield-icon" aria-hidden="true"></span>
+            <div>
+              <strong>최적화 후 자동 확인</strong>
+              <p>문서 구조 · 누락 리소스 · 이미지 품질 기준을 검사합니다.</p>
+            </div>
+          </div>
+        </aside>
 
         <section class="bottom-accordions">
           <details id="analysis-details" class="analysis-details">

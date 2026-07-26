@@ -151,14 +151,14 @@ describe("repository runtime and cleanup configuration", () => {
 
     expect(main).toContain('app.setAppUserModelId("local.hwpxoptimizer.app")');
     expect(main).toContain('icon: join(import.meta.dirname, "app-icon.png")');
-    expect(main).toContain("width: 960");
-    expect(main).toContain("height: 780");
-    expect(main).toContain("minWidth: 920");
-    expect(main).toContain("minHeight: 700");
-    expect(main).toContain("maxWidth: 1360");
-    expect(main).toContain('backgroundColor: "#e5e9f0"');
+    expect(main).toContain("width: 1240");
+    expect(main).toContain("height: 820");
+    expect(main).toContain("minWidth: 1024");
+    expect(main).toContain("minHeight: 720");
+    expect(main).toContain("maxWidth: 1600");
+    expect(main).toContain('backgroundColor: "#f3f5f8"');
     expect(styles).toMatch(/\.shell\s*{[^}]*max-width:\s*var\(--app-max\)/s);
-    expect(styles).toMatch(/--app-max:\s*960px/);
+    expect(styles).toMatch(/--app-max:\s*1240px/);
     expect(styles).toMatch(/--fs-display:\s*30px/);
     expect(styles).toMatch(/radial-gradient\(900px 420px/);
     expect(styles).toMatch(/body\[data-view="empty"\] \.drop-zone\s*{[^}]*padding:\s*10px 14px/s);
@@ -170,6 +170,10 @@ describe("repository runtime and cleanup configuration", () => {
     expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(150px, 1fr\)\)/s);
     expect(styles).toMatch(/\.option-grid select,\r?\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
     expect(styles).toMatch(/\.cleanup-settings\s*{[^}]*grid-template-columns:\s*1fr/s);
+    expect(styles).toMatch(/\.workspace-grid\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 360px/s);
+    expect(styles).toMatch(/\.plan-sidebar\s*{[^}]*grid-column:\s*2/s);
+    expect(styles).toMatch(/\.bottom-accordions\s*{[^}]*grid-column:\s*1 \/ -1/s);
+    expect(styles).toMatch(/\.primary-run-panel #optimize-button\s*{[^}]*min-height:\s*52px/s);
   });
 
   it("generates desktop and in-app icons from the same source asset", async () => {
@@ -227,6 +231,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="status-banner"');
     expect(html).toContain('id="batch-result-details"');
     expect(html).toContain('id="plan-count-pill"');
+    expect(html).toContain('class="panel plan-sidebar" id="plan-sidebar"');
+    expect(html).toContain('class="safe-card safe-line"');
     expect(html).toContain('id="option-plan-summary"');
     expect(html).toContain('id="run-dock"');
     expect(html).toContain('id="settings-close-button"');
@@ -313,6 +319,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain('from "./shared/resultGuidance.js"');
     expect(renderer).toContain("resultGuidanceText(report, plan)");
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.manualStepCount !== 10");
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.twoColumn !== true");
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("HWPX_OPT_SMOKE_SCREENSHOT");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, var\(--app-max\)\)/s);
@@ -335,12 +343,15 @@ describe("repository runtime and cleanup configuration", () => {
 
     const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');
     const resultPanel = html.indexOf('id="result-panel"');
-    const quietPlan = html.indexOf("option-plan-summary--quiet");
+    const workflowMain = html.indexOf('<div class="workflow-main">');
+    const planSidebar = html.indexOf('class="panel plan-sidebar"');
     const bottomAccordions = html.indexOf('<section class="bottom-accordions">');
     const actionPanel = html.indexOf('<div id="action-panel"');
+    expect(workflowMain).toBeGreaterThanOrEqual(0);
     expect(summaryPanelStart).toBeGreaterThanOrEqual(0);
     expect(resultPanel).toBeGreaterThan(summaryPanelStart);
-    expect(resultPanel).toBeLessThan(quietPlan === -1 ? bottomAccordions : quietPlan);
+    expect(resultPanel).toBeLessThan(planSidebar);
+    expect(planSidebar).toBeLessThan(bottomAccordions);
     expect(resultPanel).toBeLessThan(bottomAccordions);
     expect(bottomAccordions).toBeLessThan(actionPanel);
     expect(html).toMatch(
@@ -356,6 +367,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(browserMock).not.toMatch(/sample\d*\.(hwp|hwpx|json|txt)/i);
     expect(browserMock).not.toContain("Verifying optimized package");
     expect(browserMock).not.toContain('"Done"');
+    expect(browserMock).toContain('defaultMode: "balanced"');
+    expect(browserMock).toContain('submissionLimit: { id: "mb40" }');
+    expect(browserMock).toContain('batchTargetMode: "per-file"');
   });
 
   it("keeps implementation notes aligned with shipped SSIM and diagnostics behavior", async () => {

@@ -903,9 +903,11 @@ function renderDefaultPlan(): void {
 
 function renderPlanActions(plan?: SubmissionPlan): void {
   const fallbackRows: DisplayPlanRow[] = [
-    { priority: 1, label: "중복 이미지 참조 정리", savingLabel: "분석 후 표시", kind: "image" },
-    { priority: 2, label: "이미지 무손실 최적화", savingLabel: "분석 후 표시", kind: "image" },
-    { priority: 3, label: "큰 이미지 변환·리사이즈", savingLabel: "분석 후 표시", kind: "image" }
+    { priority: 1, label: "큰 이미지 적정 크기로 줄이기", savingLabel: "분석 후 표시", kind: "image" },
+    { priority: 2, label: "중복 이미지 정리", savingLabel: "분석 후 표시", kind: "image" },
+    { priority: 3, label: "이미지 불필요 정보 제거", savingLabel: "분석 후 표시", kind: "metadata" },
+    { priority: 4, label: "사용하지 않는 파일 제거", savingLabel: "분석 후 표시", kind: "metadata" },
+    { priority: 5, label: "문서 XML·개인정보 흔적 정리", savingLabel: "분석 후 표시", kind: "author" }
   ];
   const visibleRows = plan ? visiblePlanRows(plan) : [];
   const displayRows: DisplayPlanRow[] =

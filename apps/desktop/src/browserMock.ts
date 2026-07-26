@@ -6,7 +6,10 @@ type DesktopSettings = {
   saveReport: boolean;
   preventOverwrite: boolean;
   showAggressiveWarning: boolean;
-  submissionLimit: { id: "none" | "mb10" | "mb20" | "mb50" | "custom"; customBytes?: number };
+  submissionLimit: {
+    id: "none" | "mb5" | "mb10" | "mb20" | "mb30" | "mb40" | "mb41" | "mb50" | "mb100" | "custom";
+    customBytes?: number;
+  };
   preservationPreference: "preserve" | "recommended" | "size";
   batchTargetMode: "aggregate" | "per-file";
 };
@@ -19,14 +22,14 @@ const secondaryPreviewPath = "preview-batch.hwpx";
 const progressListeners = new Set<(progress: { percent: number; item: string }) => void>();
 
 let settings: DesktopSettings = {
-  defaultMode: "safe",
+  defaultMode: "balanced",
   saveNextToOriginal: true,
   saveReport: false,
   preventOverwrite: true,
   showAggressiveWarning: true,
-  submissionLimit: { id: "mb20" },
+  submissionLimit: { id: "mb40" },
   preservationPreference: "recommended",
-  batchTargetMode: "aggregate"
+  batchTargetMode: "per-file"
 };
 
 const sampleReport = {
