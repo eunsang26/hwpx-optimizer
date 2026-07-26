@@ -274,14 +274,20 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="drop-overlay"');
     expect(html).toContain("HWPX 파일을 여기에 놓으세요");
     expect(html).toContain('id="status-banner"');
+    expect(html).toContain('id="progress-title"');
+    expect(html).toContain('aria-labelledby="progress-title"');
     expect(html).toContain('id="batch-result-details"');
     expect(html).toContain('id="plan-count-pill"');
     expect(html).toContain('class="plan-strip" id="plan-sidebar"');
     expect(html).toContain('id="option-plan-summary"');
     expect(html).toContain('id="run-dock"');
     expect(html).toContain('id="settings-close-button"');
+    expect(html).toMatch(/id="settings-panel"[^>]*role="dialog"[^>]*aria-modal="true"/);
+    expect(html).toContain('id="setting-submission-limit"');
+    expect(html).toContain("기본 결재 기준");
     expect(html).toContain('id="help-button"');
     expect(html).toContain('id="help-panel"');
+    expect(html).toMatch(/id="help-panel"[^>]*role="dialog"[^>]*aria-modal="true"/);
     expect(html).toContain('id="help-backdrop"');
     expect(html).toContain('id="help-close-button"');
     expect(html).toContain("사용 매뉴얼");
@@ -295,6 +301,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain("결과물은 제출·배포·보관 전에 사용자가 직접 확인해야 하며, 원본 보존과 최종 사용 책임은 사용자에게 있습니다.");
     expect(html.match(/id="verification-body"/g)?.length).toBe(1);
     expect(html).toContain('<span aria-hidden="true">×</span>');
+    expect(html).toMatch(
+      /id="compare-modal"[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="compare-title"/
+    );
     expect(html).toContain('id="cleanup-document-toggle"');
     expect(html).toContain('id="cleanup-image-toggle"');
     expect(html).toContain('<option value="mb40" selected>40MB 미만</option>');
@@ -307,6 +316,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain('requireElement("drop-overlay")');
     expect(renderer).toContain('document.addEventListener("dragenter"');
     expect(renderer).toContain("handleAdditionalPaths(selected)");
+    expect(renderer).toContain("enterBatchMode(additionalPaths, { preservePolicy: true })");
+    expect(renderer).toContain("if (!options.preservePolicy) state.actionSelections.clear();");
     expect(renderer).toContain('document.addEventListener("dragover"');
     expect(renderer).toContain('document.addEventListener("drop"');
     expect(renderer).toContain('window.addEventListener("hwpx-tauri-dropped-files"');
@@ -315,6 +326,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("verificationBody.textContent");
     expect(renderer).toContain("renderAnalysisVerification(report);");
     expect(renderer).toContain("renderVerificationFailure(error);");
+    expect(renderer).toMatch(
+      /if \(!cancellingBatchAnalysis\) \{[\s\S]*?setIdle\(\);[\s\S]*?hideProgressPanel\(\);[\s\S]*?return;/
+    );
     expect(renderer).toContain("planCountPill.textContent");
     expect(renderer).toContain("optionPlanSummary.textContent");
     expect(renderer).toContain('const CLEANUP_ACTIONS = ["clean-shape-comment", "strip-metadata"]');
@@ -343,9 +357,12 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("showPlannedReadOnly");
     expect(renderer).toContain("hero-verdict--mix");
     expect(renderer).toContain("renderBatchReviewStrip");
+    expect(renderer).toContain('progressTitle.textContent = busyKind === "analysis" ? "분석 중" : "최적화 중"');
     expect(renderer).toContain("선택 파일 일괄 최적화");
     expect(renderer).toContain("합계 배분 목표마다 파일별 품질");
     expect(renderer).toContain("gaugeMidLabel.style.left");
+    expect(renderer).toContain("original > plan.targetBytes");
+    expect(renderer).toContain("gaugeMidLabel.hidden = !plan.targetBytes || original <= plan.targetBytes");
     expect(renderer).toContain("하한 품질까지 여지");
     expect(renderer).toContain('preservationPreference === "size"');
     expect(renderer).toContain("analyzed.filter((item) => item.selected !== false)");
@@ -357,6 +374,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain('id="gauge-start-label"');
     expect(renderer).toContain("renderHeroChips");
     expect(renderer).toContain("renderReviewStrip");
+    expect(renderer).toContain('optimizeButton.textContent = "최적화 실행"');
     expect(renderer).toContain("handleBatchQualityInput");
     expect(css).toContain('body[data-view="batch"] .target-limit::after');
     expect(css).toMatch(/\.policy-toolbar\s*{/s);
@@ -365,6 +383,15 @@ describe("repository runtime and cleanup configuration", () => {
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.manualStepCount !== 10");
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.planInsideOptions !== true");
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("HWPX_OPT_SMOKE_SCREENSHOT");
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
+      'document.getElementById("empty-choose-button")?.click()'
+    );
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
+      "canonical batch event flow mismatch"
+    );
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
+      "concurrent settings patches lost an update"
+    );
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
     expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, var\(--app-max\)\)/s);
@@ -384,14 +411,40 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("plan-priority");
     expect(renderer).toContain("중복 제외 기준");
     expect(css).not.toContain(".plan-card .plan-saving { display: none; }");
+    expect(css).toMatch(/\.workspace-grid\s*{[^}]*width:\s*100%/s);
+    expect(css).toMatch(
+      /body\[data-view="empty"\] \.summary-panel,[\s\S]*body\[data-view="empty"\] \.bottom-accordions\s*{[^}]*display:\s*none !important/s
+    );
+    expect(css).toMatch(/\.primary-run-panel #optimize-button\s*{[^}]*grid-column:\s*1/s);
+    expect(css).toMatch(
+      /body\[data-view="single"\] \.policy-toolbar-batch\s*{[^}]*display:\s*none !important/s
+    );
+    expect(css).toMatch(
+      /body\[data-view="single"\] \.quality-mode-row\s*{[^}]*position:\s*absolute/s
+    );
+    expect(css).toMatch(/body\[data-view="batch"\] \.summary-panel\s*{[^}]*order:\s*2/s);
+    expect(css).toMatch(/body\[data-view="batch"\] \.file-panel\s*{[^}]*order:\s*3/s);
+    expect(css).toMatch(
+      /body\[data-busy="analysis"\] #status-banner,[\s\S]*body\[data-busy="analysis"\] #single-workspace\s*{[^}]*display:\s*none !important/s
+    );
 
+    const policyToolbar = html.indexOf('<div id="policy-toolbar"');
+    const filePanel = html.indexOf('<section class="panel import-row file-panel"');
+    const emptyPolicyReview = html.indexOf('id="empty-policy-review"');
     const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');
+    const reviewStrip = html.indexOf('id="review-strip"');
     const resultPanel = html.indexOf('id="result-panel"');
     const optionsSheet = html.indexOf('id="detail-options-sheet"');
     const planSidebar = html.indexOf('class="plan-strip" id="plan-sidebar"');
     const bottomAccordions = html.indexOf('<section class="bottom-accordions">');
     const actionPanel = html.indexOf('<div id="action-panel"');
+    expect(policyToolbar).toBeGreaterThanOrEqual(0);
+    expect(filePanel).toBeGreaterThan(policyToolbar);
+    expect(emptyPolicyReview).toBeGreaterThan(filePanel);
     expect(summaryPanelStart).toBeGreaterThanOrEqual(0);
+    expect(summaryPanelStart).toBeGreaterThan(emptyPolicyReview);
+    expect(reviewStrip).toBeGreaterThan(summaryPanelStart);
+    expect(reviewStrip).toBeLessThan(bottomAccordions);
     expect(optionsSheet).toBeGreaterThan(summaryPanelStart);
     expect(planSidebar).toBeGreaterThan(optionsSheet);
     expect(planSidebar).toBeLessThan(resultPanel);

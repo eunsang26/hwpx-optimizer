@@ -1,6 +1,7 @@
 import {
   appendUniquePaths,
   applyOptimizationResultToBatchItem,
+  batchResultTitleForCounts,
   selectionModeForPaths,
   summarizeBatchItems
 } from "./shared/batchView.js";
@@ -15,7 +16,7 @@ import {
 import { createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
-import { allocateAggregateTargetBytes } from "./shared/batchTargetAlloc.js";
+import { allocateRemainingAggregateTargetBytes } from "./shared/batchTargetAlloc.js";
 import { resultGuidanceText } from "./shared/resultGuidance.js";
 import {
   createSubmissionPlan,
@@ -187,6 +188,7 @@ const batchOpenFolderButton = requireButton("batch-open-folder-button");
 const batchOpenReportButton = requireButton("batch-open-report-button");
 const batchRetryButton = requireButton("batch-retry-button");
 const progressPanel = requireElement("progress-panel");
+const progressTitle = requireElement("progress-title");
 const progressBar = requireElement("progress-bar");
 const progressItem = requireElement("progress-item");
 const analysisGrid = requireElement("analysis-grid");
@@ -214,6 +216,9 @@ const compareSummary = requireElement("compare-summary");
 const compareCloseButton = requireButton("compare-close");
 const cancelButton = requireButton("cancel-button");
 const settingDefaultMode = requireSelect("setting-default-mode");
+const settingSubmissionLimit = requireSelect("setting-submission-limit");
+const settingCustomLimitField = requireElement("setting-custom-limit-field");
+const settingCustomLimitInput = requireInput("setting-custom-limit-input");
 const settingSaveNext = requireInput("setting-save-next");
 const settingSaveReport = requireInput("setting-save-report");
 const settingPreventOverwrite = requireInput("setting-prevent-overwrite");
@@ -388,14 +393,19 @@ async function init(): Promise<void> {
   runDockButton.addEventListener("click", () => optimizeButton.click());
   cancelButton.addEventListener("click", async () => {
     if (state.analysisRunning || state.batchAnalyzing) {
-      state.batchCancelled = state.batchAnalyzing;
+      const cancellingBatchAnalysis = state.batchAnalyzing;
+      state.batchCancelled = cancellingBatchAnalysis;
       // Invalidate the in-flight analyze so a late resolve can't overwrite the
       // cancelled status with a normal result (best-effort backend cancel).
       analysisSequence += 1;
       state.analysisRunning = false;
       await window.hwpxOptimizer.cancelAnalyze();
       setStatus("분석을 취소했습니다.");
-      setIdle();
+      if (!cancellingBatchAnalysis) {
+        setIdle();
+        hideProgressPanel();
+        return;
+      }
       return;
     }
     if (state.batchRunning) {
@@ -606,6 +616,28 @@ async function init(): Promise<void> {
       preservationPreference: state.preservationPreference
     });
   });
+  settingSubmissionLimit.addEventListener("change", () => {
+    state.submissionLimit = {
+      id: settingSubmissionLimit.value as SubmissionLimit["id"],
+      customBytes: state.submissionLimit.customBytes
+    };
+    settingCustomLimitField.hidden = state.submissionLimit.id !== "custom";
+    renderSubmissionControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+    void saveSettings({ submissionLimit: state.submissionLimit });
+  });
+  settingCustomLimitInput.addEventListener("change", () => {
+    const value = Number(settingCustomLimitInput.value);
+    state.submissionLimit = {
+      id: "custom",
+      customBytes: Number.isFinite(value) && value > 0 ? value * 1024 * 1024 : undefined
+    };
+    renderSubmissionControls();
+    refreshSubmissionPlan();
+    refreshBatchPlans();
+    void saveSettings({ submissionLimit: state.submissionLimit });
+  });
   settingSaveNext.addEventListener("change", async () => {
     if (settingSaveNext.checked) {
       state.outputDirectory = undefined;
@@ -696,6 +728,17 @@ async function handleAdditionalPaths(paths: string[]): Promise<void> {
     setStatus("처리 중에는 새 파일을 추가할 수 없습니다. 완료 후 다시 시도하세요.");
     return;
   }
+  if (document.body.dataset.view === "batch" && state.batchItems.length > 0) {
+    const existingPaths = state.batchItems.map((item) => item.path);
+    const mergedPaths = appendUniquePaths(existingPaths, paths);
+    const additionalPaths = mergedPaths.slice(existingPaths.length);
+    if (additionalPaths.length === 0) {
+      setStatus("이미 배치 목록에 있는 파일입니다.");
+      return;
+    }
+    enterBatchMode(additionalPaths, { preservePolicy: true });
+    return;
+  }
   if (document.body.dataset.view === "single" && state.filePath) {
     const merged = appendUniquePaths([state.filePath], paths);
     if (merged.length === 1) {
@@ -756,6 +799,13 @@ async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
 
 function renderSettings(settings: DesktopSettings): void {
   settingDefaultMode.value = settings.defaultMode;
+  const settingLimit = settings.submissionLimit ?? state.submissionLimit;
+  settingSubmissionLimit.value = settingLimit.id;
+  settingCustomLimitField.hidden = settingLimit.id !== "custom";
+  settingCustomLimitInput.value =
+    settingLimit.id === "custom" && settingLimit.customBytes
+      ? String(Math.round((settingLimit.customBytes / (1024 * 1024)) * 100) / 100)
+      : "";
   settingSaveNext.checked = settings.saveNextToOriginal;
   settingSaveReport.checked = settings.saveReport;
   settingPreventOverwrite.checked = settings.preventOverwrite;
@@ -1091,7 +1141,7 @@ function renderSingleSummary(plan: SubmissionPlan): void {
   renderReviewStrip(plan);
   renderQualityControls(plan);
   summaryGrid.hidden = true;
-  optimizeButton.textContent = "제출 기준에 맞게 줄이기";
+  optimizeButton.textContent = "최적화 실행";
   renderSelectionClearButton();
   renderRunDock(plan);
 }
@@ -1107,7 +1157,7 @@ function renderTargetGauge(plan: SubmissionPlan): void {
   targetTrackFill.dataset.status = fillStatus;
   targetRow.dataset.verdict = plan.verdict;
 
-  if (plan.targetBytes && plan.targetBytes > 0 && original > 0) {
+  if (plan.targetBytes && plan.targetBytes > 0 && original > plan.targetBytes) {
     const targetPercent = Math.min(100, Math.max(0, (plan.targetBytes / original) * 100));
     targetTrackLimit.style.left = `${targetPercent}%`;
     targetTrackLimit.hidden = false;
@@ -1117,16 +1167,18 @@ function renderTargetGauge(plan: SubmissionPlan): void {
     gaugeMidLabel.style.left = "50%";
   }
 
-  if (plan.verdict === "no-target") {
-    summaryVerdict.hidden = true;
-    delete summaryVerdict.dataset.status;
-    summaryVerdictDetail.textContent = "제출 기준이 없습니다.";
-    return;
-  }
-  summaryVerdict.textContent = plan.verdictLabel;
+  const expectedLine = document.createElement("span");
+  expectedLine.append("예상 ");
+  const expectedValue = document.createElement("b");
+  expectedValue.textContent = plan.expectedSizeLabel.replace(/^약 /, "");
+  expectedLine.append(expectedValue);
+  const roomLine = document.createElement("small");
+  roomLine.textContent = plan.verdict === "no-target" ? "제출 기준 없음" : plan.verdictDetail;
+  summaryVerdict.replaceChildren(expectedLine, roomLine);
   summaryVerdict.dataset.status = plan.verdict === "pass" ? "pass" : plan.verdict;
   summaryVerdict.hidden = false;
-  summaryVerdictDetail.textContent = plan.verdictDetail;
+  summaryVerdictDetail.textContent =
+    plan.verdict === "no-target" ? "제출 기준이 없습니다." : plan.verdictDetail;
 }
 
 function clearTargetGauge(): void {
@@ -1135,6 +1187,7 @@ function clearTargetGauge(): void {
   delete targetRow.dataset.verdict;
   targetTrackLimit.hidden = true;
   gaugeStartLabel.textContent = "0";
+  gaugeMidLabel.hidden = false;
   gaugeMidLabel.textContent = "40MB";
   gaugeMidLabel.style.left = "50%";
   gaugeEndLabel.textContent = "원본";
@@ -1203,7 +1256,14 @@ function renderBatchSummary(): void {
     ? `${targetModeLabel} · ${targetStatusSummary}`
     : "예상 결과: -";
   summaryTargetLine.textContent = batchTargetSummaryLine(batchTargetBytes);
-  summaryVerdict.textContent = mixVerdict;
+  const batchScopeLine = document.createElement("span");
+  batchScopeLine.textContent =
+    state.batchTargetMode === "aggregate" ? "선택 합계 배분" : "파일별 기준";
+  const batchTargetLine = document.createElement("b");
+  batchTargetLine.textContent = batchTargetBytes
+    ? `${Math.round(batchTargetBytes / (1024 * 1024))}MB`
+    : "제한 없음";
+  summaryVerdict.replaceChildren(batchScopeLine, batchTargetLine);
   summaryVerdict.dataset.status =
     mixClass === "pass" ? "pass" : mixClass === "hard-miss" ? "hard-miss" : "need-more";
   summaryVerdict.hidden = plannedCount === 0;
@@ -1249,6 +1309,7 @@ function renderBatchSummary(): void {
       : state.batchTargetMode === "aggregate"
         ? `${Math.round(passRate)}%`
         : `${passed}/${plannedCount}`;
+  gaugeMidLabel.hidden = false;
   gaugeMidLabel.style.left = `${passRate}%`;
   gaugeEndLabel.textContent = "";
   summaryGrid.hidden = false;
@@ -1271,6 +1332,7 @@ function renderBatchSummary(): void {
     ? Math.round(qualities.reduce((sum, value) => sum + value, 0) / qualities.length)
     : DEFAULT_JPEG_QUALITY;
   chipQuality.textContent = `평균 예정 ${avgQ}%`;
+  chipQuality.hidden = true;
   policyLive.textContent = `선택 ${state.batchItems.filter((item) => item.selected).length} · 평균 예정 ${avgQ}%`;
   renderBatchReviewStrip(summaryItems);
   optimizeButton.textContent = "선택 파일 일괄 최적화";
@@ -1494,13 +1556,26 @@ function batchTargetBytesForItem(item: BatchItem): number | undefined {
   if (!batchTargetBytes || !item.originalSizeBytes) return undefined;
   if (state.batchTargetMode === "per-file") return batchTargetBytes;
   if (!item.selected) return undefined;
-  const selectedOriginalTotal = state.batchItems
-    .filter((current) => current.selected && current.originalSizeBytes)
+  const completedOutputBytes = state.batchItems
+    .filter((current) => current.selected && current.status === "done")
+    .reduce(
+      (sum, current) =>
+        sum + (current.report?.optimizedSize ?? current.expectedSizeBytes ?? 0),
+      0
+    );
+  const pendingOriginalTotal = state.batchItems
+    .filter(
+      (current) =>
+        current.selected &&
+        (current.status === "pending" || current.status === "running") &&
+        current.originalSizeBytes
+    )
     .reduce((sum, current) => sum + (current.originalSizeBytes ?? 0), 0);
-  return allocateAggregateTargetBytes({
+  return allocateRemainingAggregateTargetBytes({
     batchTargetBytes,
+    completedOutputBytes,
     itemOriginalBytes: item.originalSizeBytes,
-    selectedOriginalTotal
+    pendingOriginalTotal
   });
 }
 
@@ -1646,6 +1721,7 @@ function renderHeroChips(plan?: SubmissionPlan): void {
       : plan.plannedJpegQuality ?? (maxMode ? JPEG_QUALITY_FLOOR : DEFAULT_JPEG_QUALITY);
   const atFloor = maxMode || (typeof q === "number" && q <= JPEG_QUALITY_FLOOR);
   chipQuality.textContent = `${q}%${atFloor ? " · 하한" : ""}`;
+  chipQuality.hidden = false;
   heroChips.hidden = false;
   policyLive.textContent = `${state.qualityMode === "manual" ? "수동" : "자동"} · ${q}%`;
 
@@ -1654,6 +1730,7 @@ function renderHeroChips(plan?: SubmissionPlan): void {
   gaugeMidLabel.textContent = plan.targetBytes
     ? `${Math.round(plan.targetBytes / (1024 * 1024))}MB`
     : "목표";
+  gaugeMidLabel.hidden = !plan.targetBytes || original <= plan.targetBytes;
   gaugeEndLabel.textContent = original > 0 ? formatBytes(original) : "원본";
 }
 
@@ -1666,10 +1743,6 @@ function renderReviewStrip(plan?: SubmissionPlan): void {
   const fonts = (state.report.resourceDiagnostics ?? []).filter((item) => item.kind === "font").length;
   const ole = (state.report.resourceDiagnostics ?? []).filter((item) => item.kind === "ole").length;
   const reviewNotes = plan.planNotes.filter((note) => note.kind === "review");
-  if (near === 0 && fonts === 0 && ole === 0 && reviewNotes.length === 0) {
-    reviewStrip.hidden = true;
-    return;
-  }
   const hardMiss = plan.verdict === "hard-miss";
   reviewStripTitle.textContent = hardMiss ? "최대 압축으로도 부족" : "자동으로 건드리지 않음";
   reviewStripDetail.textContent = hardMiss
@@ -1866,6 +1939,7 @@ function renderProgress(percent: number, item: string): void {
 
 function hideProgressPanel(): void {
   document.body.dataset.busy = "";
+  progressTitle.textContent = "진행 상황";
   progressPanel.classList.remove("is-loading");
   progressPanel.hidden = true;
   stopProgressAnimation();
@@ -1913,7 +1987,7 @@ function stopProgressAnimation(): void {
 
 function renderAnalysis(report: OptimizationReport): void {
   const view = createAnalysisViewModel(report);
-  selectedOriginalMeta.textContent = `원본 크기: ${view.originalSizeLabel}`;
+  selectedOriginalMeta.textContent = `원본 ${view.originalSizeLabel}`;
   selectedModifiedMeta.textContent = `수정일: ${new Date().toISOString().slice(0, 16).replace("T", " ")}`;
   analysisDetails.open = false;
   analysisDetailSummary.innerHTML = `<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>예상 절감 ${escapeHtml(
@@ -2021,7 +2095,10 @@ function renderBatchResultPanel(): void {
     failed.length > 0 || cancelled.length > 0
       ? `${done.length}개 파일 완료 · 실패 ${failed.length} · 취소 ${cancelled.length}`
       : `${done.length}개 파일 완료 · 총 절감 ${formatBytes(totalSavedBytes)}`;
-  batchResultTitle.textContent = failed.length > 0 ? "일괄 최적화 확인 필요" : "일괄 최적화 완료";
+  batchResultTitle.textContent = batchResultTitleForCounts({
+    failed: failed.length,
+    cancelled: cancelled.length
+  });
   batchResultLine.textContent = batchStatusLine;
   batchResultStats.innerHTML = [
     metricHtml("완료", `${done.length}개`),
@@ -2221,7 +2298,9 @@ function renderModeWarning(): void {
 
 function setBusy(message: string, options: { cancelable: boolean; kind?: "analysis" | "optimization" }): void {
   setStatus(message);
-  document.body.dataset.busy = options.kind ?? (options.cancelable ? "optimization" : "analysis");
+  const busyKind = options.kind ?? (options.cancelable ? "optimization" : "analysis");
+  document.body.dataset.busy = busyKind;
+  progressTitle.textContent = busyKind === "analysis" ? "분석 중" : "최적화 중";
   resetProgressAnimation();
   progressPanel.hidden = false;
   progressPanel.classList.add("is-loading");
@@ -2301,7 +2380,7 @@ function syncActionCheckboxIndeterminateState(): void {
   });
 }
 
-function enterBatchMode(paths: string[]): void {
+function enterBatchMode(paths: string[], options: { preservePolicy?: boolean } = {}): void {
   if (state.batchRunning || state.batchAnalyzing || state.analysisRunning || state.optimizeRunning) {
     setStatus("처리 중에는 새 파일을 추가할 수 없습니다. 완료 후 다시 시도하세요.");
     return;
@@ -2313,7 +2392,7 @@ function enterBatchMode(paths: string[]): void {
   state.batchReportPath = undefined;
   state.batchRunCompleted = false;
   state.currentPlan = undefined;
-  state.actionSelections.clear();
+  if (!options.preservePolicy) state.actionSelections.clear();
   resultPanel.hidden = true;
   resultGuidance.textContent = "";
   resetVerificationPanel();
@@ -2338,7 +2417,7 @@ function enterBatchMode(paths: string[]): void {
   selectedFileCard.hidden = true;
   dropZone.hidden = true;
   fileName.textContent = "여러 HWPX 일괄 처리";
-  fileMeta.textContent = `${paths.length}개 파일`;
+  fileMeta.textContent = `${state.batchItems.length}개 파일`;
   optimizeButton.disabled = true;
   batchPanel.hidden = false;
   renderBatchList();
@@ -2430,7 +2509,7 @@ function promoteRemainingBatchItemToSingle(item: BatchItem): void {
   fileMeta.textContent = "선택한 경로는 현재 실행에서만 사용하며 저장하지 않습니다.";
   selectedFileName.textContent = item.fileName;
   selectedFilePath.textContent = "파일 경로는 앱 기록으로 저장하지 않습니다.";
-  selectedOriginalMeta.textContent = item.originalSizeLabel ? `원본 크기: ${item.originalSizeLabel}` : "원본 크기: 분석 대기";
+  selectedOriginalMeta.textContent = item.originalSizeLabel ? `원본 ${item.originalSizeLabel}` : "원본 분석 대기";
   selectedModifiedMeta.textContent = "수정일: 분석 대기";
   resetVerificationPanel();
   compareButton.disabled = true;
@@ -2514,7 +2593,7 @@ async function analyzeBatchItems(): Promise<void> {
         renderBatchList();
       }
     }
-    if (pendingItems.length > 0) {
+    if (pendingItems.length > 0 && !state.batchCancelled) {
       renderProgress(100, "일괄 분석 완료");
       setStatus("일괄 분석이 완료되었습니다. 제출 기준에 맞게 최적화할 수 있습니다.");
       refreshBatchPlanItems();
@@ -2522,6 +2601,7 @@ async function analyzeBatchItems(): Promise<void> {
   } finally {
     if (pendingItems.length > 0) {
       state.batchAnalyzing = false;
+      setIdle();
       hideProgressPanel();
     }
     renderBatchList();

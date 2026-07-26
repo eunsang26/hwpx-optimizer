@@ -3,6 +3,7 @@ import {
   appendUniquePaths,
   applyOptimizationResultToBatchItem,
   actualTargetStatusLabel,
+  batchResultTitleForCounts,
   batchItemMetaText,
   selectionModeForPaths,
   summarizeBatchItems
@@ -110,6 +111,12 @@ describe("batchView helpers", () => {
     expect(summary.text).toContain("확인 필요");
     expect(summary.text).toContain("실패 1");
     expect(summary.text).toContain("총 절감 1.00 MiB");
+  });
+
+  it("marks cancelled as well as failed batch results as needing review", () => {
+    expect(batchResultTitleForCounts({ failed: 0, cancelled: 0 })).toBe("일괄 최적화 완료");
+    expect(batchResultTitleForCounts({ failed: 1, cancelled: 0 })).toBe("일괄 최적화 확인 필요");
+    expect(batchResultTitleForCounts({ failed: 0, cancelled: 1 })).toBe("일괄 최적화 확인 필요");
   });
 
   it("describes each item according to its terminal status", () => {

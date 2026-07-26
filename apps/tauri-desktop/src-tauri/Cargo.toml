@@ -1,6 +1,6 @@
 [package]
 name = "hwpx-tauri-desktop"
-version = "0.1.5"
+version = "0.1.6"
 description = "Tauri shell PoC for HWPX Optimizer"
 edition = "2021"
 

@@ -42,6 +42,8 @@ const pendingWorkerRequests = new Map<
 const allowedInputPaths = new Set<string>();
 const allowedOutputDirectories = new Set<string>();
 const allowedGeneratedPaths = new Set<string>();
+let settingsSaveQueue: Promise<void> = Promise.resolve();
+let smokeDialogFilePaths: string[] | undefined;
 // Packaged Windows EXEs treat unknown `--flags` as Chromium switches ("bad option").
 // Prefer HWPX_OPT_SMOKE_TEST=1 for packaged smoke; keep argv for Linux `electron` launches.
 const isSmokeTest =
@@ -133,6 +135,12 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("dialog:select-hwpx-many", async () => {
+    if (isSmokeTest && smokeDialogFilePaths) {
+      for (const filePath of smokeDialogFilePaths) {
+        await registerAllowedInputPath(filePath);
+      }
+      return [...smokeDialogFilePaths];
+    }
     const options: OpenDialogOptions = {
       properties: ["openFile", "multiSelections"],
       filters: [{ name: "HWPX 문서", extensions: ["hwpx"] }]
@@ -318,6 +326,11 @@ function registerIpc(): void {
 }
 
 async function loadSettings(): Promise<DesktopSettings> {
+  await settingsSaveQueue;
+  return readSettings();
+}
+
+async function readSettings(): Promise<DesktopSettings> {
   try {
     const raw = await readFileFs(settingsPath(), "utf8");
     const parsed = JSON.parse(raw) as DesktopSettingsPatch;
@@ -330,12 +343,19 @@ async function loadSettings(): Promise<DesktopSettings> {
   }
 }
 
-async function saveSettings(patch: DesktopSettingsPatch): Promise<DesktopSettings> {
-  const current = await loadSettings();
-  const next = { ...current, ...persistentDesktopSettingsPatch(patch) };
-  await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(settingsPath(), JSON.stringify(next, null, 2));
-  return next;
+function saveSettings(patch: DesktopSettingsPatch): Promise<DesktopSettings> {
+  const task = settingsSaveQueue.then(async () => {
+    const current = await readSettings();
+    const next = { ...current, ...persistentDesktopSettingsPatch(patch) };
+    await mkdir(app.getPath("userData"), { recursive: true });
+    await writeFile(settingsPath(), JSON.stringify(next, null, 2));
+    return next;
+  });
+  settingsSaveQueue = task.then(
+    () => undefined,
+    () => undefined
+  );
+  return task;
 }
 
 function settingsPath(): string {
@@ -423,6 +443,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   await mkdir(smokeDir, { recursive: true });
   const smokeInputPath = join(smokeDir, "smoke.hwpx");
   const smokeSecondInputPath = join(smokeDir, "smoke-second.hwpx");
+  const smokeThirdInputPath = join(smokeDir, "smoke-third.hwpx");
+  const smokeFourthInputPath = join(smokeDir, "smoke-fourth.hwpx");
   const smokeSourcePath = process.env.HWPX_OPT_SMOKE_INPUT;
   const smokeMode = parseSmokeMode(process.env.HWPX_OPT_SMOKE_MODE);
   await writeFile(
@@ -430,9 +452,14 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     smokeSourcePath ? await readFileFs(resolve(smokeSourcePath)) : await createSmokeHwpxFixture()
   );
   await writeFile(smokeSecondInputPath, await createSmokeHwpxFixture());
+  await writeFile(smokeThirdInputPath, await createSmokeHwpxFixture());
+  await writeFile(smokeFourthInputPath, await createSmokeHwpxFixture());
   await registerAllowedInputPath(smokeInputPath);
   await registerAllowedInputPath(smokeSecondInputPath);
+  await registerAllowedInputPath(smokeThirdInputPath);
+  await registerAllowedInputPath(smokeFourthInputPath);
   await registerAllowedOutputDirectory(smokeDir);
+  smokeDialogFilePaths = [smokeInputPath];
 
   const result = (await window.webContents.executeJavaScript(`
     new Promise((resolve) => {
@@ -448,6 +475,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
             appReady: document.body.dataset.appReady,
             preloadApi: document.body.dataset.preloadApi,
             settingsOpen: document.getElementById("settings-panel")?.classList.contains("is-open"),
+            settingsSubmissionLimit: document.getElementById("setting-submission-limit")?.value,
             settingsOutputButton: document.getElementById("setting-output-button")?.textContent,
             settingsOutputResetButton: document.getElementById("setting-output-reset-button")?.textContent
           });
@@ -464,6 +492,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     appReady?: string;
     preloadApi?: string;
     settingsOpen?: boolean;
+    settingsSubmissionLimit?: string;
     settingsOutputButton?: string;
     settingsOutputResetButton?: string;
   };
@@ -482,10 +511,31 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   }
   if (
     result.settingsOpen !== true ||
+    result.settingsSubmissionLimit !== "mb40" ||
     result.settingsOutputButton !== "폴더 선택" ||
     result.settingsOutputResetButton !== "원본 폴더 사용"
   ) {
     throw new Error("Desktop smoke failed: settings output folder controls did not render");
+  }
+
+  const concurrentSettings = (await window.webContents.executeJavaScript(`
+    (async () => {
+      await Promise.all([
+        window.hwpxOptimizer.saveSettings({ saveReport: true }),
+        window.hwpxOptimizer.saveSettings({ preventOverwrite: false })
+      ]);
+      const loaded = await window.hwpxOptimizer.loadSettings();
+      await window.hwpxOptimizer.saveSettings({ saveReport: false, preventOverwrite: true });
+      return {
+        saveReport: loaded.saveReport,
+        preventOverwrite: loaded.preventOverwrite
+      };
+    })()
+  `)) as { saveReport?: boolean; preventOverwrite?: boolean };
+  if (concurrentSettings.saveReport !== true || concurrentSettings.preventOverwrite !== false) {
+    throw new Error(
+      `Desktop smoke failed: concurrent settings patches lost an update ${JSON.stringify(concurrentSettings)}`
+    );
   }
 
   const layout = (await window.webContents.executeJavaScript(`
@@ -493,20 +543,30 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       document.getElementById("settings-close-button")?.click();
       document.getElementById("help-button")?.click();
       const workspace = document.getElementById("single-workspace");
+      const shell = document.querySelector(".shell");
       const planSidebar = document.getElementById("plan-sidebar");
       const optionsSheet = document.getElementById("detail-options-sheet");
-      const details = document.getElementById("analysis-details");
+      const summaryPanel = document.querySelector(".summary-panel");
+      const emptyReview = document.getElementById("empty-policy-review");
       const helpPanel = document.getElementById("help-panel");
       const workspaceRect = workspace?.getBoundingClientRect();
-      const detailsWidth = details?.getBoundingClientRect().width ?? 0;
+      const shellRect = shell?.getBoundingClientRect();
+      const shellStyle = shell ? getComputedStyle(shell) : undefined;
+      const shellContentWidth = shellRect
+        ? shellRect.width -
+          Number.parseFloat(shellStyle?.paddingLeft ?? "0") -
+          Number.parseFloat(shellStyle?.paddingRight ?? "0")
+        : 0;
       return {
-        detailsInsideWorkspace: workspace?.contains(details) ?? false,
         planInsideOptions: optionsSheet?.contains(planSidebar) ?? false,
         planHiddenWithOptions: planSidebar?.getClientRects().length === 0,
         singleColumn: getComputedStyle(workspace ?? document.body).gridTemplateColumns.split(" ").length === 1,
-        detailsWidth,
+        emptySummaryHidden: summaryPanel?.getClientRects().length === 0,
+        emptyReviewVisible: (emptyReview?.getBoundingClientRect().width ?? 0) > 0,
         workspaceWidth: workspaceRect?.width ?? 0,
-        detailsWidthDelta: Math.abs(detailsWidth - (workspaceRect?.width ?? 0)),
+        shellWidth: shellRect?.width ?? 0,
+        shellContentWidth,
+        workspaceWidthDelta: Math.abs((workspaceRect?.width ?? 0) - shellContentWidth),
         viewportWidth: window.innerWidth,
         helpOpen: helpPanel?.classList.contains("is-open") ?? false,
         helpTitle: document.getElementById("help-title")?.textContent,
@@ -514,38 +574,39 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       };
     })()
   `)) as {
-    detailsInsideWorkspace?: boolean;
     planInsideOptions?: boolean;
     planHiddenWithOptions?: boolean;
     singleColumn?: boolean;
-    detailsWidth?: number;
+    emptySummaryHidden?: boolean;
+    emptyReviewVisible?: boolean;
     workspaceWidth?: number;
-    detailsWidthDelta?: number;
+    shellWidth?: number;
+    shellContentWidth?: number;
+    workspaceWidthDelta?: number;
     viewportWidth?: number;
     helpOpen?: boolean;
     helpTitle?: string;
     manualStepCount?: number;
   };
 
-  if (layout.detailsInsideWorkspace !== true) {
-    throw new Error("Desktop smoke failed: analysis details are outside the primary workspace");
-  }
   if (
     layout.planInsideOptions !== true ||
     layout.planHiddenWithOptions !== true ||
-    layout.singleColumn !== true
+    layout.singleColumn !== true ||
+    layout.emptySummaryHidden !== true ||
+    layout.emptyReviewVisible !== true
   ) {
     throw new Error(
-      `Desktop smoke failed: approved single-pass options layout did not render at ${String(layout.viewportWidth)}px`
+      `Desktop smoke failed: canonical empty layout did not render at ${String(layout.viewportWidth)}px`
     );
   }
   if (
-    !layout.detailsWidth ||
+    !layout.shellWidth ||
     !layout.workspaceWidth ||
-    (layout.detailsWidthDelta ?? Number.POSITIVE_INFINITY) > 1
+    (layout.workspaceWidthDelta ?? Number.POSITIVE_INFINITY) > 1
   ) {
     throw new Error(
-      `Desktop smoke failed: analysis details width ${String(layout.detailsWidth)} does not match workspace width ${String(layout.workspaceWidth)}`
+      `Desktop smoke failed: workspace width ${String(layout.workspaceWidth)} does not fill shell width ${String(layout.shellWidth)}`
     );
   }
   if (layout.helpOpen !== true || layout.helpTitle !== "사용 매뉴얼" || layout.manualStepCount !== 10) {
@@ -593,6 +654,511 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     dragUi.cleared !== true
   ) {
     throw new Error("Desktop smoke failed: full-window drag overlay did not respond to drag/drop events");
+  }
+
+  const selectedUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("empty-choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        const selected = document.getElementById("selected-file-card");
+        const optimize = document.getElementById("optimize-button");
+        const status = document.getElementById("summary-status");
+        if (
+          document.body.dataset.view === "single" &&
+          selected?.hidden === false &&
+          optimize?.disabled === false &&
+          status?.textContent?.includes("제출")
+        ) {
+          const policyRect = document.getElementById("policy-toolbar")?.getBoundingClientRect();
+          const fileRect = document.querySelector(".file-panel")?.getBoundingClientRect();
+          const summaryRect = document.querySelector(".summary-panel")?.getBoundingClientRect();
+          const optimizeRect = optimize.getBoundingClientRect();
+          const outputRect = document.getElementById("output-button")?.getBoundingClientRect();
+          const optionsRect = document.getElementById("toggle-options-button")?.getBoundingClientRect();
+          const detailsRect = document.getElementById("analysis-details")?.getBoundingClientRect();
+          const workspaceRect = document.getElementById("single-workspace")?.getBoundingClientRect();
+          resolve({
+            policyBeforeFile: Boolean(policyRect && fileRect && policyRect.top < fileRect.top),
+            fileBeforeHero: Boolean(fileRect && summaryRect && fileRect.top < summaryRect.top),
+            ctaSingleRow:
+              Boolean(outputRect && optionsRect) &&
+              Math.abs(
+                optimizeRect.top + optimizeRect.height / 2 -
+                  ((outputRect?.top ?? 0) + (outputRect?.height ?? 0) / 2)
+              ) <= 1 &&
+              Math.abs(
+                optimizeRect.top + optimizeRect.height / 2 -
+                  ((optionsRect?.top ?? 0) + (optionsRect?.height ?? 0) / 2)
+              ) <= 1,
+            ctaVisible: [
+              optimize.getClientRects().length > 0,
+              document.getElementById("output-button")?.getClientRects().length > 0,
+              document.getElementById("toggle-options-button")?.getClientRects().length > 0
+            ],
+            reviewVisible: (document.getElementById("review-strip")?.getBoundingClientRect().width ?? 0) > 0,
+            emptyReviewHidden: document.getElementById("empty-policy-review")?.getClientRects().length === 0,
+            expectedMeta: document.getElementById("summary-verdict")?.textContent,
+            heroText: status.textContent,
+            optimizeText: optimize.textContent,
+            visiblePolicyControls: document.querySelectorAll(
+              '#policy-toolbar label:not([hidden]):not(.policy-toolbar-batch)'
+            ).length,
+            singleBatchPolicyHidden:
+              document.querySelector(".policy-toolbar-batch")?.getClientRects().length === 0,
+            tinyFileTargetMarkerHidden:
+              document.getElementById("target-track-limit")?.getClientRects().length === 0 &&
+              document.getElementById("gauge-mid-label")?.getClientRects().length === 0,
+            workspaceWidth: workspaceRect?.width ?? 0,
+            detailsWidth: detailsRect?.width ?? 0,
+            selectedFileName: document.getElementById("selected-file-name")?.textContent
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    timedOut?: boolean;
+    policyBeforeFile?: boolean;
+    fileBeforeHero?: boolean;
+    ctaSingleRow?: boolean;
+    ctaVisible?: Array<boolean | undefined>;
+    reviewVisible?: boolean;
+    emptyReviewHidden?: boolean;
+    expectedMeta?: string;
+    heroText?: string;
+    optimizeText?: string;
+    visiblePolicyControls?: number;
+    singleBatchPolicyHidden?: boolean;
+    tinyFileTargetMarkerHidden?: boolean;
+    workspaceWidth?: number;
+    detailsWidth?: number;
+    selectedFileName?: string;
+  };
+
+  if (
+    selectedUi.timedOut ||
+    selectedUi.policyBeforeFile !== true ||
+    selectedUi.fileBeforeHero !== true ||
+    selectedUi.ctaSingleRow !== true ||
+    selectedUi.reviewVisible !== true ||
+    selectedUi.emptyReviewHidden !== true ||
+    !selectedUi.expectedMeta?.includes("예상") ||
+    !selectedUi.heroText?.includes("제출") ||
+    selectedUi.optimizeText !== "최적화 실행" ||
+    selectedUi.visiblePolicyControls !== 2 ||
+    selectedUi.singleBatchPolicyHidden !== true ||
+    selectedUi.tinyFileTargetMarkerHidden !== true ||
+    !selectedUi.selectedFileName?.endsWith(".hwpx") ||
+    !selectedUi.workspaceWidth ||
+    Math.abs(selectedUi.workspaceWidth - (selectedUi.detailsWidth ?? 0)) > 1
+  ) {
+    throw new Error(`Desktop smoke failed: canonical selected layout mismatch ${JSON.stringify(selectedUi)}`);
+  }
+
+  smokeDialogFilePaths = [smokeInputPath, smokeSecondInputPath];
+  const batchUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        const rows = Array.from(document.querySelectorAll("#batch-list tr"));
+        const optimize = document.getElementById("optimize-button");
+        if (
+          document.body.dataset.view === "batch" &&
+          document.body.dataset.busy !== "analysis" &&
+          rows.length === 2 &&
+          optimize?.disabled === false
+        ) {
+          const policyRect = document.getElementById("policy-toolbar")?.getBoundingClientRect();
+          const summaryRect = document.querySelector(".summary-panel")?.getBoundingClientRect();
+          const tableRect = document.querySelector(".file-panel")?.getBoundingClientRect();
+          const reviewRect = document.getElementById("review-strip")?.getBoundingClientRect();
+          const limitRect = document.getElementById("submission-limit-select")?.getBoundingClientRect();
+          const judgeRect = document.getElementById("batch-target-mode-select")?.getBoundingClientRect();
+          const compressionRect = document.getElementById("preservation-select")?.getBoundingClientRect();
+          const perFileState = {
+            canonicalOrder:
+              Boolean(policyRect && summaryRect && tableRect && reviewRect) &&
+              policyRect.top < summaryRect.top &&
+              summaryRect.top < tableRect.top &&
+              tableRect.top < reviewRect.top,
+            toolbarOrder:
+              Boolean(limitRect && judgeRect && compressionRect) &&
+              limitRect.left < judgeRect.left &&
+              judgeRect.left < compressionRect.left,
+            heroMeta: document.getElementById("summary-verdict")?.textContent,
+            optimizeText: optimize.textContent,
+            qualityTitle: document.getElementById("quality-head-label")?.textContent,
+            pendingRemoveActions: document.querySelectorAll('#batch-list [data-action="remove"]').length,
+            selectedRows: rows.filter((row) => row.querySelector(".batch-select")?.checked).length
+          };
+
+          const judge = document.getElementById("batch-target-mode-select");
+          judge.value = "aggregate";
+          judge.dispatchEvent(new Event("change", { bubbles: true }));
+          const aggregateMeta = document.getElementById("summary-verdict")?.textContent;
+          const allocatedRows = Array.from(document.querySelectorAll("#batch-list .name .sub"))
+            .filter((item) => item.textContent?.includes("배분 목표")).length;
+
+          const firstCheckbox = document.querySelector("#batch-list .batch-select");
+          firstCheckbox.checked = false;
+          firstCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+          const firstRow = document.querySelector("#batch-list tr");
+          const excludedState = {
+            status: firstRow?.querySelector(".status")?.textContent,
+            size: firstRow?.querySelector(".batch-size-cell")?.textContent,
+            qualityControls: firstRow?.querySelectorAll(".row-q-btn, .batch-quality-input").length,
+            selectedLive: document.getElementById("policy-live")?.textContent
+          };
+
+          document.getElementById("quality-mode-manual")?.click();
+          const manualState = {
+            title: document.getElementById("quality-head-label")?.textContent,
+            manualVisible: document.getElementById("quality-manual")?.getClientRects().length > 0,
+            selectedQualityInputs: Array.from(document.querySelectorAll("#batch-list tr"))
+              .filter((row) => row.querySelector(".batch-select")?.checked)
+              .filter((row) => row.querySelector(".batch-quality-input")).length,
+            excludedQualityInputs: firstRow?.querySelectorAll(".batch-quality-input").length
+          };
+
+          document.getElementById("toggle-options-button")?.click();
+          const optionsState = {
+            visible: document.getElementById("detail-options-sheet")?.getClientRects().length > 0,
+            beforeTable:
+              (document.getElementById("detail-options-sheet")?.getBoundingClientRect().top ?? 0) <
+              (document.querySelector(".file-panel")?.getBoundingClientRect().top ?? 0)
+          };
+          const selectAll = document.getElementById("batch-select-all");
+          selectAll.checked = false;
+          selectAll.dispatchEvent(new Event("change", { bubbles: true }));
+          const selectNoneState = {
+            hero: document.getElementById("summary-status")?.textContent,
+            optimizeDisabled: document.getElementById("optimize-button")?.disabled,
+            excludedRows: Array.from(document.querySelectorAll("#batch-list .status"))
+              .filter((item) => item.textContent === "제외").length
+          };
+          selectAll.checked = true;
+          selectAll.dispatchEvent(new Event("change", { bubbles: true }));
+          const selectAllState = {
+            selectedLive: document.getElementById("policy-live")?.textContent,
+            optimizeDisabled: document.getElementById("optimize-button")?.disabled,
+            qualityInputs: document.querySelectorAll("#batch-list .batch-quality-input").length
+          };
+          resolve({
+            perFileState,
+            aggregateMeta,
+            allocatedRows,
+            excludedState,
+            manualState,
+            optionsState,
+            selectNoneState,
+            selectAllState
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    timedOut?: boolean;
+    perFileState?: {
+      canonicalOrder?: boolean;
+      toolbarOrder?: boolean;
+      heroMeta?: string;
+      optimizeText?: string;
+      qualityTitle?: string;
+      pendingRemoveActions?: number;
+      selectedRows?: number;
+    };
+    aggregateMeta?: string;
+    allocatedRows?: number;
+    excludedState?: {
+      status?: string;
+      size?: string;
+      qualityControls?: number;
+      selectedLive?: string;
+    };
+    manualState?: {
+      title?: string;
+      manualVisible?: boolean;
+      selectedQualityInputs?: number;
+      excludedQualityInputs?: number;
+    };
+    optionsState?: {
+      visible?: boolean;
+      beforeTable?: boolean;
+    };
+    selectNoneState?: {
+      hero?: string;
+      optimizeDisabled?: boolean;
+      excludedRows?: number;
+    };
+    selectAllState?: {
+      selectedLive?: string;
+      optimizeDisabled?: boolean;
+      qualityInputs?: number;
+    };
+  };
+
+  if (
+    batchUi.timedOut ||
+    batchUi.perFileState?.canonicalOrder !== true ||
+    batchUi.perFileState.toolbarOrder !== true ||
+    !batchUi.perFileState.heroMeta?.includes("파일별 기준") ||
+    !batchUi.perFileState.heroMeta?.includes("40MB") ||
+    batchUi.perFileState.optimizeText !== "선택 파일 일괄 최적화" ||
+    batchUi.perFileState.qualityTitle !== "품질 · 파일별 자동" ||
+    batchUi.perFileState.pendingRemoveActions !== 0 ||
+    batchUi.perFileState.selectedRows !== 2 ||
+    !batchUi.aggregateMeta?.includes("선택 합계 배분") ||
+    batchUi.allocatedRows !== 2 ||
+    batchUi.excludedState?.status !== "제외" ||
+    !batchUi.excludedState.size?.includes("—") ||
+    batchUi.excludedState.qualityControls !== 0 ||
+    !batchUi.excludedState.selectedLive?.includes("선택 1") ||
+    batchUi.manualState?.title !== "일괄 품질 (선택 파일)" ||
+    batchUi.manualState.manualVisible !== true ||
+    batchUi.manualState.selectedQualityInputs !== 1 ||
+    batchUi.manualState.excludedQualityInputs !== 0 ||
+    batchUi.optionsState?.visible !== true ||
+    batchUi.optionsState.beforeTable !== true ||
+    !batchUi.selectNoneState?.hero?.includes("선택·분석 대기") ||
+    batchUi.selectNoneState.optimizeDisabled !== true ||
+    batchUi.selectNoneState.excludedRows !== 2 ||
+    !batchUi.selectAllState?.selectedLive?.includes("선택 2") ||
+    batchUi.selectAllState.optimizeDisabled !== false ||
+    batchUi.selectAllState.qualityInputs !== 2
+  ) {
+    throw new Error(`Desktop smoke failed: canonical batch event flow mismatch ${JSON.stringify(batchUi)}`);
+  }
+
+  smokeDialogFilePaths = [smokeInputPath];
+  const batchDuplicateAddUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        if (document.body.dataset.busy !== "analysis") {
+          resolve({
+            view: document.body.dataset.view,
+            rowCount: document.querySelectorAll("#batch-list tr").length,
+            fileMeta: document.getElementById("file-meta")?.textContent
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      setTimeout(poll, 0);
+    })
+  `)) as {
+    timedOut?: boolean;
+    view?: string;
+    rowCount?: number;
+    fileMeta?: string;
+  };
+  if (
+    batchDuplicateAddUi.timedOut ||
+    batchDuplicateAddUi.view !== "batch" ||
+    batchDuplicateAddUi.rowCount !== 2 ||
+    !batchDuplicateAddUi.fileMeta?.includes("2개 파일")
+  ) {
+    throw new Error(
+      `Desktop smoke failed: adding one file to an existing batch replaced the batch ${JSON.stringify(batchDuplicateAddUi)}`
+    );
+  }
+
+  smokeDialogFilePaths = [smokeThirdInputPath];
+  const batchSingleAddUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const cleanup = document.getElementById("cleanup-document-toggle");
+      cleanup.checked = false;
+      cleanup.dispatchEvent(new Event("change", { bubbles: true }));
+      document.getElementById("choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        const rows = document.querySelectorAll("#batch-list tr");
+        if (
+          document.body.dataset.view === "batch" &&
+          document.body.dataset.busy !== "analysis" &&
+          rows.length === 3
+        ) {
+          resolve({
+            view: document.body.dataset.view,
+            rowCount: rows.length,
+            fileMeta: document.getElementById("file-meta")?.textContent,
+            cleanupChecked: cleanup.checked,
+            targetMode: document.getElementById("batch-target-mode-select")?.value,
+            manualPressed: document.getElementById("quality-mode-manual")?.getAttribute("aria-pressed")
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    timedOut?: boolean;
+    view?: string;
+    rowCount?: number;
+    fileMeta?: string;
+    cleanupChecked?: boolean;
+    targetMode?: string;
+    manualPressed?: string;
+  };
+  if (
+    batchSingleAddUi.timedOut ||
+    batchSingleAddUi.view !== "batch" ||
+    batchSingleAddUi.rowCount !== 3 ||
+    !batchSingleAddUi.fileMeta?.includes("3개 파일") ||
+    batchSingleAddUi.cleanupChecked !== false ||
+    batchSingleAddUi.targetMode !== "aggregate" ||
+    batchSingleAddUi.manualPressed !== "true"
+  ) {
+    throw new Error(
+      `Desktop smoke failed: adding one new file did not preserve the active batch policy ${JSON.stringify(batchSingleAddUi)}`
+    );
+  }
+
+  const completedBatchUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("optimize-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        if (
+          document.body.dataset.batchResult === "visible" &&
+          document.body.dataset.busy === ""
+        ) {
+          resolve({
+            doneRows: Array.from(document.querySelectorAll("#batch-list .status"))
+              .filter((item) => item.textContent === "완료").length,
+            resultVisible: document.getElementById("batch-result-panel")?.getClientRects().length > 0
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as { timedOut?: boolean; doneRows?: number; resultVisible?: boolean };
+  if (completedBatchUi.timedOut || completedBatchUi.doneRows !== 3 || completedBatchUi.resultVisible !== true) {
+    throw new Error(`Desktop smoke failed: real batch completion flow mismatch ${JSON.stringify(completedBatchUi)}`);
+  }
+
+  smokeDialogFilePaths = [smokeFourthInputPath];
+  const batchPostResultAddUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        const rows = document.querySelectorAll("#batch-list tr");
+        if (
+          document.body.dataset.view === "batch" &&
+          document.body.dataset.busy !== "analysis" &&
+          rows.length === 4
+        ) {
+          resolve({
+            batchResult: document.body.dataset.batchResult,
+            resultHidden: document.getElementById("batch-result-panel")?.hidden,
+            rowCount: rows.length,
+            fileMeta: document.getElementById("file-meta")?.textContent
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    timedOut?: boolean;
+    batchResult?: string;
+    resultHidden?: boolean;
+    rowCount?: number;
+    fileMeta?: string;
+  };
+  if (
+    batchPostResultAddUi.timedOut ||
+    batchPostResultAddUi.batchResult !== "" ||
+    batchPostResultAddUi.resultHidden !== true ||
+    batchPostResultAddUi.rowCount !== 4 ||
+    !batchPostResultAddUi.fileMeta?.includes("4개 파일")
+  ) {
+    throw new Error(
+      `Desktop smoke failed: adding a file after batch completion left stale result UI ${JSON.stringify(batchPostResultAddUi)}`
+    );
+  }
+
+  window.setContentSize(920, 700);
+  const compactBatchUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const settingsPanel = document.getElementById("settings-panel");
+      settingsPanel.style.transition = "none";
+      document.getElementById("settings-button")?.click();
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const settings = settingsPanel?.getBoundingClientRect();
+        const toolbar = document.getElementById("policy-toolbar")?.getBoundingClientRect();
+        resolve({
+          viewportWidth: window.innerWidth,
+          documentWidth: document.documentElement.scrollWidth,
+          settingsLeft: settings?.left,
+          settingsRight: settings?.right,
+          toolbarLeft: toolbar?.left,
+          toolbarRight: toolbar?.right
+        });
+      }));
+    })
+  `)) as {
+    viewportWidth?: number;
+    documentWidth?: number;
+    settingsLeft?: number;
+    settingsRight?: number;
+    toolbarLeft?: number;
+    toolbarRight?: number;
+  };
+  await window.webContents.executeJavaScript(`document.getElementById("settings-close-button")?.click()`);
+  window.setContentSize(960, 780);
+  if (
+    !compactBatchUi.viewportWidth ||
+    (compactBatchUi.documentWidth ?? 0) > compactBatchUi.viewportWidth + 1 ||
+    (compactBatchUi.settingsLeft ?? -1) < 0 ||
+    (compactBatchUi.settingsRight ?? Number.POSITIVE_INFINITY) > compactBatchUi.viewportWidth + 1 ||
+    (compactBatchUi.toolbarLeft ?? -1) < 0 ||
+    (compactBatchUi.toolbarRight ?? Number.POSITIVE_INFINITY) > compactBatchUi.viewportWidth + 1
+  ) {
+    throw new Error(`Desktop smoke failed: compact batch layout overflowed ${JSON.stringify(compactBatchUi)}`);
   }
 
   const workflow = (await window.webContents.executeJavaScript(`

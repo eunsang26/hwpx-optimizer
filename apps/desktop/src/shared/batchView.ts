@@ -52,6 +52,12 @@ export function appendUniquePaths(existing: readonly string[], incoming: readonl
   return merged;
 }
 
+export function batchResultTitleForCounts(input: { failed: number; cancelled: number }): string {
+  return input.failed > 0 || input.cancelled > 0
+    ? "일괄 최적화 확인 필요"
+    : "일괄 최적화 완료";
+}
+
 export function summarizeBatchItems(items: BatchItemLike[], options: { running: boolean } = { running: false }): BatchSummary {
   if (items.length === 0) {
     return {
