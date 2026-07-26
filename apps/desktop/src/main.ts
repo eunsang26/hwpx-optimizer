@@ -42,6 +42,7 @@ const pendingWorkerRequests = new Map<
 const allowedInputPaths = new Set<string>();
 const allowedOutputDirectories = new Set<string>();
 const allowedGeneratedPaths = new Set<string>();
+let settingsSaveQueue: Promise<void> = Promise.resolve();
 let smokeDialogFilePaths: string[] | undefined;
 // Packaged Windows EXEs treat unknown `--flags` as Chromium switches ("bad option").
 // Prefer HWPX_OPT_SMOKE_TEST=1 for packaged smoke; keep argv for Linux `electron` launches.
@@ -325,6 +326,11 @@ function registerIpc(): void {
 }
 
 async function loadSettings(): Promise<DesktopSettings> {
+  await settingsSaveQueue;
+  return readSettings();
+}
+
+async function readSettings(): Promise<DesktopSettings> {
   try {
     const raw = await readFileFs(settingsPath(), "utf8");
     const parsed = JSON.parse(raw) as DesktopSettingsPatch;
@@ -337,12 +343,19 @@ async function loadSettings(): Promise<DesktopSettings> {
   }
 }
 
-async function saveSettings(patch: DesktopSettingsPatch): Promise<DesktopSettings> {
-  const current = await loadSettings();
-  const next = { ...current, ...persistentDesktopSettingsPatch(patch) };
-  await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(settingsPath(), JSON.stringify(next, null, 2));
-  return next;
+function saveSettings(patch: DesktopSettingsPatch): Promise<DesktopSettings> {
+  const task = settingsSaveQueue.then(async () => {
+    const current = await readSettings();
+    const next = { ...current, ...persistentDesktopSettingsPatch(patch) };
+    await mkdir(app.getPath("userData"), { recursive: true });
+    await writeFile(settingsPath(), JSON.stringify(next, null, 2));
+    return next;
+  });
+  settingsSaveQueue = task.then(
+    () => undefined,
+    () => undefined
+  );
+  return task;
 }
 
 function settingsPath(): string {
@@ -430,6 +443,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   await mkdir(smokeDir, { recursive: true });
   const smokeInputPath = join(smokeDir, "smoke.hwpx");
   const smokeSecondInputPath = join(smokeDir, "smoke-second.hwpx");
+  const smokeThirdInputPath = join(smokeDir, "smoke-third.hwpx");
+  const smokeFourthInputPath = join(smokeDir, "smoke-fourth.hwpx");
   const smokeSourcePath = process.env.HWPX_OPT_SMOKE_INPUT;
   const smokeMode = parseSmokeMode(process.env.HWPX_OPT_SMOKE_MODE);
   await writeFile(
@@ -437,8 +452,12 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     smokeSourcePath ? await readFileFs(resolve(smokeSourcePath)) : await createSmokeHwpxFixture()
   );
   await writeFile(smokeSecondInputPath, await createSmokeHwpxFixture());
+  await writeFile(smokeThirdInputPath, await createSmokeHwpxFixture());
+  await writeFile(smokeFourthInputPath, await createSmokeHwpxFixture());
   await registerAllowedInputPath(smokeInputPath);
   await registerAllowedInputPath(smokeSecondInputPath);
+  await registerAllowedInputPath(smokeThirdInputPath);
+  await registerAllowedInputPath(smokeFourthInputPath);
   await registerAllowedOutputDirectory(smokeDir);
   smokeDialogFilePaths = [smokeInputPath];
 
@@ -497,6 +516,26 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     result.settingsOutputResetButton !== "원본 폴더 사용"
   ) {
     throw new Error("Desktop smoke failed: settings output folder controls did not render");
+  }
+
+  const concurrentSettings = (await window.webContents.executeJavaScript(`
+    (async () => {
+      await Promise.all([
+        window.hwpxOptimizer.saveSettings({ saveReport: true }),
+        window.hwpxOptimizer.saveSettings({ preventOverwrite: false })
+      ]);
+      const loaded = await window.hwpxOptimizer.loadSettings();
+      await window.hwpxOptimizer.saveSettings({ saveReport: false, preventOverwrite: true });
+      return {
+        saveReport: loaded.saveReport,
+        preventOverwrite: loaded.preventOverwrite
+      };
+    })()
+  `)) as { saveReport?: boolean; preventOverwrite?: boolean };
+  if (concurrentSettings.saveReport !== true || concurrentSettings.preventOverwrite !== false) {
+    throw new Error(
+      `Desktop smoke failed: concurrent settings patches lost an update ${JSON.stringify(concurrentSettings)}`
+    );
   }
 
   const layout = (await window.webContents.executeJavaScript(`
@@ -905,6 +944,221 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     batchUi.selectAllState.qualityInputs !== 2
   ) {
     throw new Error(`Desktop smoke failed: canonical batch event flow mismatch ${JSON.stringify(batchUi)}`);
+  }
+
+  smokeDialogFilePaths = [smokeInputPath];
+  const batchDuplicateAddUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        if (document.body.dataset.busy !== "analysis") {
+          resolve({
+            view: document.body.dataset.view,
+            rowCount: document.querySelectorAll("#batch-list tr").length,
+            fileMeta: document.getElementById("file-meta")?.textContent
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      setTimeout(poll, 0);
+    })
+  `)) as {
+    timedOut?: boolean;
+    view?: string;
+    rowCount?: number;
+    fileMeta?: string;
+  };
+  if (
+    batchDuplicateAddUi.timedOut ||
+    batchDuplicateAddUi.view !== "batch" ||
+    batchDuplicateAddUi.rowCount !== 2 ||
+    !batchDuplicateAddUi.fileMeta?.includes("2개 파일")
+  ) {
+    throw new Error(
+      `Desktop smoke failed: adding one file to an existing batch replaced the batch ${JSON.stringify(batchDuplicateAddUi)}`
+    );
+  }
+
+  smokeDialogFilePaths = [smokeThirdInputPath];
+  const batchSingleAddUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const cleanup = document.getElementById("cleanup-document-toggle");
+      cleanup.checked = false;
+      cleanup.dispatchEvent(new Event("change", { bubbles: true }));
+      document.getElementById("choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        const rows = document.querySelectorAll("#batch-list tr");
+        if (
+          document.body.dataset.view === "batch" &&
+          document.body.dataset.busy !== "analysis" &&
+          rows.length === 3
+        ) {
+          resolve({
+            view: document.body.dataset.view,
+            rowCount: rows.length,
+            fileMeta: document.getElementById("file-meta")?.textContent,
+            cleanupChecked: cleanup.checked,
+            targetMode: document.getElementById("batch-target-mode-select")?.value,
+            manualPressed: document.getElementById("quality-mode-manual")?.getAttribute("aria-pressed")
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    timedOut?: boolean;
+    view?: string;
+    rowCount?: number;
+    fileMeta?: string;
+    cleanupChecked?: boolean;
+    targetMode?: string;
+    manualPressed?: string;
+  };
+  if (
+    batchSingleAddUi.timedOut ||
+    batchSingleAddUi.view !== "batch" ||
+    batchSingleAddUi.rowCount !== 3 ||
+    !batchSingleAddUi.fileMeta?.includes("3개 파일") ||
+    batchSingleAddUi.cleanupChecked !== false ||
+    batchSingleAddUi.targetMode !== "aggregate" ||
+    batchSingleAddUi.manualPressed !== "true"
+  ) {
+    throw new Error(
+      `Desktop smoke failed: adding one new file did not preserve the active batch policy ${JSON.stringify(batchSingleAddUi)}`
+    );
+  }
+
+  const completedBatchUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("optimize-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        if (
+          document.body.dataset.batchResult === "visible" &&
+          document.body.dataset.busy === ""
+        ) {
+          resolve({
+            doneRows: Array.from(document.querySelectorAll("#batch-list .status"))
+              .filter((item) => item.textContent === "완료").length,
+            resultVisible: document.getElementById("batch-result-panel")?.getClientRects().length > 0
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as { timedOut?: boolean; doneRows?: number; resultVisible?: boolean };
+  if (completedBatchUi.timedOut || completedBatchUi.doneRows !== 3 || completedBatchUi.resultVisible !== true) {
+    throw new Error(`Desktop smoke failed: real batch completion flow mismatch ${JSON.stringify(completedBatchUi)}`);
+  }
+
+  smokeDialogFilePaths = [smokeFourthInputPath];
+  const batchPostResultAddUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      document.getElementById("choose-button")?.click();
+      let attempts = 0;
+      const poll = () => {
+        attempts += 1;
+        const rows = document.querySelectorAll("#batch-list tr");
+        if (
+          document.body.dataset.view === "batch" &&
+          document.body.dataset.busy !== "analysis" &&
+          rows.length === 4
+        ) {
+          resolve({
+            batchResult: document.body.dataset.batchResult,
+            resultHidden: document.getElementById("batch-result-panel")?.hidden,
+            rowCount: rows.length,
+            fileMeta: document.getElementById("file-meta")?.textContent
+          });
+          return;
+        }
+        if (attempts > 2400) {
+          resolve({ timedOut: true });
+          return;
+        }
+        setTimeout(poll, 50);
+      };
+      poll();
+    })
+  `)) as {
+    timedOut?: boolean;
+    batchResult?: string;
+    resultHidden?: boolean;
+    rowCount?: number;
+    fileMeta?: string;
+  };
+  if (
+    batchPostResultAddUi.timedOut ||
+    batchPostResultAddUi.batchResult !== "" ||
+    batchPostResultAddUi.resultHidden !== true ||
+    batchPostResultAddUi.rowCount !== 4 ||
+    !batchPostResultAddUi.fileMeta?.includes("4개 파일")
+  ) {
+    throw new Error(
+      `Desktop smoke failed: adding a file after batch completion left stale result UI ${JSON.stringify(batchPostResultAddUi)}`
+    );
+  }
+
+  window.setContentSize(920, 700);
+  const compactBatchUi = (await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const settingsPanel = document.getElementById("settings-panel");
+      settingsPanel.style.transition = "none";
+      document.getElementById("settings-button")?.click();
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const settings = settingsPanel?.getBoundingClientRect();
+        const toolbar = document.getElementById("policy-toolbar")?.getBoundingClientRect();
+        resolve({
+          viewportWidth: window.innerWidth,
+          documentWidth: document.documentElement.scrollWidth,
+          settingsLeft: settings?.left,
+          settingsRight: settings?.right,
+          toolbarLeft: toolbar?.left,
+          toolbarRight: toolbar?.right
+        });
+      }));
+    })
+  `)) as {
+    viewportWidth?: number;
+    documentWidth?: number;
+    settingsLeft?: number;
+    settingsRight?: number;
+    toolbarLeft?: number;
+    toolbarRight?: number;
+  };
+  await window.webContents.executeJavaScript(`document.getElementById("settings-close-button")?.click()`);
+  window.setContentSize(960, 780);
+  if (
+    !compactBatchUi.viewportWidth ||
+    (compactBatchUi.documentWidth ?? 0) > compactBatchUi.viewportWidth + 1 ||
+    (compactBatchUi.settingsLeft ?? -1) < 0 ||
+    (compactBatchUi.settingsRight ?? Number.POSITIVE_INFINITY) > compactBatchUi.viewportWidth + 1 ||
+    (compactBatchUi.toolbarLeft ?? -1) < 0 ||
+    (compactBatchUi.toolbarRight ?? Number.POSITIVE_INFINITY) > compactBatchUi.viewportWidth + 1
+  ) {
+    throw new Error(`Desktop smoke failed: compact batch layout overflowed ${JSON.stringify(compactBatchUi)}`);
   }
 
   const workflow = (await window.webContents.executeJavaScript(`

@@ -722,6 +722,17 @@ async function handleAdditionalPaths(paths: string[]): Promise<void> {
     setStatus("처리 중에는 새 파일을 추가할 수 없습니다. 완료 후 다시 시도하세요.");
     return;
   }
+  if (document.body.dataset.view === "batch" && state.batchItems.length > 0) {
+    const existingPaths = state.batchItems.map((item) => item.path);
+    const mergedPaths = appendUniquePaths(existingPaths, paths);
+    const additionalPaths = mergedPaths.slice(existingPaths.length);
+    if (additionalPaths.length === 0) {
+      setStatus("이미 배치 목록에 있는 파일입니다.");
+      return;
+    }
+    enterBatchMode(additionalPaths, { preservePolicy: true });
+    return;
+  }
   if (document.body.dataset.view === "single" && state.filePath) {
     const merged = appendUniquePaths([state.filePath], paths);
     if (merged.length === 1) {
@@ -2347,7 +2358,7 @@ function syncActionCheckboxIndeterminateState(): void {
   });
 }
 
-function enterBatchMode(paths: string[]): void {
+function enterBatchMode(paths: string[], options: { preservePolicy?: boolean } = {}): void {
   if (state.batchRunning || state.batchAnalyzing || state.analysisRunning || state.optimizeRunning) {
     setStatus("처리 중에는 새 파일을 추가할 수 없습니다. 완료 후 다시 시도하세요.");
     return;
@@ -2359,7 +2370,7 @@ function enterBatchMode(paths: string[]): void {
   state.batchReportPath = undefined;
   state.batchRunCompleted = false;
   state.currentPlan = undefined;
-  state.actionSelections.clear();
+  if (!options.preservePolicy) state.actionSelections.clear();
   resultPanel.hidden = true;
   resultGuidance.textContent = "";
   resetVerificationPanel();
@@ -2384,7 +2395,7 @@ function enterBatchMode(paths: string[]): void {
   selectedFileCard.hidden = true;
   dropZone.hidden = true;
   fileName.textContent = "여러 HWPX 일괄 처리";
-  fileMeta.textContent = `${paths.length}개 파일`;
+  fileMeta.textContent = `${state.batchItems.length}개 파일`;
   optimizeButton.disabled = true;
   batchPanel.hidden = false;
   renderBatchList();

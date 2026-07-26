@@ -275,16 +275,19 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain("HWPX 파일을 여기에 놓으세요");
     expect(html).toContain('id="status-banner"');
     expect(html).toContain('id="progress-title"');
+    expect(html).toContain('aria-labelledby="progress-title"');
     expect(html).toContain('id="batch-result-details"');
     expect(html).toContain('id="plan-count-pill"');
     expect(html).toContain('class="plan-strip" id="plan-sidebar"');
     expect(html).toContain('id="option-plan-summary"');
     expect(html).toContain('id="run-dock"');
     expect(html).toContain('id="settings-close-button"');
+    expect(html).toMatch(/id="settings-panel"[^>]*role="dialog"[^>]*aria-modal="true"/);
     expect(html).toContain('id="setting-submission-limit"');
     expect(html).toContain("기본 결재 기준");
     expect(html).toContain('id="help-button"');
     expect(html).toContain('id="help-panel"');
+    expect(html).toMatch(/id="help-panel"[^>]*role="dialog"[^>]*aria-modal="true"/);
     expect(html).toContain('id="help-backdrop"');
     expect(html).toContain('id="help-close-button"');
     expect(html).toContain("사용 매뉴얼");
@@ -298,6 +301,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(html).toContain("결과물은 제출·배포·보관 전에 사용자가 직접 확인해야 하며, 원본 보존과 최종 사용 책임은 사용자에게 있습니다.");
     expect(html.match(/id="verification-body"/g)?.length).toBe(1);
     expect(html).toContain('<span aria-hidden="true">×</span>');
+    expect(html).toMatch(
+      /id="compare-modal"[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="compare-title"/
+    );
     expect(html).toContain('id="cleanup-document-toggle"');
     expect(html).toContain('id="cleanup-image-toggle"');
     expect(html).toContain('<option value="mb40" selected>40MB 미만</option>');
@@ -310,6 +316,8 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain('requireElement("drop-overlay")');
     expect(renderer).toContain('document.addEventListener("dragenter"');
     expect(renderer).toContain("handleAdditionalPaths(selected)");
+    expect(renderer).toContain("enterBatchMode(additionalPaths, { preservePolicy: true })");
+    expect(renderer).toContain("if (!options.preservePolicy) state.actionSelections.clear();");
     expect(renderer).toContain('document.addEventListener("dragover"');
     expect(renderer).toContain('document.addEventListener("drop"');
     expect(renderer).toContain('window.addEventListener("hwpx-tauri-dropped-files"');
@@ -377,6 +385,9 @@ describe("repository runtime and cleanup configuration", () => {
     );
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
       "canonical batch event flow mismatch"
+    );
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
+      "concurrent settings patches lost an update"
     );
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
