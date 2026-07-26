@@ -156,13 +156,17 @@ describe("repository runtime and cleanup configuration", () => {
     expect(main).toContain("minWidth: 920");
     expect(main).toContain("minHeight: 700");
     expect(main).toContain("maxWidth: 1360");
-    expect(main).toContain('backgroundColor: "#f6f8fb"');
-    expect(styles).toMatch(/\.shell\s*{[^}]*padding:\s*0 6px 80px/s);
+    expect(main).toContain('backgroundColor: "#e5e9f0"');
+    expect(styles).toMatch(/\.shell\s*{[^}]*max-width:\s*var\(--app-max\)/s);
+    expect(styles).toMatch(/--app-max:\s*960px/);
+    expect(styles).toMatch(/--fs-display:\s*30px/);
+    expect(styles).toMatch(/radial-gradient\(900px 420px/);
     expect(styles).toMatch(/body\[data-view="empty"\] \.drop-zone\s*{[^}]*padding:\s*10px 14px/s);
     expect(styles).toMatch(/body\[data-view="empty"\] \.summary-panel\s*{[^}]*padding-bottom:\s*8px/s);
-    expect(styles).toMatch(/body\[data-view="empty"\] \.bottom-row\s*{[^}]*gap:\s*6px/s);
-    expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*max-width:\s*1320px/s);
-    expect(styles).toMatch(/\.brand-mark img\s*{[^}]*width:\s*30px/s);
+    expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*gap:\s*6px/s);
+    expect(styles).toMatch(/\.brand-mark img\s*{[^}]*width:\s*26px/s);
+    expect(styles).toMatch(/\.file-toolbar\s*{/);
+    expect(styles).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
     expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(150px, 1fr\)\)/s);
     expect(styles).toMatch(/\.option-grid select,\r?\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
     expect(styles).toMatch(/\.cleanup-settings\s*{[^}]*grid-template-columns:\s*1fr/s);
@@ -311,7 +315,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.manualStepCount !== 10");
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
-    expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, 1320px\)/s);
+    expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, var\(--app-max\)\)/s);
     expect(css).toMatch(/\.help-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.help-panel\s*{[^}]*width:\s*min\(520px, calc\(100vw - 28px\)\)/s);
     expect(css).toMatch(/\.manual-steps\s*{[^}]*display:\s*grid/s);
@@ -331,12 +335,12 @@ describe("repository runtime and cleanup configuration", () => {
 
     const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');
     const resultPanel = html.indexOf('id="result-panel"');
-    const bottomRow = html.indexOf("<!-- ③ BOTTOM");
+    const quietPlan = html.indexOf("option-plan-summary--quiet");
     const bottomAccordions = html.indexOf('<section class="bottom-accordions">');
     const actionPanel = html.indexOf('<div id="action-panel"');
     expect(summaryPanelStart).toBeGreaterThanOrEqual(0);
     expect(resultPanel).toBeGreaterThan(summaryPanelStart);
-    expect(resultPanel).toBeLessThan(bottomRow);
+    expect(resultPanel).toBeLessThan(quietPlan === -1 ? bottomAccordions : quietPlan);
     expect(resultPanel).toBeLessThan(bottomAccordions);
     expect(bottomAccordions).toBeLessThan(actionPanel);
     expect(html).toMatch(

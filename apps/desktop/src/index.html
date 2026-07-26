@@ -58,22 +58,18 @@
       <section id="single-workspace" class="workspace-grid">
         <!-- ① IMPORT — single compact row -->
         <section class="panel import-row file-panel">
-          <div class="section-heading">
-            <div class="section-title">
-              <span>1.</span>
-              <h2>파일 선택</h2>
-              <strong id="selection-pill" class="selection-pill">단일 파일</strong>
-            </div>
+          <div class="file-toolbar">
+            <strong id="selection-pill" class="selection-pill">단일 파일</strong>
             <div class="file-actions">
-              <button id="choose-button" type="button" class="ghost icon-text">
+              <button id="choose-button" type="button" class="ghost icon-text compact-action">
                 <span class="file-add-icon" aria-hidden="true"></span>
                 파일 추가
               </button>
-              <button id="choose-folder-button" type="button" class="ghost icon-text">
+              <button id="choose-folder-button" type="button" class="ghost icon-text compact-action">
                 <span class="folder-icon" aria-hidden="true"></span>
                 폴더 추가
               </button>
-              <button id="batch-clear" type="button" class="ghost icon-text" disabled>
+              <button id="batch-clear" type="button" class="ghost icon-text compact-action" disabled>
                 <span class="trash-icon" aria-hidden="true"></span>
                 목록 비우기
               </button>
@@ -112,18 +108,18 @@
                 <span id="selected-modified-meta">수정일: -</span>
               </div>
             </div>
-            <div class="file-size-stats">
+            <div class="file-size-stats file-size-stats--chip" aria-label="용량 요약">
               <div>
-                <span>원본 크기</span>
+                <span>원본</span>
                 <strong id="single-original-size">-</strong>
               </div>
               <div>
-                <span>예상 결과 용량</span>
+                <span>예상</span>
                 <strong id="single-expected-size">-</strong>
               </div>
               <div class="saving-ring" aria-label="예상 절감률">
                 <span id="single-saving-ring">-</span>
-                <small>절감 예상</small>
+                <small>절감</small>
               </div>
             </div>
           </div>
@@ -148,15 +144,9 @@
           </section>
         </section>
 
-        <!-- ② RESULT HERO — gauge first + quality + CTA -->
+        <!-- RESULT HERO — gauge first + quality + CTA -->
         <section class="panel summary-panel">
-          <div class="section-heading">
-            <div class="section-title">
-              <span>2.</span>
-              <h2>제출 가능 여부</h2>
-            </div>
-            <span class="section-aside-pill" id="summary-target-line">제출 기준: 40MB 미만</span>
-          </div>
+          <p id="summary-target-line" class="sr-only">제출 기준: 40MB 미만</p>
           <div id="policy-toolbar" class="policy-toolbar" aria-label="결재·압축 기준">
             <label>
               <strong>결재</strong>
@@ -352,32 +342,9 @@
           </section>
         </section>
 
-        <!-- ③ BOTTOM — plan summary only (controls live in policy toolbar + 세부 옵션) -->
-        <div class="bottom-row">
-          <section class="panel options-panel options-panel--summary">
-            <div class="section-heading">
-              <div class="section-title">
-                <span>3.</span>
-                <h2>계획 요약</h2>
-              </div>
-              <span class="section-aside-pill">권장 기본값</span>
-            </div>
-            <p class="option-hint">
-              <span class="info-icon" aria-hidden="true"></span>
-              결재·압축 기준은 위 툴바에서, 세부 작업은 CTA의 「세부 옵션」에서 조정합니다.
-            </p>
-            <p id="option-plan-summary" class="option-plan-summary">파일을 분석하면 선택한 작업의 예상 절감량이 표시됩니다.</p>
-          </section>
-        </div>
-
-        <!-- ④ SAFE LINE — single thin row -->
-        <div class="safe-card safe-line">
-          <span class="large-shield-icon" aria-hidden="true"></span>
-          <div>
-            <strong>안전한 최적화</strong>
-            <p>원본은 그대로 유지되며, 보안 문서 우회 없이 새 파일로 저장됩니다.</p>
-          </div>
-        </div>
+        <p id="option-plan-summary" class="option-plan-summary option-plan-summary--quiet">
+          결재·압축은 위 툴바에서, 세부 작업은 「세부 옵션」에서 조정합니다.
+        </p>
 
         <section class="bottom-accordions">
           <details id="analysis-details" class="analysis-details">

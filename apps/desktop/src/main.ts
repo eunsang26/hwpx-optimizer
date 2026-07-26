@@ -66,7 +66,7 @@ async function createWindow(): Promise<BrowserWindow> {
     title: "HWPX 보고서 용량 최적화",
     icon: join(import.meta.dirname, "app-icon.png"),
     autoHideMenuBar: true,
-    backgroundColor: "#f6f8fb",
+    backgroundColor: "#e5e9f0",
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,
