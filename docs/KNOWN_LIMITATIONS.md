@@ -8,7 +8,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Verified Release Infrastructure
 
-- Desktop app can produce Linux unpacked, Windows unpacked, Windows portable, and Windows NSIS installer builds.
+- Desktop app supports Windows x64 unpacked, portable, ZIP, and NSIS installer builds.
 - Windows ZIP is the preferred local artifact for faster repeated startup. The single portable EXE remains available, but it can start slower because it self-extracts each time.
 - GitHub Actions Windows release gate passes on `windows-latest` when artifact upload is disabled for manual runs.
 - Artifact upload is optional for manual workflow runs to avoid Actions storage quota failures. Tag builds still upload release artifacts.

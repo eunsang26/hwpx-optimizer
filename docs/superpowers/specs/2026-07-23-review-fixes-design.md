@@ -30,14 +30,12 @@
 5. [LOW] media-type 재작성 키 매칭 확장 — `balancedOptimizer.ts:270` (`findHrefAttributeKey` 재사용, media-type 대소문자 무시).
 6. [LOW] TIFF→PNG orientation 통일(`.rotate()`) — `opportunities.ts:467`.
 
-## Batch 2 — 백엔드 통합 (CLI/Electron/Tauri)
+## Batch 2 — 백엔드 통합 (CLI/Electron)
 
 1. [MED] 문서 워커 워치독 타임아웃/행 복구 — `apps/desktop/src/main.ts:709`.
-2. [MED] Tauri 사이드카 경로 allow-list + 입력 대상 덮어쓰기 가드 — `apps/tauri-desktop/sidecar/desktopCore.ts`.
-3. [LOW] no-overwrite 네이밍 TOCTOU → `wx`/`O_EXCL` 생성 — cli `index.ts:150`, desktopService, 사이드카.
-4. [LOW] Electron `hwpx:optimize` IPC 인자 런타임 검증 — `main.ts:197`.
-5. [LOW] `--jobs` 4 클램프 문서화/경고 — cli `index.ts:602`.
-6. [LOW] Tauri API 타입 렌더러 계약과 동기화 — `apps/tauri-desktop/src/tauriApi.ts`.
+2. [LOW] no-overwrite 네이밍 TOCTOU → `wx`/`O_EXCL` 생성 — cli `index.ts:150`, desktopService.
+3. [LOW] Electron `hwpx:optimize` IPC 인자 런타임 검증 — `main.ts:197`.
+4. [LOW] `--jobs` 4 클램프 문서화/경고 — cli `index.ts:602`.
 
 ## Batch 3 — 프론트 기능/접근성 (`apps/desktop`)
 

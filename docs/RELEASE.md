@@ -53,21 +53,21 @@ Start desktop from the built main process:
 npm run desktop:start
 ```
 
-Create an unpacked desktop build for the current platform:
-
-```bash
-npm run desktop:pack
-```
-
-The packaging scripts generate desktop icon resources under `build/` before invoking electron-builder. They also store Electron downloads under the project-local `.npm-cache/electron` directory. This avoids relying on a writable home-directory cache in locked-down environments.
-
-Create an unpacked Windows x64 folder from Linux/WSL without executable resource editing:
+Create an unpacked Windows x64 desktop build:
 
 ```bash
 npm run desktop:pack:win
 ```
 
-Create a Windows x64 portable executable from Linux/WSL without NSIS:
+The packaging scripts generate desktop icon resources under `build/` before invoking electron-builder. They also store Electron downloads under the project-local `.npm-cache/electron` directory. This avoids relying on a writable home-directory cache in locked-down environments.
+
+From a WSL development shell, the same command cross-builds the Windows x64 folder without executable resource editing:
+
+```bash
+npm run desktop:pack:win
+```
+
+Create Windows x64 portable and ZIP artifacts:
 
 ```bash
 npm run desktop:portable:win
@@ -91,13 +91,13 @@ Create a Windows x64 installer build:
 npm run desktop:dist:win
 ```
 
-On Linux/WSL, the NSIS installer build requires `wine`. If `wine` is unavailable, use `desktop:local:win` for a Windows portable `.exe` artifact plus a ZIP distribution, or `desktop:pack:win` for a Windows unpacked folder build, then create the NSIS installer on a Windows release machine or a Linux environment with Wine configured.
+When cross-building from WSL, the NSIS installer requires `wine`. If it is unavailable, use `desktop:local:win` for a Windows portable `.exe` plus ZIP, or build the NSIS installer on a Windows release machine.
 
 For user-facing downloads, prefer the ZIP artifact when startup speed matters. The portable single EXE is convenient, but it must unpack the app payload to a temporary directory at launch. The ZIP is extracted once by the user, so launching `HWPX Optimizer.exe` inside the extracted folder avoids that repeated self-extraction cost.
 
 ## CLI Portable Windows ZIP
 
-Build a lightweight Windows x64 CLI distribution (bundled `node.exe`, built CLI/core, win32 `sharp`, and launchers) from Linux/WSL:
+Build a lightweight Windows x64 CLI distribution (bundled `node.exe`, built CLI/core, win32 `sharp`, and launchers):
 
 ```bash
 npm run build:win-portable
@@ -114,7 +114,7 @@ When `release:manifest` runs after a CLI portable build, the CLI ZIP is also inc
 - `release/SHA256SUMS.txt`
 - `release/RELEASE_NOTICE_<version>.txt`
 
-Verify ZIP structure, dependency tree, and launcher scripts on Linux:
+Verify ZIP structure, dependency tree, and launcher scripts:
 
 ```bash
 npm run release:verify-cli-portable
@@ -130,13 +130,13 @@ This gate uses `scripts/cli-portable-smoke.ps1` and is separate from the Electro
 
 Closed-network build: pass a local Node win-x64 zip via `--node-zip <path>` or `HWPX_OPT_NODE_ZIP`, and use a populated npm cache or internal mirror for dependency installation.
 
-Consolidated Linux release gate for the CLI portable ZIP (build, artifact hygiene, structure verify, host JS smoke):
+Consolidated release gate for the CLI portable ZIP:
 
 ```bash
 npm run release:check:cli-portable
 ```
 
-The Linux gate does **not** replace the Windows end-to-end smoke above. Once `.github/workflows/cli-portable-release.yml` is active, CI enforces Windows runtime support on `windows-latest`: the `cli-portable-windows-smoke` job downloads the Linux-built ZIP artifact, writes a **synthetic minimal HWPX** via `scripts/cli-portable/writeMinimalHwpx.mjs`, and runs `npm run release:verify-cli-portable-smoke`. That synthetic sample validates native `node.exe`, win32 `sharp`, launchers, and the optimize/verify path without committing private documents.
+`.github/workflows/cli-portable-release.yml` builds and verifies the CLI ZIP on `windows-latest`. Its `cli-portable-windows` job writes a **synthetic minimal HWPX** via `scripts/cli-portable/writeMinimalHwpx.mjs`, then runs `npm run release:verify-cli-portable-smoke`. That sample validates native `node.exe`, win32 `sharp`, launchers, and the optimize/verify path without committing private documents.
 
 For real-document QA before internal distribution, run the same smoke locally with a private sample:
 
@@ -144,11 +144,11 @@ For real-document QA before internal distribution, run the same smoke locally wi
 HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run release:verify-cli-portable-smoke
 ```
 
-Root-level `sample*.hwpx` files stay local-only and are not uploaded to CI. A green Linux gate alone is insufficient for a Windows support claim once the workflow ships.
+Root-level `sample*.hwpx` files stay local-only and are not uploaded to CI.
 
 The gate uses `npm run release:audit` (`scripts/release-audit.mjs`), matching `release:preflight`. That check requires a clean **production** dependency tree (`npm audit --omit=dev --audit-level=moderate`). Packaging/dev advisories under `electron-builder` / `@electron/asar` / `esbuild` may still appear in a full `npm audit` and are documented in [Known Limitations](KNOWN_LIMITATIONS.md); they do not block the gate because they are not shipped in the optimized HWPX runtime.
 
-GitHub Actions runs the CI-safe Linux gate on `ubuntu-latest` (`release:check:cli-portable:ci`) and the Windows smoke job on `windows-latest` via `.github/workflows/cli-portable-release.yml`. Tag builds and manual runs with `upload_artifact: true` upload the ZIP, zip-only checksum file, shared `release-manifest.json`, `SHA256SUMS.txt`, and `RELEASE_NOTICE_<version>.txt`.
+GitHub Actions runs the complete build, release gate, and smoke on `windows-latest` via `.github/workflows/cli-portable-release.yml`. Tag builds and manual runs with `upload_artifact: true` upload the ZIP, zip-only checksum file, shared `release-manifest.json`, `SHA256SUMS.txt`, and `RELEASE_NOTICE_<version>.txt`.
 
 ## Verification Before Release
 
@@ -161,13 +161,13 @@ npm run build
 electron_config_cache=.npm-cache/electron npx electron --version
 ```
 
-Or run the consolidated local release gate:
+Or run the consolidated local preflight:
 
 ```bash
-npm run release:check
+npm run release:preflight
 ```
 
-This gate checks release hygiene, tests, typecheck, build, audit, desktop smoke, current-platform unpacked packaging, and Windows unpacked packaging. It does not replace the final Windows installer build or clean Windows install test.
+This gate checks release hygiene, tests, typecheck, build, audit, and desktop smoke. It does not replace Windows packaging or clean Windows install testing.
 
 On a Windows release machine or Windows CI runner, run:
 
@@ -233,7 +233,7 @@ Verify an existing manifest, checksum file, and release notice against the artif
 npm run release:verify-manifest
 ```
 
-The repository also includes `.github/workflows/windows-release.yml`, which runs the CI-safe Windows packaging gate on `workflow_dispatch` and `v*` tags. CLI portable ZIP builds use `.github/workflows/cli-portable-release.yml`: Linux assembly (`release:check:cli-portable:ci`) plus a `windows-latest` smoke job that exercises the uploaded ZIP with a synthetic HWPX. CI never uses private real HWPX samples because root-level `sample*.hwpx` files are not committed. Run the sample-backed `npm run release:check:win` or self-signed `npm run release:check:win-portable` in a local QA environment before product-ready Electron approval; for CLI portable, optionally re-run `HWPX_OPT_SMOKE_INPUT=sample*.hwpx npm run release:verify-cli-portable-smoke` locally before internal distribution. Manual `workflow_dispatch` runs skip artifact upload by default to avoid Actions storage quota failures; set the `upload_artifact` input to `true` when an uploaded artifact is needed. Tag builds upload the generated artifacts.
+The repository includes two Windows-only workflows. `.github/workflows/windows-release.yml` runs the Electron packaging gate, and `.github/workflows/cli-portable-release.yml` builds and exercises the CLI ZIP with a synthetic HWPX; both run on `windows-latest` for `workflow_dispatch` and `v*` tags. CI never uses private real HWPX samples because root-level `sample*.hwpx` files are not committed. Run the sample-backed `npm run release:check:win` or self-signed `npm run release:check:win-portable` in a local QA environment before product-ready Electron approval; for CLI portable, optionally re-run `HWPX_OPT_SMOKE_INPUT=sample*.hwpx npm run release:verify-cli-portable-smoke` locally before internal distribution. Manual `workflow_dispatch` runs skip artifact upload by default to avoid Actions storage quota failures; set `upload_artifact` to `true` when an uploaded artifact is needed. Tag builds upload the generated artifacts.
 
 Then verify at least one HWPX end-to-end:
 
@@ -251,8 +251,8 @@ The project has an `electron-builder` configuration and scripts for unpacked des
 
 Before treating a build as releasable:
 
-1. Run `npm run desktop:pack`.
-2. Launch the unpacked app on the target platform.
+1. Run `npm run desktop:pack:win`.
+2. Launch the unpacked app on Windows.
 3. Verify the app can analyze and optimize a local HWPX file.
 4. Run `npm run desktop:pack:win` to confirm a Windows unpacked folder can be generated.
 5. Run `npm run desktop:local:win:self-signed` to create both the self-signed portable EXE and the faster-starting ZIP artifact.
@@ -263,15 +263,6 @@ Before treating a build as releasable:
 10. Run `npm run desktop:dist:win` on a Windows release machine or a verified Wine-enabled cross-build environment when an NSIS installer is required.
 11. Use `npm run desktop:local:win:self-signed` or the self-signed release gate for internal distribution. When an organization/public-CA PFX is available, set `HWPX_WIN_CSC_LINK` and `HWPX_WIN_CSC_KEY_PASSWORD` (aliases: `CSC_LINK`, `CSC_KEY_PASSWORD`) before the same scripts; omit them to keep the self-signed path.
 12. Install or launch the generated artifact on a clean Windows machine.
-
-Suggested future scripts:
-
-```json
-{
-  "desktop:dist:linux": "npm run build && electron-builder --linux",
-  "desktop:dist:mac": "npm run build && electron-builder --mac"
-}
-```
 
 ## Versioning
 

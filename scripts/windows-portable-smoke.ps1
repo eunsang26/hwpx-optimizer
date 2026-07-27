@@ -97,7 +97,7 @@ try {
     if (-not (Test-Path -LiteralPath $Sample)) {
       throw "Sample HWPX not found: $Sample"
     }
-    $env:HWPX_OPT_SMOKE_INPUT = (Resolve-Path -LiteralPath $Sample).Path
+    $env:HWPX_OPT_SMOKE_INPUT = (Resolve-Path -LiteralPath $Sample).ProviderPath
   } else {
     Remove-Item Env:\HWPX_OPT_SMOKE_INPUT -ErrorAction SilentlyContinue
   }
@@ -107,10 +107,29 @@ try {
     # Packaged Electron rejects unknown --flags as Chromium options; use env trigger.
     $env:HWPX_OPT_SMOKE_TEST = "1"
     Write-Host "Running desktop smoke: mode=$currentMode"
-    $process = Start-Process -FilePath $artifactPath -Wait -PassThru
+    $artifactDirectory = Split-Path -Parent $artifactPath
+    $stdoutPath = Join-Path $artifactDirectory "desktop-smoke.stdout.log"
+    $stderrPath = Join-Path $artifactDirectory "desktop-smoke.stderr.log"
+    Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+    $process = Start-Process `
+      -FilePath $artifactPath `
+      -WorkingDirectory $artifactDirectory `
+      -RedirectStandardOutput $stdoutPath `
+      -RedirectStandardError $stderrPath `
+      -Wait `
+      -PassThru
     if ($process.ExitCode -ne 0) {
+      if (Test-Path -LiteralPath $stdoutPath) {
+        Write-Host "Desktop smoke stdout:"
+        Get-Content -LiteralPath $stdoutPath | Write-Host
+      }
+      if (Test-Path -LiteralPath $stderrPath) {
+        Write-Host "Desktop smoke stderr:"
+        Get-Content -LiteralPath $stderrPath | Write-Host
+      }
       throw "Desktop smoke failed with exit code $($process.ExitCode) for mode $currentMode"
     }
+    Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
     Write-Host "Desktop smoke passed: $artifactPath ($currentMode)"
     Write-Host "  - Includes full-window drag/drop overlay regression"
     Write-Host "  - Includes analysis-details width and help manual regression"

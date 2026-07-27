@@ -140,7 +140,6 @@ let analysisSequence = 0;
 let progressAnimationTimer: number | undefined;
 let displayedProgressPercent = 0;
 let targetProgressPercent = 0;
-let lastTauriDropEventAt = 0;
 let dragDepth = 0;
 const CLEANUP_ACTIONS = ["clean-shape-comment", "strip-metadata"] as const satisfies readonly SubmissionActionId[];
 
@@ -695,14 +694,8 @@ async function init(): Promise<void> {
     event.preventDefault();
     dragDepth = 0;
     setDragOver(false);
-    if (Date.now() - lastTauriDropEventAt < 500) return;
     const dropped = event.dataTransfer?.files;
     await handleDroppedFiles(dropped ? Array.from(dropped) : []);
-  });
-  window.addEventListener("hwpx-tauri-dropped-files", () => {
-    lastTauriDropEventAt = Date.now();
-    setDragOver(false);
-    void handleDroppedFiles([], { allowEmptyRegistration: true, silentWhenEmpty: true });
   });
 
   renderModeWarning();
