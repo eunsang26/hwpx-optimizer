@@ -162,6 +162,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(releaseArtifactCheck).toContain("Windows ZIP artifacts must include TERMS.txt");
     expect(releaseArtifactCheck).toContain("non-Windows native runtime");
     expect(releaseArtifactCheck).toContain("duplicate core runtime");
+    expect(releaseArtifactCheck).toContain('replaceAll("\\\\", "/")');
     const releaseManifestWriter = await readFile("scripts/write-release-manifest.mjs", "utf8");
     const releaseManifestVerifier = await readFile("scripts/verify-release-manifest.mjs", "utf8");
     expect(releaseManifestWriter).toContain("RELEASE_NOTICE_${version}.txt");

@@ -12,7 +12,9 @@ for (const asarPath of await findReleaseFiles(releaseDir, (name) => name === "ap
   artifactLists.push({
     kind: "asar",
     label: asarPath,
-    entries: asar.listPackage(asarPath).map((entry) => entry.replace(/^\/+/, ""))
+    entries: asar.listPackage(asarPath).map((entry) =>
+      entry.replaceAll("\\", "/").replace(/^\/+/, "")
+    )
   });
 }
 
