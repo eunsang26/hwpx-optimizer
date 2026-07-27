@@ -786,23 +786,27 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           rows.length === 2 &&
           optimize?.disabled === false
         ) {
-          const policyRect = document.getElementById("policy-toolbar")?.getBoundingClientRect();
-          const summaryRect = document.querySelector(".summary-panel")?.getBoundingClientRect();
-          const tableRect = document.querySelector(".file-panel")?.getBoundingClientRect();
-          const reviewRect = document.getElementById("review-strip")?.getBoundingClientRect();
-          const limitRect = document.getElementById("submission-limit-select")?.getBoundingClientRect();
-          const judgeRect = document.getElementById("batch-target-mode-select")?.getBoundingClientRect();
-          const compressionRect = document.getElementById("preservation-select")?.getBoundingClientRect();
+          const policyToolbar = document.getElementById("policy-toolbar");
+          const summaryPanel = document.querySelector(".summary-panel");
+          const filePanel = document.querySelector(".file-panel");
+          const reviewStrip = document.getElementById("review-strip");
+          const limitField = document.getElementById("submission-limit-select")?.closest("label");
+          const judgeField = document.getElementById("batch-target-mode-select")?.closest("label");
+          const compressionField = document.getElementById("preservation-select")?.closest("label");
+          const visualOrder = (element) => {
+            const order = Number.parseInt(getComputedStyle(element).order, 10);
+            return Number.isFinite(order) ? order : 0;
+          };
           const perFileState = {
             canonicalOrder:
-              Boolean(policyRect && summaryRect && tableRect && reviewRect) &&
-              policyRect.top < summaryRect.top &&
-              summaryRect.top < tableRect.top &&
-              tableRect.top < reviewRect.top,
+              Boolean(policyToolbar && summaryPanel && filePanel && reviewStrip) &&
+              visualOrder(policyToolbar) < visualOrder(summaryPanel) &&
+              visualOrder(summaryPanel) < visualOrder(filePanel) &&
+              visualOrder(filePanel) < visualOrder(reviewStrip),
             toolbarOrder:
-              Boolean(limitRect && judgeRect && compressionRect) &&
-              limitRect.left < judgeRect.left &&
-              judgeRect.left < compressionRect.left,
+              Boolean(limitField && judgeField && compressionField) &&
+              visualOrder(limitField) < visualOrder(judgeField) &&
+              visualOrder(judgeField) < visualOrder(compressionField),
             heroMeta: document.getElementById("summary-verdict")?.textContent,
             optimizeText: optimize.textContent,
             qualityTitle: document.getElementById("quality-head-label")?.textContent,
@@ -839,11 +843,13 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           };
 
           document.getElementById("toggle-options-button")?.click();
+          const optionsSheet = document.getElementById("detail-options-sheet");
           const optionsState = {
-            visible: document.getElementById("detail-options-sheet")?.getClientRects().length > 0,
+            visible: optionsSheet?.getClientRects().length > 0,
             beforeTable:
-              (document.getElementById("detail-options-sheet")?.getBoundingClientRect().top ?? 0) <
-              (document.querySelector(".file-panel")?.getBoundingClientRect().top ?? 0)
+              Boolean(optionsSheet && summaryPanel && filePanel) &&
+              summaryPanel.contains(optionsSheet) &&
+              visualOrder(summaryPanel) < visualOrder(filePanel)
           };
           const selectAll = document.getElementById("batch-select-all");
           selectAll.checked = false;

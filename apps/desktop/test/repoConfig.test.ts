@@ -204,6 +204,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(main).toContain("maxWidth: 1360");
     expect(main).toContain("window.setContentSize(920, 700)");
     expect(main).toContain("window.setContentSize(960, 720)");
+    expect(main).toContain("const visualOrder = (element) =>");
+    expect(main).toContain("summaryPanel.contains(optionsSheet)");
+    expect(main).not.toContain("limitRect.left < judgeRect.left");
     expect(main).toContain('backgroundColor: "#e5e9f0"');
     expect(styles).toMatch(/\.shell\s*{[^}]*max-width:\s*var\(--app-max\)/s);
     expect(styles).toMatch(/--app-max:\s*960px/);
