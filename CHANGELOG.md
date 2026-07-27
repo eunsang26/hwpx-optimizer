@@ -4,6 +4,13 @@ All notable changes are documented here. Dates are local to the project (KST).
 
 ## Unreleased
 
+## 0.1.9 — 2026-07-27
+
+### Fixed
+
+- Reduced the Windows desktop default content size from 960×720 to 800×560 and the minimum size to 720×520, while retaining the larger user-resizable maximum.
+- Centralized desktop window dimensions and extended Electron smoke coverage to verify the default and minimum layouts without horizontal overflow.
+
 ## 0.1.8 — 2026-07-27
 
 ### Changed
