@@ -59,7 +59,7 @@ describe("repository runtime and cleanup configuration", () => {
       scripts?: Record<string, string>;
       build?: {
         afterPack?: string;
-        files?: string[];
+        files?: Array<string | { from?: string; to?: string; filter?: string[] }>;
         extraFiles?: Array<{ from?: string; to?: string }>;
       };
     };
@@ -114,6 +114,12 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.png");
     expect(packageJson.build?.files).toContain("apps/desktop/dist/**/*.svg");
+    expect(packageJson.build?.files).not.toContain("apps/desktop/dist/**/*.js");
+    expect(packageJson.build?.files).toContain("apps/desktop/dist/main.js");
+    expect(packageJson.build?.files).toContain("apps/desktop/dist/preload.js");
+    expect(packageJson.build?.files).toContain("apps/desktop/dist/renderer.js");
+    expect(packageJson.build?.files).toContain("apps/desktop/dist/main/**/*.js");
+    expect(packageJson.build?.files).toContain("apps/desktop/dist/shared/**/*.js");
     expect(packageJson.build?.asar).toEqual({ smartUnpack: false });
     expect(packageJson.build?.asarUnpack).toEqual(["node_modules/@img/sharp-win32-x64/**/*"]);
     expect(packageJson.build?.extraFiles).toContainEqual({ from: "TERMS.txt", to: "TERMS.txt" });
@@ -126,6 +132,19 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.build?.files).toContain("!node_modules/**/GOVERNANCE*");
     expect(packageJson.build?.files).toContain("!node_modules/**/test.*");
     expect(packageJson.build?.files).toContain("!node_modules/sharp/src/**");
+    expect(packageJson.build?.files).toContain("!node_modules/@img/sharp-linux*/**/*");
+    expect(packageJson.build?.files).toContain("!node_modules/@img/sharp-libvips-linux*/**/*");
+    expect(packageJson.build?.files).not.toContain("packages/core/dist/**/*.js");
+    expect(packageJson.build?.files).not.toContain(
+      "apps/desktop/dist/node_modules/@hwpx-optimizer/core/package.json"
+    );
+    expect(packageJson.build?.files).toContainEqual({
+      from: "packages/core",
+      to: "node_modules/@hwpx-optimizer/core",
+      filter: ["package.json", "dist/**/*.js"]
+    });
+    const desktopAssetCopier = await readFile("apps/desktop/scripts/copy-assets.mjs", "utf8");
+    expect(desktopAssetCopier).not.toContain("bundledCoreRoot");
     await expect(access("scripts/clean-release-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/clean-local-artifacts.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/prune-electron-locales.cjs")).resolves.toBeUndefined();
@@ -141,6 +160,9 @@ describe("repository runtime and cleanup configuration", () => {
     const releaseArtifactCheck = await readFile("scripts/check-release-artifacts.mjs", "utf8");
     expect(releaseArtifactCheck).toContain("TERMS.txt");
     expect(releaseArtifactCheck).toContain("Windows ZIP artifacts must include TERMS.txt");
+    expect(releaseArtifactCheck).toContain("non-Windows native runtime");
+    expect(releaseArtifactCheck).toContain("duplicate core runtime");
+    expect(releaseArtifactCheck).toContain('replaceAll("\\\\", "/")');
     const releaseManifestWriter = await readFile("scripts/write-release-manifest.mjs", "utf8");
     const releaseManifestVerifier = await readFile("scripts/verify-release-manifest.mjs", "utf8");
     expect(releaseManifestWriter).toContain("RELEASE_NOTICE_${version}.txt");

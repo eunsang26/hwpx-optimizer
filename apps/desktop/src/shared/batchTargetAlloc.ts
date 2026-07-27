@@ -28,3 +28,38 @@ export function allocateRemainingAggregateTargetBytes(input: {
     selectedOriginalTotal: input.pendingOriginalTotal
   });
 }
+
+export type AggregateTargetAllocationItem = {
+  selected: boolean;
+  status: "pending" | "running" | "done" | "failed" | "cancelled";
+  originalSizeBytes?: number;
+  expectedSizeBytes?: number;
+  report?: { optimizedSize?: number };
+};
+
+export type AggregateTargetAllocationSummary = {
+  completedOutputBytes: number;
+  pendingOriginalTotal: number;
+};
+
+/** Collect aggregate allocation inputs once so a full row refresh stays O(n). */
+export function summarizeAggregateTargetAllocation(
+  items: Iterable<AggregateTargetAllocationItem>
+): AggregateTargetAllocationSummary {
+  let completedOutputBytes = 0;
+  let pendingOriginalTotal = 0;
+  for (const item of items) {
+    if (!item.selected) continue;
+    if (item.status === "done") {
+      completedOutputBytes += item.report?.optimizedSize ?? item.expectedSizeBytes ?? 0;
+      continue;
+    }
+    if (
+      (item.status === "pending" || item.status === "running") &&
+      item.originalSizeBytes
+    ) {
+      pendingOriginalTotal += item.originalSizeBytes;
+    }
+  }
+  return { completedOutputBytes, pendingOriginalTotal };
+}

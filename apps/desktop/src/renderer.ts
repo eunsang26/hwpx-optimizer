@@ -16,7 +16,11 @@ import {
 import { createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
-import { allocateRemainingAggregateTargetBytes } from "./shared/batchTargetAlloc.js";
+import {
+  allocateRemainingAggregateTargetBytes,
+  summarizeAggregateTargetAllocation
+} from "./shared/batchTargetAlloc.js";
+import type { AggregateTargetAllocationSummary } from "./shared/batchTargetAlloc.js";
 import { resultGuidanceText } from "./shared/resultGuidance.js";
 import {
   createSubmissionPlan,
@@ -1389,6 +1393,7 @@ function createBatchPlanSummary(): BatchPlanSummary | undefined {
   let metCount = 0;
   let warningCount = 0;
   let reviewCount = 0;
+  const targetAllocation = summarizeAggregateTargetAllocation(state.batchItems);
 
   for (const item of analyzedItems) {
     if (!item.report) continue;
@@ -1413,7 +1418,7 @@ function createBatchPlanSummary(): BatchPlanSummary | undefined {
         : item.jpegQualityOverride ??
           (state.qualityMode === "manual" ? state.jpegQuality : undefined);
     const plan = createSubmissionPlan(item.report, {
-      submissionLimit: batchSubmissionLimitForItem(item),
+      submissionLimit: batchSubmissionLimitForItem(item, targetAllocation),
       preservationPreference: state.preservationPreference,
       actionOverrides: state.actionSelections,
       ...(jpegQuality !== undefined ? { jpegQuality } : {})
@@ -1545,65 +1550,52 @@ function fileTargetStatusText(passed: number, warning: number, targetBytes: numb
   return "파일별 분석 대기";
 }
 
-function batchSubmissionLimitForItem(item: BatchItem): SubmissionLimit {
+function batchSubmissionLimitForItem(
+  item: BatchItem,
+  targetAllocation?: AggregateTargetAllocationSummary
+): SubmissionLimit {
   if (state.batchTargetMode === "per-file") return state.submissionLimit;
-  const targetBytes = batchTargetBytesForItem(item);
+  const targetBytes = batchTargetBytesForItem(item, targetAllocation);
   return targetBytes ? { id: "custom", customBytes: targetBytes } : { id: "none" };
 }
 
-function batchTargetBytesForItem(item: BatchItem): number | undefined {
+function batchTargetBytesForItem(
+  item: BatchItem,
+  targetAllocation = summarizeAggregateTargetAllocation(state.batchItems)
+): number | undefined {
   const batchTargetBytes = resolveBatchTargetBytes();
   if (!batchTargetBytes || !item.originalSizeBytes) return undefined;
   if (state.batchTargetMode === "per-file") return batchTargetBytes;
   if (!item.selected) return undefined;
-  const completedOutputBytes = state.batchItems
-    .filter((current) => current.selected && current.status === "done")
-    .reduce(
-      (sum, current) =>
-        sum + (current.report?.optimizedSize ?? current.expectedSizeBytes ?? 0),
-      0
-    );
-  const pendingOriginalTotal = state.batchItems
-    .filter(
-      (current) =>
-        current.selected &&
-        (current.status === "pending" || current.status === "running") &&
-        current.originalSizeBytes
-    )
-    .reduce((sum, current) => sum + (current.originalSizeBytes ?? 0), 0);
   return allocateRemainingAggregateTargetBytes({
     batchTargetBytes,
-    completedOutputBytes,
+    completedOutputBytes: targetAllocation.completedOutputBytes,
     itemOriginalBytes: item.originalSizeBytes,
-    pendingOriginalTotal
+    pendingOriginalTotal: targetAllocation.pendingOriginalTotal
   });
 }
 
-function batchTargetLabelForItem(item: BatchItem): string {
+function batchTargetLabelForItem(
+  item: BatchItem,
+  targetAllocation?: AggregateTargetAllocationSummary
+): string {
   if (state.batchTargetMode === "aggregate" && !item.selected) return "선택 제외";
-  const targetBytes = batchTargetBytesForItem(item);
+  const targetBytes = batchTargetBytesForItem(item, targetAllocation);
   return targetBytes ? `${formatBytes(targetBytes)} 미만` : "제한 없음";
 }
 
-function batchAllocatedTargetLabelForItem(item: BatchItem): string | undefined {
+function batchAllocatedTargetLabelForItem(
+  item: BatchItem,
+  targetAllocation?: AggregateTargetAllocationSummary
+): string | undefined {
   if (state.batchTargetMode !== "aggregate") return undefined;
-  const targetBytes = batchTargetBytesForItem(item);
+  const targetBytes = batchTargetBytesForItem(item, targetAllocation);
   return targetBytes ? `배분 목표 ${formatBytes(targetBytes)}` : undefined;
 }
 
 function percentFromPlan(plan: SubmissionPlan): number {
   const original = state.report?.originalSize ?? 0;
   return original > 0 ? (plan.expectedSavingBytes / original) * 100 : 0;
-}
-
-function progressForPlan(plan: SubmissionPlan): number {
-  const original = state.report?.originalSize ?? 0;
-  if (original <= 0) return 0;
-  return Math.min(100, Math.max(0, (plan.expectedSavingBytes / original) * 100));
-}
-
-function singleStatusText(plan: SubmissionPlan): string {
-  return plan.verdictLabel;
 }
 
 function clampJpegQuality(value: number): number {
@@ -2421,7 +2413,6 @@ function enterBatchMode(paths: string[], options: { preservePolicy?: boolean } =
   optimizeButton.disabled = true;
   batchPanel.hidden = false;
   renderBatchList();
-  renderBatchSummary();
   setStatus(`${state.batchItems.length}개 파일이 일괄 처리 대기 중입니다.`);
   void analyzeBatchItems();
 }
@@ -2560,8 +2551,9 @@ async function analyzeBatchItems(): Promise<void> {
         const response = await window.hwpxOptimizer.analyze(item.path);
         item.report = response.report;
         item.originalSizeBytes = response.report.originalSize;
+        const targetAllocation = summarizeAggregateTargetAllocation(state.batchItems);
         const plan = createSubmissionPlan(response.report, {
-          submissionLimit: batchSubmissionLimitForItem(item),
+          submissionLimit: batchSubmissionLimitForItem(item, targetAllocation),
           preservationPreference: state.preservationPreference,
           actionOverrides: state.actionSelections,
           ...(state.qualityMode === "manual" && state.preservationPreference !== "preserve"
@@ -2571,7 +2563,7 @@ async function analyzeBatchItems(): Promise<void> {
         item.expectedSizeBytes = plan.expectedSizeBytes;
         item.originalSizeLabel = plan.originalSizeLabel;
         item.expectedSizeLabel = plan.expectedSizeLabel.replace(/^약 /, "");
-        item.targetLabel = batchTargetLabelForItem(item);
+        item.targetLabel = batchTargetLabelForItem(item, targetAllocation);
         item.targetStatusLabel = plan.verdictLabel;
         item.qualityLabel = qualityLabelForBatchItem(item, plan);
         item.jpegQualityDisplay = qualityDisplayForBatchItem(item, plan);
@@ -2579,7 +2571,7 @@ async function analyzeBatchItems(): Promise<void> {
           state.preservationPreference !== "size" &&
           state.preservationPreference !== "preserve" &&
           (state.qualityMode === "manual" || item.jpegQualityOverride !== undefined);
-        item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item);
+        item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item, targetAllocation);
         analyzedCount += 1;
         renderProgress(
           6 + (pendingItems.length > 0 ? (analyzedCount / pendingItems.length) * 88 : 88),
@@ -2606,17 +2598,16 @@ async function analyzeBatchItems(): Promise<void> {
     }
     renderBatchList();
   }
-  renderBatchSummary();
 }
 
 function refreshBatchPlans(): void {
   if (state.batchItems.length === 0) return;
   refreshBatchPlanItems();
   renderBatchList();
-  renderBatchSummary();
 }
 
 function refreshBatchPlanItems(): void {
+  const targetAllocation = summarizeAggregateTargetAllocation(state.batchItems);
   for (const item of state.batchItems) {
     if (!item.report) continue;
     // Terminal rows keep the actual optimize outcome — do not re-estimate from the result report.
@@ -2627,14 +2618,14 @@ function refreshBatchPlanItems(): void {
         : item.jpegQualityOverride ??
           (state.qualityMode === "manual" ? state.jpegQuality : undefined);
     const plan = createSubmissionPlan(item.report, {
-      submissionLimit: batchSubmissionLimitForItem(item),
+      submissionLimit: batchSubmissionLimitForItem(item, targetAllocation),
       preservationPreference: state.preservationPreference,
       actionOverrides: state.actionSelections,
       ...(jpegQuality !== undefined ? { jpegQuality } : {})
     });
     item.expectedSizeBytes = plan.expectedSizeBytes;
     item.expectedSizeLabel = plan.expectedSizeLabel.replace(/^약 /, "");
-    item.targetLabel = batchTargetLabelForItem(item);
+    item.targetLabel = batchTargetLabelForItem(item, targetAllocation);
     item.targetStatusLabel = plan.verdictLabel;
     item.qualityLabel = qualityLabelForBatchItem(item, plan);
     item.jpegQualityDisplay = qualityDisplayForBatchItem(item, plan);
@@ -2642,7 +2633,7 @@ function refreshBatchPlanItems(): void {
       state.preservationPreference !== "size" &&
       state.preservationPreference !== "preserve" &&
       (state.qualityMode === "manual" || item.jpegQualityOverride !== undefined);
-    item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item);
+    item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item, targetAllocation);
   }
 }
 
@@ -2700,6 +2691,7 @@ async function runBatch(): Promise<void> {
       continue;
     }
     item.status = "running";
+    const targetAllocation = summarizeAggregateTargetAllocation(state.batchItems);
     renderBatchList();
     // Reset per item so each file's own 0->100 progress (from onOptimizeProgress)
     // shows, instead of the monotonic bar sticking at 100% after the first file.
@@ -2708,7 +2700,7 @@ async function runBatch(): Promise<void> {
     try {
       const plan = item.report
         ? createSubmissionPlan(item.report, {
-            submissionLimit: batchSubmissionLimitForItem(item),
+            submissionLimit: batchSubmissionLimitForItem(item, targetAllocation),
             preservationPreference: state.preservationPreference,
             actionOverrides: state.actionSelections
           })
@@ -2720,7 +2712,7 @@ async function runBatch(): Promise<void> {
         outputDirectory: state.outputDirectory,
         outputMode: "batch",
         actions: selectedActionsForPlan(plan),
-        targetBytes: batchTargetBytesForItem(item),
+        targetBytes: batchTargetBytesForItem(item, targetAllocation),
         ...(jpegQuality !== undefined ? { jpegQuality } : {})
       });
       Object.assign(item, applyOptimizationResultToBatchItem(item, response));
