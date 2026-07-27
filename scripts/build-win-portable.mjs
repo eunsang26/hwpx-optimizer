@@ -67,7 +67,8 @@ function runBuild() {
   const result = spawnSync(npmCommand, ["run", "build"], {
     cwd: repoRoot,
     env: process.env,
-    stdio: "inherit"
+    stdio: "inherit",
+    shell: process.platform === "win32"
   });
   if (result.error) {
     throw result.error;

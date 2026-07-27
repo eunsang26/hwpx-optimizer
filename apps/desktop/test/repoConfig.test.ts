@@ -91,6 +91,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:verify-win-portable-smoke");
     expect(packageJson.scripts?.["release:check:win-portable:unsigned"]).toContain("npm run desktop:local:win");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run build:win-portable");
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("--skip-build");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-cli-portable");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:manifest");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-manifest");
@@ -98,6 +99,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:audit");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:audit");
     expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toBe(packageJson.scripts?.["release:check:cli-portable"]);
+    expect(await readFile("scripts/build-win-portable.mjs", "utf8")).toContain(
+      'shell: process.platform === "win32"'
+    );
     await expect(access("scripts/release-audit.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
     await expect(access("scripts/run-windows-portable-smoke.mjs")).resolves.toBeUndefined();
