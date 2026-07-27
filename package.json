@@ -97,14 +97,16 @@
     },
     "files": [
       "package.json",
-      "apps/desktop/dist/**/*.js",
+      "apps/desktop/dist/main.js",
+      "apps/desktop/dist/preload.js",
+      "apps/desktop/dist/renderer.js",
+      "apps/desktop/dist/main/**/*.js",
+      "apps/desktop/dist/shared/**/*.js",
       "apps/desktop/dist/**/*.cjs",
       "apps/desktop/dist/**/*.html",
       "apps/desktop/dist/**/*.css",
       "apps/desktop/dist/**/*.png",
       "apps/desktop/dist/**/*.svg",
-      "apps/desktop/dist/node_modules/@hwpx-optimizer/core/package.json",
-      "packages/core/dist/**/*.js",
       {
         "from": "packages/core",
         "to": "node_modules/@hwpx-optimizer/core",
@@ -138,8 +140,8 @@
       "!.vscode/**",
       "!.tmp/**",
       "!.npm-cache/**",
-      "!node_modules/@img/sharp-linux-x64/**/*",
-      "!node_modules/@img/sharp-libvips-linux-x64/**/*"
+      "!node_modules/@img/sharp-linux*/**/*",
+      "!node_modules/@img/sharp-libvips-linux*/**/*"
     ],
     "win": {
       "target": [

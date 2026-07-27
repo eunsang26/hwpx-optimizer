@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   allocateAggregateTargetBytes,
-  allocateRemainingAggregateTargetBytes
+  allocateRemainingAggregateTargetBytes,
+  summarizeAggregateTargetAllocation
 } from "../src/shared/batchTargetAlloc.js";
 
 describe("allocateAggregateTargetBytes", () => {
@@ -51,5 +52,47 @@ describe("allocateAggregateTargetBytes", () => {
         pendingOriginalTotal: 10 * 1024 * 1024
       })
     ).toBe(1);
+  });
+
+  it("summarizes completed output and pending input totals in one pass", () => {
+    let visited = 0;
+    const items = [
+      {
+        selected: true,
+        status: "done" as const,
+        originalSizeBytes: 30,
+        expectedSizeBytes: 18,
+        report: { optimizedSize: 16 }
+      },
+      {
+        selected: true,
+        status: "pending" as const,
+        originalSizeBytes: 20
+      },
+      {
+        selected: true,
+        status: "running" as const,
+        originalSizeBytes: 10
+      },
+      {
+        selected: false,
+        status: "pending" as const,
+        originalSizeBytes: 99
+      }
+    ];
+    function* trackedItems() {
+      for (const item of items) {
+        visited += 1;
+        yield item;
+      }
+    }
+
+    const summary = summarizeAggregateTargetAllocation(trackedItems());
+
+    expect(summary).toEqual({
+      completedOutputBytes: 16,
+      pendingOriginalTotal: 30
+    });
+    expect(visited).toBe(items.length);
   });
 });

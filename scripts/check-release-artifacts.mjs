@@ -10,6 +10,7 @@ const zipArtifactLists = [];
 
 for (const asarPath of await findReleaseFiles(releaseDir, (name) => name === "app.asar")) {
   artifactLists.push({
+    kind: "asar",
     label: asarPath,
     entries: asar.listPackage(asarPath).map((entry) => entry.replace(/^\/+/, ""))
   });
@@ -18,6 +19,7 @@ for (const asarPath of await findReleaseFiles(releaseDir, (name) => name === "ap
 for (const zipPath of await findReleaseFiles(releaseDir, (name) => name.toLowerCase().endsWith(".zip"))) {
   const zip = await JSZip.loadAsync(await readFile(zipPath));
   const zipArtifact = {
+    kind: "zip",
     label: zipPath,
     entries: Object.keys(zip.files)
   };
@@ -59,6 +61,40 @@ const violations = artifactLists.flatMap(({ label, entries }) =>
 if (violations.length > 0) {
   console.error("Release artifact check failed. Packaged artifacts include development or user-history files:");
   for (const violation of violations) {
+    console.error(`- ${violation}`);
+  }
+  process.exit(1);
+}
+
+const asarArtifacts = artifactLists.filter(({ kind }) => kind === "asar");
+const nonWindowsNativeRuntimeViolations = asarArtifacts.flatMap(({ label, entries }) =>
+  entries
+    .filter((entry) =>
+      /(^|\/)node_modules\/@img\/(?:sharp|sharp-libvips)-(?!win32)[^/]+(\/|$)/i.test(entry)
+    )
+    .map((entry) => `${label}: ${entry}`)
+);
+
+if (nonWindowsNativeRuntimeViolations.length > 0) {
+  console.error("Release artifact check failed. Windows package includes a non-Windows native runtime:");
+  for (const violation of nonWindowsNativeRuntimeViolations) {
+    console.error(`- ${violation}`);
+  }
+  process.exit(1);
+}
+
+const duplicateCoreRuntimeViolations = asarArtifacts.flatMap(({ label, entries }) => {
+  const corePackages = entries.filter((entry) =>
+    /(^|\/)node_modules\/@hwpx-optimizer\/core\/package\.json$/i.test(entry)
+  );
+  return corePackages.length === 1
+    ? []
+    : [`${label}: expected 1 core runtime, found ${corePackages.length}`];
+});
+
+if (duplicateCoreRuntimeViolations.length > 0) {
+  console.error("Release artifact check failed. Windows package includes a duplicate core runtime:");
+  for (const violation of duplicateCoreRuntimeViolations) {
     console.error(`- ${violation}`);
   }
   process.exit(1);

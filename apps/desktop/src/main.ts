@@ -1396,24 +1396,6 @@ function rejectPendingWorkerRequests(error: Error): void {
   activeOptimizeWorker = null;
 }
 
-type DocumentWorkerRequest =
-  | { id: number; type: "warm" }
-  | { id: number; type: "analyze"; filePath: string }
-  | {
-      id: number;
-      type: "optimize";
-      input: {
-        filePath: string;
-        mode: OptimizationMode;
-        outputDirectory?: string;
-        outputMode?: "single" | "batch";
-        actions?: string[];
-        targetBytes?: number;
-        jpegQuality?: number;
-        settings: DesktopSettings;
-      };
-    };
-
 type DocumentWorkerRequestInput =
   | { type: "warm" }
   | { type: "analyze"; filePath: string }
