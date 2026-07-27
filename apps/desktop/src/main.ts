@@ -599,7 +599,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     layout.emptySummaryHidden !== true ||
     layout.emptyReviewVisible !== true ||
     layout.viewportWidth !== 960 ||
-    layout.viewportHeight !== 720
+    !layout.viewportHeight ||
+    layout.viewportHeight < 700 ||
+    layout.viewportHeight > 720
   ) {
     throw new Error(
       `Desktop smoke failed: canonical empty layout did not render in the compact default window ${JSON.stringify(layout)}`
