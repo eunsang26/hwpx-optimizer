@@ -34,6 +34,10 @@ let nextWorkerRequestId = 1;
 // would otherwise never settle, leaving pendingDocumentOperation stuck so every
 // later request is refused. Terminate and reject after this budget instead.
 const DOCUMENT_OPERATION_TIMEOUT_MS = 300_000;
+const DEFAULT_WINDOW_WIDTH = 800;
+const DEFAULT_WINDOW_HEIGHT = 560;
+const MIN_WINDOW_WIDTH = 720;
+const MIN_WINDOW_HEIGHT = 520;
 const pendingWorkerRequests = new Map<
   number,
   {
@@ -61,10 +65,10 @@ if (process.platform === "win32") {
 async function createWindow(): Promise<BrowserWindow> {
   Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindowClass({
-    width: 960,
-    height: 720,
-    minWidth: 920,
-    minHeight: 700,
+    width: DEFAULT_WINDOW_WIDTH,
+    height: DEFAULT_WINDOW_HEIGHT,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     maxWidth: 1360,
     useContentSize: true,
     show: !isSmokeTest,
@@ -601,10 +605,10 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     layout.singleColumn !== true ||
     layout.emptySummaryHidden !== true ||
     layout.emptyReviewVisible !== true ||
-    layout.viewportWidth !== 960 ||
+    layout.viewportWidth !== DEFAULT_WINDOW_WIDTH ||
     !layout.viewportHeight ||
-    layout.viewportHeight < 700 ||
-    layout.viewportHeight > 720
+    layout.viewportHeight < DEFAULT_WINDOW_HEIGHT - 20 ||
+    layout.viewportHeight > DEFAULT_WINDOW_HEIGHT
   ) {
     throw new Error(
       `Desktop smoke failed: canonical empty layout did not render in the compact default window ${JSON.stringify(layout)}`
@@ -1113,7 +1117,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     );
   }
 
-  window.setContentSize(920, 700);
+  window.setContentSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
   const compactBatchUi = (await window.webContents.executeJavaScript(`
     new Promise((resolve) => {
       const settingsPanel = document.getElementById("settings-panel");
@@ -1141,7 +1145,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     toolbarRight?: number;
   };
   await window.webContents.executeJavaScript(`document.getElementById("settings-close-button")?.click()`);
-  window.setContentSize(960, 720);
+  window.setContentSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
   if (
     !compactBatchUi.viewportWidth ||
     (compactBatchUi.documentWidth ?? 0) > compactBatchUi.viewportWidth + 1 ||
