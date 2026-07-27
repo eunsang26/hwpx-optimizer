@@ -11,7 +11,7 @@ try {
   await access(marker);
   console.log(`Win32 sharp test fixtures present (${marker})`);
 } catch {
-  console.log(`Installing ${SHARP_WIN32_PACKAGE} for CLI portable Linux tests...`);
+  console.log(`Installing ${SHARP_WIN32_PACKAGE} for CLI portable tests...`);
   const result = spawnSync("npm", ["install", "--force", "--no-save", SHARP_WIN32_PACKAGE], {
     stdio: "inherit"
   });

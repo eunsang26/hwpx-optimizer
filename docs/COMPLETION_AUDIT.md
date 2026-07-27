@@ -61,7 +61,6 @@ Build a complete local HWPX document size optimization utility that lets users s
 | Docs | `README.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/RELEASE.md`, `docs/KNOWN_LIMITATIONS.md`, `docs/INTERNAL_DISTRIBUTION.md`, `docs/SECURITY_REVIEW.md` | Implemented |
 | Desktop packaging config | `package.json` electron-builder config | Implemented |
 | Desktop icon resources | `scripts/generate-desktop-icons.mjs`, `npm run desktop:icons`, generated `build/icon.png` and `build/icon.ico` | Implemented |
-| Linux unpacked build | `npm run desktop:pack` passed on 2026-05-08 | Verified |
 | Windows unpacked build | `npm run desktop:pack:win` passed on 2026-05-08 | Verified as build artifact only |
 | Windows portable artifact | `npm run desktop:portable:win`, `release/HWPX Optimizer-0.1.5-x64.exe` | Verified build artifact and Windows all-mode runtime smoke |
 | Windows fast-start ZIP artifact | `npm run desktop:zip:win`, `release/HWPX Optimizer-0.1.5-x64.zip` | Verified build artifact |
@@ -99,9 +98,8 @@ npm test -- packages/cli/test/cli.test.ts
 npm run release:hygiene
 npm run typecheck
 npm run build
-npm run release:check
+npm run release:preflight
 xvfb-run -a npm run desktop:smoke
-npm run desktop:pack
 npm run desktop:pack:win
 npm run desktop:portable:win
 npm run desktop:icons

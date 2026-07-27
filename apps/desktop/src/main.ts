@@ -8,6 +8,9 @@ if (!electronApi) {
 }
 
 const { app, BrowserWindow: BrowserWindowClass, dialog, ipcMain, shell, session, Menu } = electronApi;
+if (app.isPackaged && process.platform !== "win32") {
+  throw new Error("HWPX Optimizer packaged desktop builds support Windows only.");
+}
 import { mkdir, readFile as readFileFs, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -113,7 +116,7 @@ app.whenReady()
   });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  app.quit();
 });
 
 app.on("before-quit", () => {
@@ -788,6 +791,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           rows.length === 2 &&
           optimize?.disabled === false
         ) {
+          const judge = document.getElementById("batch-target-mode-select");
+          judge.value = "per-file";
+          judge.dispatchEvent(new Event("change", { bubbles: true }));
           const perFileState = {
             heroMeta: document.getElementById("summary-verdict")?.textContent,
             optimizeText: optimize.textContent,
@@ -796,7 +802,6 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
             selectedRows: rows.filter((row) => row.querySelector(".batch-select")?.checked).length
           };
 
-          const judge = document.getElementById("batch-target-mode-select");
           judge.value = "aggregate";
           judge.dispatchEvent(new Event("change", { bubbles: true }));
           const aggregateMeta = document.getElementById("summary-verdict")?.textContent;
@@ -1225,6 +1230,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (spoofedDropRegistration.length !== 0) {
     throw new Error("Desktop smoke failed: spoofed dropped-file path was registered");
   }
+  await window.webContents.executeJavaScript(`
+    window.hwpxOptimizer.saveSettings({ batchTargetMode: "per-file" })
+  `);
 }
 
 function parseSmokeMode(value: string | undefined): OptimizationMode {

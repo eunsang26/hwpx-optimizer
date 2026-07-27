@@ -4,6 +4,21 @@ All notable changes are documented here. Dates are local to the project (KST).
 
 ## Unreleased
 
+## 0.1.8 — 2026-07-27
+
+### Changed
+
+- The shipped product is Windows-only: Electron and CLI portable builds run and verify on `windows-latest`, while packaged Electron builds reject non-Windows platforms.
+- Removed the experimental desktop shell, Node sidecar, Rust workspace, generated icons, packaging scripts, tests, and workflow jobs that were no longer part of the product.
+- Reduced Windows Electron payload duplication and excluded non-Windows native image runtimes from the ASAR.
+- Reworked batch summary aggregation to avoid repeatedly scanning the full batch for every rendered row.
+
+### Fixed
+
+- Windows artifact inspection now normalizes ASAR paths consistently and rejects duplicate core runtimes or non-Windows native binaries.
+- Windows portable smoke uses a writable Windows working directory, preserves WSL UNC sample paths, captures failure logs, and restores its batch policy so repeated mode runs remain deterministic.
+- Removed obsolete renderer event handling and redundant batch rendering work.
+
 ## 0.1.4 — 2026-07-26
 
 ### Fixed
@@ -18,7 +33,7 @@ All notable changes are documented here. Dates are local to the project (KST).
 
 - Desktop workspace now matches the approved two-column Gauge Target Planner mockup: the workflow stays on the left, the optimization plan remains visible on the right, and verification details span the bottom.
 - Fresh Desktop and browser-preview defaults are aligned to balanced mode, a 40MB per-file target, and five visible plan actions.
-- All shipped version sources now resolve to `0.1.4`, including Electron, Tauri, CLI, core, npm lockfile, and Rust metadata.
+- All shipped version sources now resolve to `0.1.4`, including Electron, CLI, core, and npm lockfile metadata.
 
 ### Added
 
@@ -75,4 +90,4 @@ Initial unreleased baseline.
 - Core engine: HWPX reader, analyzer, planner, safe/balanced/aggressive optimizers, writer, verifier, reports.
 - CLI: `analyze`, `report`, `verify`, `optimize`, `batch`.
 - Desktop: Electron app with file selection, drag-and-drop, analysis, mode selection, optimization with progress and cancel, results, and settings.
-- Build artifacts: Linux unpacked, Windows unpacked, Windows portable EXE, Windows ZIP, NSIS installer.
+- Build artifacts: Windows unpacked, Windows portable EXE, Windows ZIP, NSIS installer.

@@ -198,7 +198,7 @@ Environment: WSL2 + Windows-local `C:\Temp`, Node 24.13.0, self-signed Electron 
 |-------|--------|-------|
 | Approved `#single-pass` desktop layout | Pass | 960px single-column Gauge First flow; optimization plan remains inside `세부 옵션`; Electron DOM/geometry smoke passed |
 | Full test suite | Pass | 65 files, 429 passed, 1 skipped |
-| Typecheck / build | Pass | Electron, CLI, core, and Tauri workspaces |
+| Typecheck / build | Pass | Electron, CLI, and core workspaces |
 | Local sample regression corpus | Pass | 4/4, including `sample2.hwpx` and `sample3.hwpx` balanced optimization |
 | Production dependency audit | Pass | 0 vulnerabilities at moderate+ under `--omit=dev`; 21 build/dev advisories documented |
 | Electron artifact hygiene / native runtime / signature | Pass | EXE and ZIP clean; Windows `sharp` unpack verified; PE certificate table verified |
@@ -218,7 +218,7 @@ Environment: WSL2 + Windows-local `C:\Temp`, Node 20.20.2, self-signed Electron 
 | Check | Result | Notes |
 |-------|--------|-------|
 | Full test suite | Pass | 65 files, 429 passed, 1 skipped |
-| Typecheck / build | Pass | Electron, CLI, core, and Tauri workspaces |
+| Typecheck / build | Pass | Electron, CLI, and core workspaces |
 | Local sample regression corpus | Pass | 4/4, including `sample2.hwpx` and `sample3.hwpx` balanced optimization |
 | Production dependency audit | Pass | 0 vulnerabilities at moderate+ under `--omit=dev`; 21 build/dev advisories documented |
 | Electron artifact hygiene / native runtime / signature | Pass | EXE and ZIP clean; Windows `sharp` unpack verified; PE certificate table verified |

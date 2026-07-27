@@ -5,9 +5,8 @@ Electron Desktop과 **별도**로 `hwpx-opt-win-x64.zip`만 배포할 때 사용
 
 ## 배포 전 체크리스트
 
-- [ ] GitHub Actions **CLI Portable Windows ZIP** 워크플로 green  
-  - `cli-portable-linux` (게이트 + ZIP 빌드)  
-  - `cli-portable-windows-smoke` (Linux ZIP + synthetic HWPX)
+- [ ] GitHub Actions **CLI Portable Windows ZIP** 워크플로의
+  `cli-portable-windows` 작업 green (게이트 + ZIP 빌드 + synthetic HWPX smoke)
 - [ ] (권장) Windows에서 실문서 QA:  
   `HWPX_OPT_SMOKE_INPUT=path/to/sample.hwpx npm run release:verify-cli-portable-smoke`
 - [ ] 태그 `v*` push 시 artifact에서 ZIP + metadata 다운로드  
@@ -104,8 +103,8 @@ gh workflow run cli-portable-release.yml -f upload_artifact=true
 
 | 항목 | 결과 |
 |------|------|
-| Actions run `30061316724` | Linux + Windows smoke **PASS** |
-| `sample2.hwpx` WSL smoke | **PASS** (balanced 92.36%, drop-here 파일/폴더) |
+| Actions run `30061316724` | Windows smoke **PASS** |
+| `sample2.hwpx` Windows PowerShell smoke | **PASS** (balanced 92.36%, drop-here 파일/폴더) |
 | sharp | 0.35.3 |
 
 *태그 push 후 artifact SHA256은 위 템플릿 표에 tag run 값으로 갱신한다.*

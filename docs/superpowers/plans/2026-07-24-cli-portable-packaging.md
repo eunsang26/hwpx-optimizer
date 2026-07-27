@@ -714,10 +714,9 @@ unzip -l release/hwpx-opt-win-x64.zip | head
 | `drop-here.bat` / `hwpx-opt.cmd` / `사용법.txt` / `TERMS.txt` | 2, 6 |
 | Output contract file vs folder | 2 (launcher), engine unchanged |
 | Temp reports for optimize | 2 |
-| Linux verify ≠ win32 load | 7 |
 | Windows CLI smoke ≠ Electron | 8 |
 | Distribution / MotW docs | 9 |
-| No SEA/pkg/Tauri / no menu | n/a (non-goals) |
+| No SEA/pkg / no menu | n/a (non-goals) |
 
 - [ ] **Step 4: Final commit only if docs/scripts tweaks remained; else stop**
 
@@ -727,8 +726,8 @@ unzip -l release/hwpx-opt-win-x64.zip | head
 
 | Spec section | Covered by |
 | --- | --- |
-| §2 Win10+ / balanced launchers / Linux assemble | Tasks 2, 4–6, 9 |
-| §3 non-goals (no engine/desktop/tauri/SEA) | Global constraints |
+| §2 Win10+ / balanced launchers / Windows assemble | Tasks 2, 4–6, 9 |
+| §3 non-goals (no engine/desktop/SEA) | Global constraints |
 | §5 layout + ESM + deps + ASCII names | Tasks 1–3, 5–6 |
 | §6 output + reports | Task 2 |
 | §7 launchers | Task 2 |

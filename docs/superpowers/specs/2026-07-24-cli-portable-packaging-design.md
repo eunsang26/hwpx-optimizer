@@ -22,19 +22,15 @@ lightweight CLI ZIP**, not an Electron-replacement GUI.
 - Default mode from launchers: **balanced**, passed explicitly (`--mode balanced`);
   the CLI's own default is `safe` ([index.ts:80,296](../../../packages/cli/src/index.ts)).
 - Original files never touched (engine guarantee). Output contract in §6.
-- Build (assembly) runs on **Linux**; the tool runs on Windows.
+- Build (assembly) and runtime verification run on **Windows**.
 
 ## 3. Non-goals
 
-- No change to `apps/desktop`, `apps/tauri-desktop`, or engine behavior/safety.
+- No change to `apps/desktop` or engine behavior/safety.
 - Not a single self-contained `.exe`. **B — Node SEA / C — pkg** are rejected not
   merely because `sharp`'s native `.node` can't be embedded, but because ESM +
   `worker_threads` (the batch pool) + native addons make SEA/pkg brittle and
   complex; approach A is also not a single file.
-- `apps/tauri-desktop` is not the answer here: its sidecar copies the *host*
-  `process.execPath` ([scripts/prepare-tauri-sidecar.mjs](../../../scripts/prepare-tauri-sidecar.mjs)),
-  so a Linux build can't produce a Windows sidecar, and WebView2 is heavier — same
-  Node+sharp problem, more weight.
 - Runtime stays strictly local. A one-time **build-time** fetch of Node + npm deps
   is allowed, with closed-network overrides (§8).
 

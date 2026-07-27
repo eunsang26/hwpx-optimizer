@@ -76,9 +76,9 @@ HWPX Optimizer는 사용자의 PC 안에서 HWPX 문서 용량 원인을 분석�
 
 경량 CLI 배포(`release/hwpx-opt-win-x64.zip`)는 Electron Desktop 배포와 별도로 관리한다.
 
-1. Linux/WSL에서 `npm run release:check:cli-portable`을 실행한다 (또는 CI `.github/workflows/cli-portable-release.yml`의 Linux 게이트 통과).
-2. CI가 활성화된 경우, 동일 워크플로의 `windows-latest` 스모크 작업이 Linux에서 빌드한 ZIP을 받아 **합성(synthetic) 최소 HWPX**로 `release:verify-cli-portable-smoke`를 실행한다. Linux 게이트만 통과했다고 Windows 런타임 지원을 주장할 수 없다.
-3. 내부 배포 전 실제 문서 QA는 로컬 Windows(또는 WSL PowerShell)에서 `HWPX_OPT_SMOKE_INPUT=sample*.hwpx npm run release:verify-cli-portable-smoke`로 `drop-here.bat` 포함 E2E를 확인한다. `sample*.hwpx`는 저장소에 커밋하지 않으며 CI에 업로드하지 않는다.
+1. Windows에서 `npm run release:check:cli-portable`을 실행한다. CI는 `.github/workflows/cli-portable-release.yml`의 `windows-latest` 작업에서 같은 게이트를 실행한다.
+2. 같은 Windows 작업이 **합성(synthetic) 최소 HWPX**로 `release:verify-cli-portable-smoke`를 실행해 `node.exe`, win32 `sharp`, 런처, optimize/verify 경로를 검증한다.
+3. 내부 배포 전 실제 문서 QA는 로컬 Windows에서 `HWPX_OPT_SMOKE_INPUT=sample*.hwpx npm run release:verify-cli-portable-smoke`로 `drop-here.bat` 포함 E2E를 확인한다. WSL을 사용하는 경우에도 Windows PowerShell과 Windows 파일시스템에서 최종 실행한다. `sample*.hwpx`는 저장소에 커밋하지 않으며 CI에 업로드하지 않는다.
 4. `release/hwpx-opt-win-x64.SHA256SUMS.txt` 또는 `release/SHA256SUMS.txt` / `release/release-manifest.json`의 SHA256 값을 배포 공지에 포함한다. 공지 템플릿: [CLI_PORTABLE_INTERNAL_RELEASE.md](./CLI_PORTABLE_INTERNAL_RELEASE.md).
 
 - 지원 OS: **Windows 10+ x64** (Node 설치 불필요; ZIP 압축 해제 후 폴더에서 실행).

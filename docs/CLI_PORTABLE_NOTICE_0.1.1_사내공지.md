@@ -23,7 +23,7 @@ Electron Desktop 앱과 별도이며, **ZIP 압축 해제 후 바로 실행**합
 
 - **크기:** 37,021,099 bytes (약 35.3 MB)
 - **버전:** 0.1.1 (Git tag `v0.1.1`)
-- **빌드 검증:** GitHub Actions run https://github.com/eunsang26/hwpx-optimizer/actions/runs/30061595586 (Linux 게이트 + Windows 스모크 통과)
+- **빌드 검증:** GitHub Actions run https://github.com/eunsang26/hwpx-optimizer/actions/runs/30061595586 (Windows 스모크 통과)
 
 다운로드 후 ZIP의 SHA256을 위 값과 **반드시 대조**한 뒤 사용하세요.
 

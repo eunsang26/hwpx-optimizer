@@ -5,11 +5,6 @@ packages/*/dist/
 packages/*/tsconfig.tsbuildinfo
 apps/*/dist/
 apps/*/tsconfig.tsbuildinfo
-apps/tauri-desktop/src-tauri/gen/
-apps/tauri-desktop/src-tauri/icons/icon.png
-apps/tauri-desktop/src-tauri/icons/icon.ico
-apps/tauri-desktop/src-tauri/binaries/hwpx-sidecar-*
-apps/tauri-desktop/src-tauri/target/
 release/
 build/
 *.log

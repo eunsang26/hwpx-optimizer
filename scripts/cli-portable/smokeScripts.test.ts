@@ -42,14 +42,17 @@ describe("CLI portable Windows smoke scripts", () => {
     );
   });
 
-  it("runs Windows smoke against Linux-built ZIP in CI", async () => {
+  it("builds and smokes the portable ZIP in one Windows CI job", async () => {
     const workflow = await readFile(
       resolve(repoRoot, ".github", "workflows", "cli-portable-release.yml"),
       "utf8"
     );
 
-    expect(workflow).toContain("cli-portable-windows-smoke");
-    expect(workflow).toContain("needs: cli-portable-linux");
+    expect(workflow).toContain("cli-portable-windows");
+    expect(workflow).toContain("runs-on: windows-latest");
+    expect(workflow).not.toContain("ubuntu-latest");
+    expect(workflow).not.toContain("cli-portable-linux");
+    expect(workflow).toContain("release:check:cli-portable:ci");
     expect(workflow).toContain("writeMinimalHwpx.mjs");
     expect(workflow).toContain("release:verify-cli-portable-smoke");
   });

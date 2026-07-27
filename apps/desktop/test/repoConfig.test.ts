@@ -9,8 +9,7 @@ describe("repository runtime and cleanup configuration", () => {
     const workspacePaths = [
       "packages/core/package.json",
       "packages/cli/package.json",
-      "apps/desktop/package.json",
-      "apps/tauri-desktop/package.json"
+      "apps/desktop/package.json"
     ];
 
     expect(rootPackage.version).toMatch(/^\d+\.\d+\.\d+$/);
@@ -26,20 +25,7 @@ describe("repository runtime and cleanup configuration", () => {
     }
 
     const coreIndex = await readFile("packages/core/src/index.ts", "utf8");
-    const cargoToml = await readFile("apps/tauri-desktop/src-tauri/Cargo.toml", "utf8");
-    const cargoLock = await readFile("apps/tauri-desktop/src-tauri/Cargo.lock", "utf8");
-    const tauriConfig = JSON.parse(
-      await readFile("apps/tauri-desktop/src-tauri/tauri.conf.json", "utf8")
-    ) as { version?: string };
-
     expect(coreIndex).toContain(`export const version = "${rootPackage.version}"`);
-    expect(cargoToml).toMatch(
-      new RegExp(`name = "hwpx-tauri-desktop"\\r?\\nversion = "${rootPackage.version?.replaceAll(".", "\\.")}"`)
-    );
-    expect(cargoLock).toMatch(
-      new RegExp(`name = "hwpx-tauri-desktop"\\r?\\nversion = "${rootPackage.version?.replaceAll(".", "\\.")}"`)
-    );
-    expect(tauriConfig.version).toBe(rootPackage.version);
   });
 
   it("pins the Node runtime used by current Vitest and Electron tooling", async () => {
@@ -68,10 +54,10 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.license).toBe("UNLICENSED");
     expect(packageJson.scripts?.["release:clean"]).toBe("node scripts/clean-release-artifacts.mjs");
     expect(packageJson.scripts?.["clean:local-artifacts"]).toBe("node scripts/clean-local-artifacts.mjs");
-    expect(packageJson.scripts?.["desktop:pack"]).not.toMatch(/release:clean/);
+    expect(packageJson.scripts?.["desktop:pack"]).toBeUndefined();
     expect(packageJson.scripts?.["desktop:pack:win"]).not.toMatch(/release:clean/);
     expect(packageJson.scripts?.["desktop:local:win"]).not.toMatch(/release:clean/);
-    expect(packageJson.scripts?.["release:check"]).toMatch(/^npm run release:clean && /);
+    expect(packageJson.scripts?.["release:check"]).toBeUndefined();
     expect(packageJson.scripts?.["release:check:win-portable"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:win"]).toMatch(/^npm run release:clean && /);
     expect(packageJson.scripts?.["release:check:cli-portable"]).toMatch(/^npm run release:clean && /);
@@ -89,14 +75,23 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:verify-cli-portable-smoke"]).toBe("node scripts/run-cli-portable-smoke.mjs");
     expect(packageJson.scripts?.["release:verify-win-signature"]).toBe("node scripts/verify-win-signature.mjs");
     expect(packageJson.scripts?.["release:electron:check:win-portable"]).toBe("npm run release:check:win-portable");
-    expect(packageJson.scripts?.["release:tauri:build"]).toBe("npm run tauri:build");
-    expect(packageJson.scripts?.["release:check"]).toContain("npm run quality:corpus:release");
+    expect(JSON.stringify(packageJson.workspaces)).not.toContain("tauri");
+    expect(JSON.stringify(packageJson.scripts)).not.toContain("tauri");
+    expect(await readFile("package-lock.json", "utf8")).not.toContain("@tauri-apps");
+    expect(await readFile(".github/workflows/windows-release.yml", "utf8")).not.toContain("tauri");
+    expect(packageJson.scripts?.build).toBe(
+      "npm run clean:build && tsc -b packages/core packages/cli apps/desktop && npm run desktop:assets"
+    );
+    expect(packageJson.scripts?.typecheck).toBe(
+      "tsc -b packages/core packages/cli apps/desktop --pretty false"
+    );
     expect(packageJson.scripts?.["desktop:local:win:self-signed"]).toContain("sign-self-signed-release-artifacts.mjs");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run desktop:local:win:self-signed");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:verify-win-signature");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:verify-win-portable-smoke");
     expect(packageJson.scripts?.["release:check:win-portable:unsigned"]).toContain("npm run desktop:local:win");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run build:win-portable");
+    expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("--skip-build");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-cli-portable");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:manifest");
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:verify-manifest");
@@ -104,6 +99,9 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.scripts?.["release:check:cli-portable"]).toContain("npm run release:audit");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run release:audit");
     expect(packageJson.scripts?.["release:check:cli-portable:ci"]).toBe(packageJson.scripts?.["release:check:cli-portable"]);
+    expect(await readFile("scripts/build-win-portable.mjs", "utf8")).toContain(
+      'shell: process.platform === "win32"'
+    );
     await expect(access("scripts/release-audit.mjs")).resolves.toBeUndefined();
     await expect(access("scripts/run-regression-corpus.ts")).resolves.toBeUndefined();
     await expect(access("scripts/run-windows-portable-smoke.mjs")).resolves.toBeUndefined();
@@ -195,6 +193,12 @@ describe("repository runtime and cleanup configuration", () => {
     expect(script).toContain("throw \"No checksum entry found");
     expect(script).toContain("ExpectedSha256 mismatch");
     expect(script).toContain("smaller than required minimum");
+    expect(script).toContain("-WorkingDirectory $artifactDirectory");
+    expect(script).toContain("-RedirectStandardOutput $stdoutPath");
+    expect(script).toContain("-RedirectStandardError $stderrPath");
+    expect(script).toContain("Desktop smoke stderr:");
+    expect(script).toContain("(Resolve-Path -LiteralPath $Sample).ProviderPath");
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain('judge.value = "per-file"');
     expect(wrapper).toContain("-RequireChecksumEntry");
     expect(wrapper).toContain("-MinArtifactBytes");
     expect(wrapper).toContain("SHA256SUMS.txt");
@@ -260,8 +264,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(copyAssets).toContain('"app-icon.svg"');
     expect(copyAssets).toContain('join(root, "dist", "app-icon.png")');
     expect(generateIcons).toContain('join("apps", "desktop", "src", "app-icon.svg")');
-    expect(generateIcons).toContain('join("apps", "tauri-desktop", "src-tauri", "icons")');
-    expect(generateIcons).toContain("tauriIconIcoPath");
+    expect(generateIcons).not.toContain("tauri");
     expect(previewConfig).toContain('src="/apps/desktop/src/app-icon.svg"');
     expect(iconSvg).toContain('aria-label="HWPX Optimizer"');
     expect(iconSvg).toContain("#16a34a");
@@ -348,7 +351,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("if (!options.preservePolicy) state.actionSelections.clear();");
     expect(renderer).toContain('document.addEventListener("dragover"');
     expect(renderer).toContain('document.addEventListener("drop"');
-    expect(renderer).toContain('window.addEventListener("hwpx-tauri-dropped-files"');
+    expect(renderer).not.toContain("tauri");
     expect(renderer).toContain("function clearSelectedFiles");
     expect(renderer).toContain('isSingle ? "파일 제거" : "목록 비우기"');
     expect(renderer).toContain("verificationBody.textContent");
@@ -419,6 +422,9 @@ describe("repository runtime and cleanup configuration", () => {
     );
     expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
       "concurrent settings patches lost an update"
+    );
+    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
+      'app.isPackaged && process.platform !== "win32"'
     );
     expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
     expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);

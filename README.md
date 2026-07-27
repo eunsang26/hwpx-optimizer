@@ -1,10 +1,10 @@
 # HWPX 문서 최적화 (HWPX Optimizer)
 
 > 한글 `.hwpx` 파일의 용량을 **원본은 그대로 둔 채** 새 파일로 줄여주는 무료 로컬 도구입니다.
-> 데스크톱 앱(Windows·Linux)과 CLI를 모두 제공하며, 모든 처리는 사용자의 PC 안에서만 이루어집니다.
+> Windows 전용 데스크톱 앱과 CLI를 제공하며, 모든 처리는 사용자의 PC 안에서만 이루어집니다.
 
 - 제작 / 관리: 한강유역수도지원센터 조은상 과장
-- 버전: 0.1.0
+- 버전: 0.1.8
 - 라이선스: 사내·비영리 무상 사용 (자세한 조건은 [`TERMS.txt`](TERMS.txt))
 
 ---
@@ -271,8 +271,7 @@ npm run cli -- batch ./docs --mode balanced --out ./optimized --jobs 2
 ```text
 hwpx-optimizer/
 ├── apps/
-│   ├── desktop/         # Electron 데스크톱 앱 (main / preload / renderer)
-│   └── tauri-desktop/   # 실험적 Tauri 셸
+│   └── desktop/         # Windows Electron 앱 (main / preload / renderer)
 ├── packages/
 │   ├── core/            # 모든 HWPX 로직 — reader/analyzer/optimizer/writer/verifier/report
 │   └── cli/             # hwpx-opt 커맨드라인 래퍼 (얇은 fs/stdout 어댑터)
@@ -339,8 +338,8 @@ xvfb-run -a npm run desktop:smoke
 **릴리즈 검증**:
 
 ```bash
-# Linux/일반
-npm run release:check
+# 공통 사전 검증
+npm run release:preflight
 
 # Windows 포터블/ZIP (Windows 머신 없이도 검증 가능한 부분)
 npm run release:check:win-portable
