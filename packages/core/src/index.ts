@@ -24,4 +24,4 @@ export * from "./writer.js";
 export * from "./xmlMinify.js";
 export * from "./xmlNode.js";
 
-export const version = "0.1.6";
+export const version = "0.1.7";

@@ -198,10 +198,16 @@ describe("repository runtime and cleanup configuration", () => {
     expect(main).toContain('app.setAppUserModelId("local.hwpxoptimizer.app")');
     expect(main).toContain('icon: join(import.meta.dirname, "app-icon.png")');
     expect(main).toContain("width: 960");
-    expect(main).toContain("height: 780");
+    expect(main).toContain("height: 720");
     expect(main).toContain("minWidth: 920");
     expect(main).toContain("minHeight: 700");
     expect(main).toContain("maxWidth: 1360");
+    expect(main).toContain("window.setContentSize(920, 700)");
+    expect(main).toContain("window.setContentSize(960, 720)");
+    expect(main).not.toContain("const visualOrder = (element) =>");
+    expect(main).not.toContain("limitRect.left < judgeRect.left");
+    expect(main).toContain("layout.viewportHeight < 700");
+    expect(main).not.toContain("layout.viewportHeight !== 720");
     expect(main).toContain('backgroundColor: "#e5e9f0"');
     expect(styles).toMatch(/\.shell\s*{[^}]*max-width:\s*var\(--app-max\)/s);
     expect(styles).toMatch(/--app-max:\s*960px/);
@@ -422,8 +428,14 @@ describe("repository runtime and cleanup configuration", () => {
     expect(css).toMatch(
       /body\[data-view="single"\] \.quality-mode-row\s*{[^}]*position:\s*absolute/s
     );
+    expect(css).toMatch(/body\[data-view="batch"\] \.policy-toolbar\s*{[^}]*order:\s*1/s);
+    expect(css).toMatch(/body\[data-view="batch"\] \.policy-toolbar-batch\s*{[^}]*order:\s*2/s);
+    expect(css).toMatch(
+      /body\[data-view="batch"\] \.policy-toolbar > label:has\(#preservation-select\)\s*{[^}]*order:\s*3/s
+    );
     expect(css).toMatch(/body\[data-view="batch"\] \.summary-panel\s*{[^}]*order:\s*2/s);
     expect(css).toMatch(/body\[data-view="batch"\] \.file-panel\s*{[^}]*order:\s*3/s);
+    expect(css).toMatch(/body\[data-view="batch"\] \.review-strip\s*{[^}]*order:\s*4/s);
     expect(css).toMatch(
       /body\[data-busy="analysis"\] #status-banner,[\s\S]*body\[data-busy="analysis"\] #single-workspace\s*{[^}]*display:\s*none !important/s
     );

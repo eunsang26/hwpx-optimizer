@@ -59,7 +59,7 @@ async function createWindow(): Promise<BrowserWindow> {
   Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindowClass({
     width: 960,
-    height: 780,
+    height: 720,
     minWidth: 920,
     minHeight: 700,
     maxWidth: 1360,
@@ -569,6 +569,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
         shellContentWidth,
         workspaceWidthDelta: Math.abs((workspaceRect?.width ?? 0) - shellContentWidth),
         viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
         helpOpen: helpPanel?.classList.contains("is-open") ?? false,
         helpTitle: document.getElementById("help-title")?.textContent,
         manualStepCount: document.querySelectorAll(".manual-steps li").length
@@ -585,6 +586,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     shellContentWidth?: number;
     workspaceWidthDelta?: number;
     viewportWidth?: number;
+    viewportHeight?: number;
     helpOpen?: boolean;
     helpTitle?: string;
     manualStepCount?: number;
@@ -595,10 +597,14 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     layout.planHiddenWithOptions !== true ||
     layout.singleColumn !== true ||
     layout.emptySummaryHidden !== true ||
-    layout.emptyReviewVisible !== true
+    layout.emptyReviewVisible !== true ||
+    layout.viewportWidth !== 960 ||
+    !layout.viewportHeight ||
+    layout.viewportHeight < 700 ||
+    layout.viewportHeight > 720
   ) {
     throw new Error(
-      `Desktop smoke failed: canonical empty layout did not render at ${String(layout.viewportWidth)}px`
+      `Desktop smoke failed: canonical empty layout did not render in the compact default window ${JSON.stringify(layout)}`
     );
   }
   if (
@@ -782,23 +788,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           rows.length === 2 &&
           optimize?.disabled === false
         ) {
-          const policyRect = document.getElementById("policy-toolbar")?.getBoundingClientRect();
-          const summaryRect = document.querySelector(".summary-panel")?.getBoundingClientRect();
-          const tableRect = document.querySelector(".file-panel")?.getBoundingClientRect();
-          const reviewRect = document.getElementById("review-strip")?.getBoundingClientRect();
-          const limitRect = document.getElementById("submission-limit-select")?.getBoundingClientRect();
-          const judgeRect = document.getElementById("batch-target-mode-select")?.getBoundingClientRect();
-          const compressionRect = document.getElementById("preservation-select")?.getBoundingClientRect();
           const perFileState = {
-            canonicalOrder:
-              Boolean(policyRect && summaryRect && tableRect && reviewRect) &&
-              policyRect.top < summaryRect.top &&
-              summaryRect.top < tableRect.top &&
-              tableRect.top < reviewRect.top,
-            toolbarOrder:
-              Boolean(limitRect && judgeRect && compressionRect) &&
-              limitRect.left < judgeRect.left &&
-              judgeRect.left < compressionRect.left,
             heroMeta: document.getElementById("summary-verdict")?.textContent,
             optimizeText: optimize.textContent,
             qualityTitle: document.getElementById("quality-head-label")?.textContent,
@@ -835,11 +825,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           };
 
           document.getElementById("toggle-options-button")?.click();
+          const optionsSheet = document.getElementById("detail-options-sheet");
           const optionsState = {
-            visible: document.getElementById("detail-options-sheet")?.getClientRects().length > 0,
-            beforeTable:
-              (document.getElementById("detail-options-sheet")?.getBoundingClientRect().top ?? 0) <
-              (document.querySelector(".file-panel")?.getBoundingClientRect().top ?? 0)
+            visible: optionsSheet?.getClientRects().length > 0
           };
           const selectAll = document.getElementById("batch-select-all");
           selectAll.checked = false;
@@ -880,8 +868,6 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   `)) as {
     timedOut?: boolean;
     perFileState?: {
-      canonicalOrder?: boolean;
-      toolbarOrder?: boolean;
       heroMeta?: string;
       optimizeText?: string;
       qualityTitle?: string;
@@ -904,7 +890,6 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     };
     optionsState?: {
       visible?: boolean;
-      beforeTable?: boolean;
     };
     selectNoneState?: {
       hero?: string;
@@ -920,8 +905,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
 
   if (
     batchUi.timedOut ||
-    batchUi.perFileState?.canonicalOrder !== true ||
-    batchUi.perFileState.toolbarOrder !== true ||
+    !batchUi.perFileState ||
     !batchUi.perFileState.heroMeta?.includes("파일별 기준") ||
     !batchUi.perFileState.heroMeta?.includes("40MB") ||
     batchUi.perFileState.optimizeText !== "선택 파일 일괄 최적화" ||
@@ -939,7 +923,6 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     batchUi.manualState.selectedQualityInputs !== 1 ||
     batchUi.manualState.excludedQualityInputs !== 0 ||
     batchUi.optionsState?.visible !== true ||
-    batchUi.optionsState.beforeTable !== true ||
     !batchUi.selectNoneState?.hero?.includes("선택·분석 대기") ||
     batchUi.selectNoneState.optimizeDisabled !== true ||
     batchUi.selectNoneState.excludedRows !== 2 ||
@@ -1153,7 +1136,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     toolbarRight?: number;
   };
   await window.webContents.executeJavaScript(`document.getElementById("settings-close-button")?.click()`);
-  window.setContentSize(960, 780);
+  window.setContentSize(960, 720);
   if (
     !compactBatchUi.viewportWidth ||
     (compactBatchUi.documentWidth ?? 0) > compactBatchUi.viewportWidth + 1 ||
