@@ -59,7 +59,7 @@ async function createWindow(): Promise<BrowserWindow> {
   Menu.setApplicationMenu(null);
   mainWindow = new BrowserWindowClass({
     width: 960,
-    height: 780,
+    height: 720,
     minWidth: 920,
     minHeight: 700,
     maxWidth: 1360,
@@ -569,6 +569,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
         shellContentWidth,
         workspaceWidthDelta: Math.abs((workspaceRect?.width ?? 0) - shellContentWidth),
         viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
         helpOpen: helpPanel?.classList.contains("is-open") ?? false,
         helpTitle: document.getElementById("help-title")?.textContent,
         manualStepCount: document.querySelectorAll(".manual-steps li").length
@@ -585,6 +586,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     shellContentWidth?: number;
     workspaceWidthDelta?: number;
     viewportWidth?: number;
+    viewportHeight?: number;
     helpOpen?: boolean;
     helpTitle?: string;
     manualStepCount?: number;
@@ -595,10 +597,12 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     layout.planHiddenWithOptions !== true ||
     layout.singleColumn !== true ||
     layout.emptySummaryHidden !== true ||
-    layout.emptyReviewVisible !== true
+    layout.emptyReviewVisible !== true ||
+    layout.viewportWidth !== 960 ||
+    layout.viewportHeight !== 720
   ) {
     throw new Error(
-      `Desktop smoke failed: canonical empty layout did not render at ${String(layout.viewportWidth)}px`
+      `Desktop smoke failed: canonical empty layout did not render in the compact default window ${JSON.stringify(layout)}`
     );
   }
   if (
@@ -1153,7 +1157,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     toolbarRight?: number;
   };
   await window.webContents.executeJavaScript(`document.getElementById("settings-close-button")?.click()`);
-  window.setContentSize(960, 780);
+  window.setContentSize(960, 720);
   if (
     !compactBatchUi.viewportWidth ||
     (compactBatchUi.documentWidth ?? 0) > compactBatchUi.viewportWidth + 1 ||
