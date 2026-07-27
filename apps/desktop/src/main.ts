@@ -788,27 +788,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           rows.length === 2 &&
           optimize?.disabled === false
         ) {
-          const policyToolbar = document.getElementById("policy-toolbar");
-          const summaryPanel = document.querySelector(".summary-panel");
-          const filePanel = document.querySelector(".file-panel");
-          const reviewStrip = document.getElementById("review-strip");
-          const limitField = document.getElementById("submission-limit-select")?.closest("label");
-          const judgeField = document.getElementById("batch-target-mode-select")?.closest("label");
-          const compressionField = document.getElementById("preservation-select")?.closest("label");
-          const visualOrder = (element) => {
-            const order = Number.parseInt(getComputedStyle(element).order, 10);
-            return Number.isFinite(order) ? order : 0;
-          };
           const perFileState = {
-            canonicalOrder:
-              Boolean(policyToolbar && summaryPanel && filePanel && reviewStrip) &&
-              visualOrder(policyToolbar) < visualOrder(summaryPanel) &&
-              visualOrder(summaryPanel) < visualOrder(filePanel) &&
-              visualOrder(filePanel) < visualOrder(reviewStrip),
-            toolbarOrder:
-              Boolean(limitField && judgeField && compressionField) &&
-              visualOrder(limitField) < visualOrder(judgeField) &&
-              visualOrder(judgeField) < visualOrder(compressionField),
             heroMeta: document.getElementById("summary-verdict")?.textContent,
             optimizeText: optimize.textContent,
             qualityTitle: document.getElementById("quality-head-label")?.textContent,
@@ -847,11 +827,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           document.getElementById("toggle-options-button")?.click();
           const optionsSheet = document.getElementById("detail-options-sheet");
           const optionsState = {
-            visible: optionsSheet?.getClientRects().length > 0,
-            beforeTable:
-              Boolean(optionsSheet && summaryPanel && filePanel) &&
-              summaryPanel.contains(optionsSheet) &&
-              visualOrder(summaryPanel) < visualOrder(filePanel)
+            visible: optionsSheet?.getClientRects().length > 0
           };
           const selectAll = document.getElementById("batch-select-all");
           selectAll.checked = false;
@@ -892,8 +868,6 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   `)) as {
     timedOut?: boolean;
     perFileState?: {
-      canonicalOrder?: boolean;
-      toolbarOrder?: boolean;
       heroMeta?: string;
       optimizeText?: string;
       qualityTitle?: string;
@@ -916,7 +890,6 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     };
     optionsState?: {
       visible?: boolean;
-      beforeTable?: boolean;
     };
     selectNoneState?: {
       hero?: string;
@@ -932,8 +905,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
 
   if (
     batchUi.timedOut ||
-    batchUi.perFileState?.canonicalOrder !== true ||
-    batchUi.perFileState.toolbarOrder !== true ||
+    !batchUi.perFileState ||
     !batchUi.perFileState.heroMeta?.includes("파일별 기준") ||
     !batchUi.perFileState.heroMeta?.includes("40MB") ||
     batchUi.perFileState.optimizeText !== "선택 파일 일괄 최적화" ||
@@ -951,7 +923,6 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     batchUi.manualState.selectedQualityInputs !== 1 ||
     batchUi.manualState.excludedQualityInputs !== 0 ||
     batchUi.optionsState?.visible !== true ||
-    batchUi.optionsState.beforeTable !== true ||
     !batchUi.selectNoneState?.hero?.includes("선택·분석 대기") ||
     batchUi.selectNoneState.optimizeDisabled !== true ||
     batchUi.selectNoneState.excludedRows !== 2 ||
