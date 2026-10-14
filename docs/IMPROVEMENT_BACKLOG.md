@@ -33,7 +33,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 대기 | Codex |
 | OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 대기 | Codex |
 | OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 대기 | Codex |
-| OPT-026 | P1 | sharp 런타임 보안 패치와 배포 검증 | core, packaging | M | 없음 | 대기 | Codex |
+| OPT-026 | P1 | sharp·Electron 런타임 보안 패치와 배포 검증 | core, packaging | M | 없음 | 검증 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 
 ## 작업별 완료 기준
 
@@ -266,14 +266,20 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 - [ ] 텍스트 대비·클릭 영역·설정 레이블·표와 긴 파일명의 가독성을 확인한다.
 - [ ] 변경 후 실제 화면을 다시 캡처해 확인하고 시각 검증 범위를 기록한다.
 
-### OPT 026 sharp 보안 패치
+### OPT 026 배포 런타임 보안 패치
 
 2026-10-14 릴리즈 audit에서 `sharp` 높음 등급 의존성 보고를 확인했다. [libheif advisory](https://github.com/advisories/GHSA-rgj7-g3m4-5g8c) 및 [librsvg advisory](https://github.com/advisories/GHSA-wq5f-xc86-pv6w)에 대응하는 [sharp 0.35.5](https://github.com/lovell/sharp/releases/tag/v0.35.5)를 검증한다.
 
-- [ ] root·workspace·패키징 pin과 lockfile을 수정 버전으로 통일한다.
-- [ ] production audit가 통과하고 문서 보존·품질·용량 회귀 테스트를 통과한다.
+Electron 패치의 npm tooling 최소 버전(22.12)에 맞춰 Node 개발/CI/CLI 배포 pin도 공식 LTS 24.21.0으로 통일한다. 기존 Node 20 검증 기록은 과거 증거로 유지한다.
+
+전체 audit에서 배포 바이너리인 Electron도 보고되어 같은 작업에 포함한다. Electron 42.11.13으로 같은 major 안에서 업데이트하고, [Electron 공식 advisory](https://github.com/electron/electron/security/advisories/GHSA-9f4c-93c8-jc8g)에 따라 `devDependencies`라도 릴리즈 차단 대상에 포함한다. 전체 audit 실패/잘못된 응답을 통과로 처리하지 않는다.
+
+- [x] root·workspace·패키징 pin과 lockfile을 수정 버전으로 통일한다.
+- [x] production audit가 통과하고 문서 보존·품질·용량 회귀 테스트를 통과한다.
 - [ ] Linux 빌드·Electron 스모크 및 Windows CLI/native 배포 실행을 검증한다.
-- [ ] 실제로 확인한 런타임과 남은 개발 도구 advisory를 문서에 반영한다.
+- [x] 실제로 확인한 런타임과 남은 개발 도구 advisory를 문서에 반영한다.
+
+검증 기록: 2026-10-14 Linux/Node 24.13.0. 전체 68개 파일·490개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. sharp 0.35.5/libvips 8.18.7, Electron 42.11.13. 배포 runtime moderate+ 0개; 전체 audit 20개(높음 8, 중간 11, 낮음 1)의 개발/패키징 도구 advisory는 남아 있다. Windows Node 24.21.0/새 native DLL 실행은 별도 CI 검증 중이다.
 
 ## 완료와 갱신 규칙
 

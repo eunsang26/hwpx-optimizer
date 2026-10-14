@@ -78,7 +78,7 @@
 ### B. 소스에서 직접 빌드 (개발자·고급 사용자)
 
 ```bash
-# 사전 요구사항: Node.js 20 이상, npm
+# 사전 요구사항: Node.js 22.12 이상 (권장 24.21 LTS), npm
 git clone <repository-url>
 cd hwpx-optimizer
 npm install

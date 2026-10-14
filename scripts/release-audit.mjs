@@ -1,47 +1,28 @@
 #!/usr/bin/env node
-/**
- * Release audit gate for shipped product dependencies.
- *
- * Packaging/dev tooling (electron-builder, esbuild, nested @electron/asar)
- * may report high advisories that do not ship inside the optimized HWPX runtime.
- * This gate requires a clean production tree (`npm audit --omit=dev`).
- *
- * Residual packaging advisories are printed for awareness but do not fail the gate.
- */
+/** Release gate: production dependencies plus the shipped Electron runtime. */
 import { spawnSync } from "node:child_process";
+import { blockingRuntimePackages, isCompleteAuditReport } from "./lib/auditPolicy.mjs";
 
 const MAX_ATTEMPTS = 3;
 
 const prodReport = runNpmAudit(["audit", "--omit=dev", "--audit-level=moderate", "--json"]);
-const prodVulns = countVulns(prodReport);
-const prodModeratePlus =
-  prodVulns.moderate + prodVulns.high + prodVulns.critical;
-
-if (prodModeratePlus > 0) {
-  console.error("Release audit failed: production dependencies have vulnerabilities.");
-  console.error(JSON.stringify(prodReport.metadata?.vulnerabilities ?? prodVulns, null, 2));
-  const names = Object.keys(prodReport.vulnerabilities ?? {});
-  if (names.length > 0) {
-    console.error(`Packages: ${names.join(", ")}`);
-  }
+const allReport = runNpmAudit(["audit", "--json"]);
+const blocked = blockingRuntimePackages(prodReport, allReport);
+if (blocked.length > 0) {
+  console.error(`Release audit failed: shipped runtime vulnerabilities at moderate+: ${blocked.join(", ")}`);
   process.exit(1);
 }
-
-console.log("Release audit passed: production dependencies have 0 vulnerabilities at moderate+.");
-
-const allReport = runNpmAudit(["audit", "--json"], { optional: true });
+console.log("Release audit passed: production dependencies and shipped Electron have 0 vulnerabilities at moderate+.");
 const allVulns = countVulns(allReport);
 if (allVulns.total > 0) {
-  console.log(
-    `Note: ${allVulns.total} packaging/dev advisory(ies) remain outside --omit=dev ` +
-      `(high=${allVulns.high}, moderate=${allVulns.moderate}, low=${allVulns.low}). ` +
-      "These are tracked in docs/KNOWN_LIMITATIONS.md and do not block the release gate."
-  );
+  console.log(`Full audit reports ${allVulns.total} advisories (high=${allVulns.high}, ` +
+    `moderate=${allVulns.moderate}, low=${allVulns.low}). ` +
+    "Remaining build-tool advisories are non-blocking; this is not a claim of zero total vulnerabilities.");
 }
 
 process.exit(0);
 
-function runNpmAudit(args, { optional = false } = {}) {
+function runNpmAudit(args) {
   let lastError = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const result = spawnNpm(args);
@@ -55,7 +36,7 @@ function runNpmAudit(args, { optional = false } = {}) {
           report.message ||
           result.stderr?.trim() ||
           "npm audit endpoint returned an error";
-      } else if (!report.metadata?.vulnerabilities && result.status !== 0) {
+      } else if (!isCompleteAuditReport(report)) {
         lastError =
           result.stderr?.trim() ||
           result.stdout?.trim() ||
@@ -68,11 +49,6 @@ function runNpmAudit(args, { optional = false } = {}) {
     if (attempt < MAX_ATTEMPTS) {
       console.warn(`npm audit attempt ${attempt}/${MAX_ATTEMPTS} failed (${lastError}); retrying...`);
     }
-  }
-
-  if (optional) {
-    console.warn(`Skipping non-blocking full audit note: ${lastError}`);
-    return {};
   }
 
   console.error(`Release audit failed: could not complete npm audit (${lastError}).`);

@@ -8,8 +8,8 @@ This directory holds the jpegli capacity GO/NO-GO harness and Hangul WebP/AVIF c
 
 ## Prerequisites
 
-- Node.js **20.20+** for bench execution (`sharp` 0.35). Root `package.json` `engines` matches this.
-- If your shell default is Node 18, `npm run bench:*` auto-reexecs via `scripts/bench/run.mjs` when `~/.nvm/versions/node/v20.20.2/bin/node` exists, or set `HWPX_OPT_NODE`.
+- Node.js **22.12+ (recommended 24.21 LTS)** for bench execution (`sharp` 0.35). Root `package.json` `engines` matches this.
+- If your shell default is older Node, `npm run bench:*` auto-reexecs via `scripts/bench/run.mjs` when `~/.nvm/versions/node/v24.21.0/bin/node` exists, or set `HWPX_OPT_NODE`.
 - Root `npm install` (provides `sharp` and `@hwpx-optimizer/core`).
 - External CLIs on PATH or via env vars (not npm dependencies):
 

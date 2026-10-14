@@ -9,6 +9,7 @@ export default defineConfig({
       "packages/**/*.test.ts",
       "apps/**/*.test.ts",
       "scripts/cli-portable/**/*.test.ts",
+      "scripts/lib/**/*.test.ts",
       "scripts/bench/**/*.test.ts"
     ],
     environment: "node"

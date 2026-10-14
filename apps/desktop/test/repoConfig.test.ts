@@ -33,9 +33,9 @@ describe("repository runtime and cleanup configuration", () => {
       engines?: { node?: string };
     };
 
-    expect(packageJson.engines?.node).toBe(">=20.20.0");
-    await expect(readFile(".nvmrc", "utf8")).resolves.toSatisfy((value) => value.trim() === "20.20.2");
-    await expect(readFile(".node-version", "utf8")).resolves.toSatisfy((value) => value.trim() === "20.20.2");
+    expect(packageJson.engines?.node).toBe(">=22.12.0");
+    await expect(readFile(".nvmrc", "utf8")).resolves.toSatisfy((value) => value.trim() === "24.21.0");
+    await expect(readFile(".node-version", "utf8")).resolves.toSatisfy((value) => value.trim() === "24.21.0");
   });
 
   it("keeps release packaging and local artifact cleanup explicit", async () => {

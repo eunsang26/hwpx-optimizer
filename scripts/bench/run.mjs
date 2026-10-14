@@ -10,16 +10,16 @@ function nodeMajor(version = process.versions.node) {
   return Number.parseInt(version.split(".")[0] ?? "0", 10);
 }
 
-function resolveNode20Bin() {
-  if (nodeMajor() >= 20) {
+function resolveNodeBin() {
+  if (nodeMajor() > 22 || (nodeMajor() === 22 && Number(process.versions.node.split(".")[1]) >= 12)) {
     return process.execPath;
   }
 
   const home = process.env.HOME ?? "";
   const candidates = [
     process.env.HWPX_OPT_NODE,
-    join(home, ".nvm/versions/node/v20.20.2/bin/node"),
-    join(home, ".nvm/versions/node/v20.20.0/bin/node")
+    join(home, ".nvm/versions/node/v24.21.0/bin/node"),
+    join(home, ".nvm/versions/node/v24.13.0/bin/node")
   ].filter(Boolean);
 
   for (const candidate of candidates) {
@@ -31,12 +31,12 @@ function resolveNode20Bin() {
   return null;
 }
 
-const nodeBin = resolveNode20Bin();
+const nodeBin = resolveNodeBin();
 if (!nodeBin) {
   console.error(
-    `HWPX bench requires Node >= 20.20.0 (current: ${process.version}).\n` +
-      "Fix: nvm use 20\n" +
-      "Or: export HWPX_OPT_NODE=/path/to/node20/bin/node"
+    `HWPX bench requires Node >= 22.12.0 (current: ${process.version}).\n` +
+      "Fix: nvm use\n" +
+      "Or: export HWPX_OPT_NODE=/path/to/node24/bin/node"
   );
   process.exit(1);
 }
