@@ -968,12 +968,7 @@ describe("runCli", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("startup sweep reaps stale 0-byte claim placeholders as well as leftover temp files, but leaves unrelated files alone", async () => {
-    // Finding 2a: an interrupted claim loop can leave a real 0-byte final-named
-    // file (created via `wx`), not just `*.tmp`; the sweep must remove both.
-    // Fix B: the sweep must not delete every 0-byte file in the out dir -- only
-    // files matching this tool's own output naming (or `*.tmp`) are eligible, so
-    // an unrelated 0-byte file left in a shared/input --out directory survives.
+  it("preserves unowned temp files and zero-byte files even when their names look like tool outputs", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const outDir = join(dir, "out");
     await mkdir(outDir, { recursive: true });
@@ -983,8 +978,8 @@ describe("runCli", () => {
 
     await runBatch(dir, { mode: "safe", out: outDir });
 
-    await expect(readFile(join(outDir, "stale.optimized.hwpx"))).rejects.toThrow();
-    await expect(readFile(join(outDir, "leftover.tmp"))).rejects.toThrow();
+    await expect(readFile(join(outDir, "stale.optimized.hwpx"))).resolves.toEqual(Buffer.alloc(0));
+    await expect(readFile(join(outDir, "leftover.tmp"), "utf8")).resolves.toBe("leftover");
     await expect(readFile(join(outDir, "keep-me.txt"))).resolves.toBeDefined();
     await rm(dir, { recursive: true, force: true });
   });

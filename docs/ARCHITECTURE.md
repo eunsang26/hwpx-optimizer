@@ -162,6 +162,8 @@ Commands:
 - `optimize`
 - `batch`
 
+Batch writes use a private `.hwpx-optimizer-batch.lock` workspace in the output folder. It contains staging files and a process ownership record; a second active batch targeting the same canonical folder is rejected. Recovery only removes recorded, unchanged zero-byte reservations belonging to an exited process, along with that private workspace. Generic `.tmp` files and unrecorded files are never swept. Unrecognized lock directories are preserved and reported for inspection.
+
 ## Desktop Boundary
 
 `apps/desktop/src/main/desktopService.ts`

@@ -12,9 +12,10 @@ import {
   version as coreVersion
 } from "@hwpx-optimizer/core";
 import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
-import { ACTION_CATALOG, optimizeByMode, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
+import { ACTION_CATALOG, optimizeByMode, parseActionList, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
 import type { OptimizationMode } from "./optimizeByMode.js";
 import { PathClaimRegistry } from "./pathClaims.js";
+import { BatchWorkspace } from "./batchWorkspace.js";
 import { WorkerPool } from "./workerPool.js";
 import type { OptimizeJob, OptimizeJobResult } from "./optimizeWorker.js";
 
@@ -199,7 +200,9 @@ function parseMaxInputBytes(value: string | undefined): number {
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error("--max-input-bytes must be a positive number.");
   }
-  return Math.floor(parsed);
+  const bytes = Math.floor(parsed);
+  if (bytes <= 0) throw new Error("--max-input-bytes must be at least one byte.");
+  return bytes;
 }
 
 function parseBatchTargetBytes(options: Record<string, string>): number | undefined {
@@ -310,29 +313,46 @@ export async function runBatch(
   }
   const outputDir = options.out ?? join(inputDir, "optimized");
   const overwrite = options.overwrite === "true";
-  await mkdir(outputDir, { recursive: true });
-  await sweepStaleTempFiles(outputDir);
   const batchTargetBytes = parseBatchTargetBytes(options);
+  const jobsRequested = parseBatchJobs(options.jobs);
+  parseTargetBytes(options);
+  parseMaxInputBytes(options["max-input-bytes"]);
+  parseActionList(options.actions);
 
   const files = (await readdir(inputDir, { withFileTypes: true }))
     .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name))
     .map((entry) => entry.name)
     .sort();
-  const inputPaths = files.map((file) => join(inputDir, file));
   if (batchTargetBytes !== undefined && files.length > batchTargetBytes) {
     throw new Error("--batch-target-bytes must allow at least one byte per HWPX file.");
   }
+  await mkdir(outputDir, { recursive: true });
+  const workspace = await BatchWorkspace.open(outputDir);
+  try {
+    return await runBatchInWorkspace(inputDir, outputDir, mode, overwrite, options, batchTargetBytes, jobsRequested, workspace);
+  } finally { await workspace.close(); }
+}
+
+async function runBatchInWorkspace(
+  inputDir: string, outputDir: string, mode: OptimizationMode, overwrite: boolean,
+  options: Record<string, string>, batchTargetBytes: number | undefined,
+  jobsRequested: number, workspace: BatchWorkspace
+): Promise<{ optimized: number; failed: number; reportPath: string }> {
+  // Enumerate after owned recovery, which can remove an interrupted claim
+  // placeholder when the output and input directories are the same.
+  const files = (await readdir(inputDir, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name)).map(entry => entry.name).sort();
+  const inputPaths = files.map(file => join(inputDir, file));
   const originalSizeByFile = await readBatchOriginalSizes(inputDir, files);
   const targetByFile = batchTargetBytes
     ? allocateBatchTargetBytes(files, originalSizeByFile, batchTargetBytes)
     : new Map<string, number>();
-  const jobsRequested = parseBatchJobs(options.jobs);
   const startedAt = Date.now();
 
   // Sequential claim pass: reserves each file's final output/report path
   // (atomically, via PathClaimRegistry) before any worker touches disk.
   // A claim/overlap failure here is per-file and does not abort the batch.
-  const claims = new PathClaimRegistry();
+  const claims = new PathClaimRegistry(claim => workspace.recordClaim(claim));
   const uncommittedClaimedPaths = new Set<string>();
   const results = new Array<BatchFileResult>(files.length);
   const jobDescriptors: OptimizeJob[] = [];
@@ -342,7 +362,9 @@ export async function runBatch(
   // an interrupt during claiming is handled too; cleanupOnSignal releases
   // whatever has been claimed so far via uncommittedClaimedPaths/jobMeta.
   let pool: WorkerPool<OptimizeJob, OptimizeJobResult> | undefined;
+  let interrupted = false;
   const cleanupOnSignal = async (code: number): Promise<void> => {
+    interrupted = true;
     try {
       if (pool) await pool.terminate();
     } catch {
@@ -355,6 +377,7 @@ export async function runBatch(
         rm(meta.tempReportPath, { force: true }).catch(() => {})
       ])
     );
+    await workspace.close().catch(() => {});
     process.exit(code);
   };
   const sigintHandler = (): void => {
@@ -368,6 +391,7 @@ export async function runBatch(
 
   try {
     for (let index = 0; index < files.length; index += 1) {
+      if (interrupted) return await new Promise<never>(() => {});
       const file = files[index];
       const sourcePath = inputPaths[index];
       const progressPrefix = `[${index + 1}/${files.length}] ${file}`;
@@ -395,8 +419,8 @@ export async function runBatch(
         }
 
         for (const claimedPath of claimedThisIteration) uncommittedClaimedPaths.add(claimedPath);
-        const tempOutputPath = `${outputPath}.tmp`;
-        const tempReportPath = `${reportPath}.tmp`;
+        const tempOutputPath = workspace.stagePath(`job-${index}.hwpx.tmp`);
+        const tempReportPath = workspace.stagePath(`job-${index}.report.json.tmp`);
         jobDescriptors.push({
           sourcePath,
           tempOutputPath,
@@ -427,6 +451,7 @@ export async function runBatch(
         execArgv: process.execArgv
       });
       const poolResults = await pool.run(jobDescriptors);
+      if (interrupted) return await new Promise<never>(() => {});
 
       for (let i = 0; i < jobMeta.length; i += 1) {
         const meta = jobMeta[i];
@@ -497,7 +522,7 @@ export async function runBatch(
         (result.status === "optimized" ? result.optimizedSize : originalSizeByFile.get(result.input) ?? 0),
       0
     );
-    const batchReportTmpPath = `${batchReportPath}.tmp`;
+    const batchReportTmpPath = workspace.stagePath("batch-report.json.tmp");
     await writeFile(
       batchReportTmpPath,
       JSON.stringify(
@@ -532,6 +557,7 @@ export async function runBatch(
   } finally {
     process.removeListener("SIGINT", sigintHandler);
     process.removeListener("SIGTERM", sigtermHandler);
+    await pool?.terminate();
   }
 }
 
@@ -545,44 +571,6 @@ function resolveOptimizeWorkerUrl(): URL {
   const isSourceRun = import.meta.url.endsWith(".ts");
   const workerFile = isSourceRun ? "./optimizeWorkerEntry.mjs" : "./optimizeWorker.js";
   return new URL(workerFile, import.meta.url);
-}
-
-async function sweepStaleTempFiles(outputDir: string): Promise<void> {
-  let entries: string[];
-  try {
-    entries = await readdir(outputDir);
-  } catch {
-    return;
-  }
-  await Promise.all(
-    entries.map(async (name) => {
-      const fullPath = join(outputDir, name);
-      if (name.endsWith(".tmp")) {
-        await rm(fullPath, { force: true }).catch(() => {});
-        return;
-      }
-      // A claim creates a real final-named 0-byte file via `wx` (see pathClaims.ts).
-      // An interrupt during the claim loop can leave one of these behind; the next
-      // run's sweep must reap it too, or nextAvailablePath permanently shifts past
-      // it. A real optimized HWPX/zip or report JSON produced by this tool is never
-      // 0 bytes, so removing a 0-byte file here is safe -- but only if it also
-      // matches this tool's own output naming. `--out` may point at a shared or
-      // the input directory (the sweep runs before input enumeration when
-      // out==inputDir), so an unrelated 0-byte file -- or a degenerate 0-byte
-      // *.hwpx input -- must never be swept.
-      if (!name.endsWith(".optimized.hwpx") && !name.endsWith(".optimized.hwpx.report.json")) {
-        return;
-      }
-      try {
-        const stats = await stat(fullPath);
-        if (stats.isFile() && stats.size === 0) {
-          await rm(fullPath, { force: true }).catch(() => {});
-        }
-      } catch {
-        // ignore races / non-files
-      }
-    })
-  );
 }
 
 type BatchJobMeta = {
