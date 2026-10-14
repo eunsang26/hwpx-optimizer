@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { constants, realpathSync } from "node:fs";
+import { constants, realpathSync, statSync } from "node:fs";
 import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
@@ -50,7 +50,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const reportPath =
         options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       assertDoesNotTargetInput(reportPath, inputPath, "report");
-      await writeFile(reportPath, JSON.stringify(report, null, 2));
+      await writeStandaloneArtifact(reportPath, JSON.stringify(report, null, 2), options.overwrite === "true");
       console.log(`Analyzed ${inputPath}`);
       printAnalysisSummary(inputPath, report);
       console.log(`Report: ${reportPath}`);
@@ -67,7 +67,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const reportPath =
         options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       assertDoesNotTargetInput(reportPath, inputPath, "report");
-      await writeFile(reportPath, text);
+      await writeStandaloneArtifact(reportPath, text, options.overwrite === "true");
       console.log(text);
       console.log(`Report: ${reportPath}`);
       return 0;
@@ -242,10 +242,30 @@ function assertDoesNotTargetInput(targetPath: string, inputPath: string, kind: "
 function pathsReferToSameFile(left: string, right: string): boolean {
   if (resolve(left) === resolve(right)) return true;
   try {
-    return realpathSync(left) === realpathSync(right);
-  } catch {
+    if (realpathSync(left) === realpathSync(right)) return true;
+    const leftIdentity = statSync(left, { bigint: true });
+    const rightIdentity = statSync(right, { bigint: true });
+    return leftIdentity.dev === rightIdentity.dev && leftIdentity.ino === rightIdentity.ino;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
     return false;
   }
+}
+
+async function writeStandaloneArtifact(path: string, content: string, overwrite: boolean): Promise<void> {
+  if (!overwrite) {
+    await writeFile(path, content, { flag: "wx" });
+    return;
+  }
+  // Replace a directory entry, never truncate its target inode. If a link
+  // appears after the input-identity check, the original still stays intact.
+  const temporary = temporaryPath(path);
+  try {
+    await assertArtifactTargetIsWritable(path);
+    await writeFile(temporary, content, { flag: "wx" });
+    await rename(temporary, path);
+  } finally { await rm(temporary, { force: true }); }
 }
 
 function printUsage(): void {

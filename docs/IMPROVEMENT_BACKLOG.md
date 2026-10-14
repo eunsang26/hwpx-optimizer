@@ -11,7 +11,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-001 | P1 | XML 본문 공백과 숫자 문자열 보존 | core | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-002 | P1 | 투명도 보존과 정확 이미지 중복 판정 | core | L | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-003 | P1 | 배치 임시파일 정리의 소유권 보장 | CLI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-004 | P1 | CLI 하드링크 원본 보호 | CLI | M | 없음 | 대기 | 미정 |
+| OPT-004 | P1 | CLI 하드링크 원본 보호 | CLI | M | 없음 | 검증 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-005 | P1 | 데스크톱 모든 입력 파일 보호 | desktop | M | OPT-004 정책 | 대기 | 미정 |
 | OPT-006 | P1 | 본문과 이미지 배치 보존 검증 | core | L | OPT-001, OPT-002 | 대기 | 미정 |
 | OPT-007 | P2 | 미해결 binary 리소스 ID 검출 | core | M | 없음 | 대기 | 미정 |
@@ -73,9 +73,11 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 대상: CLI `pathsReferToSameFile`, analyze/report/optimize/batch 저장 경계.
 
-- [ ] 경로·심볼릭링크·하드링크의 동일성을 검사해 원본을 보호한다.
-- [ ] `analyze --report <원본 하드링크> --overwrite`와 `report`가 쓰기 전에 거부된다.
+- [x] 경로·심볼릭링크·하드링크의 동일성을 검사해 원본을 보호한다.
+- [x] `analyze --report <원본 하드링크> --overwrite`와 `report`가 쓰기 전에 거부된다.
 - [ ] Linux와 Windows에서 지원되는 동일성 확인 및 원본 해시 불변 테스트가 통과한다.
+
+Linux 검증 기록: 2026-10-14 Node 24.13.0. 대상 3개 파일·72개 테스트 통과. 전체 66개 파일·474개 테스트 통과·1개 건너뛰기, 타입 검사·빌드 통과. 경로 정규화와 realpath에 파일 dev/inode 비교를 추가했다. 단독 보고서는 non-overwrite에서 배타적으로 생성하고 overwrite에서 임시파일을 승격해 링크 대상 inode를 직접 잘라 쓰지 않는다. analyze/report/optimize/batch의 하드링크 및 기존 심볼릭링크를 확인했다. Windows CI 결과 확인 후 완료로 변경한다.
 
 ### OPT 005 데스크톱 입력 보호
 
