@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
 import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
@@ -55,7 +55,11 @@ export type DesktopOptimizeInput = {
   targetBytes?: number;
   jpegQuality?: number;
   maxInputBytes?: number;
+  /** Trusted main-process selections, retained across document worker restarts. */
+  protectedInputs?: DesktopProtectedInput[];
 };
+
+export type DesktopProtectedInput = { filePath: string; dev: string; ino: string; birthtimeNs: string; ctimeNs: string };
 
 export type DesktopOptimizeResult = {
   outputPath: string;
@@ -94,10 +98,22 @@ type CachedInput = {
   size: number;
   mtimeMs: number;
   data: Buffer;
+  identity: string;
 };
 
 let coreModulePromise: Promise<CoreModule> | undefined;
 const cachedInputs = new Map<string, CachedInput>();
+const protectedInputs = new Map<string, DesktopProtectedInput>();
+
+export async function registerDesktopInput(filePath: string): Promise<DesktopProtectedInput> {
+  const canonicalPath = await realpath(filePath);
+  const info = await stat(canonicalPath, { bigint: true });
+  if (!info.isFile()) throw new Error("Selected HWPX input must be a regular file.");
+  const identity = { filePath: canonicalPath, dev: String(info.dev), ino: String(info.ino),
+    birthtimeNs: String(info.birthtimeNs), ctimeNs: String(info.ctimeNs) };
+  protectedInputs.set(canonicalPath, identity);
+  return identity;
+}
 
 async function loadCoreModule(): Promise<CoreModule> {
   coreModulePromise ??= import("@hwpx-optimizer/core").catch((error: unknown) => {
@@ -157,6 +173,10 @@ export async function optimizeDesktopFile(
     reportPath = `${outputPath}.report.json`;
     reportContent = JSON.stringify(result.report, null, 2);
   }
+  await assertArtifactsDoNotTargetInputs(
+    [outputPath, ...(reportPath ? [reportPath] : [])],
+    [...protectedInputs.values(), ...(input.protectedInputs ?? [])]
+  );
   onProgress?.({ percent: 95, item: "Writing optimized document" });
   await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent);
 
@@ -365,17 +385,36 @@ export async function assertSupportedLocalInput(
 
 async function readSupportedInput(filePath: string, options: { maxInputBytes?: number } = {}): Promise<CachedInput> {
   const snapshot = await statSupportedLocalInput(filePath, options);
+  const protectedInput = await registerDesktopInput(filePath);
+  const identity = `${protectedInput.dev}:${protectedInput.ino}:${protectedInput.birthtimeNs}:${protectedInput.ctimeNs}`;
   const cached = cachedInputs.get(filePath);
-  if (cached && cached.size === snapshot.size && cached.mtimeMs === snapshot.mtimeMs) {
+  if (cached && cached.size === snapshot.size && cached.mtimeMs === snapshot.mtimeMs && cached.identity === identity) {
     cachedInputs.delete(filePath);
     cachedInputs.set(filePath, cached);
     return cached;
   }
   const data = await readFile(filePath);
-  const input = { filePath, size: snapshot.size, mtimeMs: snapshot.mtimeMs, data };
+  const input = { filePath, size: snapshot.size, mtimeMs: snapshot.mtimeMs, data, identity };
   cachedInputs.set(filePath, input);
   pruneCachedInputs();
   return input;
+}
+
+async function assertArtifactsDoNotTargetInputs(paths: string[], inputs: DesktopProtectedInput[]): Promise<void> {
+  const inputPaths = new Set(inputs.map(input => resolve(input.filePath)));
+  const identities = new Set(inputs.map(input => `${input.dev}:${input.ino}:${input.birthtimeNs}`));
+  for (const path of paths) {
+    const canonicalName = join(await realpath(dirname(path)), basename(path));
+    let conflicts = inputPaths.has(canonicalName);
+    try {
+      const canonicalTarget = await realpath(path);
+      const info = await stat(canonicalTarget, { bigint: true });
+      conflicts ||= inputPaths.has(canonicalTarget) || identities.has(`${info.dev}:${info.ino}:${info.birthtimeNs}`);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    if (conflicts) throw new Error(`Refusing to overwrite an original selected input file: ${path}`);
+  }
 }
 
 function pruneCachedInputs(): void {

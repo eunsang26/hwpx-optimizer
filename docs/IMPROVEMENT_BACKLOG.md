@@ -11,8 +11,8 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-001 | P1 | XML 본문 공백과 숫자 문자열 보존 | core | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-002 | P1 | 투명도 보존과 정확 이미지 중복 판정 | core | L | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-003 | P1 | 배치 임시파일 정리의 소유권 보장 | CLI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-004 | P1 | CLI 하드링크 원본 보호 | CLI | M | 없음 | 검증 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-005 | P1 | 데스크톱 모든 입력 파일 보호 | desktop | M | OPT-004 정책 | 대기 | 미정 |
+| OPT-004 | P1 | CLI 하드링크 원본 보호 | CLI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-005 | P1 | 데스크톱 모든 입력 파일 보호 | desktop | M | OPT-004 정책 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-006 | P1 | 본문과 이미지 배치 보존 검증 | core | L | OPT-001, OPT-002 | 대기 | 미정 |
 | OPT-007 | P2 | 미해결 binary 리소스 ID 검출 | core | M | 없음 | 대기 | 미정 |
 | OPT-008 | P2 | safe 폰트와 OLE 삭제 금지 | core | S | 없음 | 대기 | 미정 |
@@ -33,6 +33,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 대기 | Codex |
 | OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 대기 | Codex |
 | OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 대기 | Codex |
+| OPT-026 | P1 | sharp 런타임 보안 패치와 배포 검증 | core, packaging | M | 없음 | 대기 | Codex |
 
 ## 작업별 완료 기준
 
@@ -75,17 +76,19 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 - [x] 경로·심볼릭링크·하드링크의 동일성을 검사해 원본을 보호한다.
 - [x] `analyze --report <원본 하드링크> --overwrite`와 `report`가 쓰기 전에 거부된다.
-- [ ] Linux와 Windows에서 지원되는 동일성 확인 및 원본 해시 불변 테스트가 통과한다.
+- [x] Linux와 Windows에서 지원되는 동일성 확인 및 원본 해시 불변 테스트가 통과한다.
 
-Linux 검증 기록: 2026-10-14 Node 24.13.0. 대상 3개 파일·72개 테스트 통과. 전체 66개 파일·474개 테스트 통과·1개 건너뛰기, 타입 검사·빌드 통과. 경로 정규화와 realpath에 파일 dev/inode 비교를 추가했다. 단독 보고서는 non-overwrite에서 배타적으로 생성하고 overwrite에서 임시파일을 승격해 링크 대상 inode를 직접 잘라 쓰지 않는다. analyze/report/optimize/batch의 하드링크 및 기존 심볼릭링크를 확인했다. Windows CI 결과 확인 후 완료로 변경한다.
+검증 기록: 2026-10-14 Linux/Node 24.13.0 및 [Windows/Node 20.20.2 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38521737761). 대상 3개 파일·72개 테스트 및 두 OS의 전체 66개 파일·474개 테스트 통과·1개 건너뛰기, 타입 검사·빌드 통과. 경로 정규화와 realpath에 파일 dev/inode 비교를 추가했다. 단독 보고서는 non-overwrite에서 배타적으로 생성하고 overwrite에서 임시파일을 승격해 링크 대상 inode를 직접 잘라 쓰지 않는다. analyze/report/optimize/batch의 하드링크 및 기존 심볼릭링크를 확인했다. Windows 릴리즈 실행 전체는 별도 sharp 의존성 audit에서 실패했으며 OPT-026으로 추적한다.
 
 ### OPT 005 데스크톱 입력 보호
 
 대상: `main.ts` 입력 등록, `desktopService.ts` 출력 저장.
 
-- [ ] 생성 결과와 현재 실행에서 선택한 모든 입력의 파일 동일성을 비교한다.
-- [ ] `preventOverwrite: false`에서도 입력 원본은 보호한다.
-- [ ] 다른 폴더의 같은 이름, 이미 최적화된 입력, 기존 output 하위 폴더의 입력을 검증한다.
+- [x] 생성 결과와 현재 실행에서 선택한 모든 입력의 파일 동일성을 비교한다.
+- [x] `preventOverwrite: false`에서도 입력 원본은 보호한다.
+- [x] 다른 폴더의 같은 이름, 이미 최적화된 입력, 기존 output 하위 폴더의 입력을 검증한다.
+
+검증 기록: 2026-10-14 Linux/Node 24.13.0. 데스크톱 대상 3개 파일·37개 테스트, 전체 67개 파일·481개 테스트 통과·1개 건너뛰기. 타입 검사·빌드·Electron 스모크 통과. main이 선택 입력의 정규 경로와 dev/inode/생성 시각을 보유하고 worker에 신뢰된 목록을 전달한다. 서비스는 이전 분석 입력도 기억하며 문서와 보고서 저장 전에 경로/파일 동일성을 검사한다. worker 재생성과 미선택 생성 결과 덮어쓰기 허용을 별도로 확인했다. 입력 캐시는 inode·생성/변경 시각이 달라지면 재사용하지 않는다.
 
 ### OPT 006 문서 보존 verifier
 
@@ -262,6 +265,15 @@ Linux 검증 기록: 2026-10-14 Node 24.13.0. 대상 3개 파일·72개 테스�
 - [ ] 최소 지원 창 크기와 확대 상태에서 주요 행동과 내용이 잘리거나 겹치지 않는다.
 - [ ] 텍스트 대비·클릭 영역·설정 레이블·표와 긴 파일명의 가독성을 확인한다.
 - [ ] 변경 후 실제 화면을 다시 캡처해 확인하고 시각 검증 범위를 기록한다.
+
+### OPT 026 sharp 보안 패치
+
+2026-10-14 릴리즈 audit에서 `sharp` 높음 등급 의존성 보고를 확인했다. [libheif advisory](https://github.com/advisories/GHSA-rgj7-g3m4-5g8c) 및 [librsvg advisory](https://github.com/advisories/GHSA-wq5f-xc86-pv6w)에 대응하는 [sharp 0.35.5](https://github.com/lovell/sharp/releases/tag/v0.35.5)를 검증한다.
+
+- [ ] root·workspace·패키징 pin과 lockfile을 수정 버전으로 통일한다.
+- [ ] production audit가 통과하고 문서 보존·품질·용량 회귀 테스트를 통과한다.
+- [ ] Linux 빌드·Electron 스모크 및 Windows CLI/native 배포 실행을 검증한다.
+- [ ] 실제로 확인한 런타임과 남은 개발 도구 advisory를 문서에 반영한다.
 
 ## 완료와 갱신 규칙
 

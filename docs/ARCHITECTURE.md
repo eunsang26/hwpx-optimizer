@@ -176,6 +176,8 @@ The desktop file service is the testable boundary for:
 - Writing optimized HWPX files and reports.
 - Preventing overwrite when configured.
 
+Selected inputs are protected even when output overwrite is enabled. The main process keeps canonical input paths and filesystem identities in memory and forwards them with each optimization request, retaining protection after document worker restarts. The service checks document and report destinations before writing and keeps previously analyzed input identities separate from its bounded input-buffer cache. Generated results can be overwritten only when they have not subsequently been selected as inputs.
+
 `apps/desktop/src/main.ts` owns Electron window and IPC wiring. `apps/desktop/src/preload.ts` exposes a narrow bridge to the renderer. `apps/desktop/src/renderer.ts` owns DOM updates and user interaction.
 
 The runtime preload script is copied from `apps/desktop/src/preload.cjs` so Electron loads a CommonJS preload file reliably under the app's ESM package settings. `apps/desktop/src/preload.ts` remains the TypeScript API shape used by renderer code.

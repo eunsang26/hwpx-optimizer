@@ -17,11 +17,13 @@ import { Worker } from "node:worker_threads";
 import {
   normalizeDesktopSettings,
   persistentDesktopSettingsPatch,
+  registerDesktopInput,
   previewImageDiffs,
   verifyDesktopFile,
   writeDesktopBatchReport
 } from "./main/desktopService.js";
 import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
+import type { DesktopProtectedInput } from "./main/desktopService.js";
 import type { DesktopSettings, DesktopSettingsPatch, OptimizationMode } from "./main/desktopService.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -47,6 +49,7 @@ const pendingWorkerRequests = new Map<
   }
 >();
 const allowedInputPaths = new Set<string>();
+const protectedInputIdentities = new Map<string, DesktopProtectedInput>();
 const allowedOutputDirectories = new Set<string>();
 const allowedGeneratedPaths = new Set<string>();
 let settingsSaveQueue: Promise<void> = Promise.resolve();
@@ -242,7 +245,8 @@ function registerIpc(): void {
           : undefined;
         const settings = await loadSettings();
         const effectiveSettings = outputDirectory ? { ...settings, saveNextToOriginal: false } : settings;
-        const result = await runOptimizeWorker({ ...input, filePath, outputDirectory, settings: effectiveSettings }, (progress) => {
+        const result = await runOptimizeWorker({ ...input, filePath, outputDirectory, settings: effectiveSettings,
+          protectedInputs: [...protectedInputIdentities.values()] }, (progress) => {
           mainWindow?.webContents.send("hwpx:optimize-progress", progress);
         });
         await registerGeneratedPath(result.outputPath);
@@ -382,6 +386,7 @@ async function registerAllowedInputPath(filePath: string): Promise<string> {
     throw new Error("HWPX 파일만 선택할 수 있습니다.");
   }
   allowedInputPaths.add(normalized);
+  protectedInputIdentities.set(normalized, await registerDesktopInput(normalized));
   allowedOutputDirectories.add(await normalizeExistingDirectoryPath(dirname(normalized)));
   return normalized;
 }
@@ -1311,6 +1316,7 @@ function runOptimizeWorker(
     targetBytes?: number;
     jpegQuality?: number;
     settings: DesktopSettings;
+    protectedInputs: DesktopProtectedInput[];
   },
   onProgress: (progress: { percent: number; item: string }) => void
 ): Promise<DesktopOptimizeResult> {
@@ -1422,6 +1428,7 @@ type DocumentWorkerRequestInput =
         targetBytes?: number;
         jpegQuality?: number;
         settings: DesktopSettings;
+        protectedInputs: DesktopProtectedInput[];
       };
     };
 
