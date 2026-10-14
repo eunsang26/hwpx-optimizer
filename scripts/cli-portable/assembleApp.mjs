@@ -204,11 +204,13 @@ export async function assembleApp({ repoRoot, appRoot, npmCacheDir }) {
 
   await copyWorkspacePackage(repoRoot, appRoot, "cli");
   await copyWorkspacePackage(repoRoot, appRoot, "core");
+  await copyWorkspacePackage(repoRoot, appRoot, "io");
   await pruneSharpVariants(appRoot);
 
   for (const root of [
     join(appRoot, "cli"),
     join(appRoot, "core"),
+    join(appRoot, "io"),
     join(appRoot, "node_modules")
   ]) {
     await pruneGeneratedFiles(root);

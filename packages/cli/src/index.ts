@@ -15,6 +15,8 @@ import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
 import { ACTION_CATALOG, optimizeByMode, parseActionList, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
 import type { OptimizationMode } from "./optimizeByMode.js";
 import { PathClaimRegistry } from "./pathClaims.js";
+import { removeOwnedArtifact, writeStagedFile } from "@hwpx-optimizer/io";
+import type { OwnedArtifact } from "@hwpx-optimizer/io";
 import { BatchWorkspace } from "./batchWorkspace.js";
 import { WorkerPool } from "./workerPool.js";
 import type { OptimizeJob, OptimizeJobResult } from "./optimizeWorker.js";
@@ -255,7 +257,16 @@ function pathsReferToSameFile(left: string, right: string): boolean {
 
 async function writeStandaloneArtifact(path: string, content: string, overwrite: boolean): Promise<void> {
   if (!overwrite) {
-    await writeFile(path, content, { flag: "wx" });
+    const claims = new PathClaimRegistry();
+    let stage: OwnedArtifact | undefined;
+    try {
+      await claims.claimExact(path);
+      stage = await writeStagedFile(temporaryPath(path), content);
+      await claims.publish(stage.path, path);
+    } finally {
+      if (stage) await removeOwnedArtifact(stage);
+      await claims.releaseAll();
+    }
     return;
   }
   // Replace a directory entry, never truncate its target inode. If a link
@@ -418,8 +429,8 @@ async function runBatchInWorkspace(
       const claimedThisIteration: string[] = [];
       try {
         const requestedOutputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
-        // Assert before claiming (before the wx open) so a doomed job never
-        // creates a stray placeholder file for a path we're about to reject.
+        // Assert before reserving a name so a rejected input alias never
+        // leaves an unnecessary reservation.
         assertDoesNotTargetAnyInput(requestedOutputPath, inputPaths, "output");
         let outputPath: string;
         if (overwrite) {
@@ -499,7 +510,7 @@ async function runBatchInWorkspace(
           continue;
         }
 
-        const commit = await commitBatchJob(meta);
+        const commit = await commitBatchJob(meta, claims);
         if (!commit.ok) {
           await cleanupFailedJob(meta, claims, uncommittedClaimedPaths);
           results[meta.index] = { input: meta.file, status: "failed", stage: "write-output", error: commit.error };
@@ -528,7 +539,8 @@ async function runBatchInWorkspace(
     const completedResults = results.filter((result): result is BatchFileResult => Boolean(result));
 
     const requestedBatchReportPath = join(outputDir, "batch-report.json");
-    const batchReportPath = overwrite ? requestedBatchReportPath : await nextAvailablePath(requestedBatchReportPath);
+    assertDoesNotTargetAnyInput(requestedBatchReportPath, inputPaths, "report");
+    const batchReportPath = overwrite ? requestedBatchReportPath : await claims.claim(await nextAvailablePath(requestedBatchReportPath));
     const optimizedCount = completedResults.filter((result) => result.status === "optimized").length;
     const failedCount = completedResults.filter((result) => result.status === "failed").length;
     const totalSavedBytes = completedResults.reduce(
@@ -568,7 +580,8 @@ async function runBatchInWorkspace(
         2
       )
     );
-    await rename(batchReportTmpPath, batchReportPath);
+    if (overwrite) await rename(batchReportTmpPath, batchReportPath);
+    else await claims.publish(batchReportTmpPath, batchReportPath);
     return {
       optimized: optimizedCount,
       failed: failedCount,
@@ -606,21 +619,19 @@ type BatchJobMeta = {
   claimed: boolean;
 };
 
-async function commitBatchJob(meta: BatchJobMeta): Promise<{ ok: true } | { ok: false; error: string }> {
+async function commitBatchJob(meta: BatchJobMeta, claims: PathClaimRegistry): Promise<{ ok: true } | { ok: false; error: string }> {
+  let outputArtifact: OwnedArtifact | undefined;
   try {
-    await rename(meta.tempOutputPath, meta.outputPath);
+    if (meta.claimed) outputArtifact = await claims.publish(meta.tempOutputPath, meta.outputPath);
+    else await rename(meta.tempOutputPath, meta.outputPath);
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
   try {
-    await rename(meta.tempReportPath, meta.reportPath);
+    if (meta.claimed) await claims.publish(meta.tempReportPath, meta.reportPath);
+    else await rename(meta.tempReportPath, meta.reportPath);
   } catch (error) {
-    if (meta.claimed) {
-      // Non-overwrite mode: the final path was only a 0-byte PathClaimRegistry
-      // placeholder before the rename above, so rolling the output back to temp
-      // (for cleanupFailedJob to release/unlink) loses nothing real.
-      await rename(meta.outputPath, meta.tempOutputPath).catch(() => {});
-    }
+    if (outputArtifact) await removeOwnedArtifact(outputArtifact);
     // --overwrite mode: outputPath now holds the freshly written, valid,
     // non-empty optimized file -- the rename above already atomically replaced
     // whatever was there before. Per spec (§7), --overwrite has a weaker
@@ -868,17 +879,25 @@ async function writeOptimizationArtifacts(
   options: { exclusive?: boolean } = {}
 ): Promise<void> {
   if (options.exclusive) {
-    // Non-overwriting mode: the target names were chosen because they did not
-    // exist, but a file could appear in the gap before we write. Create them with
-    // O_EXCL ("wx") so we fail loudly instead of clobbering that file via rename.
-    await assertArtifactTargetIsWritable(outputPath);
-    await assertArtifactTargetIsWritable(reportPath);
-    await writeFile(outputPath, output, { flag: "wx" });
+    const claims = new PathClaimRegistry();
+    const stages: OwnedArtifact[] = [];
+    let reportArtifact: OwnedArtifact | undefined;
     try {
-      await writeFile(reportPath, reportContent, { flag: "wx" });
+      // Obtain both names before writing either result.
+      await claims.claimExact(outputPath);
+      await claims.claimExact(reportPath);
+      const outputStage = await writeStagedFile(temporaryPath(outputPath), output);
+      stages.push(outputStage);
+      const reportStage = await writeStagedFile(temporaryPath(reportPath), reportContent);
+      stages.push(reportStage);
+      reportArtifact = await claims.publish(reportStage.path, reportPath);
+      await claims.publish(outputStage.path, outputPath);
     } catch (error) {
-      await rm(outputPath, { force: true });
+      if (reportArtifact) await removeOwnedArtifact(reportArtifact);
       throw error;
+    } finally {
+      await Promise.all(stages.map(removeOwnedArtifact));
+      await claims.releaseAll();
     }
     return;
   }

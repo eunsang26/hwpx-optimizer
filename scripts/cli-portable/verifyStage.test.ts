@@ -35,6 +35,14 @@ async function buildValidStage(stageRoot: string): Promise<void> {
   await mkdir(cliPkg, { recursive: true });
   await writeJson(join(cliPkg, "package.json"), { type: "module" });
 
+  const ioDist = join(appRoot, "io", "dist");
+  await mkdir(ioDist, { recursive: true });
+  await writeFile(join(ioDist, "index.js"), "export {};\n");
+  const ioPkg = join(appRoot, "node_modules", "@hwpx-optimizer", "io");
+  await mkdir(join(ioPkg, "dist"), { recursive: true });
+  await writeJson(join(ioPkg, "package.json"), { type: "module" });
+  await writeFile(join(ioPkg, "dist", "index.js"), "export {};\n");
+
   const sharpLib = join(appRoot, "node_modules", "@img", "sharp-win32-x64", "lib");
   await mkdir(sharpLib, { recursive: true });
   const sourceSharpLib = join(process.cwd(), "node_modules", "@img", "sharp-win32-x64", "lib");

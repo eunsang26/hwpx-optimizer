@@ -2,6 +2,8 @@ import { constants } from "node:fs";
 import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
+import { PathClaimRegistry, removeOwnedArtifact, writeStagedFile } from "@hwpx-optimizer/io";
+import type { OwnedArtifact } from "@hwpx-optimizer/io";
 import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
 import type { DesktopImagePreviewInput } from "../shared/imagePreview.js";
@@ -159,7 +161,7 @@ export async function optimizeDesktopFile(
   source = undefined;
 
   onProgress?.({ percent: 88, item: "Preparing output file" });
-  const outputPath = await nextOutputPath(
+  let outputPath = await nextOutputPath(
     input.filePath,
     input.outputDirectory,
     input.settings,
@@ -167,51 +169,62 @@ export async function optimizeDesktopFile(
   );
   await mkdir(dirname(outputPath), { recursive: true });
 
+  const claims = input.settings.preventOverwrite ? new PathClaimRegistry() : undefined;
   let reportPath: string | undefined;
-  let reportContent: string | undefined;
-  if (input.settings.saveReport) {
-    onProgress?.({ percent: 92, item: "Preparing JSON report" });
-    reportPath = `${outputPath}.report.json`;
-    reportContent = JSON.stringify(result.report, null, 2);
-  }
-  await assertArtifactsDoNotTargetInputs(
-    [outputPath, ...(reportPath ? [reportPath] : [])],
-    [...protectedInputs.values(), ...(input.protectedInputs ?? [])]
-  );
-  onProgress?.({ percent: 95, item: "Writing optimized document" });
-  await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent);
+  try {
+    if (claims) outputPath = await claims.claim(outputPath, "dash");
+    let reportContent: string | undefined;
+    if (input.settings.saveReport) {
+      onProgress?.({ percent: 92, item: "Preparing JSON report" });
+      reportPath = `${outputPath}.report.json`;
+      await assertArtifactTargetIsWritable(reportPath);
+      if (claims) reportPath = await claims.claim(reportPath, "dash");
+      reportContent = JSON.stringify(result.report, null, 2);
+    }
+    await assertArtifactsDoNotTargetInputs(
+      [outputPath, ...(reportPath ? [reportPath] : [])],
+      [...protectedInputs.values(), ...(input.protectedInputs ?? [])]
+    );
+    onProgress?.({ percent: 95, item: "Writing optimized document" });
+    await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent, claims);
 
-  onProgress?.({ percent: 99, item: "Finalizing optimized document" });
-  return { outputPath, reportPath, report: result.report };
+    onProgress?.({ percent: 99, item: "Finalizing optimized document" });
+    return { outputPath, reportPath, report: result.report };
+  } finally { await claims?.releaseAll(); }
 }
 
 export async function writeDesktopBatchReport(input: DesktopBatchReportInput): Promise<{ reportPath: string }> {
   assertValidBatchReportInput(input);
   await mkdir(input.reportDirectory, { recursive: true });
   const requestedReportPath = join(input.reportDirectory, "batch-report.json");
-  const reportPath = input.settings.preventOverwrite ? await nextAvailableReportPath(requestedReportPath) : requestedReportPath;
-  const totalOriginalSize = input.items.reduce((sum, item) => sum + (item.originalSize ?? 0), 0);
-  const totalOptimizedSize = input.items.reduce(
-    (sum, item) => sum + (item.status === "done" ? item.optimizedSize ?? 0 : item.originalSize ?? 0),
-    0
-  );
-  const incompleteCount = input.items.filter((item) => item.status === "failed" || item.status === "cancelled").length;
-  const report = {
-    mode: input.mode,
-    generatedAt: new Date().toISOString(),
-    totals: {
-      done: input.items.filter((item) => item.status === "done").length,
-      failed: input.items.filter((item) => item.status === "failed").length,
-      cancelled: input.items.filter((item) => item.status === "cancelled").length,
-      savedBytes: input.items.reduce((sum, item) => sum + (item.savedBytes ?? 0), 0),
-      totalOriginalSize,
-      totalOptimizedSize,
-      ...createBatchTargetFields(totalOriginalSize, totalOptimizedSize, input.batchTargetBytes, incompleteCount)
-    },
-    items: input.items
-  };
-  await writeJsonArtifact(reportPath, JSON.stringify(report, null, 2));
-  return { reportPath };
+  const preferredReportPath = input.settings.preventOverwrite ? await nextAvailableReportPath(requestedReportPath) : requestedReportPath;
+  const claims = input.settings.preventOverwrite ? new PathClaimRegistry() : undefined;
+  try {
+    const reportPath = claims ? await claims.claim(preferredReportPath, "dash") : preferredReportPath;
+    await assertArtifactsDoNotTargetInputs([reportPath], [...protectedInputs.values()]);
+    const totalOriginalSize = input.items.reduce((sum, item) => sum + (item.originalSize ?? 0), 0);
+    const totalOptimizedSize = input.items.reduce(
+      (sum, item) => sum + (item.status === "done" ? item.optimizedSize ?? 0 : item.originalSize ?? 0),
+      0
+    );
+    const incompleteCount = input.items.filter((item) => item.status === "failed" || item.status === "cancelled").length;
+    const report = {
+      mode: input.mode,
+      generatedAt: new Date().toISOString(),
+      totals: {
+        done: input.items.filter((item) => item.status === "done").length,
+        failed: input.items.filter((item) => item.status === "failed").length,
+        cancelled: input.items.filter((item) => item.status === "cancelled").length,
+        savedBytes: input.items.reduce((sum, item) => sum + (item.savedBytes ?? 0), 0),
+        totalOriginalSize,
+        totalOptimizedSize,
+        ...createBatchTargetFields(totalOriginalSize, totalOptimizedSize, input.batchTargetBytes, incompleteCount)
+      },
+      items: input.items
+    };
+    await writeJsonArtifact(reportPath, JSON.stringify(report, null, 2), claims);
+    return { reportPath };
+  } finally { await claims?.releaseAll(); }
 }
 
 function assertValidBatchReportInput(input: DesktopBatchReportInput): void {
@@ -447,41 +460,46 @@ async function writeOptimizationArtifacts(
   outputPath: string,
   output: Buffer,
   reportPath: string | undefined,
-  reportContent: string | undefined
+  reportContent: string | undefined,
+  claims?: PathClaimRegistry
 ): Promise<void> {
   const outputTmpPath = temporaryPath(outputPath);
   const reportTmpPath = reportPath && reportContent ? temporaryPath(reportPath) : undefined;
-  let reportPromoted = false;
+  const stages: OwnedArtifact[] = [];
+  let reportArtifact: OwnedArtifact | undefined;
   try {
-    await assertArtifactTargetIsWritable(outputPath);
-    if (reportPath) await assertArtifactTargetIsWritable(reportPath);
-    await writeFile(outputTmpPath, output);
-    if (reportPath && reportContent && reportTmpPath) {
-      await writeFile(reportTmpPath, reportContent);
-      await rename(reportTmpPath, reportPath);
-      reportPromoted = true;
+    if (!claims) {
+      await assertArtifactTargetIsWritable(outputPath);
+      if (reportPath) await assertArtifactTargetIsWritable(reportPath);
     }
-    await rename(outputTmpPath, outputPath);
+    const outputStage = await writeStagedFile(outputTmpPath, output);
+    stages.push(outputStage);
+    if (reportPath && reportContent && reportTmpPath) {
+      const reportStage = await writeStagedFile(reportTmpPath, reportContent);
+      stages.push(reportStage);
+      if (claims) reportArtifact = await claims.publish(reportTmpPath, reportPath);
+      else {
+        await rename(reportTmpPath, reportPath);
+        reportArtifact = { ...reportStage, path: reportPath };
+      }
+    }
+    if (claims) await claims.publish(outputTmpPath, outputPath);
+    else await rename(outputTmpPath, outputPath);
   } catch (error) {
-    await Promise.all([
-      rm(outputTmpPath, { force: true }),
-      reportTmpPath ? rm(reportTmpPath, { force: true }) : Promise.resolve(),
-      reportPromoted && reportPath ? rm(reportPath, { force: true }) : Promise.resolve()
-    ]);
+    if (reportArtifact) await removeOwnedArtifact(reportArtifact);
     throw error;
-  }
+  } finally { await Promise.all(stages.map(removeOwnedArtifact)); }
 }
 
-async function writeJsonArtifact(path: string, content: string): Promise<void> {
+async function writeJsonArtifact(path: string, content: string, claims?: PathClaimRegistry): Promise<void> {
   const tmpPath = temporaryPath(path);
+  let stage: OwnedArtifact | undefined;
   try {
-    await assertArtifactTargetIsWritable(path);
-    await writeFile(tmpPath, content);
-    await rename(tmpPath, path);
-  } catch (error) {
-    await rm(tmpPath, { force: true });
-    throw error;
-  }
+    if (!claims) await assertArtifactTargetIsWritable(path);
+    stage = await writeStagedFile(tmpPath, content);
+    if (claims) await claims.publish(tmpPath, path);
+    else await rename(tmpPath, path);
+  } finally { if (stage) await removeOwnedArtifact(stage); }
 }
 
 async function nextAvailableReportPath(path: string): Promise<string> {

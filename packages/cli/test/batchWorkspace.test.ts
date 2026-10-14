@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readFile, readdir, rm, rmdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -13,6 +13,18 @@ beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), "hwpx-workspace-"));
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
 describe("batch workspace ownership", () => {
+  it("still recovers recorded empty-file reservations from legacy journals", async () => {
+    const workspace = await BatchWorkspace.open(dir);
+    const legacyPath = join(dir, "legacy.hwpx");
+    await writeFile(legacyPath, "", { flag: "wx" });
+    const identity = await lstat(legacyPath, { bigint: true });
+    await workspace.recordClaim({ path: legacyPath, dev: String(identity.dev), ino: String(identity.ino),
+      birthtimeNs: String(identity.birthtimeNs), ctimeNs: String(identity.ctimeNs) });
+    await markProcessExited(workspace);
+    const recovered = await BatchWorkspace.open(dir);
+    await expect(lstat(legacyPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await recovered.close();
+  });
   it("refuses a second active batch workspace without touching the first", async () => {
     const workspace = await BatchWorkspace.open(dir);
     const stage = workspace.stagePath("job-0.hwpx.tmp");
@@ -27,7 +39,9 @@ describe("batch workspace ownership", () => {
     const registry = new PathClaimRegistry(claim => workspace.recordClaim(claim));
     const owned = await registry.claim(join(dir, "owned.hwpx"));
     const preserved = await registry.claim(join(dir, "written.hwpx"));
-    await writeFile(preserved, "valid output");
+    const ready = workspace.stagePath("job-1.hwpx.tmp");
+    await writeFile(ready, "valid output");
+    await registry.publish(ready, preserved);
     const unowned = join(dir, "other-program.tmp");
     await writeFile(unowned, "other data");
     await writeFile(workspace.stagePath("job-0.hwpx.tmp"), "partial owned output");
@@ -43,7 +57,7 @@ describe("batch workspace ownership", () => {
     const workspace = await BatchWorkspace.open(dir);
     const registry = new PathClaimRegistry(claim => workspace.recordClaim(claim));
     const path = await registry.claim(join(dir, "replaced.hwpx"));
-    await rm(path);
+    await rmdir(path);
     await writeFile(path, "user replacement");
     await markProcessExited(workspace);
     const recovered = await BatchWorkspace.open(dir);

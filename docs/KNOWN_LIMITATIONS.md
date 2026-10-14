@@ -22,6 +22,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Non-Blockers For Continued Development
 
+- Non-overwrite saves reserve document/report names and publish complete staged bytes by hardlink where supported. On FAT or other filesystems without hardlinks, an exclusive copy preserves existing names but a reader can observe partial bytes during the copy. Forced termination recovery and overwrite-mode document/report rollback are still tracked in OPT-012 and OPT-011 respectively; no multi-file crash-atomic guarantee is made.
 - Future reference graph additions should be driven by real HWPX samples that expose new reference forms.
 - Duplicate image consolidation does not automatically merge near-duplicates or lossy re-encodes whose decoded pixels differ.
 - PSNR and SSIM thresholds are conservative quality gates, not perceptual proof that every image is visually identical. Manual review is still appropriate for high-stakes documents.

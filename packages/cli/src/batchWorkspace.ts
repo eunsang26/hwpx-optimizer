@@ -92,7 +92,7 @@ async function readOwner(directory: string, outputDirectory: string): Promise<Ow
       throw new Error("Invalid ownership record.");
     }
     for (const claim of owner.claims) {
-      if (typeof claim.path !== "string" || dirname(claim.path) !== outputDirectory ||
+      if ((claim.kind !== undefined && claim.kind !== "directory") || typeof claim.path !== "string" || dirname(claim.path) !== outputDirectory ||
         !/^\d+$/.test(claim.dev) || !/^\d+$/.test(claim.ino) || !/^\d+$/.test(claim.birthtimeNs) ||
         !/^\d+$/.test(claim.ctimeNs)) throw new Error("Invalid claim identity.");
     }

@@ -12,6 +12,9 @@ The original document is read-only input. Every optimization path writes a separ
 packages/core
   HWPX ZIP reading, analysis, planning, optimization, writing, verification, reports
 
+packages/io
+  Shared filesystem reservations, exclusive publication, and owned-file cleanup
+
 packages/cli
   hwpx-opt command line wrapper around packages/core
 
@@ -166,7 +169,15 @@ Commands:
 - `optimize`
 - `batch`
 
-Batch writes use a private `.hwpx-optimizer-batch.lock` workspace in the output folder. It contains staging files and a process ownership record; a second active batch targeting the same canonical folder is rejected. Recovery only removes recorded, unchanged zero-byte reservations belonging to an exited process, along with that private workspace. Generic `.tmp` files and unrecorded files are never swept. Unrecognized lock directories are preserved and reported for inspection.
+Batch writes use a private `.hwpx-optimizer-batch.lock` workspace in the output folder. It contains staging files and a process ownership record; a second active batch targeting the same canonical folder is rejected. Recovery only removes recorded, unchanged reservations belonging to an exited process, along with that private workspace. New reservations are empty directories; recovery also supports legacy zero-byte file reservations. Generic `.tmp` files and unrecorded files are never swept. Unrecognized lock directories are preserved and reported for inspection.
+
+## Filesystem Publication Boundary
+
+`packages/io/src/index.ts` is shared by CLI and desktop; core remains buffer-oriented and does not import it. Non-overwrite saves reserve names with exclusive directory creation. A document/report pair obtains both names before staging either artifact. Desktop saves and batch jobs select suffixes on conflicts; standalone CLI saves may report an explicit collision.
+
+Stages use exclusive file creation. Publication removes only the unchanged, empty reservation and hardlinks the complete stage into the final name. Link creation fails if another file appears in the gap. On filesystems without hardlinks, publication streams into a file opened with `O_EXCL`, retaining the exclusive-name guarantee while bytes are copied. This fallback does not publish all bytes atomically. Cleanup checks filesystem identity, modification time, and size before deleting owned files; reservations never use recursive deletion.
+
+These rules prevent non-overwrite saves from replacing another operation's result or a user replacement file. They do not provide a multi-file crash transaction. Overwrite-mode document/report rollback and cancellation recovery remain separately tracked as OPT-011 and OPT-012 in `IMPROVEMENT_BACKLOG.md`.
 
 ## Desktop Boundary
 

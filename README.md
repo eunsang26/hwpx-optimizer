@@ -274,6 +274,7 @@ hwpx-optimizer/
 │   └── desktop/         # Windows Electron 앱 (main / preload / renderer)
 ├── packages/
 │   ├── core/            # 모든 HWPX 로직 — reader/analyzer/optimizer/writer/verifier/report
+│   ├── io/              # CLI·desktop 공통 경로 예약·배타적 저장·소유 파일 정리
 │   └── cli/             # hwpx-opt 커맨드라인 래퍼 (얇은 fs/stdout 어댑터)
 ├── scripts/             # 빌드·릴리즈·검증·아이콘 생성 스크립트
 ├── docs/                # 아키텍처·테스트·릴리즈·QA·한계 문서
@@ -317,7 +318,7 @@ npm test -- packages/core/test/optimizer.test.ts
 # 타입 검사
 npm run typecheck
 
-# 전체 빌드 (core + cli + desktop)
+# 전체 빌드 (core + io + cli + desktop)
 npm run build
 ```
 

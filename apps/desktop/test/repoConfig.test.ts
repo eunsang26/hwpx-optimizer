@@ -9,6 +9,7 @@ describe("repository runtime and cleanup configuration", () => {
     const workspacePaths = [
       "packages/core/package.json",
       "packages/cli/package.json",
+      "packages/io/package.json",
       "apps/desktop/package.json"
     ];
 
@@ -21,6 +22,9 @@ describe("repository runtime and cleanup configuration", () => {
       expect(workspacePackage.version, path).toBe(rootPackage.version);
       if (workspacePackage.dependencies?.["@hwpx-optimizer/core"]) {
         expect(workspacePackage.dependencies["@hwpx-optimizer/core"], path).toBe(rootPackage.version);
+      }
+      if (workspacePackage.dependencies?.["@hwpx-optimizer/io"]) {
+        expect(workspacePackage.dependencies["@hwpx-optimizer/io"], path).toBe(rootPackage.version);
       }
     }
 
@@ -80,10 +84,10 @@ describe("repository runtime and cleanup configuration", () => {
     expect(await readFile("package-lock.json", "utf8")).not.toContain("@tauri-apps");
     expect(await readFile(".github/workflows/windows-release.yml", "utf8")).not.toContain("tauri");
     expect(packageJson.scripts?.build).toBe(
-      "npm run clean:build && tsc -b packages/core packages/cli apps/desktop && npm run desktop:assets"
+      "npm run clean:build && tsc -b packages/core packages/io packages/cli apps/desktop && npm run desktop:assets"
     );
     expect(packageJson.scripts?.typecheck).toBe(
-      "tsc -b packages/core packages/cli apps/desktop --pretty false"
+      "tsc -b packages/core packages/io packages/cli apps/desktop --pretty false"
     );
     expect(packageJson.scripts?.["desktop:local:win:self-signed"]).toContain("sign-self-signed-release-artifacts.mjs");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run desktop:local:win:self-signed");
