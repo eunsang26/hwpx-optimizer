@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
+import { verifyDocumentPreservation } from "./documentVerifier.js";
 import { computeVisualMetrics } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
@@ -131,9 +132,23 @@ async function verifyAgainstOriginal(input: {
   const originalImages = new Map(originalAnalysis.images.map((image) => [image.path, image]));
   const outputImages = new Map(outputAnalysis.images.map((image) => [image.path, image]));
   const originalDuplicatePathsByPath = await duplicateImagePathsByPath(input.original, input.imageConcurrency);
+  verifyDocumentPreservation({ original: input.original, output: input.output,
+    originalGraph, duplicatePathsByPath: originalDuplicatePathsByPath, mode: input.mode });
   const visualPairs: Array<{ original: HwpxEntry; output: HwpxEntry }> = [];
   const originalImageEntries = new Map(input.original.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
   const outputImageEntries = new Map(input.output.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
+  for (const [path, image] of originalImages) {
+    const before = originalImageEntries.get(path);
+    const preserved = [path, ...(originalDuplicatePathsByPath.get(path) ?? [])]
+      .some((candidate) => {
+        const after = outputImageEntries.get(candidate);
+        return Boolean(after && before?.data.equals(after.data));
+      });
+    if (image.preservationReason && originalGraph.resources.get(path)?.referenced &&
+        !preserved) {
+      throw new Error(`Verification failed: protected image representation changed ${path}: ${image.preservationReason}`);
+    }
+  }
 
   for (const resource of originalGraph.resources.values()) {
     if (!resource.referenced) continue;
@@ -166,6 +181,12 @@ async function verifyAgainstOriginal(input: {
         ? [{ original: entry, output }] : [];
     });
     await mapLimit(changedPairs, resolveImageConcurrency(input.imageConcurrency), async (pair) => {
+      const [beforeMetadata, afterMetadata] = await Promise.all([
+        safeReadMetadata(pair.original.data), safeReadMetadata(pair.output.data)
+      ]);
+      if ((beforeMetadata.orientation ?? 1) !== (afterMetadata.orientation ?? 1)) {
+        throw new Error(`Verification failed: safe mode image orientation changed ${pair.original.path}`);
+      }
       const [original, output] = await Promise.all([
         computeDecodedPixelHash(pair.original.data), computeDecodedPixelHash(pair.output.data)
       ]);

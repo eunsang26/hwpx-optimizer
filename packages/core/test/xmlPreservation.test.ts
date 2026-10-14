@@ -4,11 +4,32 @@ import { minifyXmlBuffer } from "../src/xmlMinify.js";
 import { analyzeHwpxBuffer, optimizeHwpxBufferSafe, optimizeHwpxBufferBalanced, optimizeHwpxBufferAggressive } from "../src/optimize.js";
 import { readHwpxPackage } from "../src/reader.js";
 import { createHwpxFixture } from "./fixtures.js";
+import { parseDocumentXml } from "../src/xmlDocument.js";
 
 const literalParser = new XMLParser({ ignoreAttributes: false, parseTagValue: false, trimValues: false });
 const textXml = '<hp:t> A </hp:t><hp:t>00123</hp:t><hp:t> </hp:t><hp:t>1.20</hp:t><hp:t>1e03</hp:t><hp:t>A &amp; B</hp:t>';
 
 describe("XML document preservation", () => {
+  it("preserves numeric whitespace references while applying XML literal-whitespace normalization", () => {
+    const input = '<root literal="a\r\nb\tc" referenced="a&#10;b&#9;c&#13;d"><hp:t>A&#13;B\r\nC</hp:t><![CDATA[<tag attr="a\tb">]]><!-- <tag attr="a\tb"> --></root>';
+    const output = minifyXmlBuffer(Buffer.from(input)).toString();
+    expect(output).toContain('literal="a b c"');
+    expect(output).toContain('referenced="a&#10;b&#9;c&#13;d"');
+    expect(output).toContain('<hp:t>A&#13;B\nC</hp:t>');
+    expect(output).toContain('<![CDATA[<tag attr="a\tb">]]>');
+    expect(output).toContain('<!-- <tag attr="a\tb"> -->');
+    expect(parseDocumentXml(output)).toEqual(parseDocumentXml(input));
+  });
+  it("rejects unsupported declared encodings and invalid UTF-8 before optimization", async () => {
+    const declared = await createHwpxFixture({ entries: {
+      "Contents/section0.xml": '<?xml version="1.0" encoding="ISO-8859-1"?><root>text</root>'
+    } });
+    const malformed = await createHwpxFixture({ entries: {
+      "Contents/section0.xml": Buffer.concat([Buffer.from('<root>'), Buffer.from([0xff]), Buffer.from('</root>')])
+    } });
+    await expect(optimizeHwpxBufferSafe(declared)).rejects.toThrow(/Unsupported XML encoding/);
+    await expect(optimizeHwpxBufferSafe(malformed)).rejects.toThrow(/Invalid UTF-8 XML/);
+  });
   it("keeps text and attribute values literal while removing structural indentation", () => {
     const input = `<root version="001">\n  ${textXml}\n</root>`;
     const output = minifyXmlBuffer(Buffer.from(input)).toString();

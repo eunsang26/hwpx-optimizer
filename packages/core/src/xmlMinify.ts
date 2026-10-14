@@ -1,4 +1,4 @@
-import { buildDocumentXml, parseDocumentXml } from "./xmlDocument.js";
+import { buildDocumentXml, decodeDocumentXml, parseDocumentXml } from "./xmlDocument.js";
 import { getXmlAttributes, isXmlNode } from "./xmlNode.js";
 import type { XmlNode } from "./xmlNode.js";
 
@@ -13,7 +13,7 @@ const ELEMENT_ONLY_CONTAINERS = new Set([
 ]);
 
 export function minifyXmlBuffer(data: Buffer): Buffer {
-  const nodes = parseDocumentXml(data.toString("utf8"));
+  const nodes = parseDocumentXml(decodeDocumentXml(data));
   removeStructuralWhitespace(nodes);
   return Buffer.from(buildDocumentXml(nodes));
 }

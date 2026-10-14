@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import type { HwpxEntry, HwpxEntryKind, HwpxPackage } from "./types.js";
-import { assertWellFormedXml } from "./xmlDocument.js";
+import { assertWellFormedXml, decodeDocumentXml } from "./xmlDocument.js";
 
 const PROTECTED_DOCUMENT_ERROR =
   "보안 처리된 문서는 최적화 대상이 아닙니다. 암호화, DRM, 전자서명, 권한 제한을 해제하거나 우회하지 않습니다.";
@@ -78,7 +78,7 @@ export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOpt
   rejectProtectedHwpxEntries(entries);
   validateHwpxStructure(entries);
   for (const entry of entries) {
-    if (entry.kind === "xml") assertWellFormedXml(entry.data.toString("utf8"), entry.path);
+    if (entry.kind === "xml") assertWellFormedXml(decodeDocumentXml(entry.data, entry.path), entry.path);
   }
   return { entries };
 }

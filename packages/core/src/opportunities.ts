@@ -447,7 +447,13 @@ export async function transformImageActionWithBudget(
 }
 
 export function cleanShapeComments(xml: string): string {
-  return xml.replace(/<hp:shapeComment>[\s\S]*?<\/hp:shapeComment>/g, "<hp:shapeComment>그림입니다.</hp:shapeComment>");
+  return xml.replace(/(<hp:shapeComment>)([^<]*)(<\/hp:shapeComment>)/g,
+    (_match, open: string, text: string, close: string) => {
+      const lines = text.split(/\r?\n/);
+      const retained = lines.filter((line) => !/^\s*원본 그림의 (이름|크기):/.test(line));
+      return retained.length === lines.length ? `${open}${text}${close}` :
+        `${open}${retained.join(text.includes("\r\n") ? "\r\n" : "\n")}${close}`;
+    });
 }
 
 export function outputMediaType(path: string): string {

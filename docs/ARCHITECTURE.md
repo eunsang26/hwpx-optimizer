@@ -129,15 +129,19 @@ Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a strong
 - Confirms the minimum HWPX package structure is present.
 - Confirms XML entries parse.
 - Confirms referenced internal resources exist.
-- Compares original and output packages when a mode policy is provided.
+- Compares original and output packages when a mode policy is provided. Document XML parts retain text, element order, and layout/style attributes; each resource use is compared in its original position. Attribute order and known structural formatting may differ. Allowed changes are unused-resource manifest deletion, exact duplicate aliasing, supported image conversion, and generated shape-comment filename/dimension lines. Authored alternative text remains intact.
+- Preserves opaque package parts, fonts, and embedded objects byte-for-byte. Accepted legacy inputs may gain the canonical mimetype marker.
+- Unknown ID reference forms prevent duplicate consolidation; style/paragraph IDs are never reassigned as binary IDs.
 - Rejects safe-mode outputs that change referenced image dimensions or format.
-- Rejects changed safe-mode referenced image bytes unless decoded pixel and alpha hashes remain equal.
+- Rejects changed safe-mode referenced image bytes unless decoded pixel and alpha hashes remain equal and EXIF orientation is unchanged. Protected image representations must remain byte-identical, including when exact duplicates are aliased.
 - Rejects balanced/aggressive outputs that remove referenced images without an allowed replacement.
 - Rejects balanced/aggressive image conversions outside the current policy: BMP may become PNG, JPEG must remain JPEG, and PNG must remain PNG.
 - Rejects balanced/aggressive outputs that enlarge referenced image dimensions.
 - Rejects balanced/aggressive outputs whose referenced image PSNR and SSIM scores fall below the per-mode quality thresholds.
 
 Decoded image reuse retains RGB or RGBA channels. Same-visual hashes include alpha, canonicalizing fully opaque RGBA to RGB only for hashing. Advanced quality samples retain alpha and compare composites over both dark and light backgrounds, using the lower score. Images with ICC profiles, high sample precision, multiple frames/pages, unsupported BMP alpha or oriented PNG metadata retain their original bytes and report a reason.
+
+XML handling supports UTF-8 only and rejects invalid UTF-8 or other declared encodings before optimization. Literal line endings/attribute whitespace and numeric character references follow [XML 1.0 normalization](https://www.w3.org/TR/xml/#AVNormalize); serializers preserve referenced control characters.
 
 Current limitation: advanced mode verification uses PSNR and SSIM on 512×512 aspect-preserving (`fit: contain`) samples plus structural invariants; it does not prove every visual detail is perceptually identical. BMP/TIFF→PNG is allowed in advanced modes; JPEG stays JPEG and PNG stays PNG.
 

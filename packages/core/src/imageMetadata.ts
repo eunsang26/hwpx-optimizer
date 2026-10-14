@@ -53,10 +53,12 @@ async function readImageMetadataUncached(
     const image = options.rotate ? sharp(data).rotate() : sharp(data);
     const metadata = await image.metadata();
     const format = metadata.format ? String(metadata.format) : undefined;
+    // metadata() describes the input header even when rotate() is queued.
+    const swapsAxes = options.rotate && (metadata.orientation ?? 1) >= 5 && (metadata.orientation ?? 1) <= 8;
     return {
       format,
-      width: metadata.width,
-      height: metadata.height,
+      width: swapsAxes ? metadata.height : metadata.width,
+      height: swapsAxes ? metadata.width : metadata.height,
       hasMetadata: Boolean(metadata.exif || metadata.icc || metadata.iptc || metadata.xmp),
       isBmp: format === "bmp",
       ...(preservationReason(metadata) ? { preservationReason: preservationReason(metadata) } : {})

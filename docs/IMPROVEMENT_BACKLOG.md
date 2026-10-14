@@ -13,7 +13,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-003 | P1 | 배치 임시파일 정리의 소유권 보장 | CLI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-004 | P1 | CLI 하드링크 원본 보호 | CLI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-005 | P1 | 데스크톱 모든 입력 파일 보호 | desktop | M | OPT-004 정책 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-006 | P1 | 본문과 이미지 배치 보존 검증 | core | L | OPT-001, OPT-002 | 대기 | 미정 |
+| OPT-006 | P1 | 본문과 이미지 배치 보존 검증 | core | L | OPT-001, OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-007 | P2 | 미해결 binary 리소스 ID 검출 | core | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-008 | P2 | safe 폰트와 OLE 삭제 금지 | core | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-009 | P2 | 변환 경로 변경을 verifier에 전달 | core | M | OPT-006 대응 정책 | 대기 | 미정 |
@@ -94,10 +94,12 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 대상: `verifier.ts`, manifest·reference graph 및 변환 변경 내역.
 
-- [ ] 허용 변경을 명시하고 본문·레이아웃 속성 변경을 거부한다.
-- [ ] 같은 이미지 파일들이 남아 있어도 사용 위치의 ID가 뒤바뀌면 거부한다.
-- [ ] safe에서 이미지 방향·픽셀·투명도 변경을 거부한다.
-- [ ] 정상 XML 서식 정리·중복 통합·허용 변환은 통과한다.
+- [x] 허용 변경을 명시하고 본문·레이아웃 속성 변경을 거부한다.
+- [x] 같은 이미지 파일들이 남아 있어도 사용 위치의 ID가 뒤바뀌면 거부한다.
+- [x] safe에서 이미지 방향·픽셀·투명도 변경을 거부한다.
+- [x] 정상 XML 서식 정리·중복 통합·허용 변환은 통과한다.
+
+검증 기록: 2026-10-14 Linux/Node 24.13.0. 문서 검증 회귀 18개 및 XML 보존 회귀 19개, 관련 4개 파일·84개 대상 테스트 통과. 최종 전체 71개 파일·526개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. XML 본문/레이아웃/사용 위치 및 비이미지 package part를 비교하고 정확 중복/지원 변환/자동 생성 설명 줄 정리만 허용한다. 스타일 ID 충돌은 통합을 건너뛰며 작성한 대체 설명을 보존한다. safe 방향 변경은 거부하고 고급 모드의 충실한 EXIF 회전 반영은 허용한다. UTF-8/XML 문자 공백 처리도 보완하고 Python 표준 XML parser로 독립 비교했다. 변환 이름 충돌의 명시적 전달·preview 연결은 OPT-009에서 이어간다.
 
 ### OPT 007 미해결 binary ID
 
