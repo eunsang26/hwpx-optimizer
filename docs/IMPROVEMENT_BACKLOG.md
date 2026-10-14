@@ -1,0 +1,262 @@
+# HWPX Optimizer 개선 작업목록
+
+[2026년 10월 14일 전체 리뷰](CODEBASE_REVIEW_2026-10-14.md)에 따른 추적 목록이다. 기준 커밋은 `315b61b`이다. 사용자가 전체 구현과 UI/UX·HCI 개선을 승인했다. `codex/comprehensive-improvements`에서 한 항목씩 구현·검증하며 진행한다.
+
+P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 누락으로 먼저 수정한다. P2는 기능 신뢰성·검증·배포 개선, P3는 유지보수와 문서 개선이다. 크기 S/M/L은 상대 범위이며 일정 약속이 아니다. 담당과 PR은 작업 시작 시 정한다.
+
+## 추적표
+
+| ID | 우선순위 | 작업 | 영역 | 크기 | 선행 | 상태 | 담당 및 PR |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| OPT-001 | P1 | XML 본문 공백과 숫자 문자열 보존 | core | M | 없음 | 대기 | 미정 |
+| OPT-002 | P1 | 투명도 보존과 정확 이미지 중복 판정 | core | L | 없음 | 대기 | 미정 |
+| OPT-003 | P1 | 배치 임시파일 정리의 소유권 보장 | CLI | M | 없음 | 대기 | 미정 |
+| OPT-004 | P1 | CLI 하드링크 원본 보호 | CLI | M | 없음 | 대기 | 미정 |
+| OPT-005 | P1 | 데스크톱 모든 입력 파일 보호 | desktop | M | OPT-004 정책 | 대기 | 미정 |
+| OPT-006 | P1 | 본문과 이미지 배치 보존 검증 | core | L | OPT-001, OPT-002 | 대기 | 미정 |
+| OPT-007 | P2 | 미해결 binary 리소스 ID 검출 | core | M | 없음 | 대기 | 미정 |
+| OPT-008 | P2 | safe 폰트와 OLE 삭제 금지 | core | S | 없음 | 대기 | 미정 |
+| OPT-009 | P2 | 변환 경로 변경을 verifier에 전달 | core | M | OPT-006 대응 정책 | 대기 | 미정 |
+| OPT-010 | P2 | non-overwrite 저장의 원자적 경로 확보 | CLI, desktop | M | OPT-003, OPT-005 | 대기 | 미정 |
+| OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 대기 | 미정 |
+| OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 대기 | 미정 |
+| OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 대기 | 미정 |
+| OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 대기 | 미정 |
+| OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 대기 | 미정 |
+| OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 대기 | 미정 |
+| OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 대기 | 미정 |
+| OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 대기 | 미정 |
+| OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 대기 | 미정 |
+| OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 대기 | 미정 |
+| OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 대기 | 미정 |
+| OPT-022 | P3 | 벤치마크 실패 문서 추적과 판정 | bench | M | 없음 | 대기 | 미정 |
+| OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 대기 | Codex |
+| OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 대기 | Codex |
+| OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 대기 | Codex |
+
+## 작업별 완료 기준
+
+### OPT 001 XML 텍스트 보존
+
+대상: `xmlMinify.ts`, `balancedOptimizer.ts` 및 XML parser 공통 정책.
+
+- [ ] 문자열 parsing과 공백 보존 설정을 모든 재작성 경로에 적용한다.
+- [ ] ` A `, 공백만 있는 본문, `00123`, 소수·지수 형태 문자열, entity, mixed content를 보존한다.
+- [ ] safe·balanced·aggressive 최종 출력의 본문 동일성을 확인한다. XML 서식 공백 제거는 본문과 구분한다.
+- [ ] 잘못된 입력 XML을 재작성으로 정상화해 성공 처리하지 않는다.
+
+### OPT 002 투명도와 이미지 동일성
+
+대상: `decodedImage.ts`, `optimizer.ts`, `opportunities.ts`, `visualSimilarity.ts`, `imagePreview.ts`.
+
+- [ ] RGBA 등 필요한 채널을 디코드·변환·캐시에 보존한다.
+- [ ] RGB가 같고 alpha가 다른 이미지가 정확 중복으로 병합되지 않는다.
+- [ ] safe PNG의 alpha와 픽셀이 같으며 고급 모드 검증이 투명도 변경을 검출한다.
+- [ ] 색 프로필·16비트 PNG·alpha mask BMP·다중 페이지 TIFF의 보존/건너뛰기 정책을 정하고 fixture로 확인한다.
+
+### OPT 003 배치 정리 소유권
+
+대상: CLI `sweepStaleTempFiles`, 임시 경로 생성, path claim 정리.
+
+- [ ] 다른 프로그램의 `.tmp`와 도구 출력처럼 이름 붙인 사용자 파일을 삭제하지 않는다.
+- [ ] 작업별 소유 기록과 실행 잠금으로 종료된 실행의 잔여물만 정리한다.
+- [ ] 입력·출력 같은 폴더, 공용 출력 폴더, 동시 배치 실행을 검증한다.
+- [ ] 잘못된 옵션을 검증하기 전에 사용자 폴더를 변경하지 않는다.
+
+### OPT 004 CLI 원본 동일성
+
+대상: CLI `pathsReferToSameFile`, analyze/report/optimize/batch 저장 경계.
+
+- [ ] 경로·심볼릭링크·하드링크의 동일성을 검사해 원본을 보호한다.
+- [ ] `analyze --report <원본 하드링크> --overwrite`와 `report`가 쓰기 전에 거부된다.
+- [ ] Linux와 Windows에서 지원되는 동일성 확인 및 원본 해시 불변 테스트가 통과한다.
+
+### OPT 005 데스크톱 입력 보호
+
+대상: `main.ts` 입력 등록, `desktopService.ts` 출력 저장.
+
+- [ ] 생성 결과와 현재 실행에서 선택한 모든 입력의 파일 동일성을 비교한다.
+- [ ] `preventOverwrite: false`에서도 입력 원본은 보호한다.
+- [ ] 다른 폴더의 같은 이름, 이미 최적화된 입력, 기존 output 하위 폴더의 입력을 검증한다.
+
+### OPT 006 문서 보존 verifier
+
+대상: `verifier.ts`, manifest·reference graph 및 변환 변경 내역.
+
+- [ ] 허용 변경을 명시하고 본문·레이아웃 속성 변경을 거부한다.
+- [ ] 같은 이미지 파일들이 남아 있어도 사용 위치의 ID가 뒤바뀌면 거부한다.
+- [ ] safe에서 이미지 방향·픽셀·투명도 변경을 거부한다.
+- [ ] 정상 XML 서식 정리·중복 통합·허용 변환은 통과한다.
+
+### OPT 007 미해결 binary ID
+
+대상: `referenceGraph.ts`, `manifest.ts`, `verifier.ts`.
+
+- [ ] 미등록 `binaryItemIDRef`와 존재하지 않는 manifest 리소스를 경고·검증 실패로 전달한다.
+- [ ] 이미지 ID와 문서 내부 스타일·문단 ID를 구분해 정상 문서를 잘못 거부하지 않는다.
+- [ ] 직접 경로·상대 경로·percent encoding 기존 사례가 유지된다.
+
+### OPT 008 safe 리소스 삭제 정책
+
+대상: `planner.ts`, `structuralOpportunities.ts`.
+
+- [ ] safe에서도 font·OLE를 항상 보존한다.
+- [ ] `BinData/font.ttf`, `BinData/object.ole` 미참조 fixture에서 삭제가 적용되지 않는다.
+- [ ] 삭제 정책을 공유하고 safe와 고급 모드의 차이를 명시한다.
+
+### OPT 009 변환 경로 대응
+
+대상: `balancedOptimizer.ts`, `verifier.ts`, `imagePreview.ts`.
+
+- [ ] `originalPath → outputPath` 및 ID 변경 정보를 명시적으로 전달한다.
+- [ ] BMP와 다른 내용의 동일 stem PNG가 공존할 때 `-opt.png` 결과가 최종 verifier와 preview를 통과한다.
+- [ ] TIFF 변환·다중 충돌·통합 후 변환도 전체 최적화 API로 확인한다.
+
+### OPT 010 배타적 저장
+
+대상: `desktopService.ts`, CLI pathClaims·단일 분석 보고서·배치 보고서 저장.
+
+- [ ] 존재 확인 후 rename 대신 배타적 예약/승격으로 사용자 파일 덮어쓰기를 막는다.
+- [ ] 서로 다른 프로세스가 같은 폴더에 쓰면 고유한 결과 또는 명확한 충돌 오류가 나온다.
+- [ ] 문서와 보고서 이름을 함께 확보하고 예약 실패 시 자기 파일만 정리한다.
+
+### OPT 011 문서와 보고서 저장 계약
+
+대상: CLI 및 데스크톱 `writeOptimizationArtifacts`, `commitBatchJob`.
+
+- [ ] 출력과 보고서의 동일 경로·별칭을 쓰기 전에 거부한다.
+- [ ] 보고서 승격·출력 승격 각각의 실패에 기존 결과·보고서가 유실되지 않는다.
+- [ ] 보고서 저장 실패라도 검증된 문서를 보존할지 rollback할지 정책을 통일하고 결과 상태에 반영한다.
+- [ ] 쓰기·rename 실패를 주입하고 결과·보고서·임시파일 상태를 확인한다.
+
+### OPT 012 취소와 저장 복구
+
+대상: `main.ts` cancel/watchdog, `documentWorker.ts`, artifact 저장 경계.
+
+- [ ] read·transform·verify·write·rename 단계의 취소와 worker 종료를 검증한다.
+- [ ] 저장 commit 이후 취소는 완료 결과를 유실하거나 취소로 오표시하지 않는다.
+- [ ] 중단된 저장을 복구·정리하고 다음 작업이 정상 실행된다.
+- [ ] 시간 제한 정책을 측정된 대용량 처리 시간에 맞추고 실패 원인을 구분한다.
+
+### OPT 013 quick 분석
+
+대상: `optimize.ts`, `structuralOpportunities.ts`, Desktop 분석 요청.
+
+- [ ] 기본값과 명시적 `quick`의 동작이 같으며 quick에서 불필요한 정확 픽셀·유사 이미지 검사를 생략한다.
+- [ ] 상세 중복 검사와 정확 인코딩 측정을 필요에 따라 실행한다.
+- [ ] 이미지 수별 quick/deep 시간·인코딩·디코드 횟수를 기록한다.
+- [ ] 예측 정보가 줄어드는 경우 UI에 추정 근거를 반영한다.
+
+### OPT 014 메모리와 동시성
+
+대상: `decodedImage.ts`, `reader.ts`, `opportunities.ts`, CLI workerPool.
+
+- [ ] 파일 크기·이미지 픽셀·worker 수별 peak RSS와 raw cache 잔존량을 측정한다.
+- [ ] 사용하지 않는 fire-and-forget JPEG 디코드를 제거하거나 비용 효과를 입증한다.
+- [ ] worker 수와 이미지 동시성의 곱을 제어하고 지원 한도를 정의한다.
+- [ ] ZIP64·위조 선언 크기·큰 디코드에서 제한이 실제 할당 전에 작동하는지 확인한다.
+- [ ] 모든 문서 처리는 로컬에서 수행한다.
+
+### OPT 015 추정과 실측
+
+대상: `types.ts`, `report.ts`, `projectPackageSize.ts`, `submissionPlan.ts`, `targetPlan.ts`.
+
+- [ ] estimated size와 actual size를 타입 및 보고서에서 구분한다.
+- [ ] 최적화 전은 예상 제출 가능, 최적화 후는 실제 결과에 따른 판정을 표시한다.
+- [ ] 사진·차트·BMP·JPEG·PNG·중복 혼합 corpus에서 목표 경계와 예측 오차를 기록한다.
+- [ ] CLI·desktop 목표 배분의 공통 계약을 정의하고 엄격한 `< targetBytes`를 유지한다.
+
+### OPT 016 폰트 패키징
+
+대상: `package.json` electron-builder files, `copy-assets.mjs`, 배포물 검사.
+
+- [ ] `PretendardVariable.woff2`와 `OFL.txt`를 명시적으로 포함한다.
+- [ ] 실제 Windows `app.asar` 또는 배포 디렉터리에서 파일 존재를 확인한다.
+- [ ] 외부 네트워크 없이 깨끗한 PC에서 폰트 로딩을 확인한다.
+
+### OPT 017 PR 게이트
+
+대상: `.github/workflows`.
+
+- [ ] `pull_request`에서 테스트·타입 검사·빌드·합성 corpus·Linux 스모크를 실행한다.
+- [ ] 정기 또는 릴리즈 Windows 테스트에서 native sharp와 포터블 실행을 검증한다.
+- [ ] 실제 업무 샘플과 결과물을 CI에 업로드하지 않는다.
+- [ ] Node 지원 버전과 Windows 런타임 검증을 명시한다.
+
+### OPT 018 동작 통합 테스트
+
+대상: `repoConfig.test.ts`, renderer·IPC·worker 테스트.
+
+- [ ] 문자열 검사에 의존한 상태·취소·저장 검증을 실제 실행 기반 테스트로 옮긴다.
+- [ ] 선택·추가·삭제·취소·재시도·일괄 완료·보고서 저장 실패 흐름을 검증한다.
+- [ ] 파일 보존 결함은 최종 출력/원본 해시와 내용으로 검사한다.
+- [ ] 정적 설정 검사는 필요한 범위에 유지하고 코드 형태에 묶인 검사를 줄인다.
+
+### OPT 019 책임 분리
+
+대상: `main.ts`, `renderer.ts`, shared helpers.
+
+- [ ] main의 스모크 실행 코드를 테스트 전용 모듈로 옮긴다.
+- [ ] worker 요청 수명주기와 IPC 파일 권한 경계를 분리한다.
+- [ ] renderer의 단일·배치 상태 전이와 DOM 표시를 분리한다.
+- [ ] 중복 목표 배분·품질 상수·액션 카탈로그를 정리하고 기존 흐름 테스트를 유지한다.
+
+### OPT 020 설정 저장
+
+대상: `persistentDesktopSettingsPatch`, `normalizeDesktopSettings`, `main.ts` settings 저장.
+
+- [ ] customBytes를 유한한 양수로 검사하고 지원 범위를 정한다.
+- [ ] 같은 디렉터리의 임시파일 후 승격으로 설정을 저장한다.
+- [ ] 손상된 설정·버전 migration·동시 저장을 검증하고 복구 결과를 안내한다.
+
+### OPT 021 문서와 릴리즈 증거
+
+대상: `ARCHITECTURE.md`, `KNOWN_LIMITATIONS.md`, `SECURITY_REVIEW.md`, `TESTING.md`, QA 문서.
+
+- [ ] safe 보존 및 verifier 설명을 수정 완료된 실제 동작과 맞춘다.
+- [ ] audit의 moderate 이상 차단과 전체 취약점 0 표현을 일치시킨다.
+- [ ] 실제 Windows·한컴 열기·큰 문서·장시간 재시작을 버전·환경·결과별로 기록한다.
+- [ ] synthetic 통과와 실제 문서 검증, 로컬 호스트 검증과 배포물 검증을 구분한다.
+
+### OPT 022 벤치마크 실패 추적
+
+대상: `scripts/bench/src/runBench.ts`, `report.ts`, corpus tests.
+
+- [ ] 문서별 처리 실패와 제외 이유를 보고서에 남긴다.
+- [ ] 실패 문서를 중앙값에서 조용히 제외해 GO가 되지 않도록 판정 정책을 정한다.
+- [ ] 실제 corpus와 fixture의 통계 범위를 맞추고 실패/부분 성공 fixture로 확인한다.
+- [ ] 측정 도구 미설치 INVALID와 정상 NO-GO를 구분하는 기존 정책을 유지한다.
+
+### OPT 023 화면과 흐름 기반 UX
+
+대상: 기존 Electron 앱의 빈 화면·파일 선택·단일 분석·배치·진행·완료·설정 흐름.
+
+- [ ] 실제 실행 화면을 캡처·검토하고 화면별 관찰 근거를 기록한다.
+- [ ] 제출 용량 최적화라는 사용자 과제에 맞게 다음 행동과 결과 확인을 명확히 한다.
+- [ ] 예상 결과와 검증된 실측 결과, 단일·파일별·합계 목표를 구별한다.
+- [ ] 기존 시각 스타일을 기반으로 확인된 UX 마찰을 수정하고 전후 흐름을 검증한다.
+
+### OPT 024 키보드와 피드백 및 오류 복구
+
+대상: renderer의 포커스·live status·폼 검증·진행·취소·실패와 재시도.
+
+- [ ] 키보드만으로 파일 선택부터 결과 열기와 모달 닫기를 수행한다.
+- [ ] 모달의 포커스 진입·유지·복귀, 명확한 포커스 표시를 검증한다.
+- [ ] 분석·저장·취소·완료·실패를 시각과 보조기술에 일관되게 전달한다.
+- [ ] 잘못된 용량 입력에 해당 컨트롤과 연결된 설명 및 복구 방법을 제공한다.
+- [ ] 진행 표시·감소된 모션·반복 실행과 부분 실패의 HCI 동작을 검증한다.
+
+### OPT 025 화면 계층과 가독성
+
+대상: 기존 styles.css, index.html 및 renderer 화면 표시.
+
+- [ ] 사용자 목표·주요 행동·상세 설정·완료 결과의 시각 계층을 화면 근거로 정리한다.
+- [ ] 최소 지원 창 크기와 확대 상태에서 주요 행동과 내용이 잘리거나 겹치지 않는다.
+- [ ] 텍스트 대비·클릭 영역·설정 레이블·표와 긴 파일명의 가독성을 확인한다.
+- [ ] 변경 후 실제 화면을 다시 캡처해 확인하고 시각 검증 범위를 기록한다.
+
+## 완료와 갱신 규칙
+
+한 번에 한 작업을 수행한다. 상태는 대기 → 진행 → 검증 → 완료로 갱신하며, 작업 시작 시 담당과 branch/PR을 기록한다. 범위가 달라지면 ID는 유지하고 변경 이유를 기록한다.
+
+동작 변경은 해당 패키지의 재현 회귀 테스트를 먼저 실행한 뒤 `npm test`, `npm run typecheck`, `npm run build`를 통과해야 한다. Electron 경계 변경은 스모크, 패키징 변경은 실제 Windows 산출물 검사를 추가한다. 완료 시 체크박스, 변경 커밋/PR, 검증 명령·결과·환경을 기록한다. 구현 없이 테스트가 통과했다는 이유로 완료 처리하지 않는다.
