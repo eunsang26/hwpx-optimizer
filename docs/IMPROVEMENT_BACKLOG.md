@@ -8,7 +8,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 | ID | 우선순위 | 작업 | 영역 | 크기 | 선행 | 상태 | 담당 및 PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| OPT-001 | P1 | XML 본문 공백과 숫자 문자열 보존 | core | M | 없음 | 대기 | 미정 |
+| OPT-001 | P1 | XML 본문 공백과 숫자 문자열 보존 | core | M | 없음 | 완료 | Codex · codex/comprehensive-improvements |
 | OPT-002 | P1 | 투명도 보존과 정확 이미지 중복 판정 | core | L | 없음 | 대기 | 미정 |
 | OPT-003 | P1 | 배치 임시파일 정리의 소유권 보장 | CLI | M | 없음 | 대기 | 미정 |
 | OPT-004 | P1 | CLI 하드링크 원본 보호 | CLI | M | 없음 | 대기 | 미정 |
@@ -40,10 +40,12 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 대상: `xmlMinify.ts`, `balancedOptimizer.ts` 및 XML parser 공통 정책.
 
-- [ ] 문자열 parsing과 공백 보존 설정을 모든 재작성 경로에 적용한다.
-- [ ] ` A `, 공백만 있는 본문, `00123`, 소수·지수 형태 문자열, entity, mixed content를 보존한다.
-- [ ] safe·balanced·aggressive 최종 출력의 본문 동일성을 확인한다. XML 서식 공백 제거는 본문과 구분한다.
-- [ ] 잘못된 입력 XML을 재작성으로 정상화해 성공 처리하지 않는다.
+- [x] 문자열 parsing과 공백 보존 설정을 모든 재작성 경로에 적용한다.
+- [x] ` A `, 공백만 있는 본문, `00123`, 소수·지수 형태 문자열, entity, mixed content를 보존한다.
+- [x] safe·balanced·aggressive 최종 출력의 본문 동일성을 확인한다. XML 서식 공백 제거는 본문과 구분한다.
+- [x] 잘못된 입력 XML을 재작성으로 정상화해 성공 처리하지 않는다.
+
+검증 기록: 2026-10-14 Linux/Node 24.13.0. `xmlPreservation.test.ts` 17개 통과, 관련 6개 파일의 초기 대상 테스트 110개 통과. 최종 `npm test` 63개 파일·436개 테스트 통과·1개 건너뛰기, `npm run typecheck`, `npm run build` 통과. 공통 parser/builder가 텍스트·CDATA·주석을 보존하며 알려진 구조 컨테이너의 서식 공백만 줄인다. 원본 ZIP을 읽을 때 XML well-formedness를 검사한다.
 
 ### OPT 002 투명도와 이미지 동일성
 

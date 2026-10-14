@@ -1,4 +1,4 @@
-import { XMLBuilder, XMLParser } from "fast-xml-parser";
+import { buildDocumentXml, parseDocumentXml } from "./xmlDocument.js";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
@@ -344,18 +344,11 @@ function updateManifestReferences(
 }
 
 function parseXml(xml: string): XmlNode[] {
-  const parser = new XMLParser({ ignoreAttributes: false, preserveOrder: true, attributeNamePrefix: "" });
-  return parser.parse(xml) as XmlNode[];
+  return parseDocumentXml(xml);
 }
 
 function buildXml(document: XmlNode[]): string {
-  const builder = new XMLBuilder({
-    ignoreAttributes: false,
-    preserveOrder: true,
-    attributeNamePrefix: "",
-    suppressEmptyNode: true
-  });
-  return builder.build(document);
+  return buildDocumentXml(document, true);
 }
 
 function updateHrefAttributes(
