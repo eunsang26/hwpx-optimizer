@@ -1,4 +1,5 @@
 import { minifyXmlBuffer } from "./xmlMinify.js";
+import { canRemoveUnusedResource } from "./resourcePolicy.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import type {
   HwpxPackage,
@@ -48,8 +49,7 @@ export async function detectStructuralOptimizationOpportunities(
   for (const resource of analysis.unusedBinData) {
     if (
       resource.size <= 0 ||
-      resource.kind === "font" ||
-      resource.kind === "ole" ||
+      !canRemoveUnusedResource(resource) ||
       riskyResourcePaths.has(resource.path) ||
       duplicateMemberPaths.has(resource.path)
     ) {

@@ -23,7 +23,7 @@ This file separates release blockers from non-blockers so the project does not o
 - Future reference graph additions should be driven by real HWPX samples that expose new reference forms.
 - Duplicate image consolidation does not automatically merge near-duplicates or lossy re-encodes whose decoded pixels differ.
 - PSNR and SSIM thresholds are conservative quality gates, not perceptual proof that every image is visually identical. Manual review is still appropriate for high-stakes documents.
-- Embedded fonts and OLE objects are reported as risky resources but not optimized.
+- Embedded fonts and OLE objects are reported as risky resources and preserved in every mode, even when no supported reference is found.
 - Display-size based image budgets depend on detectable HWPX picture size fields. If those fields are missing, fallback mode profile limits are used.
 - JPEG XMP/IPTC/comment metadata removal can produce little or no size reduction when metadata is already small or ZIP compression dominates the package size. EXIF orientation is preserved to avoid rotation regressions.
 - Safe-mode optimization can still take time on image-heavy documents because it performs lossless image metadata/PNG processing and ZIP verification even when final savings are zero.

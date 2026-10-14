@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { getDecodedImage } from "./decodedImage.js";
 import { assertImageCanBeTransformed } from "./imageMetadata.js";
+import { canRemoveUnusedResource } from "./resourcePolicy.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 import { minifyXmlBuffer } from "./xmlMinify.js";
 
@@ -45,8 +46,12 @@ export async function applySafeOptimizationPlan(input: {
   const entries = [];
   for (const entry of input.pkg.entries) {
     if (removeTargets.has(entry.path)) {
-      applied.push({ type: "remove-unused", target: entry.path, beforeSize: entry.size, afterSize: 0 });
-      continue;
+      if (canRemoveUnusedResource(entry)) {
+        applied.push({ type: "remove-unused", target: entry.path, beforeSize: entry.size, afterSize: 0 });
+        continue;
+      }
+      skipped.push({ type: "remove-unused", target: entry.path, beforeSize: entry.size });
+      warnings.push(`remove-unused skipped for protected resource ${entry.path}`);
     }
 
     if (stripMetadataTargets.has(entry.path)) {

@@ -15,7 +15,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-005 | P1 | 데스크톱 모든 입력 파일 보호 | desktop | M | OPT-004 정책 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-006 | P1 | 본문과 이미지 배치 보존 검증 | core | L | OPT-001, OPT-002 | 대기 | 미정 |
 | OPT-007 | P2 | 미해결 binary 리소스 ID 검출 | core | M | 없음 | 대기 | 미정 |
-| OPT-008 | P2 | safe 폰트와 OLE 삭제 금지 | core | S | 없음 | 대기 | 미정 |
+| OPT-008 | P2 | safe 폰트와 OLE 삭제 금지 | core | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-009 | P2 | 변환 경로 변경을 verifier에 전달 | core | M | OPT-006 대응 정책 | 대기 | 미정 |
 | OPT-010 | P2 | non-overwrite 저장의 원자적 경로 확보 | CLI, desktop | M | OPT-003, OPT-005 | 대기 | 미정 |
 | OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 대기 | 미정 |
@@ -111,9 +111,11 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 대상: `planner.ts`, `structuralOpportunities.ts`.
 
-- [ ] safe에서도 font·OLE를 항상 보존한다.
-- [ ] `BinData/font.ttf`, `BinData/object.ole` 미참조 fixture에서 삭제가 적용되지 않는다.
-- [ ] 삭제 정책을 공유하고 safe와 고급 모드의 차이를 명시한다.
+- [x] safe에서도 font·OLE를 항상 보존한다.
+- [x] `BinData/font.ttf`, `BinData/object.ole` 미참조 fixture에서 삭제가 적용되지 않는다.
+- [x] 삭제 정책을 공유하고 safe와 고급 모드의 차이를 명시한다.
+
+검증 기록: 2026-10-14 Linux/Node 24.13.0. 새 정책 테스트 5개를 포함한 대상 3개 파일·16개 테스트, 전체 69개 파일·495개 테스트 통과·1개 건너뛰기. 타입 검사·빌드 통과. safe·balanced·aggressive 모두 미참조 글꼴/OLE 바이트를 보존한다. 공유 삭제 정책을 계획과 실행 양쪽에 적용해 외부에서 전달된 삭제 plan도 보호한다. 일반 미사용 BinData 정리는 유지한다.
 
 ### OPT 009 변환 경로 대응
 

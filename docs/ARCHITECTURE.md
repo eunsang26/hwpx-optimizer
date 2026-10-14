@@ -59,7 +59,7 @@ input.hwpx
 - Detects byte-identical duplicate images by SHA-256.
 - Detects same-visual duplicate images by exact decoded pixel hash across lossless encodings.
 - Detects unreferenced BinData candidates.
-- Reports font and OLE resources as risky resources.
+- Reports font and OLE resources as risky resources. A shared removal policy preserves these resources in every mode, including caller-supplied plans.
 
 ### Image Display Analysis
 
