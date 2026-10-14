@@ -8,8 +8,8 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 | ID | 우선순위 | 작업 | 영역 | 크기 | 선행 | 상태 | 담당 및 PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| OPT-001 | P1 | XML 본문 공백과 숫자 문자열 보존 | core | M | 없음 | 완료 | Codex · codex/comprehensive-improvements |
-| OPT-002 | P1 | 투명도 보존과 정확 이미지 중복 판정 | core | L | 없음 | 대기 | 미정 |
+| OPT-001 | P1 | XML 본문 공백과 숫자 문자열 보존 | core | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-002 | P1 | 투명도 보존과 정확 이미지 중복 판정 | core | L | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-003 | P1 | 배치 임시파일 정리의 소유권 보장 | CLI | M | 없음 | 대기 | 미정 |
 | OPT-004 | P1 | CLI 하드링크 원본 보호 | CLI | M | 없음 | 대기 | 미정 |
 | OPT-005 | P1 | 데스크톱 모든 입력 파일 보호 | desktop | M | OPT-004 정책 | 대기 | 미정 |
@@ -51,10 +51,12 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 대상: `decodedImage.ts`, `optimizer.ts`, `opportunities.ts`, `visualSimilarity.ts`, `imagePreview.ts`.
 
-- [ ] RGBA 등 필요한 채널을 디코드·변환·캐시에 보존한다.
-- [ ] RGB가 같고 alpha가 다른 이미지가 정확 중복으로 병합되지 않는다.
-- [ ] safe PNG의 alpha와 픽셀이 같으며 고급 모드 검증이 투명도 변경을 검출한다.
-- [ ] 색 프로필·16비트 PNG·alpha mask BMP·다중 페이지 TIFF의 보존/건너뛰기 정책을 정하고 fixture로 확인한다.
+- [x] RGBA 등 필요한 채널을 디코드·변환·캐시에 보존한다.
+- [x] RGB가 같고 alpha가 다른 이미지가 정확 중복으로 병합되지 않는다.
+- [x] safe PNG의 alpha와 픽셀이 같으며 고급 모드 검증이 투명도 변경을 검출한다.
+- [x] 색 프로필·16비트 PNG·alpha mask BMP·다중 페이지 TIFF의 보존/건너뛰기 정책을 정하고 fixture로 확인한다.
+
+검증 기록: 2026-10-14 Linux/Node 24.13.0. 새 `imagePreservation.test.ts` 15개, 기존 관련 8개 파일 89개 테스트 통과. 전체 `npm test` 64개 파일·451개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·Electron 스모크 통과. safe는 변경된 참조 이미지의 정확 픽셀/alpha 해시도 검사한다. 고급 품질 검증은 밝은 배경과 어두운 배경 합성 중 낮은 PSNR/SSIM을 사용한다. 색 프로필·고비트·다중 프레임·alpha BMP 및 방향 메타데이터 PNG는 이미지 원본 바이트를 유지하고 이유를 보고한다.
 
 ### OPT 003 배치 정리 소유권
 

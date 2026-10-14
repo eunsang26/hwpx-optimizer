@@ -1,5 +1,6 @@
 import sharp from "sharp";
-import { decodeBmp } from "./bmp.js";
+import type { Metadata } from "sharp";
+import { readBmpInfo } from "./bmp.js";
 
 export type ImageMetadata = {
   format?: string;
@@ -7,6 +8,7 @@ export type ImageMetadata = {
   height?: number;
   hasMetadata: boolean;
   isBmp: boolean;
+  preservationReason?: string;
 };
 
 type CachedMetadata = {
@@ -34,14 +36,15 @@ async function readImageMetadataUncached(
   options: { rotate?: boolean }
 ): Promise<ImageMetadata> {
   if (isMaybeBmp(path, data)) {
-    const bmp = decodeBmp(data);
+    const bmp = readBmpInfo(data);
     if (bmp) {
       return {
         format: "bmp",
         width: bmp.width,
         height: bmp.height,
         hasMetadata: false,
-        isBmp: true
+        isBmp: true,
+        ...(!bmp.supported ? { preservationReason: "Unsupported BMP variant; alpha or encoding cannot be preserved." } : {})
       };
     }
   }
@@ -55,7 +58,8 @@ async function readImageMetadataUncached(
       width: metadata.width,
       height: metadata.height,
       hasMetadata: Boolean(metadata.exif || metadata.icc || metadata.iptc || metadata.xmp),
-      isBmp: format === "bmp"
+      isBmp: format === "bmp",
+      ...(preservationReason(metadata) ? { preservationReason: preservationReason(metadata) } : {})
     };
   } catch {
     return {
@@ -64,6 +68,23 @@ async function readImageMetadataUncached(
       isBmp: false
     };
   }
+}
+
+function preservationReason(metadata: Metadata): string | undefined {
+  if ((metadata.pages ?? 1) > 1) return "Multi-page or animated image; all frames must be preserved.";
+  if (metadata.icc) return "Embedded color profile; original color representation is preserved.";
+  if ((metadata.depth && metadata.depth !== "uchar") || (metadata.bitsPerSample ?? 8) > 8) {
+    return "High-bit-depth image; original sample precision is preserved.";
+  }
+  if (metadata.format === "png" && (metadata.orientation ?? 1) !== 1) {
+    return "Oriented PNG; original orientation metadata is preserved.";
+  }
+  return undefined;
+}
+
+export async function assertImageCanBeTransformed(data: Buffer): Promise<void> {
+  const metadata = await readImageMetadata("", data);
+  if (metadata.preservationReason) throw new Error(metadata.preservationReason);
 }
 
 function isMaybeBmp(path: string, data: Buffer): boolean {

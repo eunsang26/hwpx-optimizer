@@ -131,10 +131,13 @@ Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a strong
 - Confirms referenced internal resources exist.
 - Compares original and output packages when a mode policy is provided.
 - Rejects safe-mode outputs that change referenced image dimensions or format.
+- Rejects changed safe-mode referenced image bytes unless decoded pixel and alpha hashes remain equal.
 - Rejects balanced/aggressive outputs that remove referenced images without an allowed replacement.
 - Rejects balanced/aggressive image conversions outside the current policy: BMP may become PNG, JPEG must remain JPEG, and PNG must remain PNG.
 - Rejects balanced/aggressive outputs that enlarge referenced image dimensions.
 - Rejects balanced/aggressive outputs whose referenced image PSNR and SSIM scores fall below the per-mode quality thresholds.
+
+Decoded image reuse retains RGB or RGBA channels. Same-visual hashes include alpha, canonicalizing fully opaque RGBA to RGB only for hashing. Advanced quality samples retain alpha and compare composites over both dark and light backgrounds, using the lower score. Images with ICC profiles, high sample precision, multiple frames/pages, unsupported BMP alpha or oriented PNG metadata retain their original bytes and report a reason.
 
 Current limitation: advanced mode verification uses PSNR and SSIM on 512×512 aspect-preserving (`fit: contain`) samples plus structural invariants; it does not prove every visual detail is perceptually identical. BMP/TIFF→PNG is allowed in advanced modes; JPEG stays JPEG and PNG stays PNG.
 

@@ -16,6 +16,7 @@ export function createSafeOptimizationPlan(input: {
   }
 
   for (const image of input.analysis.images) {
+    if (image.preservationReason) continue;
     if (image.hasMetadata && canStripMetadataLosslessly(image.path)) {
       actions.push({ type: "strip-metadata", target: image.path, risk: "safe" });
     }

@@ -3,7 +3,8 @@ import { readBmpInfo } from "./bmp.js";
 import { getDecodedImage } from "./decodedImage.js";
 import { findByteIdenticalImageGroups, findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
-import { readImageMetadata } from "./imageMetadata.js";
+import { assertImageCanBeTransformed, readImageMetadata } from "./imageMetadata.js";
+import type { ImageMetadata } from "./imageMetadata.js";
 import { stripJpegMetadataSegments } from "./optimizer.js";
 import type { HwpxPackage, OptimizationOpportunity } from "./types.js";
 
@@ -95,6 +96,7 @@ async function collectOpportunities(
     if (entry.kind !== "image") continue;
 
     const metadata = await readMetadata(entry.data);
+    if (metadata.preservationReason) continue;
     const resizeBudget = normalizeResizeBudget(resizeBudgets.get(entry.path), profile);
     // Hangul packages sometimes store JPEG payloads under a .png href. Drive the
     // JPEG pipeline from decoded format so we never re-encode those as PNG.
@@ -362,6 +364,7 @@ export async function transformImageBalancedWithBudget(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<{ outputPath: string; data: Buffer }> {
+  await assertImageCanBeTransformed(data);
   const metadata = await readMetadata(data);
   const resizeBudget = normalizeResizeBudget(budget, profile);
   if (isBmp(path)) {
@@ -413,6 +416,7 @@ export async function transformImageActionWithBudget(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<{ outputPath: string; data: Buffer }> {
+  await assertImageCanBeTransformed(data);
   const metadata = await readMetadata(data);
   const resizeBudget = normalizeResizeBudget(budget, profile);
   if (action === "convert-bmp-to-png") {
@@ -462,7 +466,7 @@ async function convertBmpToPng(
 ): Promise<Buffer> {
   const decoded = await getDecodedImage(data);
   const image = decoded
-    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
     : sharp(data);
   const sourceWidth = decoded?.width ?? width;
   const sourceHeight = decoded?.height ?? height;
@@ -510,7 +514,7 @@ async function convertTiffToPng(
   // swapped dimensions fail the verifier's aspect-ratio/enlargement checks).
   const decoded = await getDecodedImage(data, { rotate: true });
   const image = decoded
-    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
     : sharp(data).rotate();
   const sourceWidth = decoded?.width ?? width;
   const sourceHeight = decoded?.height ?? height;
@@ -558,7 +562,7 @@ async function resizePng(
   const decoded = await getDecodedImage(data, { rotate: true });
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   const image = decoded
-    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
     : sharp(data).rotate();
   return image
     .resize({
@@ -575,7 +579,7 @@ async function resizePng(
 async function optimizePng(data: Buffer, profile: ImageOptimizationProfile = balancedImageProfile): Promise<Buffer> {
   const decoded = await getDecodedImage(data, { rotate: false });
   if (!decoded) return sharp(data).png(pngOptions(profile)).toBuffer();
-  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
     .png(pngOptions(profile))
     .toBuffer();
 }
@@ -588,9 +592,8 @@ function pngOptions(profile: ImageOptimizationProfile) {
   };
 }
 
-async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number; format?: string }> {
-  const metadata = await readImageMetadata("", data);
-  return { width: metadata.width, height: metadata.height, format: metadata.format };
+async function readMetadata(data: Buffer): Promise<ImageMetadata> {
+  return readImageMetadata("", data);
 }
 
 function addOpportunityIfSmaller(

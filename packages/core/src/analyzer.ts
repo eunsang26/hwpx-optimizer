@@ -102,6 +102,7 @@ async function inspectImage(
     width: metadata.width,
     height: metadata.height,
     hasMetadata: metadata.hasMetadata,
+    ...(metadata.preservationReason ? { preservationReason: metadata.preservationReason } : {}),
     isBmpCandidate: extension === "bmp" || metadata.isBmp,
     ...createDisplayFields(displayRefs, metadata.width, metadata.height)
   };

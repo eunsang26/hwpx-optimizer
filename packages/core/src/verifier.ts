@@ -6,6 +6,7 @@ import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { computeVisualMetrics } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
+import { computeDecodedPixelHash } from "./visualSimilarity.js";
 import type { HwpxEntry, HwpxPackage, ImageInventoryItem } from "./types.js";
 
 export type VerifyMode = "safe" | "balanced" | "aggressive";
@@ -159,6 +160,19 @@ async function verifyAgainstOriginal(input: {
 
   if (input.mode === "safe") {
     verifySafeImages({ originalImages, outputImages, originalGraph });
+    const changedPairs = [...originalImageEntries.values()].flatMap((entry) => {
+      const output = outputImageEntries.get(entry.path);
+      return originalGraph.resources.get(entry.path)?.referenced && output && !entry.data.equals(output.data)
+        ? [{ original: entry, output }] : [];
+    });
+    await mapLimit(changedPairs, resolveImageConcurrency(input.imageConcurrency), async (pair) => {
+      const [original, output] = await Promise.all([
+        computeDecodedPixelHash(pair.original.data), computeDecodedPixelHash(pair.output.data)
+      ]);
+      if (!original || !output || original.hash !== output.hash) {
+        throw new Error(`Verification failed: safe mode image pixels or alpha changed ${pair.original.path}`);
+      }
+    });
     return;
   }
 

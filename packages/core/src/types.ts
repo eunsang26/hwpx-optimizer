@@ -18,6 +18,7 @@ export type ImageInventoryItem = {
   width?: number;
   height?: number;
   hasMetadata: boolean;
+  preservationReason?: string;
   isBmpCandidate: boolean;
   displayRefs: ImageDisplayReference[];
   largestDisplay?: ImageDisplaySummary;

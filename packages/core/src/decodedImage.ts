@@ -1,11 +1,12 @@
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
+import { readImageMetadata } from "./imageMetadata.js";
 
 export type DecodedImage = {
   data: Buffer;
   width: number;
   height: number;
-  channels: 3;
+  channels: 3 | 4;
   autoOriented: boolean;
   indexed: boolean;
 };
@@ -18,7 +19,7 @@ type CacheSlots = {
 const decodedImageCache = new WeakMap<Buffer, CacheSlots>();
 
 /**
- * Decode image bytes to 3-channel RGB raw, caching by Buffer identity.
+ * Decode image bytes to RGB/RGBA raw, caching by Buffer identity.
  * Callers that share the same BinData Buffer across duplicate hashing and
  * transforms hit the cache instead of re-decoding.
  */
@@ -47,6 +48,7 @@ export async function peekDecodedImageCache(
 }
 
 async function decodeImageUncached(data: Buffer, rotate: boolean): Promise<DecodedImage | null> {
+  if ((await readImageMetadata("", data)).preservationReason) return null;
   const bmp = decodeBmp(data);
   if (bmp) {
     return {
@@ -61,19 +63,19 @@ async function decodeImageUncached(data: Buffer, rotate: boolean): Promise<Decod
 
   try {
     const pipeline = rotate ? sharp(data).rotate() : sharp(data);
-    const decoded = await pipeline.toColourspace("srgb").removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const decoded = await pipeline.toColourspace("srgb").raw().toBuffer({ resolveWithObject: true });
     if (!decoded.info.width || !decoded.info.height) return null;
-    if (decoded.info.channels === 3) {
+    if (decoded.info.channels === 3 || decoded.info.channels === 4) {
       return {
         data: decoded.data,
         width: decoded.info.width,
         height: decoded.info.height,
-        channels: 3,
+        channels: decoded.info.channels,
         autoOriented: rotate,
         indexed: false
       };
     }
-    // Normalize unexpected channel counts to RGB.
+    // Normalize unexpected channel counts while retaining alpha.
     const rgb = await sharp(decoded.data, {
       raw: {
         width: decoded.info.width,
@@ -81,16 +83,15 @@ async function decodeImageUncached(data: Buffer, rotate: boolean): Promise<Decod
         channels: decoded.info.channels
       }
     })
-      .removeAlpha()
       .toColourspace("srgb")
       .raw()
       .toBuffer({ resolveWithObject: true });
-    if (rgb.info.channels !== 3) return null;
+    if (rgb.info.channels !== 3 && rgb.info.channels !== 4) return null;
     return {
       data: rgb.data,
       width: rgb.info.width,
       height: rgb.info.height,
-      channels: 3,
+      channels: rgb.info.channels,
       autoOriented: rotate,
       indexed: false
     };

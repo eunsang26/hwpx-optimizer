@@ -42,6 +42,10 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Safe Mode Caveats
 
+Image rewrites preserve transparency. Exact same-visual duplicate detection includes alpha; fully opaque RGB and RGBA can still share a canonical pixel hash. Safe verification compares decoded pixels for changed referenced images, and advanced quality verification evaluates the worse of light- and dark-background composites so alpha loss is visible to the quality gate.
+
+Images with embedded ICC profiles, sample depth greater than 8 bits, multiple pages/frames, or non-default PNG orientation retain their original image bytes. BMPs with alpha masks and ambiguous legacy 32-bit BI_RGB alpha are also preserved instead of converted. Reports include the preservation reason. Structural package cleanup can still reduce the document around these images. This conservative policy avoids silently losing color precision, profiles, animation/pages or transparency.
+
 Safe mode intentionally avoids the largest size-saving operations when they could affect the visible document:
 
 - No image resizing.

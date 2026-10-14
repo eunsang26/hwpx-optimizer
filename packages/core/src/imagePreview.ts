@@ -115,17 +115,40 @@ export async function computeVisualMetrics(
       return { psnr: null, ssim: null };
     }
 
-    let sumSquaredError = 0;
-    for (let index = 0; index < originalRaw.length; index += 1) {
-      const diff = originalRaw[index]! - optimizedRaw[index]!;
-      sumSquaredError += diff * diff;
-    }
-    const mse = sumSquaredError / originalRaw.length;
-    const psnr = mse === 0 ? PSNR_MAX_DB : Math.min(10 * Math.log10((255 * 255) / mse), PSNR_MAX_DB);
-    return { psnr, ssim: computeSsimFromRgbSamples(originalRaw, optimizedRaw) };
+    // Evaluate on both dark and light backgrounds. Dropping alpha must not be
+    // invisible to the quality gate just because the RGB channels are equal.
+    const samples = [0, 255].map((background) => {
+      const left = compositeRgbaSample(originalRaw, background);
+      const right = compositeRgbaSample(optimizedRaw, background);
+      let sumSquaredError = 0;
+      for (let index = 0; index < left.length; index += 1) {
+        const diff = left[index]! - right[index]!;
+        sumSquaredError += diff * diff;
+      }
+      const mse = sumSquaredError / left.length;
+      return {
+        psnr: mse === 0 ? PSNR_MAX_DB : Math.min(10 * Math.log10((255 * 255) / mse), PSNR_MAX_DB),
+        ssim: computeSsimFromRgbSamples(left, right)
+      };
+    });
+    return {
+      psnr: Math.min(...samples.map((sample) => sample.psnr)),
+      ssim: samples.some((sample) => sample.ssim === null) ? null : Math.min(...samples.map((sample) => sample.ssim!))
+    };
   } catch {
     return { psnr: null, ssim: null };
   }
+}
+
+function compositeRgbaSample(data: Buffer, background: number): Buffer {
+  const rgb = Buffer.alloc((data.length / 4) * 3);
+  for (let source = 0, target = 0; source < data.length; source += 4) {
+    const alpha = data[source + 3]! / 255;
+    for (let channel = 0; channel < 3; channel += 1) {
+      rgb[target++] = Math.round(data[source + channel]! * alpha + background * (1 - alpha));
+    }
+  }
+  return rgb;
 }
 
 function computeSsimFromRgbSamples(originalRaw: Buffer, optimizedRaw: Buffer): number | null {
@@ -177,14 +200,15 @@ async function decodeForMetrics(data: Buffer, sampleSize: number): Promise<Buffe
     const pipeline = bmp
       ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } })
       : sharp(data);
-    // contain + letterbox keeps aspect ratio while producing equal-sized RGB
+    // contain + letterbox keeps aspect ratio while producing equal-sized RGBA
     // samples so PSNR/SSIM length checks stay valid across differing shapes.
     return await pipeline
       .rotate()
-      .removeAlpha()
+      .toColourspace("srgb")
+      .ensureAlpha()
       .resize(sampleSize, sampleSize, {
         fit: "contain",
-        background: { r: 0, g: 0, b: 0 },
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
         kernel: "lanczos3"
       })
       .raw()

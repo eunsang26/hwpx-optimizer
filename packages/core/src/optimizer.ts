@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { getDecodedImage } from "./decodedImage.js";
+import { assertImageCanBeTransformed } from "./imageMetadata.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 import { minifyXmlBuffer } from "./xmlMinify.js";
 
@@ -122,10 +123,11 @@ function stripImageMetadataLossless(path: string, data: Buffer): Buffer {
 }
 
 async function optimizePngLosslessly(data: Buffer): Promise<Buffer> {
+  await assertImageCanBeTransformed(data);
   const decoded = await getDecodedImage(data, { rotate: false });
   const png = { compressionLevel: 9, adaptiveFiltering: true, palette: false };
   if (!decoded) return sharp(data).png(png).toBuffer();
-  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
     .png(png)
     .toBuffer();
 }
