@@ -281,7 +281,7 @@ Electron 패치의 npm tooling 최소 버전(22.12)에 맞춰 Node 개발/CI/CLI
 - [ ] Linux 빌드·Electron 스모크 및 Windows CLI/native 배포 실행을 검증한다.
 - [x] 실제로 확인한 런타임과 남은 개발 도구 advisory를 문서에 반영한다.
 
-검증 기록: 2026-10-14 Linux/Node 24.13.0. 전체 68개 파일·490개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. sharp 0.35.5/libvips 8.18.7, Electron 42.11.13. 배포 runtime moderate+ 0개; 전체 audit 20개(높음 8, 중간 11, 낮음 1)의 개발/패키징 도구 advisory는 남아 있다. Windows Node 24.21.0/새 native DLL 실행은 별도 CI 검증 중이다.
+검증 기록: 2026-10-14 Linux/Node 24.13.0. 전체 68개 파일·490개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. sharp 0.35.5/libvips 8.18.7, Electron 42.11.13. 배포 runtime moderate+ 0개; 전체 audit 20개(높음 8, 중간 11, 낮음 1)의 개발/패키징 도구 advisory는 남아 있다. 첫 Windows 실행은 npm 11.19의 lockfile 검증에서 WASM 선택 의존성 `@emnapi/runtime`·`@emnapi/core` 누락으로 설치 실패했다. 동일 Node 24.21.0/npm 11.19.0을 공식 archive/checksum으로 준비해 깨끗한 workspace에서 lockfile을 보정했다. `npm ci --dry-run`, Node 24.21.0 전체 495개 테스트·타입 검사·빌드·runtime audit 통과. Windows native 실행은 재검증 중이다.
 
 ## 완료와 갱신 규칙
 
