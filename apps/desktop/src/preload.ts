@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type { DesktopImagePreviewInput } from "./shared/imagePreview.js";
 
 const api = {
   selectHwpx: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-hwpx"),
@@ -49,7 +50,7 @@ const api = {
       savedPercent?: number;
     }>;
   }): Promise<{ reportPath: string }> => ipcRenderer.invoke("hwpx:save-batch-report", input),
-  previewImageDiffs: (input: { originalPath: string; optimizedPath: string; maxItems?: number; maxInputBytes?: number }) =>
+  previewImageDiffs: (input: DesktopImagePreviewInput) =>
     ipcRenderer.invoke("hwpx:image-preview", input),
   showItem: (filePath: string) => ipcRenderer.invoke("shell:show-item", filePath),
   openPath: (filePath: string) => ipcRenderer.invoke("shell:open-path", filePath)

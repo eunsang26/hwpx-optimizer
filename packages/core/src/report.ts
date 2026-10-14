@@ -5,7 +5,8 @@ import type {
   OptimizationOpportunityGroup,
   OptimizationReport,
   PackageAnalysis,
-  PerformanceSummary
+  PerformanceSummary,
+  ResourceMapping
 } from "./types.js";
 import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
 
@@ -77,10 +78,12 @@ export function createOptimizationReport(input: {
   targetMissReason?: string;
   plannedJpegQuality?: number;
   performance?: PerformanceSummary;
+  resourceMappings?: ResourceMapping[];
 }): OptimizationReport {
   const savedBytes = input.originalSize - input.optimizedSize;
   return {
     originalSize: input.originalSize,
+    ...(input.resourceMappings ? { resourceMappings: input.resourceMappings } : {}),
     optimizedSize: input.optimizedSize,
     savedBytes,
     savedPercent: input.originalSize === 0 ? 0 : (savedBytes / input.originalSize) * 100,

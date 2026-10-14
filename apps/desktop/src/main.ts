@@ -1,4 +1,5 @@
 import type { BrowserWindow as BrowserWindowInstance, OpenDialogOptions } from "electron";
+import type { DesktopImagePreviewInput } from "./shared/imagePreview.js";
 type BrowserWindow = BrowserWindowInstance;
 type ElectronApi = typeof import("electron");
 
@@ -322,10 +323,11 @@ function registerIpc(): void {
 
   ipcMain.handle(
     "hwpx:image-preview",
-    async (_event, input: { originalPath: string; optimizedPath: string; maxItems?: number; maxInputBytes?: number }) =>
+    async (_event, input: DesktopImagePreviewInput) =>
       previewImageDiffs(await requireAllowedInputPath(input.originalPath), await requireGeneratedPath(input.optimizedPath), {
         maxItems: input.maxItems,
-        maxInputBytes: input.maxInputBytes
+        maxInputBytes: input.maxInputBytes,
+        resourceMappings: input.resourceMappings
       })
   );
 

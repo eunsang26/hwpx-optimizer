@@ -4,6 +4,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
 import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
+import type { DesktopImagePreviewInput } from "../shared/imagePreview.js";
 
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
 export type BatchTargetMode = "aggregate" | "per-file";
@@ -284,7 +285,7 @@ export async function verifyDesktopFile(
 export async function previewImageDiffs(
   originalPath: string,
   optimizedPath: string,
-  options: { maxItems?: number; maxInputBytes?: number } = {}
+  options: Omit<DesktopImagePreviewInput, "originalPath" | "optimizedPath"> = {}
 ): Promise<ImagePreviewPair[]> {
   const [originalStat, optimizedStat] = await Promise.all([stat(originalPath), stat(optimizedPath)]);
   const maxInputBytes = options.maxInputBytes ?? DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES;

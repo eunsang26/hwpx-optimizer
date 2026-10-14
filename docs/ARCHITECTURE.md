@@ -134,7 +134,7 @@ Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a strong
 - Unknown ID reference forms prevent duplicate consolidation; style/paragraph IDs are never reassigned as binary IDs.
 - Rejects safe-mode outputs that change referenced image dimensions or format.
 - Rejects changed safe-mode referenced image bytes unless decoded pixel and alpha hashes remain equal and EXIF orientation is unchanged. Protected image representations must remain byte-identical, including when exact duplicates are aliased.
-- Rejects balanced/aggressive outputs that remove referenced images without an allowed replacement.
+- Rejects balanced/aggressive outputs that remove referenced images without an allowed replacement. The optimizer records actual original/output paths and manifest IDs, composes duplicate aliases with later conversions, and passes the resulting mappings to verification and the optimization report. Serialized XML uses must agree with those mappings.
 - Rejects balanced/aggressive image conversions outside the current policy: BMP may become PNG, JPEG must remain JPEG, and PNG must remain PNG.
 - Rejects balanced/aggressive outputs that enlarge referenced image dimensions.
 - Rejects balanced/aggressive outputs whose referenced image PSNR and SSIM scores fall below the per-mode quality thresholds.
@@ -150,7 +150,7 @@ Current limitation: advanced mode verification uses PSNR and SSIM on 512×512 as
 `packages/core/src/report.ts`
 
 - Builds JSON report objects.
-- Includes sizes, image inventory, duplicate groups, unused BinData, risky resources, opportunities, warnings, and applied/skipped actions.
+- Includes sizes, image inventory, duplicate groups, unused BinData, risky resources, opportunities, warnings, and applied/skipped actions. Advanced successful outputs include `resourceMappings`; image actions carry the actual `outputPath`. A rollback to the original does not retain mappings for discarded changes. Image previews receive report mappings; older reports recover identities from stable manifest IDs and XML use positions rather than extension guesses.
 
 ## CLI Boundary
 

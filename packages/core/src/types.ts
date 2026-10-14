@@ -159,9 +159,20 @@ export type AppliedAction = {
   target: string;
   beforeSize?: number;
   afterSize?: number;
+  /** Actual resource destination after conversion/collision allocation or consolidation. */
+  outputPath?: string;
+};
+
+export type ResourceMapping = {
+  originalPath: string;
+  outputPath: string;
+  originalId?: string;
+  outputId?: string;
 };
 
 export type OptimizationReport = {
+  /** Surviving image identities in the returned output, including duplicate aliases. */
+  resourceMappings?: ResourceMapping[];
   originalSize: number;
   optimizedSize?: number;
   savedBytes?: number;

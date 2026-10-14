@@ -1,5 +1,6 @@
 import { buildDocumentXml, parseDocumentXml } from "./xmlDocument.js";
 import { isBinaryResourceReference } from "./binaryReferences.js";
+import { describeResourceMappings } from "./resourceMappings.js";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
@@ -8,7 +9,7 @@ import { applySafeOptimizationPlan } from "./optimizer.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageActionWithBudget } from "./opportunities.js";
 import type { ImageOptimizationProfile, TransformImageAction } from "./opportunities.js";
 import { normalizePackagePath } from "./packagePath.js";
-import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan } from "./types.js";
+import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan, ResourceMapping } from "./types.js";
 import { getStringAttribute, getXmlAttributes, isXmlNode, setAttribute } from "./xmlNode.js";
 import type { XmlNode } from "./xmlNode.js";
 
@@ -20,7 +21,7 @@ export async function applyBalancedOptimizationPlan(input: {
   profile?: ImageOptimizationProfile;
   onTransformProgress?: (progress: { completed: number; total: number; target: string; action: TransformImageAction }) => void;
   imageConcurrency?: number;
-}): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[] }> {
+}): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[]; resourceMappings: ResourceMapping[] }> {
   const profile = input.profile ?? balancedImageProfile;
   const structuralPlan: OptimizationPlan = {
     mode: input.plan.mode,
@@ -160,7 +161,8 @@ export async function applyBalancedOptimizationPlan(input: {
       type: outcome.action,
       target: outcome.entry.path,
       beforeSize: outcome.entry.size,
-      afterSize: outcome.data.byteLength
+      afterSize: outcome.data.byteLength,
+      outputPath
     });
   }
 
@@ -183,7 +185,14 @@ export async function applyBalancedOptimizationPlan(input: {
     return { ...entry, data, size: data.byteLength };
   });
 
-  return { pkg: { entries }, applied, skipped, warnings };
+  const consolidationPaths = new Map(consolidated.applied.flatMap((action) =>
+    action.outputPath ? [[action.target, action.outputPath] as const] : []));
+  const pairs = input.pkg.entries.filter((entry) => entry.kind === "image").map((entry) => {
+    const canonical = consolidationPaths.get(entry.path) ?? entry.path;
+    return [entry.path, pathUpdates.get(canonical) ?? canonical] as const;
+  });
+  const pkg = { entries };
+  return { pkg, applied, skipped, warnings, resourceMappings: describeResourceMappings(input.pkg, pkg, pairs) };
 }
 
 function isTransformImageAction(action: string): action is TransformImageAction {
@@ -295,7 +304,8 @@ async function consolidateDuplicateImages(
       type: "consolidate-duplicate-images",
       target,
       beforeSize: duplicateSizes.get(target),
-      afterSize: 0
+      afterSize: 0,
+      outputPath: canonicalPath
     });
   }
 

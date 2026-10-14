@@ -2226,7 +2226,8 @@ async function openImageCompareModal(): Promise<void> {
   try {
     const pairs = await window.hwpxOptimizer.previewImageDiffs({
       originalPath: state.filePath,
-      optimizedPath: state.result.outputPath
+      optimizedPath: state.result.outputPath,
+      resourceMappings: state.result.report.resourceMappings
     });
     if (pairs.length === 0) {
       compareSummary.textContent = "변경된 이미지가 없습니다.";

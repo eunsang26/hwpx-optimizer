@@ -16,7 +16,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-006 | P1 | 본문과 이미지 배치 보존 검증 | core | L | OPT-001, OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-007 | P2 | 미해결 binary 리소스 ID 검출 | core | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-008 | P2 | safe 폰트와 OLE 삭제 금지 | core | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-009 | P2 | 변환 경로 변경을 verifier에 전달 | core | M | OPT-006 대응 정책 | 대기 | 미정 |
+| OPT-009 | P2 | 변환 경로 변경을 verifier에 전달 | core | M | OPT-006 대응 정책 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-010 | P2 | non-overwrite 저장의 원자적 경로 확보 | CLI, desktop | M | OPT-003, OPT-005 | 대기 | 미정 |
 | OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 대기 | 미정 |
 | OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 대기 | 미정 |
@@ -125,9 +125,11 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 대상: `balancedOptimizer.ts`, `verifier.ts`, `imagePreview.ts`.
 
-- [ ] `originalPath → outputPath` 및 ID 변경 정보를 명시적으로 전달한다.
-- [ ] BMP와 다른 내용의 동일 stem PNG가 공존할 때 `-opt.png` 결과가 최종 verifier와 preview를 통과한다.
-- [ ] TIFF 변환·다중 충돌·통합 후 변환도 전체 최적화 API로 확인한다.
+- [x] `originalPath → outputPath` 및 ID 변경 정보를 명시적으로 전달한다.
+- [x] BMP와 다른 내용의 동일 stem PNG가 공존할 때 `-opt.png` 결과가 최종 verifier와 preview를 통과한다.
+- [x] TIFF 변환·다중 충돌·통합 후 변환도 전체 최적화 API로 확인한다.
+
+검증 기록: 2026-10-14 Linux/Node 24.13.0. 대상 4개 파일·45개 테스트, 최종 전체 72개 파일·531개 테스트 통과·1개 건너뛰기. 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. 변환과 중복 통합의 실제 outputPath 및 original/output ID를 보고서에 기록하고 verifier·renderer IPC·preview로 전달한다. BMP 동일 stem PNG와 -opt/-opt2 충돌, TIFF, 통합 후 충돌 변환, 잘못된 mapping 및 비표시 변환의 desktop preview를 확인했다. 이전 보고서는 stable ID/XML 사용 위치로 대응을 복구하며 확장자 추측을 사용하지 않는다. 원본을 반환한 rollback에서는 폐기된 변환 mapping을 기록하지 않는다.
 
 ### OPT 010 배타적 저장
 

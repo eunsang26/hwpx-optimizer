@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
 import { readHwpxPackage } from "./reader.js";
-import type { HwpxEntry } from "./types.js";
+import { inferResourceMappings } from "./resourceMappings.js";
+import type { HwpxEntry, ResourceMapping } from "./types.js";
 
 export type ImagePreviewPair = {
   originalPath: string;
@@ -22,6 +23,7 @@ export type ImagePreviewOptions = {
   thumbnailMaxEdge?: number;
   thumbnailQuality?: number;
   psnrSampleSize?: number;
+  resourceMappings?: ResourceMapping[];
 };
 
 export type VisualMetrics = {
@@ -60,9 +62,14 @@ export async function extractImageDiffPreviews(
   type Candidate = { original: HwpxEntry; output: HwpxEntry; savedBytes: number };
   const candidates: Candidate[] = [];
 
-  for (const [path, output] of outputImages) {
-    const original = matchOriginalImage(originalImages, path);
-    if (!original) continue;
+  const mappings = options.resourceMappings ?? inferResourceMappings(originalPkg, outputPkg);
+  const seen = new Set<string>();
+  for (const mapping of mappings) {
+    const original = originalImages.get(mapping.originalPath);
+    const output = outputImages.get(mapping.outputPath);
+    const key = JSON.stringify([mapping.originalPath, mapping.outputPath]);
+    if (!original || !output || seen.has(key)) continue;
+    seen.add(key);
     if (original.size === output.size && hashesEqual(original.data, output.data)) continue;
     candidates.push({ original, output, savedBytes: original.size - output.size });
   }
@@ -216,19 +223,6 @@ async function decodeForMetrics(data: Buffer, sampleSize: number): Promise<Buffe
   } catch {
     return null;
   }
-}
-
-function matchOriginalImage(originalImages: Map<string, HwpxEntry>, outputPath: string): HwpxEntry | undefined {
-  const direct = originalImages.get(outputPath);
-  if (direct) return direct;
-  const candidates = ["bmp", "png", "jpg", "jpeg"];
-  for (const ext of candidates) {
-    const candidate = outputPath.replace(/\.[^.\/]+$/, `.${ext}`);
-    if (candidate === outputPath) continue;
-    const match = originalImages.get(candidate);
-    if (match) return match;
-  }
-  return undefined;
 }
 
 async function renderThumbnailDataUrl(data: Buffer, maxEdge: number, quality: number): Promise<string> {

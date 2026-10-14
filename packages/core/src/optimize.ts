@@ -425,7 +425,8 @@ async function optimizeHwpxBufferWithProfile(
       mode: settings.mode,
       originalPackage: pkg,
       originalAnalysis: analysis,
-      imageConcurrency: settings.options.imageConcurrency
+      imageConcurrency: settings.options.imageConcurrency,
+      resourceMappings: optimized.resourceMappings
     })
   );
 
@@ -464,6 +465,7 @@ async function optimizeHwpxBufferWithProfile(
     opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
     targetBytes: settings.options.targetBytes,
     plannedJpegQuality: settings.profile.jpegQuality,
+    resourceMappings: optimized.resourceMappings,
     warnings: combinedWarnings.length > 0 ? combinedWarnings : undefined
   }));
   return { output, report };

@@ -8,7 +8,7 @@ import { computeVisualMetrics } from "./imagePreview.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
 import { computeDecodedPixelHash } from "./visualSimilarity.js";
-import type { HwpxEntry, HwpxPackage, ImageInventoryItem } from "./types.js";
+import type { HwpxEntry, HwpxPackage, ImageInventoryItem, ResourceMapping } from "./types.js";
 
 export type VerifyMode = "safe" | "balanced" | "aggressive";
 
@@ -19,6 +19,7 @@ export type VerifyHwpxOutputOptions = {
   originalAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
   outputAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
   imageConcurrency?: number;
+  resourceMappings?: ResourceMapping[];
 };
 
 const PSNR_MINIMUM_DB: Record<Exclude<VerifyMode, "safe">, number> = {
@@ -52,7 +53,8 @@ export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutput
       mode: options.mode,
       originalAnalysis: options.originalAnalysis,
       outputAnalysis: options.outputAnalysis,
-      imageConcurrency: options.imageConcurrency
+      imageConcurrency: options.imageConcurrency,
+      resourceMappings: options.resourceMappings
     });
   }
 }
@@ -111,6 +113,7 @@ async function verifyAgainstOriginal(input: {
   originalAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
   outputAnalysis?: Awaited<ReturnType<typeof analyzeHwpxPackage>>;
   imageConcurrency?: number;
+  resourceMappings?: ResourceMapping[];
 }): Promise<void> {
   const originalGraph = buildReferenceGraph(input.original);
   const outputGraph = buildReferenceGraph(input.output);
@@ -132,8 +135,9 @@ async function verifyAgainstOriginal(input: {
   const originalImages = new Map(originalAnalysis.images.map((image) => [image.path, image]));
   const outputImages = new Map(outputAnalysis.images.map((image) => [image.path, image]));
   const originalDuplicatePathsByPath = await duplicateImagePathsByPath(input.original, input.imageConcurrency);
-  verifyDocumentPreservation({ original: input.original, output: input.output,
-    originalGraph, duplicatePathsByPath: originalDuplicatePathsByPath, mode: input.mode });
+  const mappedPaths = verifyDocumentPreservation({ original: input.original, output: input.output,
+    originalGraph, duplicatePathsByPath: originalDuplicatePathsByPath, mode: input.mode,
+    resourceMappings: input.resourceMappings });
   const visualPairs: Array<{ original: HwpxEntry; output: HwpxEntry }> = [];
   const originalImageEntries = new Map(input.original.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
   const outputImageEntries = new Map(input.output.entries.filter((entry) => entry.kind === "image").map((entry) => [entry.path, entry]));
@@ -154,17 +158,23 @@ async function verifyAgainstOriginal(input: {
     if (!resource.referenced) continue;
     const originalImage = originalImages.get(resource.path);
     if (input.mode !== "safe" && originalImage) {
-      const outputImage = verifyAdvancedImage({
-        originalImage,
-        outputImages,
-        outputGraph,
-        mode: input.mode,
-        originalDuplicatePaths: originalDuplicatePathsByPath.get(originalImage.path) ?? []
-      });
-      const originalEntry = originalImageEntries.get(originalImage.path);
-      const outputEntry = outputImageEntries.get(outputImage.path);
-      if (originalEntry && outputEntry) {
-        visualPairs.push({ original: originalEntry, output: outputEntry });
+      const candidates = [...(mappedPaths.get(originalImage.path) ?? new Set([originalImage.path]))]
+        .filter((path) => outputGraph.resources.get(path)?.referenced);
+      if (candidates.length === 0) throw new Error(`Verification failed: referenced image removed ${originalImage.path}`);
+      for (const path of candidates) {
+        const outputImage = verifyAdvancedImage({
+          originalImage,
+          outputImages,
+          outputGraph,
+          mode: input.mode,
+          originalDuplicatePaths: originalDuplicatePathsByPath.get(originalImage.path) ?? [],
+          candidatePaths: [path]
+        });
+        const originalEntry = originalImageEntries.get(originalImage.path);
+        const outputEntry = outputImageEntries.get(outputImage.path);
+        if (originalEntry && outputEntry) {
+          visualPairs.push({ original: originalEntry, output: outputEntry });
+        }
       }
       continue;
     }
@@ -286,8 +296,9 @@ function verifyAdvancedImage(input: {
   outputGraph: ReturnType<typeof buildReferenceGraph>;
   mode: Exclude<VerifyMode, "safe">;
   originalDuplicatePaths: string[];
+  candidatePaths: string[];
 }): ImageInventoryItem {
-  const candidatePaths = allowedAdvancedImagePaths(input.originalImage, input.originalDuplicatePaths);
+  const candidatePaths = input.candidatePaths;
   const outputImage =
     candidatePaths
       .map((path) => input.outputImages.get(path))
@@ -406,23 +417,6 @@ function normalizeFormat(format: string): string {
   return normalized;
 }
 
-function allowedAdvancedImagePaths(image: ImageInventoryItem, duplicatePaths: string[] = []): string[] {
-  // Include extension variants for every seed path. After same-visual consolidation the
-  // canonical may also be converted (BMP/TIFF→PNG), so a removed duplicate like
-  // image24.bmp must still resolve to the surviving image163.png.
-  const paths = new Set<string>();
-  for (const seed of [image.path, ...duplicatePaths]) {
-    paths.add(seed);
-    paths.add(replaceExtension(seed, ".bmp"));
-    paths.add(replaceExtension(seed, ".png"));
-    paths.add(replaceExtension(seed, ".jpg"));
-    paths.add(replaceExtension(seed, ".jpeg"));
-    paths.add(replaceExtension(seed, ".tif"));
-    paths.add(replaceExtension(seed, ".tiff"));
-  }
-  return [...paths];
-}
-
 function isAllowedAdvancedFormat(originalImage: ImageInventoryItem, outputImage: ImageInventoryItem): boolean {
   const original = normalizeFormat(originalImage.format);
   const output = normalizeFormat(outputImage.format);
@@ -431,10 +425,6 @@ function isAllowedAdvancedFormat(originalImage: ImageInventoryItem, outputImage:
   if (original === "jpeg") return output === "jpeg";
   if (original === "png") return output === "png";
   return original === output;
-}
-
-function replaceExtension(path: string, extension: string): string {
-  return path.replace(/\.[^.\/]+$/, extension);
 }
 
 async function duplicateImagePathsByPath(pkg: HwpxPackage, imageConcurrency?: number): Promise<Map<string, string[]>> {

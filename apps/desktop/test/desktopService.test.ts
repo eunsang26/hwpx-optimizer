@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import sharp from "sharp";
 import { createHwpxFixture } from "../../../packages/core/test/fixtures.js";
 import {
   analyzeDesktopFile,
@@ -499,6 +500,21 @@ describe("desktop service", () => {
     await expect(previewImageDiffs(originalPath, optimizedPath, { maxInputBytes: 10 })).rejects.toThrow(
       "too large for image preview"
     );
+  });
+  it("passes explicit TIFF resource mappings through the desktop preview boundary", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "hwpx-preview-mapping-"));
+    const tiff = await sharp({ create: { width: 32, height: 24, channels: 3, background: "#123456" } })
+      .tiff({ compression: "none" }).toBuffer();
+    const png = await sharp(tiff).png().toBuffer();
+    const originalPath = join(directory, "original.hwpx");
+    const optimizedPath = join(directory, "output.hwpx");
+    await writeFile(originalPath, await createHwpxFixture({ entries: { "BinData/image.tiff": tiff } }));
+    await writeFile(optimizedPath, await createHwpxFixture({ entries: { "BinData/image.png": png } }));
+    const pairs = await previewImageDiffs(originalPath, optimizedPath, { resourceMappings: [
+      { originalPath: "BinData/image.tiff", outputPath: "BinData/image.png" }
+    ] });
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]).toMatchObject({ originalPath: "BinData/image.tiff", outputPath: "BinData/image.png" });
   });
 
   it("rejects optimization inputs over the configured local processing limit", async () => {

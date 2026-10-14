@@ -7,7 +7,7 @@ import { parseDocumentXml } from "./xmlDocument.js";
 import { minifyXmlBuffer } from "./xmlMinify.js";
 import { getXmlAttributes } from "./xmlNode.js";
 import type { XmlNode } from "./xmlNode.js";
-import type { HwpxPackage, ReferenceGraph } from "./types.js";
+import type { HwpxPackage, ReferenceGraph, ResourceMapping } from "./types.js";
 
 /** Compare serialized document semantics and every resource use in its original position. */
 export function verifyDocumentPreservation(input: {
@@ -16,6 +16,7 @@ export function verifyDocumentPreservation(input: {
   originalGraph: ReferenceGraph;
   duplicatePathsByPath: Map<string, string[]>;
   mode: "safe" | "balanced" | "aggressive";
+  resourceMappings?: ResourceMapping[];
 }): Map<string, Set<string>> {
   const originalEntries = new Map(input.original.entries.map((entry) => [entry.path, entry]));
   const outputEntries = new Map(input.output.entries.map((entry) => [entry.path, entry]));
@@ -32,6 +33,10 @@ export function verifyDocumentPreservation(input: {
   const outputIds = manifest(input.output, outputPaths);
   const mappedPaths = new Map<string, Set<string>>();
   const canonical = (path: string): string => input.duplicatePathsByPath.get(path)?.[0] ?? path;
+  const explicitPairs = input.resourceMappings ? new Set(input.resourceMappings.map((mapping) =>
+    JSON.stringify([mapping.originalPath, mapping.outputPath]))) : undefined;
+  const survivingDuplicateGroups = new Set([...originalIds].filter(([id]) => outputIds.has(id))
+    .map(([, path]) => canonical(path)));
   function fail(path: string, detail: string): never {
     throw new Error(`Verification failed: document content or layout changed at ${path}: ${detail}`);
   }
@@ -51,17 +56,32 @@ export function verifyDocumentPreservation(input: {
         const seeds = input.duplicatePathsByPath.get(originalPath) ?? [originalPath];
         const allowed = seeds.some((seed) => {
           const stem = seed.replace(/\.[^./]+$/, "");
-          if (/\.(bmp|tiff?)$/i.test(seed)) return outputPath === `${stem}.png`;
-          if (/\.jpe?g$/i.test(seed)) return outputPath === `${stem}.jpg`;
-          return false;
+          const suffix = /\.(bmp|tiff?)$/i.test(seed) ? ".png" : /\.jpe?g$/i.test(seed) ? ".jpg" : undefined;
+          if (!suffix) return false;
+          if (outputPath === `${stem}${suffix}`) return true;
+          if (!outputPath.startsWith(`${stem}-opt`) || !outputPath.endsWith(suffix)) return false;
+          const number = outputPath.slice(stem.length + 4, -suffix.length);
+          return number === "" || /^[2-9]\d*$|^1\d+$/.test(number);
         });
         if (!allowed || outputPaths.has(originalPath)) fail(location,
           `${input.mode} mode image conversion is not allowed ${originalPath} → ${outputPath}`);
       }
     }
+    if (source.kind === "image" && explicitPairs && !explicitPairs.has(JSON.stringify([originalPath, outputPath]))) {
+      fail(location, "explicit resource mapping does not match serialized use");
+    }
     const paths = mappedPaths.get(originalPath) ?? new Set<string>();
     paths.add(outputPath);
     mappedPaths.set(originalPath, paths);
+  }
+  for (const mapping of input.resourceMappings ?? []) {
+    if (originalEntries.get(mapping.originalPath)?.kind !== "image" ||
+        outputEntries.get(mapping.outputPath)?.kind !== "image" ||
+        (mapping.originalId !== undefined && originalIds.get(mapping.originalId) !== mapping.originalPath) ||
+        (mapping.outputId !== undefined && outputIds.get(mapping.outputId) !== mapping.outputPath)) {
+      fail(mapping.originalPath, "invalid explicit resource mapping");
+    }
+    verifyPair(mapping.originalPath, mapping.outputPath, mapping.originalPath);
   }
   function canRemoveManifestItem(node: XmlNode): boolean {
     if (!Object.keys(node).some((name) => name.split(":").at(-1) === "item")) return false;
@@ -71,9 +91,8 @@ export function verifyDocumentPreservation(input: {
     const entry = path ? originalEntries.get(path) : undefined;
     if (!entry || outputPaths.has(entry.path)) return false;
     if (!input.originalGraph.resources.get(entry.path)?.referenced && canRemoveUnusedResource(entry)) return true;
-    return input.mode !== "safe" && entry.kind === "image" &&
-      (input.duplicatePathsByPath.get(entry.path) ?? []).some((duplicate) =>
-        [...originalIds].some(([id, original]) => original === duplicate && outputIds.has(id)));
+    return input.mode !== "safe" && entry.kind === "image" && input.duplicatePathsByPath.has(entry.path) &&
+      survivingDuplicateGroups.has(canonical(entry.path));
   }
   function pruneRemovedManifestItems(nodes: XmlNode[]): XmlNode[] {
     return nodes.filter((node) => !canRemoveManifestItem(node)).map((node) => Object.fromEntries(
