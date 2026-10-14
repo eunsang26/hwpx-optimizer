@@ -17,7 +17,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-007 | P2 | 미해결 binary 리소스 ID 검출 | core | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-008 | P2 | safe 폰트와 OLE 삭제 금지 | core | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-009 | P2 | 변환 경로 변경을 verifier에 전달 | core | M | OPT-006 대응 정책 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-010 | P2 | non-overwrite 저장의 원자적 경로 확보 | CLI, desktop | M | OPT-003, OPT-005 | 검증 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-010 | P2 | non-overwrite 저장의 원자적 경로 확보 | CLI, desktop | M | OPT-003, OPT-005 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 대기 | 미정 |
 | OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 대기 | 미정 |
 | OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 대기 | 미정 |
@@ -139,7 +139,9 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 - [x] 서로 다른 프로세스가 같은 폴더에 쓰면 고유한 결과 또는 명확한 충돌 오류가 나온다.
 - [x] 문서와 보고서 이름을 함께 확보하고 예약 실패 시 자기 파일만 정리한다.
 
-검증 기록: 2026-10-15 Linux/Node 24.13.0. 동시 저장·사용자 대체 파일·배치 복구 대상 4개 파일·30개 테스트 및 전체 76개 파일·551개 테스트 통과·1개 건너뛰기. 타입 검사·빌드·합성 corpus 2/2·배포 runtime audit·Electron 스모크 통과. 실제 ASAR fixture로 core/io runtime 누락 거부 3개 테스트를 추가하고 배포 검사에 필수 모듈 존재 조건을 넣었다. `packages/io`를 CLI/desktop이 공유하며 빈 디렉터리 예약과 배타적 hardlink 승격을 사용한다. hardlink 미지원 시 `O_EXCL` 스트리밍 복사를 사용하므로 이름은 보호하지만 바이트 전체의 원자적 공개를 보장하지 않는다. 다른 파일이 생기거나 예약이 바뀌면 보존하고 실패한다. 구형 0바이트 배치 예약 복구도 유지한다. Windows CLI ZIP·Electron 패키지의 새 모듈 포함 및 실행은 재검증 중이다. 덮어쓰기 rollback과 강제 종료 복구는 OPT-011/012에서 이어간다.
+검증 기록: 2026-10-15 Linux/Node 24.13.0. 동시 저장·사용자 대체 파일·배치 복구 대상 4개 파일·30개 테스트 및 전체 76개 파일·551개 테스트 통과·1개 건너뛰기. 타입 검사·빌드·합성 corpus 2/2·배포 runtime audit·Electron 스모크 통과. 실제 ASAR fixture로 core/io runtime 누락 거부 3개 테스트를 추가하고 배포 검사에 필수 모듈 존재 조건을 넣었다. `packages/io`를 CLI/desktop이 공유하며 빈 디렉터리 예약과 배타적 hardlink 승격을 사용한다. hardlink 미지원 시 `O_EXCL` 스트리밍 복사를 사용하므로 이름은 보호하지만 바이트 전체의 원자적 공개를 보장하지 않는다. 다른 파일이 생기거나 예약이 바뀌면 보존하고 실패한다. 구형 0바이트 배치 예약 복구도 유지한다. 덮어쓰기 rollback과 강제 종료 복구는 OPT-011/012에서 이어간다.
+
+Windows 검증: Node 24.21.0. 구현 커밋 `391eed6`의 [CLI ZIP/native 실행 스모크](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38656830941)가 548개 테스트·타입 검사·빌드·audit와 함께 통과했다. ASAR 검사 보완 커밋 `0c9ca1b`의 [데스크톱 릴리즈 빌드](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38657036685)는 551개 테스트·타입 검사·빌드·합성 corpus·audit·Electron 스모크·실제 ASAR의 core/io 필수 파일 검사·unpacked native 검사를 통과했다. 두 실행 모두 1개 테스트를 건너뛰었고 합성 문서만 사용했으며 산출물 업로드를 비활성화했다.
 
 ### OPT 011 문서와 보고서 저장 계약
 
