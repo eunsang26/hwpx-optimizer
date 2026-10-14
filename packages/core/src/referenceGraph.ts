@@ -1,10 +1,8 @@
-import { XMLParser } from "fast-xml-parser";
-import { buildManifestPathById } from "./manifest.js";
+import { buildManifestPathById, extractManifestItems, resolveManifestHref } from "./manifest.js";
 import { BIN_DATA_PREFIX, normalizePackagePath } from "./packagePath.js";
 import type { HwpxPackage, ReferenceGraph, ResourceReference } from "./types.js";
 import { getXmlAttributes, isXmlNode } from "./xmlNode.js";
-
-const ATTRIBUTE_PARSER = new XMLParser({ ignoreAttributes: false, preserveOrder: true, attributeNamePrefix: "" });
+import { parseDocumentXml } from "./xmlDocument.js";
 
 export function buildReferenceGraph(pkg: HwpxPackage): ReferenceGraph {
   const resources = new Map<string, ResourceReference>();
@@ -18,27 +16,40 @@ export function buildReferenceGraph(pkg: HwpxPackage): ReferenceGraph {
     }
   }
 
-  const manifestPathById = buildManifestPathById(pkg, normalizePackagePath);
+  const availablePaths = new Set(pkg.entries.map((entry) => entry.path));
+  const manifestPathById = buildManifestPathById(pkg, (href) => resolveManifestHref(href, availablePaths));
 
   const missingReferences: string[] = [];
+  const declaredIds = new Set<string>();
+  for (const item of extractManifestItems(xmlText.find((xml) => isPackageManifest(xml.path))?.text ?? "")) {
+    if (declaredIds.has(item.id)) missingReferences.push(`duplicate manifest ID ${item.id}`);
+    declaredIds.add(item.id);
+    const path = resolveManifestHref(item.href, availablePaths);
+    if (path && !availablePaths.has(path)) missingReferences.push(`manifest ${item.id}: ${path}`);
+    if (!path && !/^[a-z][a-z\d+.-]*:/i.test(item.href)) {
+      missingReferences.push(`invalid manifest href ${item.id}: ${item.href}`);
+    }
+  }
   for (const xml of xmlText) {
     const refs = extractInternalRefs(xml.text, { includeDirectPackagePaths: !isPackageManifest(xml.path) });
     for (const ref of refs) {
-      const normalized = normalizePackagePath(ref);
+      const normalized = normalizePackagePath(ref, { xmlDecoded: true });
       if (!normalized) continue;
       markReference({ resources, missingReferences, path: normalized, referrer: xml.path });
     }
 
     if (isPackageManifest(xml.path)) continue;
     for (const idRef of extractBinaryItemIdRefs(xml.text)) {
-      const path = manifestPathById.get(idRef);
+      const path = manifestPathById.get(idRef.value);
       if (path) {
         markReference({ resources, missingReferences, path, referrer: xml.path });
+      } else if (idRef.required) {
+        missingReferences.push(`binaryItemIDRef ${idRef.value} at ${xml.path}`);
       }
     }
   }
 
-  return { resources, missingReferences };
+  return { resources, missingReferences: [...new Set(missingReferences)] };
 }
 
 function extractInternalRefs(xml: string, options: { includeDirectPackagePaths: boolean }): string[] {
@@ -47,25 +58,32 @@ function extractInternalRefs(xml: string, options: { includeDirectPackagePaths: 
     for (const value of extractParsedAttributeValues(xml)) {
       refs.add(value);
     }
-    for (const match of xml.matchAll(/[\w:-]+\s*=\s*["']([^"']+)["']/g)) {
-      refs.add(match[1]);
-    }
-    for (const match of xml.matchAll(/BinData\/[^"'()<>\s]+/gi)) {
-      refs.add(match[0]);
+    for (const text of extractParsedText(xml)) {
+      for (const match of text.matchAll(/BinData\/[^"'()<>\s]+/gi)) refs.add(match[0]);
     }
   }
   return [...refs];
 }
 
-function extractBinaryItemIdRefs(xml: string): string[] {
-  const refs: string[] = [];
-  for (const [name, value] of extractParsedAttributes(xml)) {
-    if (isIdReferenceAttribute(name)) refs.push(value);
+function extractParsedText(xml: string): string[] {
+  const text: string[] = [];
+  function visit(value: unknown): void {
+    if (Array.isArray(value)) { for (const node of value) visit(node); return; }
+    if (!isXmlNode(value)) return;
+    for (const [name, child] of Object.entries(value)) {
+      if (name === "#text" && typeof child === "string") text.push(child);
+      else if (name !== "#comment" && Array.isArray(child)) visit(child);
+    }
   }
-  for (const match of xml.matchAll(/([\w:-]+)\s*=\s*["']([^"']+)["']/g)) {
-    const name = match[1] ?? "";
-    const value = match[2] ?? "";
-    if (isIdReferenceAttribute(name)) refs.push(value);
+  visit(parseDocumentXml(xml));
+  return text;
+}
+
+function extractBinaryItemIdRefs(xml: string): Array<{ value: string; required: boolean }> {
+  const refs: Array<{ value: string; required: boolean }> = [];
+  for (const [name, value] of extractParsedAttributes(xml)) {
+    if (isIdReferenceAttribute(name)) refs.push({ value,
+      required: name.split(":").at(-1)?.toLowerCase() === "binaryitemidref" });
   }
   return refs;
 }
@@ -76,7 +94,7 @@ function extractParsedAttributeValues(xml: string): string[] {
 
 function extractParsedAttributes(xml: string): Array<[string, string]> {
   try {
-    const document = ATTRIBUTE_PARSER.parse(xml);
+    const document = parseDocumentXml(xml);
     const attrs: Array<[string, string]> = [];
     collectParsedAttributes(document, attrs);
     return attrs;

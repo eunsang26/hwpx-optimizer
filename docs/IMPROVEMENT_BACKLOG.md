@@ -14,7 +14,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-004 | P1 | CLI 하드링크 원본 보호 | CLI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-005 | P1 | 데스크톱 모든 입력 파일 보호 | desktop | M | OPT-004 정책 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-006 | P1 | 본문과 이미지 배치 보존 검증 | core | L | OPT-001, OPT-002 | 대기 | 미정 |
-| OPT-007 | P2 | 미해결 binary 리소스 ID 검출 | core | M | 없음 | 대기 | 미정 |
+| OPT-007 | P2 | 미해결 binary 리소스 ID 검출 | core | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-008 | P2 | safe 폰트와 OLE 삭제 금지 | core | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-009 | P2 | 변환 경로 변경을 verifier에 전달 | core | M | OPT-006 대응 정책 | 대기 | 미정 |
 | OPT-010 | P2 | non-overwrite 저장의 원자적 경로 확보 | CLI, desktop | M | OPT-003, OPT-005 | 대기 | 미정 |
@@ -33,7 +33,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 대기 | Codex |
 | OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 대기 | Codex |
 | OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 대기 | Codex |
-| OPT-026 | P1 | sharp·Electron 런타임 보안 패치와 배포 검증 | core, packaging | M | 없음 | 검증 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-026 | P1 | sharp·Electron 런타임 보안 패치와 배포 검증 | core, packaging | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 
 ## 작업별 완료 기준
 
@@ -103,9 +103,11 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 
 대상: `referenceGraph.ts`, `manifest.ts`, `verifier.ts`.
 
-- [ ] 미등록 `binaryItemIDRef`와 존재하지 않는 manifest 리소스를 경고·검증 실패로 전달한다.
-- [ ] 이미지 ID와 문서 내부 스타일·문단 ID를 구분해 정상 문서를 잘못 거부하지 않는다.
-- [ ] 직접 경로·상대 경로·percent encoding 기존 사례가 유지된다.
+- [x] 미등록 `binaryItemIDRef`와 존재하지 않는 manifest 리소스를 경고·검증 실패로 전달한다.
+- [x] 이미지 ID와 문서 내부 스타일·문단 ID를 구분해 정상 문서를 잘못 거부하지 않는다.
+- [x] 직접 경로·상대 경로·percent encoding 기존 사례가 유지된다.
+
+검증 기록: 2026-10-14 Linux/Node 24.13.0. 리소스 참조 회귀 11개를 포함한 대상 4개 파일·41개 테스트, 전체 70개 파일·506개 테스트 통과·1개 건너뛰기, 타입 검사·빌드 통과. manifest 파일 누락과 중복 ID 및 명시적 binary ID 미등록을 보고서 경고와 verifier 오류로 전달한다. 일반 문단/스타일 Ref는 미등록 binary ID로 간주하지 않는다. XML 숫자 문자 참조·상대 경로·percent 인코딩·문자 그대로의 entity 파일명 및 정상 삭제의 manifest 정리를 확인했다.
 
 ### OPT 008 safe 리소스 삭제 정책
 
@@ -278,10 +280,12 @@ Electron 패치의 npm tooling 최소 버전(22.12)에 맞춰 Node 개발/CI/CLI
 
 - [x] root·workspace·패키징 pin과 lockfile을 수정 버전으로 통일한다.
 - [x] production audit가 통과하고 문서 보존·품질·용량 회귀 테스트를 통과한다.
-- [ ] Linux 빌드·Electron 스모크 및 Windows CLI/native 배포 실행을 검증한다.
+- [x] Linux 빌드·Electron 스모크 및 Windows CLI/native 배포 실행을 검증한다.
 - [x] 실제로 확인한 런타임과 남은 개발 도구 advisory를 문서에 반영한다.
 
 검증 기록: 2026-10-14 Linux/Node 24.13.0. 전체 68개 파일·490개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. sharp 0.35.5/libvips 8.18.7, Electron 42.11.13. 배포 runtime moderate+ 0개; 전체 audit 20개(높음 8, 중간 11, 낮음 1)의 개발/패키징 도구 advisory는 남아 있다. 첫 Windows 실행은 npm 11.19의 lockfile 검증에서 WASM 선택 의존성 `@emnapi/runtime`·`@emnapi/core` 누락으로 설치 실패했다. 동일 Node 24.21.0/npm 11.19.0을 공식 archive/checksum으로 준비해 깨끗한 workspace에서 lockfile을 보정했다. `npm ci --dry-run`, Node 24.21.0 전체 495개 테스트·타입 검사·빌드·runtime audit 통과. Windows native 실행은 재검증 중이다.
+
+Windows 검증: 보정 커밋 `1363fda`에서 [CLI ZIP/native 실행 스모크](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38527067723)와 [데스크톱 릴리즈 빌드·Electron 스모크·unpacked native 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38527071838) 모두 통과했다. 두 실행 모두 495개 테스트·타입 검사·빌드·audit 통과. 합성 문서만 사용하고 산출물 업로드는 비활성화했다. clean 기관 PC·한컴 수동 QA는 OPT-021에 남아 있다.
 
 ## 완료와 갱신 규칙
 

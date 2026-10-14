@@ -3,6 +3,7 @@ import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { getDecodedImage } from "./decodedImage.js";
 import { assertImageCanBeTransformed } from "./imageMetadata.js";
 import { canRemoveUnusedResource } from "./resourcePolicy.js";
+import { removeManifestResources } from "./manifest.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 import { minifyXmlBuffer } from "./xmlMinify.js";
 
@@ -113,7 +114,14 @@ export async function applySafeOptimizationPlan(input: {
     entries.push(entry);
   }
 
-  return { pkg: { entries }, applied, skipped, warnings };
+  const removedPaths = new Set(applied.filter((action) => action.type === "remove-unused").map((action) => action.target));
+  const availablePaths = new Set(input.pkg.entries.map((entry) => entry.path));
+  const consistentEntries = entries.map((entry) => {
+    if (entry.path !== "Contents/content.hpf") return entry;
+    const data = removeManifestResources(entry.data, removedPaths, availablePaths);
+    return data === entry.data ? entry : { ...entry, data, size: data.byteLength };
+  });
+  return { pkg: { entries: consistentEntries }, applied, skipped, warnings };
 }
 
 function describeError(error: unknown): string {

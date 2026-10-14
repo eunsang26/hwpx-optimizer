@@ -18,16 +18,20 @@ function decodeXmlEntities(value: string): string {
     .replace(/&gt;/g, ">");
 }
 
-function cleanPackagePath(value: string): string {
-  return decodePackagePath(value.trim()).replace(/^#/, "").replace(/^\.?\//, "").replace(/\\/g, "/");
+function cleanPackagePath(value: string, xmlDecoded = false): string {
+  let decoded = value.trim();
+  if (xmlDecoded) {
+    try { decoded = decodeURIComponent(decoded); } catch { /* Keep literal percent sequences. */ }
+  } else decoded = decodePackagePath(decoded);
+  return decoded.replace(/^#/, "").replace(/^\.?\//, "").replace(/\\/g, "/");
 }
 
 function hasUnsafeSegment(path: string): boolean {
   return path.split("/").some((segment) => segment === ".." || segment === "." || segment === "");
 }
 
-export function normalizePackagePath(value: string): string | null {
-  const cleaned = cleanPackagePath(value);
+export function normalizePackagePath(value: string, options: { xmlDecoded?: boolean } = {}): string | null {
+  const cleaned = cleanPackagePath(value, options.xmlDecoded);
   const lower = cleaned.toLowerCase();
   const prefix = BIN_DATA_PREFIX.toLowerCase();
   const binDataIndex = lower.indexOf(prefix);

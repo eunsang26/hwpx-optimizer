@@ -171,9 +171,10 @@ export function groupOpportunities(opportunities: OptimizationOpportunity[]): Op
 }
 
 function createWarnings(analysis: PackageAnalysis): string[] {
-  return analysis.images.flatMap((image) => image.preservationReason
+  return [...(analysis.referenceGraph?.missingReferences ?? []).map((reference) =>
+    `Unresolved package reference: ${reference}`), ...analysis.images.flatMap((image) => image.preservationReason
     ? [`Image bytes preserved for ${image.path}: ${image.preservationReason}`]
-    : image.isBmpCandidate ? [`BMP candidate detected; convert-bmp-to-png may reduce size: ${image.path}`] : []);
+    : image.isBmpCandidate ? [`BMP candidate detected; convert-bmp-to-png may reduce size: ${image.path}`] : [])];
 }
 
 const riskOrder = { safe: 0, medium: 1, high: 2 } as const;
