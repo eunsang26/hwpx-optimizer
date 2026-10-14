@@ -102,6 +102,21 @@ if (duplicateCoreRuntimeViolations.length > 0) {
   process.exit(1);
 }
 
+const missingWorkspaceRuntimes = asarArtifacts.flatMap(({ label, entries }) =>
+  ["core", "io"].flatMap((name) => {
+    const root = `node_modules/@hwpx-optimizer/${name}`;
+    return ["package.json", "dist/index.js"]
+      .filter((file) => !entries.includes(`${root}/${file}`))
+      .map((file) => `${label}: missing ${root}/${file}`);
+  })
+);
+
+if (missingWorkspaceRuntimes.length > 0) {
+  console.error("Release artifact check failed. Required desktop workspace runtimes are missing:");
+  for (const violation of missingWorkspaceRuntimes) console.error(`- ${violation}`);
+  process.exit(1);
+}
+
 const zipArtifactsMissingTerms = zipArtifactLists
   .filter(({ entries }) => !entries.some((entry) => /(^|\/)TERMS\.txt$/i.test(entry)))
   .map(({ label }) => label);

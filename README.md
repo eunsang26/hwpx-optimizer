@@ -257,12 +257,14 @@ npm run cli -- batch ./docs --mode balanced --out ./optimized --jobs 2
 | `--target-bytes` / `--target-mb`  | 대부분의 명령        | 파일별 목표 용량 (도달 못 하면 리포트에 `missed`로 기록)            |
 | `--batch-target-bytes` / `--batch-target-mb` | `batch`   | 폴더 전체의 합산 목표 용량 (원본 크기 비율로 자동 분배)             |
 | `--allow-larger`                  | `optimize`, `batch` | 결과가 원본보다 커도 허용 (기본은 거부)                            |
-| `--overwrite`                     | `optimize`, `batch` | 같은 이름이 있을 때 덮어쓰기 (기본은 `-2`, `-3` 자동 부여)         |
+| `--overwrite`                     | `optimize`, `batch` | 같은 이름이 있을 때 덮어쓰기 (기본은 새 이름 자동 부여)            |
 | `--max-input-bytes`               | 모든 명령           | 처리할 입력 최대 크기(byte). 기본 512 MiB                          |
 | `--analysis-mode quick\|deep`     | `analyze`, `report` | 빠른 분석 vs 더 깊은 검사                                          |
 | `--jobs N`                        | `batch`             | 동시 처리 개수 (1~4)                                              |
 
 원본 파일 경로와 동일한 위치를 결과·리포트 경로로 지정하면 안전을 위해 작업이 거부됩니다.
+
+기본 저장은 문서와 리포트 이름을 함께 예약합니다. 동시 실행으로 이름을 먼저 확보한 파일이 있으면 새 이름을 사용하거나 충돌 오류를 반환하며 기존 파일을 덮어쓰지 않습니다. hardlink를 지원하지 않는 파일시스템에서는 배타적으로 새 파일을 열어 복사하므로 복사 중인 파일의 내용이 일부만 보일 수 있습니다.
 
 ---
 
