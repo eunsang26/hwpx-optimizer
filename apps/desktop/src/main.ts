@@ -16,6 +16,7 @@ import { mkdir, readFile as readFileFs, readdir, realpath, rm, stat, writeFile }
 import { dirname, join, resolve } from "node:path";
 import { DocumentWorkerClient } from "./main/documentWorkerClient.js";
 import { DocumentOperations } from "./main/documentOperations.js";
+import { assertOfflineBundledFonts } from "./main/offlineFontSmoke.js";
 import {
   saveDesktopOptimization,
   normalizeDesktopSettings,
@@ -89,12 +90,15 @@ async function createWindow(): Promise<BrowserWindow> {
 app.whenReady()
   .then(async () => {
     blockExternalNetworkRequests();
+    if (isSmokeTest) session.defaultSession.enableNetworkEmulation({ offline: true });
+    if (process.env.HWPX_OPT_EXPECT_PACKAGED === "1" && !app.isPackaged) throw new Error("Expected an actual packaged desktop executable.");
     registerIpc();
     const window = await createWindow();
     if (!isSmokeTest) void warmDocumentWorker();
 
     if (isSmokeTest) {
       await runSmokeAssertions(window);
+      console.log(JSON.stringify({ check: "desktop-smoke-complete", packaged: app.isPackaged }));
       app.quit();
       return;
     }
@@ -434,6 +438,7 @@ async function normalizeExistingDirectoryPath(directoryPath: string): Promise<st
 }
 
 async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
+  await assertOfflineBundledFonts(window, app.isPackaged);
   const smokeDir = join(app.getPath("userData"), "smoke-workspace");
   await rm(smokeDir, { recursive: true, force: true });
   await mkdir(smokeDir, { recursive: true });

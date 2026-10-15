@@ -71,6 +71,18 @@ Expected result:
 - The smoke script exits with code 0.
 - The optimized output passes verifier.
 
+## Bundled Font Check
+
+The desktop ASAR must contain `apps/desktop/dist/fonts/PretendardVariable.woff2` and `OFL.txt` unchanged from the checkout. `npm run release:verify-artifacts` extracts and checks both. After building an unpacked app on a clean Windows host without system Pretendard, run:
+
+```powershell
+npm run desktop:smoke:packaged:win
+```
+
+This read-only font preflight does not install or remove fonts. The runner copies the app outside the checkout, uses fresh settings/cache, starts the renderer offline, verifies actual Korean/Latin custom glyphs at regular/bold weights, and requires full synthetic document workflow completion. An installed Pretendard preflight failure means that host cannot provide the absent-system-font evidence; use a clean Windows VM. It is not a reason to delete the user's fonts. Ordinary `desktop:smoke` also verifies the custom web font.
+
+On the target institutional PC, disconnect external networking, open the packaged app and check Korean labels, digits and bold headings. Check that both the font and license are present in the inspected release. Automated Windows evidence and remaining manual environment coverage are recorded separately in `BUNDLED_FONTS_2026-10-15.md`.
+
 ## Manual Desktop Workflow
 
 1. Launch the portable executable or installed app.

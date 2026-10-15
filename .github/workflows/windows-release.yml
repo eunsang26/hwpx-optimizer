@@ -35,6 +35,9 @@ jobs:
       - name: Run Windows release gate
         run: npm run release:check:win:ci
 
+      - name: Verify packaged desktop with bundled fonts offline on a clean profile
+        run: npm run desktop:smoke:packaged:win
+
       - name: Measure synthetic desktop processing and save gaps
         run: node scripts/bench/measure-desktop-cancellation.mjs
 
