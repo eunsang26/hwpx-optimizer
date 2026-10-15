@@ -204,6 +204,7 @@ The desktop responsibilities are split into the following modules:
 | Module | Responsibility |
 | --- | --- |
 | `main/documentController.ts` | Authorizes analysis/optimization/report/preview requests, runs document operations, and closes the queue before disposing its worker. It receives settings and dependencies without importing Electron. Its request types are also used by the typed preload bridge. |
+| `main/settingsStore.ts`, `shared/desktopSettings.ts` | Serialize reads/patches, validate a private-data-free schema and custom byte bounds, publish synced same-directory snapshots, disclose recovery/migration, and drain accepted saves on shutdown. See [settings contracts](DESKTOP_SETTINGS_2026-10-15.md). |
 | `main/pathPermissions.ts` | Owns session-scoped canonical input/output/generated-path grants and original filesystem identities. A worker restart cannot reset these grants or identities. |
 | `main/documentOperations.ts`, `main/documentWorkerClient.ts` | Own operation cancellation/cleanup and worker request/generation lifetimes, respectively. IPC handlers delegate rather than reimplementing these lifetimes. |
 | `main/smoke/runtime.ts`, `main/smoke/desktopSmoke.ts` | Test-only diagnostics, offline probe, dialog adapter and desktop assertions; loaded dynamically only in smoke mode. The separate `main/workflowSmoke.ts` runs the 11 behavior regressions. |

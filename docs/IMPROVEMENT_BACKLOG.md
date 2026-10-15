@@ -27,7 +27,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 대기 | 미정 |
 | OPT-022 | P3 | 벤치마크 실패 문서 추적과 판정 | bench | M | 없음 | 대기 | 미정 |
 | OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
@@ -258,9 +258,11 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 
 대상: `persistentDesktopSettingsPatch`, `normalizeDesktopSettings`, `main.ts` settings 저장.
 
-- [ ] customBytes를 유한한 양수로 검사하고 지원 범위를 정한다.
-- [ ] 같은 디렉터리의 임시파일 후 승격으로 설정을 저장한다.
-- [ ] 손상된 설정·버전 migration·동시 저장을 검증하고 복구 결과를 안내한다.
+- [x] customBytes를 유한한 양수로 검사하고 지원 범위를 정한다.
+- [x] 같은 디렉터리의 임시파일 후 승격으로 설정을 저장한다.
+- [x] 손상된 설정·버전 migration·동시 저장을 검증하고 복구 결과를 안내한다.
+
+검증 기록: 2026-10-15, 커밋 `22546ee`. `DesktopSettingsStore`가 같은 디렉터리에 배타적으로 임시파일을 쓰고 sync/close 후 rename으로 전체 설정을 교체한다. 쓰기·sync·승격 실패는 기존 바이트를 유지하고 소유한 stage만 정리한다. 읽기와 부분 패치를 직렬화하고 종료 전 수락된 저장을 기다린다. 공통 whitelist가 중첩 속성과 경로·상태 메타데이터를 제거하며 customBytes는 1~1TiB의 정수로 제한한다. 손상/이전/읽기 실패/새 버전 설정을 구분하고 전용 복구 안내, 저장 실패 처리, 양쪽 사용자 지정 입력의 연결된 오류와 실행 차단을 추가했다. 39개 설정 테스트, 전체 90개 파일·730개 통과·1개 건너뛰기, 타입 검사·빌드·corpus 2/2·문서 11개 및 설정 4개 Electron 흐름 통과. [PR Checks](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38693914662)의 Linux/Node 22.12·24.21 및 Windows CLI와 [Windows 실제 데스크톱 패키지](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38693910368)도 같은 테스트·15개 흐름·오프라인 폰트/native/audit를 통과했다. 저장 대기 중 실제 앱 종료→새 프로세스 재실행, 원본 해시, 페이지 오류 0개, 800/720px 캡처를 로컬 Playwright로 확인했다. 문서 저장 중 종료의 기존 묶음 복구도 재확인했다. 각 CI 실행 artifact 0개, 업로드 skipped. [설정 계약·이전·원자성 및 검증 범위](DESKTOP_SETTINGS_2026-10-15.md).
 
 ### OPT 021 문서와 릴리즈 증거
 
@@ -300,7 +302,7 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 - [ ] 키보드만으로 파일 선택부터 결과 열기와 모달 닫기를 수행한다.
 - [ ] 모달의 포커스 진입·유지·복귀, 명확한 포커스 표시를 검증한다.
 - [ ] 분석·저장·취소·완료·실패를 시각과 보조기술에 일관되게 전달한다.
-- [ ] 잘못된 용량 입력에 해당 컨트롤과 연결된 설명 및 복구 방법을 제공한다.
+- [x] 잘못된 용량 입력에 해당 컨트롤과 연결된 설명 및 복구 방법을 제공한다. OPT-020에서 두 입력의 aria-describedby·aria-invalid·오류 설명, 실행 차단 및 정상 값 재입력/프리셋 변경을 구현하고 실제 Electron/Playwright로 검증했다.
 - [ ] 진행 표시·감소된 모션·반복 실행과 부분 실패의 HCI 동작을 검증한다. 요약 보고서 저장 대기 중 초기화·다음 파일 선택에 대한 늦은 응답 격리도 포함한다.
 
 ### OPT 025 화면 계층과 가독성
