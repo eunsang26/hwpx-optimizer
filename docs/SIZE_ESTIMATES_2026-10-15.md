@@ -66,4 +66,10 @@ safe·balanced·aggressive의 모델을 따로 전달한다. safe는 리사이�
 
 이 실행에서 입력 SHA256 불변·저장 파일 유지·page error 0개를 확인했다. 화면 캡처만으로 스크린리더나 전체 접근성 준수를 판정하지 않는다. 완료 배너의 `실패 0` 때문에 경고색이 되는 기존 문제와 작은 창의 밀도/확대는 OPT-024/025에 남는다.
 
-Windows 실행과 패키지 검증은 별도 실행 후 기록한다.
+### Windows 재검증
+
+커밋 `d1ca2a5`, Windows/Node 24.21.0의 [CLI ZIP 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38671044380)과 [데스크톱 릴리즈 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38671027766)이 모두 성공했다. 두 실행 모두 86개 파일·672개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·배포 audit를 통과했다. CLI ZIP의 실제 optimize/verify/batch/launcher smoke, 데스크톱의 합성 corpus 2/2·새 phase/실측 계약을 포함한 Electron smoke·NSIS 빌드·실제 ASAR 내 core/io entry 검사·unpacked native 파일 검사도 통과했다.
+
+Windows 용량 측정 역시 9/9 조합·27/27 경계를 통과했고 위 표의 원본/추정/실제 바이트와 같았다. 기존 처리/저장 간격·분석 모드·리소스 측정도 통과했다. quick/default의 이미지 1/8/24개 측정에서 raw decode와 encode 요청은 모두 0개였다. 입력과 패키지는 합성이며 산출물 업로드 단계는 모두 건너뛰었다. production+shipped Electron의 moderate+ advisory는 0개였고 전체 개발/빌드 도구 advisory 20개(high 8·moderate 11·low 1)는 남아 있다.
+
+화면별 PNG와 캡션을 함께 보는 로컬 보고서는 같은 캡처 폴더의 `index.html`이다. 7단계·7개 이미지가 렌더되는 것을 별도 Electron 창에서도 확인했다.
