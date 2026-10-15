@@ -52,7 +52,22 @@ ZIP64·실제 streaming·Unicode 이름 경계, byte-budget eviction, pending de
 
 실제 Electron/로컬 Playwright로 유효한 25MP PNG가 든 합성 문서를 열고 상세 분석 및 최적화 후 원본 이미지와 입력 해시를 보존하는지 검사했다. 한도 초과 이유는 한국어로 표시한다. 실제 크기 위조 ZIP은 거부하며 결과를 오표시하지 않고 다음 문서를 다시 열 수 있다. 완료 후 늦은 100% 진행 이벤트가 결과를 가리던 문제도 수정하고 Electron smoke와 실제 IPC 재전송으로 회귀 검증한다. 캡처·접근성 트리·실행 기록은 `.tmp/ui-audit/resource-limits-2026-10-15/`에만 있다.
 
-Linux 최종 전체 85개 파일·661개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·배포 audit·Electron 스모크 통과. 실제 화면 실행 시각은 2026-10-15 01:48:00 UTC이며 page error 0건이다. 세 화면을 직접 확인했다. Windows 검증은 진행 중이다.
+Linux 최종 전체 85개 파일·661개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·배포 audit·Electron 스모크 통과. 실제 화면 실행 시각은 2026-10-15 01:48:00 UTC이며 page error 0건이다. 세 화면을 직접 확인했다. Windows 최종 검증도 통과했으며 아래에 기록했다.
+
+## Windows 검증
+
+최종 코드 `4fc94c6`, Node 24.21.0에서 [CLI ZIP/native 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38667916586)과 [데스크톱 릴리즈 및 합성 측정](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38667916779)이 모두 통과했다. 두 실행 모두 85개 파일·661개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·배포 audit 통과다. CLI는 실제 배포 ZIP의 optimize·verify·batch·launcher를 실행했다. 데스크톱은 합성 corpus 2/2·Electron 스모크·NSIS 빌드·실제 ASAR runtime 존재 및 unpacked native 검사를 통과했다. 0바이트 위조와 정상 빈 항목의 호환성 테스트도 포함한다. 산출물 업로드는 모두 건너뛰었다.
+
+| 입력 | worker | 관측 peak RSS(MiB) | worker별 peak raw(MiB) | worker별 peak retained(MiB) | 종료 raw | 시간(ms) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1MP-font-1MiB | 1 | 127.1 | 18.0 | 20.4 | 0 | 636.3 |
+| 1MP-font-1MiB | 2 | 189.3 | 18.0 | 20.4 | 0 | 808.4 |
+| 1MP-font-1MiB | 4 | 309.5 | 18.0 | 20.4 | 0 | 1,349.2 |
+| 8MP-font-16MiB | 1 | 267.5 | 53.8 | 59.8 | 0 | 3,733.6 |
+| 8MP-font-16MiB | 2 | 468.2 | 53.8 | 59.8 | 0 | 4,362.0 |
+| 8MP-font-16MiB | 4 | 815.2 | 53.8 | 59.8 | 0 | 7,267.2 |
+
+Windows에서도 32/128MiB 위조 크기 ZIP을 64KiB 한도로 거부했고 최대 최종 concat은 19바이트였다. 큰 이미지 case의 cache peak retained는 59.8MiB·완료 후 raw 0바이트였다. 플랫폼·allocator·측정 시점에 따라 RSS가 달라지므로 Linux와 수치를 동일하다고 주장하지 않는다.
 
 ## 남은 한계
 
