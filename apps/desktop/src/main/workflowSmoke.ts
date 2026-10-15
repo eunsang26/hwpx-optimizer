@@ -76,10 +76,20 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
     else await idle();
   };
   const text = (id: string) => evaluate<string>(`document.getElementById(${JSON.stringify(id)}).textContent`);
-  const reset = async (): Promise<void> => {
-    await click("#start-over-button");
+  const reset = async (selector = "#start-over-button"): Promise<void> => {
+    await click(selector);
     assert.equal(await evaluate(`document.body.dataset.view`), "empty");
     assert.equal(await evaluate(`document.activeElement.id`), "empty-choose-button");
+  };
+  const assertDock = async (action: string): Promise<void> => {
+    assert.equal(await evaluate(`(() => {
+      const dock = document.getElementById("run-dock");
+      const button = document.getElementById("run-dock-button");
+      const box = button.getBoundingClientRect();
+      return dock.dataset.action === ${JSON.stringify(action)} &&
+        button.checkVisibility({ visibilityProperty: true }) && !button.disabled &&
+        box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth;
+    })()`), true, `Next action must be available inside the viewport: ${action}`);
   };
   const preserved = async (): Promise<void> => {
     for (const [path, expected] of originalHashes) assert.equal(digest(await readFile(path)), expected, `Source changed: ${basename(path)}`);
@@ -136,6 +146,7 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
       await waitFor(`document.body.dataset.view === "single" && !document.getElementById("optimize-button").disabled`);
       assert.equal(await text("selected-file-name"), basename(inputs[0]));
       assert.match(await text("status-text"), /빠른 분석이 완료/);
+      await assertDock("optimize");
     });
 
     await checked("cancel detailed analysis retains the plan and allows retry", async () => {
@@ -182,12 +193,26 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
       assert.deepEqual(await tree(directory), before);
     });
     await checked("retry publishes a verified output and matching measured report", async () => {
-      await click("#optimize-button");
+      await click("#run-dock-button");
       await waitFor(`document.body.dataset.busy === "" && document.body.dataset.result === "visible"`);
       await assertPair(join(directory, "선택 A_optimized.hwpx"), inputs[0]);
       const before = await tree(directory);
-      await reset();
+      await assertDock("open-file");
+      assert.equal(await evaluate(`document.getElementById("quality-controls").checkVisibility()`), false);
+      assert.equal(await evaluate(`document.getElementById("submission-limit-select").disabled`), true);
+      await click("#result-retry-button");
+      await assertDock("optimize");
+      assert.equal(await evaluate(`document.getElementById("result-panel").hidden`), true);
+      assert.match(await text("summary-result-line"), /예상/);
+      assert.match(await text("verification-body"), /이미지 품질 검증은 최적화 실행 시/);
+      assert.equal(await evaluate(`document.getElementById("analysis-details").open`), false);
       assert.deepEqual(await tree(directory), before);
+      await click("#run-dock-button");
+      await waitFor(`document.body.dataset.busy === "" && document.body.dataset.result === "visible"`);
+      await assertPair(join(directory, "선택 A_optimized.hwpx"), inputs[0]);
+      const repeated = await tree(directory);
+      await reset("#run-dock-start-over");
+      assert.deepEqual(await tree(directory), repeated);
     });
 
     await checked("cancel batch analysis stops the remaining queue without changing files", async () => {
@@ -282,6 +307,10 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
       await waitFor(`!document.body.dataset.busy && document.body.dataset.batchResult === "visible"`);
       context.worker.prepare = originalPrepare;
       assert.match(await text("batch-result-panel"), /확인 필요/);
+      await assertDock("review-results");
+      assert.match(await text("policy-live"), /미완료/);
+      await click("#run-dock-button");
+      assert.equal(await evaluate(`document.activeElement.id`), "batch-result-title");
       const report = JSON.parse(await readFile(batchReport, "utf8"));
       assert.equal(report.totals.done, 0);
       assert.equal(report.totals.cancelled, 2);
@@ -298,7 +327,9 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
     });
     await checked("batch runs selected files only and writes a measured aggregate report", async () => {
       await click('#batch-list .batch-select[data-batch-index="1"]');
-      await click("#optimize-button");
+      assert.match(await text("summary-status"), /예상/);
+      await assertDock("optimize");
+      await click("#run-dock-button");
       await waitFor(`document.body.dataset.busy === "" && document.body.dataset.batchResult === "visible" && !document.getElementById("batch-open-report-button").disabled`);
       const report = JSON.parse(await readFile(batchReport, "utf8"));
       assert.equal(report.totals.done, 1);
@@ -308,6 +339,8 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
       assert.equal(report.totals.totalOptimizedSize, (await readFile(report.items[0].output)).length);
       assert.equal(await evaluate(`Array.from(document.querySelectorAll("#batch-list .status")).filter(cell => cell.textContent === "완료").length`), 1);
       assert.equal((await readdir(batchDirectory)).some(name => name.includes("제외 C")), false);
+      await assertDock("open-folder");
+      assert.equal(await evaluate(`document.getElementById("status-banner").dataset.tone`), "success");
     });
     assert.deepEqual(await evaluate(`window.__workflowErrors`), []);
     console.log(JSON.stringify({ check: "desktop-workflow-complete", cases: completedCases.length, sourceHashesVerified: originalHashes.size }));

@@ -13,7 +13,7 @@ export const ACTION_CATALOG: Record<OptimizationOpportunityGroup["action"], Acti
   "resize-jpeg": {"label": "큰 JPEG 리사이즈", "planLabel": "큰 JPEG 리사이즈", "bucket": "image", "priority": 90},
   "resize-png": {"label": "큰 PNG 리사이즈", "planLabel": "큰 PNG 리사이즈", "bucket": "image", "priority": 100},
   "convert-tiff-to-png": {"label": "TIFF를 PNG로 변환", "planLabel": "TIFF를 PNG로 변환", "bucket": "image", "priority": 80},
-  "clean-shape-comment": {"label": "이미지 설명 메타데이터 정리", "planLabel": "작성자·편집 흔적 정리", "bucket": "author", "priority": 60},
+  "clean-shape-comment": {"label": "생성된 그림 이름·크기 정리", "planLabel": "생성된 그림 이름·크기 정리", "bucket": "author", "priority": 60},
   "consolidate-duplicate-images": {"label": "중복 이미지 참조 정리", "planLabel": "중복 이미지 참조 정리", "bucket": "image", "priority": 10}
 };
 

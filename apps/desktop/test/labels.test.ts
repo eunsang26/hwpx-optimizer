@@ -119,7 +119,7 @@ describe("shared labels", () => {
   it("provides Korean labels for every supported action and mode", () => {
     expect(actionLabel("strip-metadata")).toBe("EXIF 제외 이미지 메타데이터 제거");
     expect(actionLabel("convert-bmp-to-png")).toBe("BMP를 PNG로 변환");
-    expect(actionLabel("clean-shape-comment")).toBe("이미지 설명 메타데이터 정리");
+    expect(actionLabel("clean-shape-comment")).toBe("생성된 그림 이름·크기 정리");
     expect(actionLabel("custom-action")).toBe("custom-action");
     expect(modeLabel("safe")).toBe("안전");
     expect(modeLabel("balanced")).toBe("균형");

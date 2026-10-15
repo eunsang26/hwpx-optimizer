@@ -186,6 +186,12 @@ export class RendererWorkflow {
     return path === this.state.filePath;
   }
 
+  retrySingle(): boolean {
+    if (this.busy || !this.state.result || !this.state.report) return false;
+    this.state.result = undefined;
+    return true;
+  }
+
   beginBatchAnalysis(): void { this.state.batchAnalyzing = true; this.state.batchCancelled = false; }
   finishBatchAnalysis(): void { this.state.batchAnalyzing = false; }
   beginBatch(): void {

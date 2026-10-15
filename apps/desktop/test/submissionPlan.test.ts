@@ -420,7 +420,7 @@ describe("submission optimization plan", () => {
     expect(plan.actionRows.map((row) => row.label)).toEqual([
       "중복 이미지 참조 정리",
       "EXIF 제외 이미지 정보 제거",
-      "작성자·편집 흔적 정리",
+      "생성된 그림 이름·크기 정리",
       "큰 JPEG 리사이즈"
     ]);
     expect(plan.actionRows.map((row) => row.savingLabel)).toEqual(["3.00 MiB", "500.0 KiB", "500.0 KiB", "8.00 MiB"]);

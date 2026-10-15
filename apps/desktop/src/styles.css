@@ -212,11 +212,6 @@ body[data-view="empty"] .shell {
   padding-bottom: 12px;
 }
 
-/* Mockup A: no sticky run-dock competing with hero CTA */
-.run-dock {
-  display: none !important;
-}
-
 .file-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1583,7 +1578,7 @@ body[data-view="empty"] .summary-card > div > strong {
   white-space: nowrap;
 }
 body[data-view="batch"] .target-limit::after {
-  content: "통과율";
+  content: attr(data-label);
 }
 
 .verdict-pill {
@@ -2138,7 +2133,6 @@ body[data-view="batch"][data-batch-result="visible"] .primary-run-panel {
 }
 
 .run-dock {
-  display: none !important;
   position: fixed;
   left: 50%;
   bottom: 14px;
@@ -2156,6 +2150,17 @@ body[data-view="batch"][data-batch-result="visible"] .primary-run-panel {
   backdrop-filter: blur(14px) saturate(180%);
   -webkit-backdrop-filter: blur(14px) saturate(180%);
 }
+.run-dock:not([hidden]) { display: grid; }
+body[data-run-dock="visible"] .shell { padding-bottom: 140px; }
+.run-dock > .run-dock-actions { display: flex; gap: 8px; }
+.run-dock .ghost { background: var(--surface); color: var(--ink); box-shadow: none; }
+body:has(.settings.is-open, .help-panel.is-open, #compare-modal:not([hidden])) .run-dock {
+  visibility: hidden;
+}
+body[data-result="visible"] .quality-controls,
+body[data-batch-result="visible"] .quality-controls,
+body[data-result="visible"] .detail-options-sheet,
+body[data-batch-result="visible"] .detail-options-sheet { display: none; }
 .run-dock > div {
   min-width: 0;
   display: grid;

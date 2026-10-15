@@ -30,7 +30,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-022 | P3 | 벤치마크 실패 문서 추적과 판정 | bench | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 대기 | Codex |
 | OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 대기 | Codex |
 | OPT-026 | P1 | sharp·Electron 런타임 보안 패치와 배포 검증 | core, packaging | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
@@ -292,10 +292,12 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 
 대상: 기존 Electron 앱의 빈 화면·파일 선택·단일 분석·배치·진행·완료·설정 흐름.
 
-- [ ] 실제 실행 화면을 캡처·검토하고 화면별 관찰 근거를 기록한다.
-- [ ] 제출 용량 최적화라는 사용자 과제에 맞게 다음 행동과 결과 확인을 명확히 한다.
-- [ ] 예상 결과와 검증된 실측 결과, 단일·파일별·합계 목표를 구별한다.
-- [ ] 기존 시각 스타일을 기반으로 확인된 UX 마찰을 수정하고 전후 흐름을 검증한다.
+- [x] 실제 실행 화면을 캡처·검토하고 화면별 관찰 근거를 기록한다.
+- [x] 제출 용량 최적화라는 사용자 과제에 맞게 다음 행동과 결과 확인을 명확히 한다.
+- [x] 예상 결과와 검증된 실측 결과, 단일·파일별·합계 목표를 구별한다.
+- [x] 기존 시각 스타일을 기반으로 확인된 UX 마찰을 수정하고 전후 흐름을 검증한다.
+
+검증 기록: 2026-10-15 Linux/Node 24.13.0. 같은 합성 입력의 전후 9개 실제 화면과 재계획/720px 추가 3개 화면을 캡처·직접 확인했다. 실행·결과 동작이 기본 창 밖에 있던 문제를 하단 다음 작업으로 보완하고, 완료 결과는 명시적 재계획까지 실측 상태를 유지한다. 일괄 제목에 예상을 표시하고 파일별/전체 한도를 명시하며, 잘못된 합계 통과율 대신 같은 바이트 축의 한도·원본·현재 합계를 표시한다. 작성자/이력 익명화 및 EXIF 전체 제거처럼 읽히던 옵션을 실제 그림 정보 정리 범위로 수정했다. 실제 pointer/keyboard·IPC·worker·파일 저장을 통한 dock 실행/열기/재계획/초기화, 800/720px 동작 위치, 원본·저장 결과 해시, 합계 983,570바이트의 원본 대비 검증, page error 0을 확인했다. 대상 48개·전체 93개 파일·752개 통과·1개 skip, typecheck/build·hygiene·runtime audit와 문서 11개+설정 4개 Electron 흐름을 통과했다. [관찰·변경·검증 범위](UX_FLOW_AUDIT_2026-10-15.md). 이미지와 원시 기록은 `.tmp/ui-audit/ux-flow-2026-10-15/report.md`에 로컬로만 남겼다. HCI 전체와 확대/대비/표·긴 파일명/dock 간격은 OPT-024·025에 남아 있다.
 
 - [x] 2026-10-15 추가 요청: 단일·일괄 압축 완료 뒤 처음 화면으로 돌아가 새 작업을 시작할 수 있다. 저장 결과·설정은 유지하고 파일 선택으로 포커스를 옮긴다.
 

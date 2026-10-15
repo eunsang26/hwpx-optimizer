@@ -77,6 +77,24 @@ describe("renderer document transitions without a DOM", () => {
     expect(flow.state.batchItems.every(item => item.status === "pending")).toBe(true);
   });
 
+  it("returns a completed single result to its original analysis and keeps the selected policy", () => {
+    const flow = new RendererWorkflow();
+    flow.selectSingle("/a.hwpx");
+    const token = flow.beginAnalysis("/a.hwpx");
+    flow.acceptAnalysis(token, analysis, "quick"); flow.finishAnalysis(token);
+    flow.state.submissionLimit = { id: "custom", customBytes: 12345 };
+    const path = flow.beginOptimization()!;
+    flow.acceptOptimization(path, { outputPath: "/out/a.hwpx", report: completed });
+    expect(flow.retrySingle()).toBe(false);
+    flow.finishOptimization(path);
+    expect(flow.retrySingle()).toBe(true);
+    expect(flow.state.result).toBeUndefined();
+    expect(flow.state.report).toBe(analysis);
+    expect(flow.state.filePath).toBe("/a.hwpx");
+    expect(flow.state.submissionLimit).toEqual({ id: "custom", customBytes: 12345 });
+    expect(flow.retrySingle()).toBe(false);
+  });
+
   it("does not attach an old optimization outcome to a new selection", () => {
     const flow = new RendererWorkflow();
     flow.selectSingle("/a.hwpx");

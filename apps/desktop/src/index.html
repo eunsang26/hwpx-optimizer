@@ -64,9 +64,9 @@
       </section>
 
       <section id="single-workspace" class="workspace-grid">
-        <div id="policy-toolbar" class="policy-toolbar" aria-label="결재·압축 기준">
+        <div id="policy-toolbar" class="policy-toolbar" aria-label="제출·압축 기준">
           <label>
-            <strong>결재</strong>
+            <strong>제출 한도</strong>
             <select id="submission-limit-select">
               <option value="none">제한 없음</option>
               <option value="mb5">5MB 미만</option>
@@ -278,18 +278,18 @@
               <strong>세부 옵션</strong>
               <span>체크된 항목만 실행 · 품질은 위 자동/수동</span>
             </div>
-            <div class="cleanup-settings" aria-label="개인정보·숨은 정보 정리">
+            <div class="cleanup-settings" aria-label="그림 부가 정보 정리">
               <div>
-                <strong>개인정보·숨은 정보 정리</strong>
-                <span>문서 흔적과 이미지 메타데이터를 별도로 선택합니다.</span>
+                <strong>그림 부가 정보 정리</strong>
+                <span>그림의 생성 정보와 이미지 메타데이터를 선택합니다. 문서 익명화 기능은 아닙니다.</span>
               </div>
               <label>
                 <input id="cleanup-document-toggle" type="checkbox" checked />
-                <span>문서 작성자·편집 흔적 정리</span>
+                <span>자동 생성된 그림 이름·크기 정리 · 작성한 설명 보존</span>
               </label>
               <label>
                 <input id="cleanup-image-toggle" type="checkbox" checked />
-                <span>이미지 EXIF/메타데이터 제거</span>
+                <span>EXIF 제외 이미지 메타데이터 정리</span>
               </label>
               <label class="opt-row-disabled" title="분석 시 유사 이미지 그룹을 검토용으로만 표시합니다. 자동 병합은 하지 않습니다.">
                 <input type="checkbox" disabled />
@@ -319,7 +319,7 @@
             <div class="batch-result-head">
               <span class="success-dot" aria-hidden="true"></span>
               <div>
-                <h2 id="batch-result-title">일괄 최적화 완료</h2>
+                <h2 id="batch-result-title" tabindex="-1">일괄 최적화 완료</h2>
                 <p id="batch-result-line">완료된 파일과 절감량을 확인하세요.</p>
               </div>
             </div>
@@ -345,6 +345,7 @@
                 <button id="compare-button" class="ghost" disabled>결과 비교</button>
                 <button id="reverify-button" class="ghost" disabled>다시 검증</button>
                 <button id="open-report-button" class="ghost" disabled>현재 리포트</button>
+                <button id="result-retry-button" type="button" class="ghost">다시 최적화</button>
                 <button id="result-start-over-button" type="button" class="ghost">처음으로</button>
               </div>
             </div>
@@ -364,7 +365,7 @@
         </div>
 
         <p id="option-plan-summary" class="option-plan-summary option-plan-summary--quiet">
-          결재·압축은 위 툴바에서, 세부 작업은 「세부 옵션」에서 조정합니다.
+          제출 한도·압축은 위 툴바에서, 세부 작업은 「세부 옵션」에서 조정합니다.
         </p>
 
         <section class="bottom-accordions">
@@ -404,12 +405,15 @@
         <button id="action-reset" class="ghost" type="button">기본값으로</button>
       </div>
       <p id="mode-warning" hidden></p>
-      <section id="run-dock" class="run-dock" hidden>
+      <section id="run-dock" class="run-dock" hidden aria-label="다음 작업">
         <div>
           <strong id="run-dock-status">분석 결과 대기 중</strong>
           <span id="run-dock-summary">파일을 선택하면 실행 요약이 표시됩니다.</span>
         </div>
-        <button id="run-dock-button" type="button" disabled>파일을 선택해 시작하세요</button>
+        <div class="run-dock-actions">
+          <button id="run-dock-button" type="button" disabled>파일을 선택해 시작하세요</button>
+          <button id="run-dock-start-over" type="button" class="ghost" hidden>처음으로</button>
+        </div>
       </section>
       <div hidden>
         <label><input type="radio" name="mode" value="safe" checked /> 안전</label>
@@ -499,7 +503,7 @@
           </select>
         </label>
         <label class="settings-field">
-          기본 결재 기준
+          기본 제출 한도
           <select id="setting-submission-limit">
             <option value="none">제한 없음</option>
             <option value="mb5">5MB 미만</option>

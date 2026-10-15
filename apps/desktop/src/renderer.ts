@@ -89,7 +89,7 @@ const chooseButton = requireButton("choose-button");
 const chooseFolderButton = requireButton("choose-folder-button");
 const emptyChooseButton = requireButton("empty-choose-button");
 const emptyFolderButton = requireButton("empty-folder-button");
-const startOverButtons = ["start-over-button", "result-start-over-button", "batch-start-over-button"].map(requireButton);
+const startOverButtons = ["start-over-button", "result-start-over-button", "batch-start-over-button", "run-dock-start-over"].map(requireButton);
 const optimizeButton = requireButton("optimize-button");
 const batchPanel = requireElement("batch-panel");
 const batchList = requireElement("batch-list");
@@ -324,7 +324,18 @@ async function init(): Promise<void> {
     }
     void optimizeCurrentFile();
   });
-  runDockButton.addEventListener("click", () => optimizeButton.click());
+  runDockButton.addEventListener("click", () => {
+    if (workflow.busy) return;
+    if (state.result) openFileButton.click();
+    else if (state.view === "batch" && state.batchRunCompleted) {
+      if (state.batchItems.filter(item => item.selected).every(item => item.status === "done") &&
+          !batchOpenFolderButton.disabled) batchOpenFolderButton.click();
+      else {
+        batchResultPanel.scrollIntoView({ block: "center" });
+        batchResultTitle.focus({ preventScroll: true });
+      }
+    } else optimizeButton.click();
+  });
   cancelButton.addEventListener("click", async () => {
     if (state.analysisRunning || state.batchAnalyzing) {
       const cancellingBatchAnalysis = state.batchAnalyzing;
@@ -400,6 +411,16 @@ async function init(): Promise<void> {
     if (state.batchReportPath) void window.hwpxOptimizer.openPath(state.batchReportPath);
   });
   batchRetryButton.addEventListener("click", resetBatchCompletedItems);
+  requireButton("result-retry-button").addEventListener("click", () => {
+    if (!workflow.retrySingle()) return;
+    resultPanel.hidden = true;
+    document.body.dataset.result = "";
+    setSubmissionInputsDisabled(false);
+    if (state.report) renderAnalysis(state.report);
+    refreshSubmissionPlan();
+    setStatus("기존 결과 파일은 유지됩니다. 계획을 조정한 뒤 다시 최적화하세요.");
+    runDockButton.focus();
+  });
   for (const button of startOverButtons) button.addEventListener("click", returnToStart);
   reverifyButton.addEventListener("click", reverifyCurrentResult);
   compareButton.addEventListener("click", openImageCompareModal);
@@ -858,6 +879,8 @@ function formatCustomLimitMb(customBytes: number): string {
 }
 
 function refreshSubmissionPlan(): void {
+  // A completed output keeps its measured presentation until explicit retry.
+  if (state.result) { renderRunDock(state.currentPlan); return; }
   if (!state.report) {
     state.currentPlan = undefined;
     if (state.batchItems.length > 0) {
@@ -1045,7 +1068,7 @@ function planActionDescription(kind: string): string {
   if (kind === "target") return "목표 용량에 맞춰 추가 후보를 검토합니다.";
   if (kind === "quality") return "품질 기준을 통과한 후보만 적용합니다.";
   if (kind === "review") return "자동 처리하지 않고 확인 항목으로 표시합니다.";
-  if (kind === "author") return "작성자 정보 및 편집 기록 등 개인 정보를 정리합니다.";
+  if (kind === "author") return "자동 생성된 그림 이름·크기 행만 정리하고 작성한 설명은 보존합니다.";
   if (kind === "metadata") return "불필요한 메타데이터 및 숨은 정보를 제거합니다.";
   return "이미지 압축 및 크기 조정으로 파일 용량을 줄입니다.";
 }
@@ -1217,15 +1240,15 @@ function renderBatchSummary(): void {
     mixVerdict = targetStatusSummary;
     mixClass = targetStatusSummary === "전체 목표 주의 필요" ? "mix" : "pass";
   } else if (!needMore && !hardMiss) {
-    mixVerdict = `${passed}통과`;
+    mixVerdict = `${passed}개 통과`;
     mixClass = "pass";
   } else if (hardMiss > 0 && passed === 0 && needMore === 0) {
-    mixVerdict = `${hardMiss}미달`;
+    mixVerdict = `${hardMiss}개 기준 초과`;
     mixClass = "hard-miss";
   } else {
-    mixVerdict = `${passed}통과`;
-    if (needMore) mixVerdict += ` · ${needMore}더압축`;
-    if (hardMiss) mixVerdict += ` · ${hardMiss}미달`;
+    mixVerdict = `${passed}개 통과`;
+    if (needMore) mixVerdict += ` · ${needMore}개 추가 압축`;
+    if (hardMiss) mixVerdict += ` · ${hardMiss}개 기준 초과`;
     mixClass = "mix";
   }
   summaryOriginal.textContent = summaryItems.length ? formatBytes(originalTotal) : "-";
@@ -1239,6 +1262,7 @@ function renderBatchSummary(): void {
     const actualMiss = state.batchTargetMode === "aggregate" ? Boolean(batchTargetBytes && expectedTotal >= batchTargetBytes) : warning > 0;
     mixClass = actualMiss ? "hard-miss" : "pass";
   } else if (partialCompletion) { mixVerdict = "미완료 파일 확인 필요"; mixClass = "hard-miss"; }
+  else if (plannedCount > 0) mixVerdict = `예상 · ${mixVerdict}`;
   summaryStatus.innerHTML = `<span class="success-dot" aria-hidden="true"></span>${mixVerdict}`;
   summaryStatus.classList.toggle("hero-verdict--mix", mixClass === "mix");
   summaryStatus.classList.toggle("hero-verdict--bad", mixClass === "hard-miss");
@@ -1255,46 +1279,40 @@ function renderBatchSummary(): void {
   summaryVerdict.dataset.status =
     mixClass === "pass" ? "pass" : mixClass === "hard-miss" ? "hard-miss" : "need-more";
   summaryVerdict.hidden = plannedCount === 0;
-  const aggregatePass =
-    state.batchTargetMode === "aggregate" &&
-    Boolean(batchTargetBytes) &&
-    expectedTotal < (batchTargetBytes as number);
-  summaryVerdictDetail.textContent =
-    plannedCount === 0
-      ? "선택된 분석 파일이 없습니다."
-      : state.batchTargetMode === "aggregate"
-        ? aggregatePass || !batchTargetBytes
-          ? `합계 ${formatBytes(expectedTotal)}`
-          : `합계 초과 · 파일 ${passed}/${plannedCount}`
-        : `통과 ${passed}/${plannedCount}`;
+  const targetScope = state.batchTargetMode === "aggregate" ? "전체 합계" : "파일마다";
+  const limitLabel = batchTargetBytes ? `${formatTargetLimitBytes(batchTargetBytes)} 미만` : "제한 없음";
+  summaryVerdictDetail.textContent = plannedCount === 0 ? "선택된 분석 파일이 없습니다." :
+    `${targetScope} ${limitLabel} · ${allCompleted ? "실제" : partialCompletion ? "미완료 포함" : "예상"} ${
+      state.batchTargetMode === "aggregate" ? `합계 ${formatBytes(expectedTotal)}` : `통과 ${passed}/${plannedCount}`}`;
   summaryAnalysisBasis.hidden = plannedCount === 0;
   summaryAnalysisBasis.textContent = allCompleted ? "저장된 결과 파일의 실제 바이트 합계로 판정했습니다." : partialCompletion ? "실패·취소·미완료 파일이 있어 제출 가능 여부를 확정할 수 없습니다." : summaryItems.some(item => item.report?.analysis?.mode === "quick")
     ? "빠른 분석 추정값 · 픽셀·유사 이미지 중복 미검사 · 최종 용량은 저장 후 확인하세요."
     : "예상 용량은 실제 저장 결과와 다를 수 있습니다.";
-  const passRate =
-    plannedCount === 0
-      ? 0
-      : state.batchTargetMode === "aggregate"
-        ? !batchTargetBytes || expectedTotal < batchTargetBytes
-          ? 100
-          : Math.min(99, Math.round((batchTargetBytes / Math.max(expectedTotal, 1)) * 100))
-        : (passed / plannedCount) * 100;
-  targetTrackFill.style.width = `${passRate}%`;
+  const passRate = plannedCount === 0 ? 0 : passed / plannedCount * 100;
+  const aggregateScale = Math.max(originalTotal, expectedTotal, 1);
+  const aggregateFill = expectedTotal / aggregateScale * 100;
+  const aggregateLimit = (batchTargetBytes ?? 0) / aggregateScale * 100;
+  targetTrackFill.style.width = `${state.batchTargetMode === "aggregate" ? aggregateFill : passRate}%`;
   targetTrackFill.dataset.status = mixClass === "hard-miss" ? "hard-miss" : mixClass === "mix" ? "over" : "pass";
-  targetTrackLimit.style.left = `${passRate}%`;
-  targetTrackLimit.hidden = plannedCount === 0;
-  gaugeStartLabel.textContent = state.batchTargetMode === "aggregate" ? "합계" : "통과율";
+  targetTrackLimit.style.left = `${state.batchTargetMode === "aggregate" ? aggregateLimit : passRate}%`;
+  const hideAggregateLimit = !batchTargetBytes || batchTargetBytes >= aggregateScale;
+  targetTrackLimit.hidden = plannedCount === 0 || (state.batchTargetMode === "aggregate" && hideAggregateLimit);
+  targetTrackLimit.dataset.label = state.batchTargetMode === "aggregate" ? "합계 한도" : "통과율";
+  gaugeStartLabel.textContent = state.batchTargetMode === "aggregate" ? "0" : "예상 통과율";
   gaugeMidLabel.textContent =
     plannedCount === 0
       ? state.batchTargetMode === "aggregate"
         ? "합계"
         : "통과율"
       : state.batchTargetMode === "aggregate"
-        ? `${Math.round(passRate)}%`
+        ? batchTargetBytes ? formatTargetLimitBytes(batchTargetBytes) : "한도 없음"
         : `${passed}/${plannedCount}`;
   gaugeMidLabel.hidden = false;
-  gaugeMidLabel.style.left = `${passRate}%`;
-  gaugeEndLabel.textContent = "";
+  gaugeMidLabel.style.left = `${state.batchTargetMode === "aggregate" ? aggregateLimit : passRate}%`;
+  gaugeMidLabel.hidden = plannedCount === 0 || (state.batchTargetMode === "aggregate" && hideAggregateLimit);
+  gaugeEndLabel.textContent = state.batchTargetMode === "aggregate" ?
+    aggregateScale === originalTotal ? `원본 ${formatBytes(originalTotal)}` : formatBytes(aggregateScale) : "";
+  if (state.batchTargetMode === "per-file") gaugeStartLabel.textContent = allCompleted ? "실제 통과율" : "예상 통과율";
   summaryGrid.hidden = false;
   heroChips.hidden = false;
   chipPolicy.textContent =
@@ -1306,7 +1324,7 @@ function renderBatchSummary(): void {
   chipPolicy.className = `hero-chip ${
     state.preservationPreference === "size" ? "hero-chip--max" : "hero-chip--fit"
   }`;
-  chipLimit.textContent = state.batchTargetMode === "aggregate" ? "체크 시 배분·품질% 갱신" : "체크=실행 대상";
+  chipLimit.textContent = `${targetScope} · ${limitLabel}`;
   chipLimit.className = "hero-chip hero-chip--soft";
   const qualities = summaryItems
     .map((item) => item.jpegQualityDisplay)
@@ -1316,7 +1334,8 @@ function renderBatchSummary(): void {
     : DEFAULT_JPEG_QUALITY;
   chipQuality.textContent = `평균 예정 ${avgQ}%`;
   chipQuality.hidden = true;
-  policyLive.textContent = `선택 ${state.batchItems.filter((item) => item.selected).length} · 평균 예정 ${avgQ}%`;
+  policyLive.textContent = allCompleted ? "저장된 처리 결과" : partialCompletion ? "미완료 파일 확인" :
+    `선택 ${state.batchItems.filter((item) => item.selected).length} · 평균 예정 ${avgQ}%`;
   renderBatchReviewStrip(summaryItems);
   optimizeButton.textContent = "선택 파일 일괄 최적화";
   optimizeButton.disabled =
@@ -1453,27 +1472,39 @@ function createBatchPlanSummary(): BatchPlanSummary | undefined {
 }
 
 function batchPlanDescription(kind: string): string {
-  if (kind === "author") return "개인 정보 정리";
+  if (kind === "author") return "그림 생성 정보 정리";
   if (kind === "metadata") return "메타데이터/숨은 정보 정리";
   return "이미지 용량 최적화";
 }
 
 function renderRunDock(plan?: SubmissionPlan): void {
-  const shouldShow = false;
+  const shouldShow = !workflow.busy && (state.view === "batch" ? state.batchItems.length > 0 : Boolean(state.filePath && state.report));
   runDock.hidden = !shouldShow;
-  if (!shouldShow || !plan) {
-    runDockStatus.textContent = state.analysisRunning ? "분석 중" : "분석 결과 대기 중";
-    runDockSummary.textContent = state.analysisRunning
-      ? `제출 기준 ${targetLabelForDisplay()} · 결과 계산 중`
-      : "파일을 선택하면 실행 요약이 표시됩니다.";
+  document.body.dataset.runDock = shouldShow ? "visible" : "";
+  const completed = Boolean(state.result) || (state.view === "batch" && state.batchRunCompleted);
+  requireButton("run-dock-start-over").hidden = !completed;
+  if (!shouldShow) return;
+  runDockStatus.textContent = summaryStatus.textContent ?? "";
+  if (state.result) {
+    runDock.dataset.action = "open-file";
+    runDockSummary.textContent = "결과 파일을 열어 내용을 확인한 뒤 제출하세요.";
+    runDockButton.textContent = "결과 파일 열기";
+    runDockButton.disabled = false;
+  } else if (state.view === "batch" && state.batchRunCompleted) {
+    const selected = state.batchItems.filter(item => item.selected);
+    const complete = selected.length > 0 && selected.every(item => item.status === "done");
+    runDock.dataset.action = complete ? "open-folder" : "review-results";
+    runDockSummary.textContent = complete ? "저장된 결과를 열어 확인하세요. 파일별 결과는 아래 목록에서 볼 수 있습니다." :
+      "실패·취소·미완료 파일을 확인한 뒤 다시 최적화할 수 있습니다.";
+    runDockButton.textContent = complete ? "결과 폴더 보기" : "처리 결과 확인";
+    runDockButton.disabled = false;
+  } else {
+    runDock.dataset.action = "optimize";
+    runDockSummary.textContent = state.view === "batch" ? summaryResultLine.textContent :
+      `예상 ${plan?.expectedSizeLabel ?? "계산 중"} · 저장 ${outputDirectoryLabel()}`;
     runDockButton.textContent = optimizeButton.textContent;
-    runDockButton.disabled = true;
-    return;
+    runDockButton.disabled = optimizeButton.disabled || hasInvalidCustomLimit();
   }
-  runDockStatus.textContent = plan.targetStatusLabel;
-  runDockSummary.textContent = `예상 결과 ${plan.expectedSizeLabel} · 중복 제외 절감 ${plan.expectedSavingLabel} · 저장 ${outputDirectoryLabel()}`;
-  runDockButton.textContent = optimizeButton.textContent;
-  runDockButton.disabled = optimizeButton.disabled;
 }
 
 function outputDirectoryLabel(): string {
@@ -1632,7 +1663,7 @@ function renderHeroChips(plan?: SubmissionPlan): void {
   chipPolicy.textContent = policy;
   chipPolicy.className = `hero-chip ${maxMode || state.qualityMode === "manual" ? "hero-chip--max" : "hero-chip--fit"}`;
   chipLimit.textContent = plan.targetBytes
-    ? `개별 · ${formatTargetLimitBytes(plan.targetBytes)}`
+    ? `파일 1개 · ${formatTargetLimitBytes(plan.targetBytes)} 미만`
     : "제한 없음";
   const q =
     state.qualityMode === "manual"
@@ -1975,6 +2006,8 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
   summaryVerdict.dataset.status = report.targetStatus === "missed" ? "hard-miss" : "pass";
   summaryVerdictDetail.textContent = actualVerdict;
   summaryAnalysisBasis.textContent = "저장된 결과 파일의 실제 바이트 크기로 판정했습니다.";
+  chipQuality.hidden = true;
+  policyLive.textContent = "저장된 처리 결과";
   targetTrackFill.style.width = `${report.originalSize > 0 ? Math.min(100, optimizedSize / report.originalSize * 100) : 0}%`;
   targetTrackFill.dataset.status = report.targetStatus === "missed" ? "hard-miss" : "pass";
   requireElement("output-path").textContent = `결과 파일: ${fileNameFromPath(outputPath)}`;
@@ -2022,6 +2055,7 @@ function renderBatchResultPanel(): void {
   batchResultDetails.textContent = batchResultDetailsText({ done, failed, cancelled });
   batchOpenFolderButton.disabled = !hasOutput;
   batchOpenReportButton.disabled = !state.batchReportPath;
+  setSubmissionInputsDisabled(false);
 }
 
 function batchResultDetailsText(input: { done: BatchItem[]; failed: BatchItem[]; cancelled: BatchItem[] }): string {
@@ -2050,6 +2084,7 @@ function resetBatchCompletedItems(): void {
   refreshBatchPlanItems();
   renderBatchList();
   renderBatchResultPanel();
+  setSubmissionInputsDisabled(false);
   setStatus(`${resetCount}개 파일을 다시 최적화할 수 있습니다.`);
 }
 
@@ -2229,25 +2264,26 @@ function setIdle(): void {
 }
 
 function setSubmissionInputsDisabled(disabled: boolean): void {
+  const lockPlan = disabled || Boolean(state.result) || (state.view === "batch" && state.batchRunCompleted);
   deepAnalysisButton.hidden = Boolean(state.result);
   deepAnalysisButton.disabled = disabled || !state.filePath || !state.report || Boolean(state.result);
-  submissionLimitSelect.disabled = disabled;
-  customLimitInput.disabled = disabled;
-  preservationSelect.disabled = disabled;
-  batchTargetModeSelect.disabled = disabled;
-  cleanupDocumentToggle.disabled = disabled;
-  cleanupImageToggle.disabled = disabled;
+  submissionLimitSelect.disabled = lockPlan;
+  customLimitInput.disabled = lockPlan;
+  preservationSelect.disabled = lockPlan;
+  batchTargetModeSelect.disabled = lockPlan;
+  cleanupDocumentToggle.disabled = lockPlan;
+  cleanupImageToggle.disabled = lockPlan;
   actionCheckboxes.querySelectorAll<HTMLInputElement>("input[type='checkbox']").forEach((input) => {
-    input.disabled = disabled;
+    input.disabled = lockPlan;
   });
-  runDockButton.disabled = disabled || optimizeButton.disabled;
+  runDockButton.disabled = disabled || (runDock.dataset.action === "optimize" && optimizeButton.disabled);
 }
 
-function setStatus(message: string): void {
+function setStatus(message: string, tone?: "info" | "success" | "warning"): void {
   statusText.textContent = message;
   statusBannerText.textContent = message;
   statusBanner.hidden = message.trim().length === 0;
-  statusBanner.dataset.tone = statusTone(message);
+  statusBanner.dataset.tone = tone ?? statusTone(message);
 }
 
 function statusTone(message: string): "info" | "success" | "warning" {
@@ -2595,12 +2631,14 @@ async function runBatch(): Promise<void> {
   renderBatchResultPanel();
   const completed = state.batchItems.filter((item) => item.status === "done").length;
   const failed = state.batchItems.filter((item) => item.status === "failed").length;
+  const cancelled = state.batchItems.filter((item) => item.status === "cancelled").length;
   setStatus(
     reportError
       ? `일괄 처리는 끝났지만 리포트를 저장하지 못했습니다. ${reportError}`
       : batchReportPath
       ? `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}. 리포트: ${fileNameFromPath(batchReportPath)}`
-      : `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}.`
+      : `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}, 취소 ${cancelled}.`,
+    reportError || failed > 0 || cancelled > 0 ? "warning" : "success"
   );
 }
 
