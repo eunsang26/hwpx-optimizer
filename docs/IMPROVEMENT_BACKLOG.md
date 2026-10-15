@@ -18,7 +18,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-008 | P2 | safe 폰트와 OLE 삭제 금지 | core | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-009 | P2 | 변환 경로 변경을 verifier에 전달 | core | M | OPT-006 대응 정책 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-010 | P2 | non-overwrite 저장의 원자적 경로 확보 | CLI, desktop | M | OPT-003, OPT-005 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 검증 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 대기 | 미정 |
 | OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 대기 | 미정 |
 | OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 대기 | 미정 |
@@ -152,7 +152,9 @@ Windows 검증: Node 24.21.0. 구현 커밋 `391eed6`의 [CLI ZIP/native 실행 
 - [x] 보고서 저장 실패라도 검증된 문서를 보존할지 rollback할지 정책을 통일하고 결과 상태에 반영한다.
 - [x] 쓰기·rename 실패를 주입하고 결과·보고서·임시파일 상태를 확인한다.
 
-검증 기록: 2026-10-15 Linux/Node 24.13.0. 공통 저장 트랜잭션 18개 및 CLI·batch·desktop 경계 17개 회귀 테스트를 추가했다. 원본·배타적 저장을 포함한 대상 6개 파일·59개 테스트와 최종 전체 78개 파일·586개 테스트 통과·1개 건너뛰기. 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. 모든 경계가 문서/보고서 묶음 rollback을 사용하며 overwrite에서도 이전 파일을 보관했다가 복원한다. 동일 경로, hardlink, symbolic link와 부모 디렉터리 별칭을 쓰기 전에 거부한다. 쓰기·backup rename·각 결과 승격 실패와 사용자 대체 파일로 인한 복원 실패를 주입했다. 복원을 막는 사용자 파일은 보존하고 오류에 남겨 둔 복구 디렉터리를 알린다. 성공 후 정리 경고는 성공을 실패로 바꾸지 않는다. 강제 종료는 OPT-012 범위다. Windows 배포 실행 검증 중이다.
+검증 기록: 2026-10-15 Linux/Node 24.13.0. 공통 저장 트랜잭션 18개 및 CLI·batch·desktop 경계 17개 회귀 테스트를 추가했다. 원본·배타적 저장을 포함한 대상 6개 파일·59개 테스트와 최종 전체 78개 파일·586개 테스트 통과·1개 건너뛰기. 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. 모든 경계가 문서/보고서 묶음 rollback을 사용하며 overwrite에서도 이전 파일을 보관했다가 복원한다. 동일 경로, hardlink, symbolic link와 부모 디렉터리 별칭을 쓰기 전에 거부한다. 쓰기·backup rename·각 결과 승격 실패와 사용자 대체 파일로 인한 복원 실패를 주입했다. 복원을 막는 사용자 파일은 보존하고 오류에 남겨 둔 복구 디렉터리를 알린다. 성공 후 정리 경고는 성공을 실패로 바꾸지 않는다. 강제 종료는 OPT-012 범위다.
+
+Windows 검증: 커밋 `fc4f29a`, Node 24.21.0. [CLI ZIP/native 실행 스모크](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38658307060)와 [데스크톱 릴리즈 빌드·Electron 스모크·ASAR/native 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38658310332)가 모두 통과했다. 두 실행 모두 78개 파일·586개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·배포 audit 통과. 합성 입력만 사용하고 산출물 업로드는 비활성화했다.
 
 ### OPT 012 취소와 저장 복구
 
