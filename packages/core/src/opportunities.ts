@@ -1,3 +1,4 @@
+import { SHARP_INPUT_OPTIONS } from "./resourceLimits.js";
 import sharp from "sharp";
 import { readBmpInfo } from "./bmp.js";
 import { getDecodedImage } from "./decodedImage.js";
@@ -459,8 +460,8 @@ async function convertBmpToPng(
 ): Promise<Buffer> {
   const decoded = await getDecodedImage(data);
   const image = decoded
-    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
-    : sharp(data);
+    ? sharp(decoded.data, { ...SHARP_INPUT_OPTIONS, raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
+    : sharp(data, SHARP_INPUT_OPTIONS);
   const sourceWidth = decoded?.width ?? width;
   const sourceHeight = decoded?.height ?? height;
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
@@ -507,8 +508,8 @@ async function convertTiffToPng(
   // swapped dimensions fail the verifier's aspect-ratio/enlargement checks).
   const decoded = await getDecodedImage(data, { rotate: true });
   const image = decoded
-    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
-    : sharp(data).rotate();
+    ? sharp(decoded.data, { ...SHARP_INPUT_OPTIONS, raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
+    : sharp(data, SHARP_INPUT_OPTIONS).rotate();
   const sourceWidth = decoded?.width ?? width;
   const sourceHeight = decoded?.height ?? height;
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
@@ -530,11 +531,8 @@ async function resizeJpeg(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<Buffer> {
-  // Warm the shared decode cache for same-visual hashing on this Buffer, but keep
-  // mozjpeg encoding on the original container — raw→JPEG often grows bytes.
-  void getDecodedImage(data, { rotate: true });
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
-  return sharp(data, { failOn: "none" })
+  return sharp(data, { ...SHARP_INPUT_OPTIONS, failOn: "none" })
     .resize({
       width: target.width,
       height: target.height,
@@ -555,8 +553,8 @@ async function resizePng(
   const decoded = await getDecodedImage(data, { rotate: true });
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   const image = decoded
-    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
-    : sharp(data).rotate();
+    ? sharp(decoded.data, { ...SHARP_INPUT_OPTIONS, raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
+    : sharp(data, SHARP_INPUT_OPTIONS).rotate();
   return image
     .resize({
       width: target.width,
@@ -571,8 +569,8 @@ async function resizePng(
 
 async function optimizePng(data: Buffer, profile: ImageOptimizationProfile = balancedImageProfile): Promise<Buffer> {
   const decoded = await getDecodedImage(data, { rotate: false });
-  if (!decoded) return sharp(data).png(pngOptions(profile)).toBuffer();
-  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
+  if (!decoded) return sharp(data, SHARP_INPUT_OPTIONS).png(pngOptions(profile)).toBuffer();
+  return sharp(decoded.data, { ...SHARP_INPUT_OPTIONS, raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
     .png(pngOptions(profile))
     .toBuffer();
 }

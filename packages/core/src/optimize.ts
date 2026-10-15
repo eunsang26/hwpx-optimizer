@@ -1,3 +1,4 @@
+import { withDecodedImageCache } from "./decodedImage.js";
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { applyBalancedOptimizationPlan } from "./balancedOptimizer.js";
 import { applySafeOptimizationPlan } from "./optimizer.js";
@@ -56,6 +57,13 @@ export async function analyzeHwpxBuffer(
   input: Buffer,
   options: { targetBytes?: number; analysisMode?: AnalysisMode; imageConcurrency?: number } = {}
 ): Promise<OptimizationReport> {
+  return withDecodedImageCache(() => analyzeHwpxBufferInCache(input, options));
+}
+
+async function analyzeHwpxBufferInCache(
+  input: Buffer,
+  options: { targetBytes?: number; analysisMode?: AnalysisMode; imageConcurrency?: number } = {}
+): Promise<OptimizationReport> {
   const timer = new PerformanceTimer();
   const targetBytes = normalizeTargetBytes(options.targetBytes);
   const analysisMode = options.analysisMode ?? "quick";
@@ -104,6 +112,13 @@ export async function analyzeHwpxBuffer(
 }
 
 export async function optimizeHwpxBufferSafe(input: Buffer, options: SafeOptimizeOptions = {}): Promise<{
+  output: Buffer;
+  report: OptimizationReport;
+}> {
+  return withDecodedImageCache(() => optimizeHwpxBufferSafeInCache(input, options));
+}
+
+async function optimizeHwpxBufferSafeInCache(input: Buffer, options: SafeOptimizeOptions = {}): Promise<{
   output: Buffer;
   report: OptimizationReport;
 }> {
@@ -184,12 +199,12 @@ export async function optimizeHwpxBufferBalanced(
   output: Buffer;
   report: OptimizationReport;
 }> {
-  return optimizeHwpxBufferAdvanced(input, {
+  return withDecodedImageCache(() => optimizeHwpxBufferAdvanced(input, {
     options,
     mode: "balanced",
     profile: balancedImageProfile,
     rollbackWarning: "Balanced mode did not produce a smaller file; original package bytes returned."
-  });
+  }));
 }
 
 async function optimizeHwpxBufferAdvanced(
@@ -724,11 +739,11 @@ export async function optimizeHwpxBufferAggressive(
   output: Buffer;
   report: OptimizationReport;
 }> {
-  return optimizeHwpxBufferAdvanced(input, {
+  return withDecodedImageCache(() => optimizeHwpxBufferAdvanced(input, {
     options,
     mode: "aggressive",
     profile: aggressiveImageProfile,
     rollbackWarning: "Aggressive mode did not produce a smaller file; original package bytes returned.",
     warnings: ["Aggressive mode prioritizes file size and may introduce visible image quality differences."]
-  });
+  }));
 }

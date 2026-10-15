@@ -14,6 +14,14 @@ import {
   warningLabel
 } from "../src/shared/labels.js";
 
+describe("resource limit messages", () => {
+  it("explains bounded decoding failures and preserved oversized images", () => {
+    expect(errorLabel("Error invoking remote method 'hwpx:analyze': Error: Invalid HWPX package: entry exceeds declared size BinData/a.bin")).toContain("원본은 유지");
+    expect(errorLabel("Invalid HWPX package: missing ZIP64 size/offset field")).toContain("ZIP 구성 정보");
+    expect(warningLabel("BinData/a.png: Image exceeds supported pixel limit (24000000 pixels); original bytes are preserved.")).toContain("24MP");
+  });
+});
+
 describe("shared labels", () => {
   it("translates progress strings, including dynamic mode-specific phrasing", () => {
     expect(progressLabel("Reading HWPX package")).toBe("HWPX 문서 구조를 읽는 중입니다");

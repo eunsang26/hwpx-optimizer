@@ -21,7 +21,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 검증 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 대기 | 미정 |
 | OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 대기 | 미정 |
 | OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 대기 | 미정 |
@@ -186,13 +186,15 @@ Windows 검증: 커밋 `831bdba`, Node 24.21.0. [CLI ZIP/native 실행](https://
 
 대상: `decodedImage.ts`, `reader.ts`, `opportunities.ts`, CLI workerPool.
 
-- [ ] 파일 크기·이미지 픽셀·worker 수별 peak RSS와 raw cache 잔존량을 측정한다.
-- [ ] 사용하지 않는 fire-and-forget JPEG 디코드를 제거하거나 비용 효과를 입증한다.
-- [ ] worker 수와 이미지 동시성의 곱을 제어하고 지원 한도를 정의한다.
-- [ ] ZIP64·위조 선언 크기·큰 디코드에서 제한이 실제 할당 전에 작동하는지 확인한다.
-- [ ] 모든 문서 처리는 로컬에서 수행한다.
+- [x] 파일 크기·이미지 픽셀·worker 수별 peak RSS와 raw cache 잔존량을 측정한다.
+- [x] 사용하지 않는 fire-and-forget JPEG 디코드를 제거하거나 비용 효과를 입증한다.
+- [x] worker 수와 이미지 동시성의 곱을 제어하고 지원 한도를 정의한다.
+- [x] ZIP64·위조 선언 크기·큰 디코드에서 제한이 실제 할당 전에 작동하는지 확인한다.
+- [x] 모든 문서 처리는 로컬에서 수행한다.
 
 진행 기록 1: 2026-10-15, ZIP 읽기 제한을 먼저 수정했다. ZIP64 end/locator와 항목의 64비트 크기·offset을 사전 검사하며 unsafe integer·범위 오류·과다 항목·누락 필드를 loader 전에 거부한다. 작은 ZIP64와 앞에 prefix가 붙은 ZIP의 호환성은 유지한다. 메타데이터 개수 한도는 폴더를 포함한 전체 record에 적용한다. 실제 압축 해제는 청크를 확인한 뒤 누적해 위조된 작은 선언 크기와 Unicode 이름 변경에도 항목/전체 크기 제한이 작동한다. 전체 항목을 먼저 합치는 allocation과 중복 Buffer 복사를 제거했다. 대상 2개 파일·32개 테스트 및 전체 84개 파일·637개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. 이미지 raw cache·동시성·peak RSS 측정과 Windows 검증은 계속 진행한다. OPT-014는 완료 처리하지 않는다.
+
+Linux 최종 검증: 2026-10-15 Node 24.13.0. 64MiB/64 slot의 작업별 cache를 적용하고 성공·실패 및 늦은 callback 뒤에 raw가 남지 않게 했다. 불필요한 JPEG 사전 raw decode를 제거했다. 큰 이미지의 header/BMP allocation guard와 Sharp 24MP 한도를 적용해 원본을 보존하고, preview 출력 크기도 제한한다. core mapper 기본 2·최대 4, CLI worker 최대 4·worker별 mapper 1로 제한했다. 요청 수/실제 수를 별도로 보고하고 빈 입력은 실제 worker 0으로 기록한다. 실제 WorkerPool 동시성, CLI 보고, 혼합 이미지 보존 및 앞선 ZIP64/위조 크기 검사를 포함해 전체 85개 파일·657개 테스트 통과·1개 건너뛰기. 타입 검사·빌드·합성 corpus 2/2·배포 audit·Electron 스모크 통과. 합성 1/8MP×JPEG 3개·입력 2.3/25.9MB·worker 1/2/4별 RSS와 raw cache를 측정했다. 큰 case의 관측 peak RSS는 약 375/648/1,142MiB, worker별 peak retained cache 59.8MiB·종료 raw 0이다. 실제 Electron/Playwright로 유효한 25MP 이미지 보존, 위조 크기 오류·재시도, 완료 후 늦은 진행 이벤트 무시를 확인했다. [한도·측정 범위·추가 한계](RESOURCE_LIMITS_2026-10-15.md). Windows 검증은 진행 중이다.
 
 ### OPT 015 추정과 실측
 

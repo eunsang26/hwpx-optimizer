@@ -6,6 +6,7 @@ import { availableParallelism } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  MAX_BATCH_WORKERS,
   analyzeHwpxBuffer,
   estimateNonOverlappingSavingBytes,
   verifyHwpxOutput,
@@ -473,7 +474,7 @@ async function runBatchInWorkspace(
       }
     }
 
-    const jobsEffective = Math.max(1, Math.min(jobsRequested, jobMeta.length));
+    const jobsEffective = Math.min(jobsRequested, jobMeta.length, MAX_BATCH_WORKERS);
 
     if (jobMeta.length > 0) {
       pool = new WorkerPool<OptimizeJob, OptimizeJobResult>({
@@ -727,10 +728,10 @@ function createBatchTargetFields(
 }
 
 export function parseBatchJobs(value: string | undefined): number {
-  if (value === undefined) return Math.max(1, Math.min(availableParallelism() - 1, 4));
+  if (value === undefined) return Math.max(1, Math.min(availableParallelism() - 1, MAX_BATCH_WORKERS));
   if (value === "max") return Math.max(1, availableParallelism());
   const jobs = Number(value);
-  if (!Number.isInteger(jobs) || jobs <= 0) {
+  if (!Number.isSafeInteger(jobs) || jobs <= 0) {
     throw new Error('--jobs must be a positive integer or "max".');
   }
   return jobs;

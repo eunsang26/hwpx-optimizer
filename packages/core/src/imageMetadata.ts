@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import type { Metadata } from "sharp";
+import { imagePixelLimitReason } from "./resourceLimits.js";
 import { readBmpInfo } from "./bmp.js";
 
 export type ImageMetadata = {
@@ -44,13 +45,13 @@ async function readImageMetadataUncached(
         height: bmp.height,
         hasMetadata: false,
         isBmp: true,
-        ...(!bmp.supported ? { preservationReason: "Unsupported BMP variant; alpha or encoding cannot be preserved." } : {})
+        ...(imagePixelLimitReason(bmp.width, bmp.height) ? { preservationReason: imagePixelLimitReason(bmp.width, bmp.height) } : !bmp.supported ? { preservationReason: "Unsupported BMP variant; alpha or encoding cannot be preserved." } : {})
       };
     }
   }
 
   try {
-    const image = options.rotate ? sharp(data).rotate() : sharp(data);
+    const image = options.rotate ? sharp(data, { limitInputPixels: false }).rotate() : sharp(data, { limitInputPixels: false });
     const metadata = await image.metadata();
     const format = metadata.format ? String(metadata.format) : undefined;
     // metadata() describes the input header even when rotate() is queued.
@@ -73,6 +74,8 @@ async function readImageMetadataUncached(
 }
 
 function preservationReason(metadata: Metadata): string | undefined {
+  const sizeReason = imagePixelLimitReason(metadata.width, metadata.height);
+  if (sizeReason) return sizeReason;
   if ((metadata.pages ?? 1) > 1) return "Multi-page or animated image; all frames must be preserved.";
   if (metadata.icc) return "Embedded color profile; original color representation is preserved.";
   if ((metadata.depth && metadata.depth !== "uchar") || (metadata.bitsPerSample ?? 8) > 8) {

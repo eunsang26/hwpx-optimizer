@@ -209,6 +209,16 @@ The main process passes an AbortSignal through staging and exclusive publication
 
 Core analysis normalizes the omitted mode to `quick` across inventory, structural opportunities and image opportunities. Quick performs header/byte analysis and estimates image candidates; it does not decode pixels, compute visual duplicate hashes or encode images. Deep enables those diagnostics and candidate encode measurements. Desktop initial single and batch imports use quick; the single-file detail panel can request deep through the validated preload/IPC/worker path. Reports disclose the work performed in optional `analysis` coverage metadata, and the renderer labels deferred checks and estimated sizes. Older reports without metadata retain unknown coverage. Candidate encode measurements remain distinct from actual final ZIP bytes. See `QUICK_ANALYSIS_2026-10-15.md` for measurements.
 
+## Processing Resource Limits
+
+ZIP metadata preflight covers normal and ZIP64 end records, locators, entry counts and 64-bit sizes/offsets before JSZip loads metadata. The 20,000-record default includes directories. Default limits remain 512MiB per expanded entry and 2GiB total expanded data. Unicode-decoded names are checked again after loading. Actual entry streams are checked before accumulating each chunk and concatenating the accepted entry; false declared sizes cannot bypass the entry/aggregate limits. This avoids allocating a complete untrusted expanded entry before validation, although decompressor chunks and its current input block still have transient cost.
+
+`resourceLimits.ts` defines a 24-million-pixel image ceiling. Larger images are retained with a warning, including BMP before RGB allocation; native decode/encode pipelines also set Sharp's input pixel limit. Preview outputs have at most 12 pairs and 1024-pixel edges/samples; one pair runs at a time. Core image mappers default to two concurrent items and cap explicit requests at four. CLI uses at most four workers, each requesting image concurrency one; requested and effective worker counts are recorded in its batch report.
+
+Buffer analysis, optimization and verification use an AsyncLocalStorage-owned decoded-image cache. Ready entries are bounded by 64MiB including encoded-source and decoded-pixel backing buffers, and by 64 slots. Old entries are evicted and oversized entries are returned without caching. Concurrent requests for one buffer share the pending decode. Success and failure dispose the scope; late callbacks cannot repopulate it. Nested operations share their active owner. Standalone image helpers use a bounded cache and expose an explicit clear operation. JPEG encoding no longer launches a separate unawaited raw decode to warm this cache.
+
+These limits do not bound total RSS: ZIP buffers, active decodes, native intermediates, thumbnails, externally retained returned buffers and allocator/native caches also consume memory. The largest permitted archive/pixel/worker limits have not been proven safe in every combination on low-memory PCs. See `RESOURCE_LIMITS_2026-10-15.md` for synthetic RSS measurements and their scope.
+
 ## Safety Rules
 
 - Never overwrite the original input file.

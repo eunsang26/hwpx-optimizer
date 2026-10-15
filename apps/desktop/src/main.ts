@@ -1190,6 +1190,11 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (!workflow.originalSize || workflow.originalSize <= 0) {
     throw new Error("Desktop smoke failed: analysis did not return a document size");
   }
+  window.webContents.send("hwpx:optimize-progress", { percent: 100, item: "Optimization complete" });
+  const lateProgressHidden = await window.webContents.executeJavaScript(`
+    new Promise(resolve => setTimeout(() => resolve(document.getElementById("progress-panel")?.hidden), 30))
+  `);
+  if (!lateProgressHidden) throw new Error("Desktop smoke failed: late progress reopened the idle progress panel");
   if (workflow.analysisMode !== "quick" || workflow.detailedAnalysisMode !== "deep" || !workflow.invalidAnalysisRejected) {
     throw new Error("Desktop smoke failed: analysis mode did not cross the preload/IPC/worker boundary");
   }

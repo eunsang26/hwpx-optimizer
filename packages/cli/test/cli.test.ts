@@ -726,6 +726,24 @@ describe("runCli", () => {
     );
   });
 
+  it("reports the supported worker cap while preserving the requested count", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-worker-cap-")), inputDir = join(dir, "docs"), outDir = join(dir, "out");
+    await mkdir(inputDir);
+    const source = await createHwpxFixture({ entries: {} });
+    for (let index = 0; index < 5; index += 1) await writeFile(join(inputDir, `${index}.hwpx`), source);
+    expect(await runCli(["batch", inputDir, "--out", outDir, "--jobs", "12"])).toBe(0);
+    const report = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8"));
+    expect(report).toMatchObject({ jobs: 4, jobsEffective: 4, jobsRequested: 12 });
+    expect(report.totals.failed).toBe(0); expect(report.results).toHaveLength(5);
+  });
+  it("reports zero effective workers when there are no input documents", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-worker-empty-"));
+    const outDir = join(dir, "out");
+    expect(await runCli(["batch", dir, "--out", outDir, "--jobs", "12"])).toBe(0);
+    const report = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8"));
+    expect(report).toMatchObject({ jobs: 0, jobsEffective: 0, jobsRequested: 12 });
+    expect(report.results).toEqual([]);
+  });
   it("records the configured batch worker limit", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputDir = join(dir, "docs");

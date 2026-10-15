@@ -1,3 +1,4 @@
+import { MAX_CONCURRENT_IMAGE_OPERATIONS } from "./resourceLimits.js";
 import { availableParallelism } from "node:os";
 
 export type MapLimitOptions = {
@@ -6,13 +7,13 @@ export type MapLimitOptions = {
 
 export function defaultImageConcurrency(): number {
   const cpuCount = availableParallelism();
-  return Math.max(1, Math.min(6, Math.floor(cpuCount || 4)));
+  return Math.max(1, Math.min(2, Math.floor(cpuCount || 2)));
 }
 
 export function resolveImageConcurrency(requested?: number): number {
   if (requested === undefined) return defaultImageConcurrency();
   if (!Number.isFinite(requested)) return defaultImageConcurrency();
-  return Math.max(1, Math.floor(requested));
+  return Math.max(1, Math.min(MAX_CONCURRENT_IMAGE_OPERATIONS, Math.floor(requested)));
 }
 
 export async function mapLimit<T, R>(

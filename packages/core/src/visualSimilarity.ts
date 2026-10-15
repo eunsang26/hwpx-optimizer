@@ -1,5 +1,7 @@
+import { SHARP_INPUT_OPTIONS } from "./resourceLimits.js";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
+import { readImageMetadata } from "./imageMetadata.js";
 import { getDecodedImage } from "./decodedImage.js";
 
 const HASH_SIZE = 8;
@@ -37,7 +39,8 @@ export type DecodedPixelHash = {
  */
 export async function computeAverageHash(data: Buffer): Promise<AverageHash | null> {
   try {
-    const raw = await sharp(data)
+    if ((await readImageMetadata("", data)).preservationReason) return null;
+    const raw = await sharp(data, SHARP_INPUT_OPTIONS)
       .removeAlpha()
       .grayscale()
       .resize(HASH_SIZE, HASH_SIZE, { fit: "fill", kernel: "lanczos3" })

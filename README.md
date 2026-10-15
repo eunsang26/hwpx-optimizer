@@ -219,7 +219,8 @@ npm run cli -- batch ./docs --mode balanced --out ./optimized --jobs 2
 
 - 한 파일이 실패해도 전체가 중단되지 않습니다.
 - 출력 폴더에 `batch-report.json`이 생성됩니다. 실패 항목에는 `stage`(read-input / optimize / resolve-output-path / write-output / write-report)가 기록됩니다.
-- `--jobs`는 최대 4까지 지정 가능합니다.
+- `--jobs`의 실제 병렬 실행은 최대 4개입니다. 더 큰 수나 `max`를 요청해도 이 한도를 적용하며 요청 수와 실제 수를 batch 보고서에 남깁니다.
+- 24MP를 넘는 이미지는 경고와 함께 원본을 보존합니다. 메모리가 부족한 환경은 `--jobs 1`을 사용하세요. [처리 한도와 측정 근거](docs/RESOURCE_LIMITS_2026-10-15.md)를 참고하세요.
 
 ---
 

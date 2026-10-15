@@ -14,6 +14,7 @@ export * from "./performance.js";
 export * from "./planner.js";
 export * from "./projectPackageSize.js";
 export * from "./reader.js";
+export * from "./resourceLimits.js";
 export * from "./referenceGraph.js";
 export * from "./resourceMappings.js";
 export * from "./regressionCorpus.js";

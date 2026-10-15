@@ -1,3 +1,4 @@
+import { withDecodedImageCache } from "./decodedImage.js";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import sharp from "sharp";
 import { analyzeHwpxPackage } from "./analyzer.js";
@@ -32,6 +33,10 @@ const SSIM_MINIMUM: Record<Exclude<VerifyMode, "safe">, number> = {
 };
 
 export async function verifyHwpxOutput(output: Buffer, options: VerifyHwpxOutputOptions = {}): Promise<void> {
+  return withDecodedImageCache(() => verifyHwpxOutputInCache(output, options));
+}
+
+async function verifyHwpxOutputInCache(output: Buffer, options: VerifyHwpxOutputOptions): Promise<void> {
   const hasOriginal = options.original !== undefined;
   const hasMode = options.mode !== undefined;
   if (hasOriginal !== hasMode) {

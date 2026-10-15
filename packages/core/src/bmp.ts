@@ -1,3 +1,5 @@
+import { imagePixelLimitReason } from "./resourceLimits.js";
+
 export type DecodedBmp = {
   width: number;
   height: number;
@@ -52,7 +54,7 @@ export function readBmpInfo(data: Buffer): BmpInfo | null {
 
 export function decodeBmp(data: Buffer): DecodedBmp | null {
   const header = parseBmpHeader(data);
-  if (!header) return null;
+  if (!header || imagePixelLimitReason(header.width, header.height)) return null;
   if (hasUnsupportedAlpha(data, header)) return null;
 
   if (header.compression === BI_RGB) {

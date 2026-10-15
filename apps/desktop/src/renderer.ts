@@ -726,6 +726,7 @@ async function init(): Promise<void> {
   renderEmptySummary();
   renderPlanActions();
   const unsubscribeOptimizeProgress = window.hwpxOptimizer.onOptimizeProgress((progress) => {
+    if (!state.optimizeRunning && !state.batchRunning) return;
     renderProgress(progress.percent, progress.item);
   });
   window.addEventListener("beforeunload", unsubscribeOptimizeProgress, { once: true });
