@@ -47,4 +47,17 @@ Linux 빌드의 원본/복사본 기준:
 
 ## Windows 검증
 
-실제 Windows 패키지 실행 결과를 확인한 뒤 기록한다. 깨끗한 CI 환경에서의 자동화와 기관 PC의 수동 QA는 구분한다. 이 작업이 Windows 10/11의 모든 정책·디스플레이·접근성 환경이나 한글 앱의 문서 외형을 검증하는 것은 아니다.
+커밋 `80ef282`, Windows/Node 24.21.0의 [데스크톱 릴리즈 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38684373755)과 [CLI ZIP 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38684376108)이 모두 성공했다. 두 실행 모두 기본 병렬 설정의 87개 파일·684개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·배포 audit가 통과했다. 데스크톱은 NSIS 빌드·실제 ASAR UI 진입 파일/폰트/라이선스·native/locale 파일 검사·원래 배포물의 독립 실행·처리/저장/분석/메모리/용량 경계 측정을 통과했다. CLI도 실제 ZIP의 optimize/verify/batch/launcher 검사가 통과했다. 모든 산출물 업로드 단계는 건너뛰었다.
+
+실제 배포물의 폰트 검증 원시 기록:
+
+- 시스템/사용자 Pretendard 등록 0개·폰트 파일 0개.
+- 체크아웃 밖 새 디렉터리에서 실행. 복사 ASAR 5,840,140B, SHA256 `4b79faf7878cf4b17de0ba3829f5a50565098857e01de002b54ac3a8876bd1f5`, 빌드 원본과 바이트 동일.
+- `packaged: true`, 외부 검증 요청 취소 확인, 네트워크 오프라인 모의 활성화.
+- 실제 `resources/app.asar/apps/desktop/dist/fonts/PretendardVariable.woff2` URL 사용. font는 위 Linux와 같은 2,057,688B/SHA256이었다.
+- 두께 400·700 모두 `Pretendard Variable`, 16 glyph, `isCustomFont: true`. 시스템 fallback 글꼴은 사용하지 않았다.
+- `desktop-smoke-complete`의 `packaged: true`를 확인했다. 합성 문서의 분석·최적화·실제 파일 검증·일괄 처리·초기화가 모두 끝난 뒤 종료 코드 0이었다. 진단용 파일 추가나 재시도로 통과시키지 않았다.
+
+Windows OFL은 체크아웃의 CRLF 형식 4,511B이며 SHA256은 `8a2aba6114145294edbbce5998eab74320e7e07ce39999cc9f95ae2967d2eb9e`다. 위 Linux LF 원본을 CRLF로 변환한 해시와 같으며, Windows에서도 소스와 ASAR의 바이트 동일성을 검사했다. 폰트나 라이선스 내용을 편집하지 않았다.
+
+Production+shipped Electron의 moderate+ advisory는 0개였고 개발/빌드 도구 advisory 20개(high 8·moderate 11·low 1)는 남아 있다. 깨끗한 CI 환경에서의 자동화와 기관 PC의 수동 QA는 구분한다. 이 작업이 Windows 10/11의 모든 정책·디스플레이·접근성 환경이나 한글 앱의 문서 외형을 검증하는 것은 아니다.

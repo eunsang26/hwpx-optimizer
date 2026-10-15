@@ -23,7 +23,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 대기 | 미정 |
 | OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 대기 | 미정 |
 | OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 대기 | 미정 |
@@ -215,9 +215,11 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 
 대상: `package.json` electron-builder files, `copy-assets.mjs`, 배포물 검사.
 
-- [ ] `PretendardVariable.woff2`와 `OFL.txt`를 명시적으로 포함한다.
-- [ ] 실제 Windows `app.asar` 또는 배포 디렉터리에서 파일 존재를 확인한다.
-- [ ] 외부 네트워크 없이 깨끗한 PC에서 폰트 로딩을 확인한다.
+- [x] `PretendardVariable.woff2`와 `OFL.txt`를 명시적으로 포함한다.
+- [x] 실제 Windows `app.asar` 또는 배포 디렉터리에서 파일 존재를 확인한다.
+- [x] 외부 네트워크 없이 깨끗한 PC에서 폰트 로딩을 확인한다.
+
+검증 기록: 2026-10-15, Linux/Node 24.13.0과 커밋 `80ef282`의 [Windows 데스크톱](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38684373755)·[CLI ZIP](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38684376108). 전체 87개 파일·684개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·Electron 및 실제 패키지 스모크·배포 audit 통과. ASAR에서 WOFF2/OFL을 소스와 비교했고, 설치 Pretendard 0개인 Windows 환경에서 저장소 밖 원본과 동일한 앱 복사본·새 프로필·오프라인 세션으로 실제 custom glyph를 400/700 두께에서 확인했다. 한국어만 남기는 기존 locale 정리로 생긴 시작 실패도 확인해 ko/en-US를 함께 보존하고 누락/빈 파일을 거부한다. [바이트·해시·실행 증거와 범위](BUNDLED_FONTS_2026-10-15.md). 원본 배포물의 전체 합성 워크플로가 정상 종료했으며 artifact 업로드는 모두 건너뛰었다.
 
 ### OPT 017 PR 게이트
 

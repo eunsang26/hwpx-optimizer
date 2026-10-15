@@ -73,7 +73,7 @@ Expected result:
 
 ## Bundled Font Check
 
-The unpacked runtime must also retain nonempty `locales/ko.pak` and `locales/en-US.pak`; the default fallback is required for the verified English Windows runner to initialize the renderer. Locale pruning rejects missing or empty required resources.
+The unpacked runtime must also retain nonempty `locales/ko.pak` and `locales/en-US.pak`; the default fallback is required for the verified clean Windows runner to initialize the renderer. Locale pruning rejects missing or empty required resources.
 
 The desktop ASAR must contain `apps/desktop/dist/fonts/PretendardVariable.woff2` and `OFL.txt` unchanged from the checkout. `npm run release:verify-artifacts` extracts and checks both. After building an unpacked app on a clean Windows host without system Pretendard, run:
 
