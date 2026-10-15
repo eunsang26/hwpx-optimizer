@@ -20,7 +20,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-010 | P2 | non-overwrite 저장의 원자적 경로 확보 | CLI, desktop | M | OPT-003, OPT-005 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 대기 | 미정 |
 | OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 대기 | 미정 |
 | OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 대기 | 미정 |
@@ -178,7 +178,9 @@ Windows 검증: 커밋 `00bdf5c`, Node 24.21.0. [CLI ZIP/native 실행](https://
 - [x] 이미지 수별 quick/deep 시간·인코딩·디코드 횟수를 기록한다.
 - [x] 예측 정보가 줄어드는 경우 UI에 추정 근거를 반영한다.
 
-Linux 검증: 2026-10-15 Node 24.13.0. core 기본값과 명시적 quick이 시간 필드를 제외하고 동일하며 혼합 JPEG·PNG·TIFF·BMP에서 Sharp raw/인코딩 출력을 실행하지 않는다. Desktop 자동 single/batch는 quick, 단일 파일 상세 분석과 CLI deep은 픽셀·유사 이미지 검사 및 후보 인코딩을 수행한다. 보고서·화면·CLI가 추정 근거와 미검사를 표시한다. 24개 합성 이미지에서 quick 219.6ms·deep 2,209.3ms, raw/인코딩 출력은 quick 각 0회·deep 각 48회였다. 실제 Electron/Playwright로 키보드 상세 검사, 옵션·포커스 유지, 취소/오류 뒤 계획 유지, 재시도·최적화·처음으로 및 작은 창을 확인했다. 전체 83개 파일·620개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·배포 audit·Electron 스모크 통과. Windows 검증은 진행 중이다. [분석 계약·측정·한계](QUICK_ANALYSIS_2026-10-15.md).
+Linux 검증: 2026-10-15 Node 24.13.0. core 기본값과 명시적 quick이 시간 필드를 제외하고 동일하며 혼합 JPEG·PNG·TIFF·BMP에서 Sharp raw/인코딩 출력을 실행하지 않는다. Desktop 자동 single/batch는 quick, 단일 파일 상세 분석과 CLI deep은 픽셀·유사 이미지 검사 및 후보 인코딩을 수행한다. 보고서·화면·CLI가 추정 근거와 미검사를 표시한다. 24개 합성 이미지에서 quick 219.6ms·deep 2,209.3ms, raw/인코딩 출력은 quick 각 0회·deep 각 48회였다. 실제 Electron/Playwright로 키보드 상세 검사, 옵션·포커스 유지, 취소/오류 뒤 계획 유지, 재시도·최적화·처음으로 및 작은 창을 확인했다. 전체 83개 파일·620개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·배포 audit·Electron 스모크 통과. Windows 검증도 통과했다. [분석 계약·측정·한계](QUICK_ANALYSIS_2026-10-15.md).
+
+Windows 검증: 커밋 `831bdba`, Node 24.21.0. [CLI ZIP/native 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38663816515)과 [데스크톱 릴리즈·합성 측정](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38663816648)이 통과했다. 두 실행 모두 83개 파일·620개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·배포 audit 통과. 데스크톱은 합성 corpus 2/2·Electron 스모크·NSIS·실제 ASAR runtime 및 unpacked native 검사도 통과했다. 24개 이미지의 quick 231.5ms·deep 2,678.9ms, raw/인코딩 출력은 quick 각 0회·deep 각 48회였다. 합성 입력만 사용하고 산출물 업로드는 모두 비활성화했다.
 
 ### OPT 014 메모리와 동시성
 

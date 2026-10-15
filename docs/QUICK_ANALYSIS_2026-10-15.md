@@ -50,4 +50,23 @@ Linux 전체 83개 파일·620개 테스트 통과·1개 건너뛰기, 타입 �
 
 화면에서 확인한 추가 과제는 상세 분석의 영문 검토 이유(OPT-023), 아래로 스크롤한 상태에서 상단 오류 배너가 시야 밖에 놓이는 문제(OPT-024), 작은 글자와 정보 계층(OPT-025)다. 이번 분석 비용 개선만으로 전체 UX/HCI 완료를 주장하지 않는다.
 
-Windows 실행 근거는 해당 커밋의 검증 후 추가한다.
+## Windows 실행 근거
+
+코드 커밋 `831bdba`, Node 24.21.0에서 [CLI ZIP/native 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38663816515)과 [데스크톱 릴리즈 및 합성 측정](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38663816648)이 모두 통과했다. 양쪽 모두 83개 파일·620개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·배포 audit 통과다. CLI 배포 ZIP의 optimize·verify·batch 및 launcher를 실행했다. 데스크톱은 합성 corpus 2/2·Electron 스모크·NSIS 빌드·실제 ASAR runtime 존재 및 unpacked native 검사를 통과했다. 산출물 업로드는 모두 건너뛰었다. clean 기관 PC·한컴 수동 QA의 근거로 확대 해석하지 않는다.
+
+동일 스크립트의 Windows 측정값:
+
+| 이미지 수 | 모드 | 시간(ms) | metadata | raw 출력 | 인코딩 출력 |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 1 | default | 42.5 | 2 | 0 | 0 |
+| 1 | quick | 42.5 | 2 | 0 | 0 |
+| 1 | deep | 82.9 | 3 | 2 | 2 |
+| 8 | default | 124.5 | 16 | 0 | 0 |
+| 8 | quick | 118.7 | 16 | 0 | 0 |
+| 8 | deep | 884.4 | 24 | 16 | 16 |
+| 24 | default | 232.8 | 48 | 0 | 0 |
+| 24 | quick | 231.5 | 48 | 0 | 0 |
+| 24 | deep | 2,678.9 | 72 | 48 | 48 |
+
+24개 이미지에서 기본/quick은 약 0.23초, deep은 약 2.68초였다. raw 및 인코딩 출력 요청 수는 Linux와 같았다.
+
