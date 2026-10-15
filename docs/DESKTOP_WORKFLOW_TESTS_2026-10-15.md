@@ -37,3 +37,9 @@ The blocked aggregate-report scenario also failed before the renderer fix: the e
 - Local Playwright used real pointer clicks with separate synthetic documents and isolated settings. File addition and pending removal were visible, the report warning remained visible with its report action disabled, original hashes were unchanged and page errors were **0**. At content widths 800 and 720 the page widths were respectively 785 and 705, with no horizontal page overflow. Captures remain local in `.tmp/ui-audit/workflow-regressions-2026-10-15/` (`01-single-800.png`, `02-batch-720.png`, `03-batch-report-error-720.png`, ARIA snapshots and `checks.json`). No documents or captures were uploaded.
 
 This is synthetic workflow and preservation evidence. It does not establish Hancom rendering fidelity or institutional-PC manual acceptance. Wider HCI error wording/recovery and visual hierarchy remain tracked by OPT-024/025; the visible report failure still includes the underlying filesystem detail.
+
+## Windows and automatic PR verification
+
+Commit `3493fea` passed [automatic PR checks](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38688082218): Linux/Node 22.12.0 and 24.21.0 each ran 678 tests (1 skipped), typecheck/build, synthetic corpus and all 11 workflow cases. The Windows/Node 24.21.0 reusable CLI job ran the same 678 tests, native package verification and the actual portable ZIP smoke.
+
+The separate [Windows desktop release gate](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38688097736) passed the same tests, typecheck/build, release audit, ASAR/native/locale/font checks, source smoke, and the original packaged app copied outside the checkout. Both source and packaged runs emitted 11-case completion markers with five hashes verified; the packaged app also passed the absent-system-font offline glyph check. All four synthetic measurement steps completed. Both runs have zero artifacts and every upload step was skipped.

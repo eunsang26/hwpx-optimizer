@@ -25,7 +25,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 대기 | 미정 |
 | OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 대기 | 미정 |
 | OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 대기 | 미정 |
@@ -236,10 +236,12 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 
 대상: `repoConfig.test.ts`, renderer·IPC·worker 테스트.
 
-- [ ] 문자열 검사에 의존한 상태·취소·저장 검증을 실제 실행 기반 테스트로 옮긴다.
-- [ ] 선택·추가·삭제·취소·재시도·일괄 완료·보고서 저장 실패 흐름을 검증한다.
-- [ ] 파일 보존 결함은 최종 출력/원본 해시와 내용으로 검사한다.
-- [ ] 정적 설정 검사는 필요한 범위에 유지하고 코드 형태에 묶인 검사를 줄인다.
+- [x] 문자열 검사에 의존한 상태·취소·저장 검증을 실제 실행 기반 테스트로 옮긴다.
+- [x] 선택·추가·삭제·취소·재시도·일괄 완료·보고서 저장 실패 흐름을 검증한다.
+- [x] 파일 보존 결함은 최종 출력/원본 해시와 내용으로 검사한다.
+- [x] 정적 설정 검사는 필요한 범위에 유지하고 코드 형태에 묶인 검사를 줄인다.
+
+검증 기록: 2026-10-15, 커밋 `3493fea`. 소스 문자열 기반 6개 테스트를 제거하고 실제 Electron DOM→preload→IPC→worker→파일 저장을 통과하는 11개 회귀 시나리오로 대체했다. 원본 4개·무관한 파일 1개의 SHA-256을 매번 확인하고 취소/실패/초기화 전후 전체 디렉터리, 원본 대비 출력 내용과 보고서 실측 바이트를 검사한다. 기존 real-worker/저장 단계 테스트는 유지했다. 숨겨진 파일 추가·목록 비우기와 대기 행 제거를 복구했고, 일괄 보고서 저장 오류가 완료 문구에 덮이지 않도록 수정했다. 로컬 관련 65개 테스트·전체 87개 파일 678개 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·11/11 Electron 통과. [PR 검증](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38688082218)의 Linux/Node 22.12·24.21과 Windows CLI/Node 24.21도 통과했고, [Windows 데스크톱 배포 검증](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38688097736)의 소스/실제 패키지 모두 11/11 시나리오와 원본 해시를 확인했다. 업로드 단계는 모두 skipped, 각 실행 artifact 0개. 로컬 실제 Playwright 클릭·800/720px 화면 캡처·페이지 오류 0개·원본 해시 불변도 확인했다. [시나리오·실패 재현·검증 범위](DESKTOP_WORKFLOW_TESTS_2026-10-15.md).
 
 ### OPT 019 책임 분리
 
