@@ -26,7 +26,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 대기 | 미정 |
 | OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 대기 | 미정 |
 | OPT-022 | P3 | 벤치마크 실패 문서 추적과 판정 | bench | M | 없음 | 대기 | 미정 |
@@ -247,10 +247,12 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 
 대상: `main.ts`, `renderer.ts`, shared helpers.
 
-- [ ] main의 스모크 실행 코드를 테스트 전용 모듈로 옮긴다.
-- [ ] worker 요청 수명주기와 IPC 파일 권한 경계를 분리한다.
-- [ ] renderer의 단일·배치 상태 전이와 DOM 표시를 분리한다.
-- [ ] 중복 목표 배분·품질 상수·액션 카탈로그를 정리하고 기존 흐름 테스트를 유지한다.
+- [x] main의 스모크 실행 코드를 테스트 전용 모듈로 옮긴다.
+- [x] worker 요청 수명주기와 IPC 파일 권한 경계를 분리한다.
+- [x] renderer의 단일·배치 상태 전이와 DOM 표시를 분리한다.
+- [x] 중복 목표 배분·품질 상수·액션 카탈로그를 정리하고 기존 흐름 테스트를 유지한다.
+
+검증 기록: 2026-10-15, 커밋 `2d4a6c3`. main의 스모크 실행/진단을 smoke 전용 동적 모듈로 옮기고, `DesktopPathPermissions`가 세션 권한과 원본 identity를, `DesktopDocumentController`가 문서 요청·저장·종료 수명주기를 조정하도록 분리했다. renderer의 단일/일괄 문서 전이·취소 token·완료·재시도는 DOM 없는 `RendererWorkflow`가 관리하고, 분석/갱신/요약/실행의 목표와 품질 계획은 `BatchPlanner`를 공유한다. action catalog·JPEG 정책·창 크기를 공통화하고 preload의 요청 타입을 재사용했다. 새 renderer 모듈도 패키지에 명시적으로 포함한다. 관련 54개 테스트, 전체 89개 파일·691개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·Electron 11/11 통과. 로컬 Playwright의 실제 클릭·800/720px 및 저장 중 정상 종료의 기존 묶음 복구·원본/결과 해시·페이지 오류 0개도 확인했다. [PR Checks](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38690684978)의 Linux/Node 22.12·24.21과 Windows CLI, [Windows 데스크톱 배포](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38690680075) 모두 통과했으며 소스/저장소 밖 실제 패키지에서 각각 11개 흐름과 원본 해시를 확인했다. 두 실행 artifact 0개, 업로드 skipped. [모듈별 책임](ARCHITECTURE.md#desktop-boundary).
 
 ### OPT 020 설정 저장
 
@@ -299,7 +301,7 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 - [ ] 모달의 포커스 진입·유지·복귀, 명확한 포커스 표시를 검증한다.
 - [ ] 분석·저장·취소·완료·실패를 시각과 보조기술에 일관되게 전달한다.
 - [ ] 잘못된 용량 입력에 해당 컨트롤과 연결된 설명 및 복구 방법을 제공한다.
-- [ ] 진행 표시·감소된 모션·반복 실행과 부분 실패의 HCI 동작을 검증한다.
+- [ ] 진행 표시·감소된 모션·반복 실행과 부분 실패의 HCI 동작을 검증한다. 요약 보고서 저장 대기 중 초기화·다음 파일 선택에 대한 늦은 응답 격리도 포함한다.
 
 ### OPT 025 화면 계층과 가독성
 
