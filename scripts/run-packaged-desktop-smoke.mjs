@@ -35,9 +35,12 @@ const proofs = (result.stdout ?? "").split(/\r?\n/).flatMap(line => {
   try { return [JSON.parse(line)]; }
   catch { return []; }
 });
-if (!proofs.some(proof => proof.check === "offline-bundled-font" && proof.packaged === true && proof.offline === true &&
+if (!proofs.some(proof => proof.check === "offline-bundled-font" && proof.packaged === true && proof.externalNetworkBlocked === true &&
     /\/resources\/app\.asar\/apps\/desktop\/dist\/fonts\/PretendardVariable\.woff2$/i.test(proof.fontUrl) && proof.rendered?.length === 2)) {
   throw new Error("Packaged desktop exited without the required offline custom-font proof.");
+}
+if (!proofs.some(proof => proof.check === "external-network-block" && proof.packaged === true && proof.blocked === true)) {
+  throw new Error("Packaged desktop did not prove the external request was cancelled by its network policy.");
 }
 if (!proofs.some(proof => proof.check === "desktop-smoke-complete" && proof.packaged === true)) {
   throw new Error("Packaged desktop exited before the complete synthetic workflow was verified.");

@@ -2,7 +2,7 @@ import type { BrowserWindow } from "electron";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
-/** Test-only renderer proof; called after the smoke session was made offline before navigation. */
+/** Test-only proof after external requests were verified blocked before navigation. */
 export async function assertOfflineBundledFonts(window: BrowserWindow, packaged: boolean): Promise<void> {
   const debuggerApi = window.webContents.debugger;
   const assets = await Promise.all(["PretendardVariable.woff2", "OFL.txt"].map(async file => {
@@ -51,7 +51,8 @@ export async function assertOfflineBundledFonts(window: BrowserWindow, packaged:
       }
       rendered.push({ weight: Number(id.split("-").at(-1)), fonts: used });
     }
-    console.log(JSON.stringify({ check: "offline-bundled-font", packaged, offline: true,
+    console.log(JSON.stringify({ check: "offline-bundled-font", packaged, externalNetworkBlocked: true,
+      networkEmulation: !packaged,
       fontUrl: loaded.fontUrl, assets, rendered }));
   } finally {
     if (debuggerApi.isAttached()) debuggerApi.detach();

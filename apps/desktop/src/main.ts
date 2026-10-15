@@ -43,6 +43,7 @@ const allowedOutputDirectories = new Set<string>();
 const allowedGeneratedPaths = new Set<string>();
 let settingsSaveQueue: Promise<void> = Promise.resolve();
 let smokeDialogFilePaths: string[] | undefined;
+let smokeBlockedExternalRequests = 0;
 // Packaged Windows EXEs treat unknown `--flags` as Chromium switches ("bad option").
 // Prefer HWPX_OPT_SMOKE_TEST=1 for packaged smoke; keep argv for Linux `electron` launches.
 const isSmokeTest =
@@ -90,7 +91,18 @@ async function createWindow(): Promise<BrowserWindow> {
 app.whenReady()
   .then(async () => {
     blockExternalNetworkRequests();
-    if (isSmokeTest) session.defaultSession.enableNetworkEmulation({ offline: true });
+    if (isSmokeTest) {
+      // Verify cancellation at the request hook before any DNS/socket attempt.
+      const before = smokeBlockedExternalRequests;
+      let connected = false;
+      try { await session.defaultSession.fetch("https://font-smoke.invalid/blocked-check"); connected = true; }
+      catch { /* Expected cancellation by our request policy. */ }
+      if (connected || smokeBlockedExternalRequests !== before + 1) throw new Error("Desktop smoke failed: external network policy did not cancel the probe.");
+      console.log(JSON.stringify({ check: "external-network-block", packaged: app.isPackaged, blocked: true }));
+      // Packaged runs verify outbound blocking independently of Chromium emulation;
+      // source runs additionally emulate offline. Local file access stays enabled.
+      if (!app.isPackaged) session.defaultSession.enableNetworkEmulation({ offline: true });
+    }
     if (process.env.HWPX_OPT_EXPECT_PACKAGED === "1" && !app.isPackaged) throw new Error("Expected an actual packaged desktop executable.");
     registerIpc();
     const window = await createWindow();
@@ -364,7 +376,10 @@ function settingsPath(): string {
 function blockExternalNetworkRequests(): void {
   session.defaultSession.webRequest.onBeforeRequest(
     { urls: ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*"] },
-    (_details, callback) => callback({ cancel: true })
+    (details, callback) => {
+      if (isSmokeTest && details.url === "https://font-smoke.invalid/blocked-check") smokeBlockedExternalRequests += 1;
+      callback({ cancel: true });
+    }
   );
 }
 
