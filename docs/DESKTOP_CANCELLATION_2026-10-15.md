@@ -27,7 +27,7 @@ Linux, Node 24.13.0에서 다음을 확인했다.
 
 추가 테스트는 `documentCancellation.test.ts` 10개, `documentOperations.test.ts` 8개, `artifactCancellation.test.ts` 10개다. worker 단계 제어는 테스트에서 생성한 외부 bootstrap을 사용하며 제품 코드에 테스트 지연이나 강제 종료 hook을 넣지 않았다.
 
-최종 전체 테스트 81개 파일·614개 통과·1개 건너뛰기, `npm run typecheck`, `npm run build`, `npm run desktop:smoke:built`가 통과했다. 합성 corpus 검증도 2/2 통과했다. Windows의 동일 테스트와 실제 패키징 검증은 별도 실행 기록을 아래에 추가한다.
+최종 전체 테스트 81개 파일·614개 통과·1개 건너뛰기, `npm run typecheck`, `npm run build`, `npm run desktop:smoke:built`가 통과했다. 합성 corpus 검증도 2/2 통과했다. Windows의 동일 테스트와 실제 패키징 검증도 통과했으며 실행 기록은 아래와 같다.
 
 ## 실제 Electron 화면과 흐름
 
@@ -53,6 +53,20 @@ Linux / Node 24.13.0의 한 번의 측정 결과다. ms 단위이며 분석은 d
 | JPEG 8개, balanced | 9,826,399 | 4,519.7 | 2,417.0 | 18.0 | 2,435.0 | 569.1 |
 
 5분은 총 실행 시간 상한이 아닌 **진행 응답이 없는 시간**이다. 측정된 가장 긴 deep 분석보다 약 66배, 가장 긴 최적화 진행 간격보다 약 115배 길게 두었다. 단계별 진행이 있는 작업은 전체 시간이 5분을 넘어도 계속된다. 분석 내부의 세부 진행은 아직 전달하지 않아 분석 단계 전체가 무응답 구간에 해당한다. 이 합성 측정은 최대 지원 크기나 모든 저사양·기관 PC의 처리 시간을 보증하지 않는다. Windows 릴리즈 workflow에서도 동일 합성 측정을 수행한다.
+
+## Windows 실행 근거
+
+코드 커밋 `00bdf5c`, Windows runner / Node 24.21.0에서 [CLI ZIP/native 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38662097570)과 [데스크톱 릴리즈·합성 측정](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38662097421)이 모두 성공했다. 양쪽 모두 전체 81개 파일·614개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·배포 audit 통과다. CLI는 배포 ZIP의 optimize·verify·batch 및 drag/drop launcher 실행을 확인했다. 데스크톱은 합성 corpus 2/2, Electron 스모크, NSIS 빌드, 실제 ASAR runtime 존재와 unpacked sharp native 파일 검사를 통과했다. 업로드 단계는 모두 건너뛰었다.
+
+동일 스크립트의 Windows 측정값이다. 단위는 ms다.
+
+| 합성 입력 | 분석 | 계산·전달 | 저장 | 계산·전달·저장 합계 | 최대 진행 응답 간격 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 폰트 5MiB | 249.1 | 505.3 | 14.5 | 519.8 | 367.2 |
+| 폰트 32MiB + JPEG 4개 | 2,162.1 | 3,478.5 | 31.7 | 3,510.2 | 2,386.5 |
+| JPEG 8개, balanced | 3,200.8 | 2,011.5 | 8.7 | 2,020.2 | 556.2 |
+
+이 실행은 Windows CI와 합성 문서의 근거이며 clean 기관 PC·한컴 수동 QA를 대신하지 않는다.
 
 ## 복구 보장의 한계
 

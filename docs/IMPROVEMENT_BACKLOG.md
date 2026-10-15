@@ -19,7 +19,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-009 | P2 | 변환 경로 변경을 verifier에 전달 | core | M | OPT-006 대응 정책 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-010 | P2 | non-overwrite 저장의 원자적 경로 확보 | CLI, desktop | M | OPT-003, OPT-005 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 대기 | 미정 |
 | OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 대기 | 미정 |
 | OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 대기 | 미정 |
@@ -165,7 +165,9 @@ Windows 검증: 커밋 `fc4f29a`, Node 24.21.0. [CLI ZIP/native 실행 스모크
 - [x] 중단된 저장을 복구·정리하고 다음 작업이 정상 실행된다.
 - [x] 시간 제한 정책을 측정된 대용량 처리 시간에 맞추고 실패 원인을 구분한다.
 
-Linux 검증: 2026-10-15 Node 24.13.0. 실제 worker 10개·작업 수명주기 8개·저장 취소 10개 테스트를 추가했다. 전체 81개 파일·614개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·Electron 스모크 통과. 실제 Electron/로컬 Playwright로 저장 전 취소→재시도, commit 직후 취소→완료 결과 유지, 처음으로 복귀→저장 파일 유지, 저장 중 정상 앱 종료→이전 파일 복원을 확인했다. worker는 계산한 바이트만 전달하고 main이 저장과 rollback을 소유한다. 취소 응답과 다음 작업은 복구가 끝난 뒤 허용한다. 38.5MB 합성 입력에서 계산·전달·저장 3.61초, 최대 진행 응답 간격 2.60초를 측정했다. 제한은 총 실행 시간이 아닌 진행 응답 없는 5분이며 단계와 사용자 취소·시간 초과·예기치 않은 종료를 구분한다. Windows 검증은 진행 중이다. [상세 근거와 한계](DESKTOP_CANCELLATION_2026-10-15.md). 주 프로세스 강제 종료나 전원 장애의 자동 재시작 복구는 보장하지 않는다.
+Linux 검증: 2026-10-15 Node 24.13.0. 실제 worker 10개·작업 수명주기 8개·저장 취소 10개 테스트를 추가했다. 전체 81개 파일·614개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·Electron 스모크 통과. 실제 Electron/로컬 Playwright로 저장 전 취소→재시도, commit 직후 취소→완료 결과 유지, 처음으로 복귀→저장 파일 유지, 저장 중 정상 앱 종료→이전 파일 복원을 확인했다. worker는 계산한 바이트만 전달하고 main이 저장과 rollback을 소유한다. 취소 응답과 다음 작업은 복구가 끝난 뒤 허용한다. 38.5MB 합성 입력에서 계산·전달·저장 3.61초, 최대 진행 응답 간격 2.60초를 측정했다. 제한은 총 실행 시간이 아닌 진행 응답 없는 5분이며 단계와 사용자 취소·시간 초과·예기치 않은 종료를 구분한다. Windows 검증도 통과했다. [상세 근거와 한계](DESKTOP_CANCELLATION_2026-10-15.md). 주 프로세스 강제 종료나 전원 장애의 자동 재시작 복구는 보장하지 않는다.
+
+Windows 검증: 커밋 `00bdf5c`, Node 24.21.0. [CLI ZIP/native 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38662097570)과 [데스크톱 릴리즈·합성 측정](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38662097421)이 모두 통과했다. 두 실행 모두 81개 파일·614개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·배포 audit 통과. 데스크톱은 합성 corpus 2/2·Electron 스모크·실제 ASAR runtime 및 unpacked native 검사도 통과했다. Windows 합성 38.5MB 입력에서 계산·전달·저장 3.51초, 최대 진행 응답 간격 2.39초였다. 합성 입력만 사용했고 산출물 업로드는 모두 비활성화했다.
 
 ### OPT 013 quick 분석
 
