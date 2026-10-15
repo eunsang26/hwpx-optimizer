@@ -9,7 +9,7 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 ## Prerequisites
 
 - Clean Windows 10 or Windows 11 machine.
-- Node.js 20 or newer, if running source-based checks.
+- Node.js 22.12.0 or newer (24.21.0 recommended), if running source-based checks. Windows release CI uses Node 24.21.0.
 - A local HWPX sample file. Do not commit sample files.
 - A protected or signed HWPX-like test package, if available, for rejection-path confirmation. Do not use real confidential documents as test fixtures.
 - A release artifact from `release/`, either:

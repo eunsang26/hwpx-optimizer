@@ -1,5 +1,17 @@
 # Testing
 
+## Pull Request and Windows CI
+
+Use Node **22.12.0 or newer** locally; `.nvmrc` and `.node-version` select **24.21.0**. Node 20 is not supported by the current toolchain. The PR matrix tests both the minimum supported runtime (22.12.0) and the pinned development runtime (24.21.0).
+
+`.github/workflows/pr-checks.yml` runs for every pull request, pushes to `main`, and merge queue groups, including documentation changes and draft PRs. Linux jobs independently run `npm ci`, repository hygiene, all tests (two workers), typecheck, build, the synthetic regression corpus, and the real Electron smoke under Xvfb. A failure stops the remaining steps of that job; matrix jobs run independently. A newer revision cancels superseded runs for the same event/ref.
+
+The same workflow calls `cli-portable-release.yml` on Windows/Node 24.21.0. It runs all tests, typecheck, build, the shipped-runtime audit, builds the CLI ZIP with the Windows sharp native runtime, verifies extracted package/native files and the manifest, then executes the actual portable CLI's optimize/verify/batch/launcher smoke with a generated HWPX. Uploads are explicitly disabled. The separate Windows desktop release workflow runs on version tags or manual dispatch and additionally verifies the actual packaged desktop offline, including its font and native runtime. These are build/runtime checks, not evidence of Hancom or institutional-PC manual QA.
+
+PR and `main` checks use read-only repository permissions, no inherited secrets, and no artifact upload steps. The reusable Windows workflow uploads only for a `v*` tag push or an explicit manual upload request; a `main` push calling it cannot upload artifacts. CI uses generated documents; never pass private samples, reports, screenshots, or local output directories to CI. Release uploads retain explicit file allowlists. Neither workflow enables network-dependent document processing.
+
+Repository rules must select the Linux matrix and Windows native/portable checks if merges should require them; adding the workflows does not itself configure branch protection. Checkout/setup-node actions are pinned to their verified v6 commit SHAs and run on Node 24 independently of the project's Node matrix ([checkout](https://github.com/actions/checkout/tree/v6), [setup-node](https://github.com/actions/setup-node/tree/v6)). Merge queue triggering follows the [GitHub event contract](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group).
+
 ## Test Commands
 
 Run a targeted test while developing:
