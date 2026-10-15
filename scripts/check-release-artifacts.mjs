@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, join, normalize } from "node:path";
 import { createHash } from "node:crypto";
 import asar from "@electron/asar";
 import JSZip from "jszip";
@@ -129,7 +129,8 @@ for (const artifact of asarArtifacts) {
       continue;
     }
     const reference = await readFile(new URL(`../apps/desktop/src/fonts/${file}`, import.meta.url));
-    const packaged = asar.extractFile(artifact.label, packagedPath);
+    // ASAR listing uses normalized separators above; extraction requires the host path separator.
+    const packaged = asar.extractFile(artifact.label, normalize(packagedPath));
     if (!packaged.length || !packaged.equals(reference)) {
       fontViolations.push(`${artifact.label}: changed or empty ${packagedPath}`);
       continue;
