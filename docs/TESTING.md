@@ -81,6 +81,9 @@ Core tests cover:
 - Reference graph construction.
 - Safe optimization planning.
 - Safe optimizer output.
+- Significant XML whitespace/numeric strings, mixed content and UTF-8 validation; original-to-output text/layout/resource-position comparisons.
+- Alpha/orientation/protected image representations, font/OLE retention and duplicate/converted resource mappings.
+- ZIP64/path/streaming-expanded-size limits and bounded decoded-cache disposal.
 - Balanced image conversion and resizing behavior.
 - Aggressive image profile behavior.
 - Report shape.
@@ -103,6 +106,9 @@ Desktop tests cover:
 - Non-overwrite naming.
 - Report saving.
 - Verification call path.
+- Original inode protection across worker recreation, exclusive output claims and pair rollback on failed publication.
+- Real worker CPU-phase cancellation, timeout and graceful-shutdown recovery; DOM-free stale-result and batch-planning behavior.
+- Settings whitelist/schema migration, range validation, atomic publication failures and shutdown draining.
 
 Desktop smoke tests cover:
 
@@ -124,18 +130,9 @@ The UI cancellation gate pauses delivery after the real worker returns, before p
 
 Synthetic HWPX fixtures live in `packages/core/test/fixtures.ts`. They build ZIP packages with controlled XML and resource entries.
 
-Fixture categories still needed for broader product confidence:
+Existing synthetic cases cover text-only packages, PNG/JPEG/BMP, JPEG EXIF, unused/duplicate resources, oversized images, retained OLE/font parts and malformed packages. `createReportLikeHwpxFixture` combines report-shaped XML and mixed resources; `regressionFixtures.test.ts` verifies that controlled case through analysis/optimization/original comparison. These fixtures are generated structures, not evidence of Hancom-authored documents or representative institutional rendering.
 
-- Text-only HWPX.
-- PNG and JPEG HWPX.
-- BMP HWPX.
-- EXIF-heavy JPEG HWPX.
-- Unused BinData HWPX.
-- Duplicate image HWPX.
-- Large image HWPX.
-- OLE HWPX.
-- Embedded font HWPX.
-- Broken or malformed HWPX.
+Broader confidence still needs current-version real-document/Hancom checks, representative very large documents on target PCs, and measured long-duration restart tests. Record their exact version/environment/results separately in [the release evidence ledger](RELEASE_EVIDENCE_2026-10-15.md); do not relabel synthetic corpus passes as those manual checks. A standalone CLI/Desktop verify pass validates package/XML/references; optimization's original-plus-mode verifier checks additional preservation invariants, and neither renders in Hancom.
 
 Real user sample files and local optimization outputs must not be committed. Root-level `sample*.hwpx`, `sample*.hwp`, `sample*.json`, `sample*.txt`, and `결과/` are ignored.
 
@@ -152,6 +149,8 @@ Automated smoke checks exercise synthetic workflows and failure recovery. Visual
 7. Confirm report JSON is created when enabled.
 8. Confirm `Open File` and `Show Folder` work on the target OS.
 9. Repeat with balanced and aggressive modes on disposable copies.
+
+Follow [Windows QA](WINDOWS_QA_CHECKLIST.md) for packaged, target-machine acceptance; source launch alone does not establish the packaged app's dependencies, institutional policies or Hancom behavior. Save non-sensitive version/environment/timing/outcome metadata in the evidence ledger; keep actual documents, reports and captures local.
 
 ## Pre-Commit Gate
 

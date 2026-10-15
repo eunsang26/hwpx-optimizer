@@ -28,7 +28,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 대기 | 미정 |
+| OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-022 | P3 | 벤치마크 실패 문서 추적과 판정 | bench | M | 없음 | 대기 | 미정 |
 | OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 대기 | Codex |
@@ -268,10 +268,14 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 
 대상: `ARCHITECTURE.md`, `KNOWN_LIMITATIONS.md`, `SECURITY_REVIEW.md`, `TESTING.md`, QA 문서.
 
-- [ ] safe 보존 및 verifier 설명을 수정 완료된 실제 동작과 맞춘다.
-- [ ] audit의 moderate 이상 차단과 전체 취약점 0 표현을 일치시킨다.
+- [x] safe 보존 및 verifier 설명을 수정 완료된 실제 동작과 맞춘다.
+- [x] audit의 moderate 이상 차단과 전체 취약점 0 표현을 일치시킨다.
 - [ ] 실제 Windows·한컴 열기·큰 문서·장시간 재시작을 버전·환경·결과별로 기록한다.
-- [ ] synthetic 통과와 실제 문서 검증, 로컬 호스트 검증과 배포물 검증을 구분한다.
+- [x] synthetic 통과와 실제 문서 검증, 로컬 호스트 검증과 배포물 검증을 구분한다.
+
+진행 기록: 2026-10-15. [릴리즈 증거 목록](RELEASE_EVIDENCE_2026-10-15.md)에 현재 런타임 `22546ee`·앱/Node/Electron/sharp 버전·Windows Server build·CI 실행별 소스/실제 패키지 범위와 합성 입력을 정리했다. 기존 실제 문서 QA는 원래 commit/날짜로 유지하고 현재 검증으로 승격하지 않았다. safe XML·pixel/alpha·보호 자원·생성 comment 정리와 원본 없는 단독 verifier의 범위를 문서에 맞췄다. audit은 production+배포 Electron의 moderate 이상 차단이며 full 20개 잔존을 분리했다. 현재 큰 합성 입력 25,907,497바이트의 worker/RSS/시간을 원본 실행 로그에서 기록하고, 한컴 열기·대형 실제 문서·기관 PC 장시간/재시작은 미실시·필요 관측 항목으로 남겼다. 이 수동 관측이 없으므로 항목 전체는 아직 완료가 아니다. 실제 문서·화면은 열거나 업로드하지 않았다.
+
+문서 검증: 보존 대상 57개·audit 정책 9개 테스트, 전체 90개 파일·730개 통과·1개 skip, typecheck/build·hygiene·runtime audit 통과. 9개 문서 상대 링크 누락 0개, CI head SHA/성공/업로드 0개를 확인했다.
 
 ### OPT 022 벤치마크 실패 추적
 

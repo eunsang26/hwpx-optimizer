@@ -60,7 +60,7 @@ input.hwpx
 - Builds image inventory.
 - Extracts image format, dimensions, metadata flags, and BMP candidates.
 - Detects byte-identical duplicate images by SHA-256.
-- Detects same-visual duplicate images by exact decoded pixel hash across lossless encodings.
+- In deep analysis, detects same-visual duplicate images by exact decoded pixel/alpha hash across lossless encodings. Default quick analysis defers pixel decoding and similarity checks and labels candidate sizes as estimates.
 - Detects unreferenced BinData candidates. Validates content.hpf local declarations and explicit binaryItemIDRef resolution; deleting unused BinData removes its manifest declaration as part of the same operation.
 - Reports font and OLE resources as risky resources. A shared removal policy preserves these resources in every mode, including caller-supplied plans.
 
@@ -95,11 +95,11 @@ input.hwpx
 
 `packages/core/src/optimizer.ts`
 
-- Minifies XML by parsing and serializing it.
-- Strips JPEG metadata segments while preserving format and dimensions.
-- Optimizes PNG where beneficial.
-- Removes unreferenced BinData only after graph analysis.
-- Skips an item if a specific optimization fails.
+- Removes inter-element formatting only in known element-only XML containers. Text, numeric strings, mixed/unknown content, authored shape comments and `xml:space="preserve"` remain significant; this is not blanket whitespace trimming.
+- Strips supported JPEG metadata while preserving format, dimensions and EXIF orientation; changed referenced images must also retain decoded pixels and alpha.
+- Optimizes supported PNG losslessly only where beneficial. Images with protected representations retain their bytes as described below.
+- Removes unreferenced BinData only after graph analysis and updates its manifest declaration. Embedded fonts and OLE objects remain in every mode, including caller-supplied plans.
+- Records skipped actions and warnings when an individual transform fails. Parsing, protection, reference or final verification failures reject the operation. A non-smaller final safe package returns the original input bytes.
 
 ### Balanced and Aggressive Optimizers
 
@@ -109,7 +109,7 @@ input.hwpx
 - Convert BMP to PNG.
 - Resize oversized JPEGs according to mode profile and display budgets.
 - Optimize PNG resources.
-- Clean shape-comment metadata.
+- Remove generated `원본 그림의 이름:` / `원본 그림의 크기:` lines from supported shape comments while preserving authored descriptions. This is not general document anonymization.
 - Consolidate byte-identical or exact same-visual duplicate image resources by redirecting XML image IDs to a canonical resource.
 - Record applied and skipped actions.
 - Update manifest `href` and `media-type` attributes through a parsed XML tree.
@@ -138,7 +138,7 @@ Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a strong
 - Rejects safe-mode outputs that change referenced image dimensions or format.
 - Rejects changed safe-mode referenced image bytes unless decoded pixel and alpha hashes remain equal and EXIF orientation is unchanged. Protected image representations must remain byte-identical, including when exact duplicates are aliased.
 - Rejects balanced/aggressive outputs that remove referenced images without an allowed replacement. The optimizer records actual original/output paths and manifest IDs, composes duplicate aliases with later conversions, and passes the resulting mappings to verification and the optimization report. Serialized XML uses must agree with those mappings.
-- Rejects balanced/aggressive image conversions outside the current policy: BMP may become PNG, JPEG must remain JPEG, and PNG must remain PNG.
+- Rejects balanced/aggressive image conversions outside the current policy: supported BMP/TIFF may become PNG, JPEG must remain JPEG, and PNG must remain PNG.
 - Rejects balanced/aggressive outputs that enlarge referenced image dimensions.
 - Rejects balanced/aggressive outputs whose referenced image PSNR and SSIM scores fall below the per-mode quality thresholds.
 
@@ -147,6 +147,8 @@ Decoded image reuse retains RGB or RGBA channels. Same-visual hashes include alp
 XML handling supports UTF-8 only and rejects invalid UTF-8 or other declared encodings before optimization. Literal line endings/attribute whitespace and numeric character references follow [XML 1.0 normalization](https://www.w3.org/TR/xml/#AVNormalize); serializers preserve referenced control characters.
 
 Current limitation: advanced mode verification uses PSNR and SSIM on 512×512 aspect-preserving (`fit: contain`) samples plus structural invariants; it does not prove every visual detail is perceptually identical. BMP/TIFF→PNG is allowed in advanced modes; JPEG stays JPEG and PNG stays PNG.
+
+`verifyHwpxOutput(output)` without an original performs standalone package/XML/reference validation. The CLI `verify` command and Desktop result verification use this form; they cannot establish preservation relative to an unavailable input. The optimizer itself calls the stronger original-plus-mode verification before returning bytes. Neither form renders a document in Hancom. See [current evidence and manual gaps](RELEASE_EVIDENCE_2026-10-15.md).
 
 ### Report
 

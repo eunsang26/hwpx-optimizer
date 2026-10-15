@@ -49,7 +49,7 @@ HWPX Optimizer는 사용자의 PC 안에서 HWPX 문서 용량 원인을 분석�
 
 1. 배포 브랜치에서 테스트, typecheck, build, release hygiene, desktop smoke를 통과시킨다.
 2. Windows 배포 전 `npm run release:check:win-portable:self-signed`를 실행한다.
-3. `release/SHA256SUMS.txt`, `release/release-manifest.json`, `release/RELEASE_NOTICE_0.1.0.txt`를 생성하고 검증한다.
+3. `release/SHA256SUMS.txt`, `release/release-manifest.json`, `release/RELEASE_NOTICE_<version>.txt`를 생성하고 검증한다.
 4. `npm run release:verify-artifacts`로 배포 산출물 안에 개발 파일, 샘플, 리포트, 설정, 로그, 소스맵, 타입 선언이 포함되지 않았음을 확인한다.
 5. 배포 파일명, 버전, 배포일, 담당자, SHA256 값, 자체서명 상태, `TERMS.txt` 사용 조건, 보증 부인 및 사용자 책임 문구를 배포 공지에 포함한다.
 6. 승인된 사내 공유 위치 또는 소프트웨어 배포 시스템으로만 배포한다.

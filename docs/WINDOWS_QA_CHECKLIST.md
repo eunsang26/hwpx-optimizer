@@ -2,6 +2,12 @@
 
 This checklist verifies the release candidate on a clean Windows machine. It is required before calling the desktop utility product-ready.
 
+## Current evidence — 2026-10-15
+
+[The current release evidence ledger](RELEASE_EVIDENCE_2026-10-15.md) records app 0.1.9 / runtime commit `22546ee`, Electron 42.11.13, sharp 0.35.5 and Node 24.21.0. Native Windows Server 2025 CI passed source and actual packaged Electron workflows (11 document + 4 settings cases each), ASAR/native/locale/offline-font checks, and synthetic size/resource measurements. Windows CLI ZIP execution passed independently. Every current CI document is synthetic; artifacts were not uploaded.
+
+**Current Hancom opening, representative large real documents, and institutional Windows 10/11 long-duration restart acceptance remain unverified.** The historical 2026-07-26 records below are retained with their original versions; they do not sign off the current commit. Enter actual environment, artifact SHA256, elapsed time/repetitions and results in the ledger before closing these manual checks. Short automatic restarts are not a soak test.
+
 ## Scope
 
 Verify that the Windows build runs locally, does not upload files, preserves the original HWPX file, rejects protected documents without bypass, stores no recent-file/history/log paths in the app, and can analyze, optimize, save, and verify optimized HWPX outputs.
@@ -127,7 +133,7 @@ Expected result:
 - Repeated optimizations do not overwrite prior outputs by default.
 - Very large packages complete or fail with a clear non-crashing error.
 - Representative real-world documents do not expose missing-reference verifier failures.
-- Safe mode preserves image formats and dimensions.
+- Safe mode preserves image formats, dimensions, decoded pixels/alpha and EXIF orientation; XML body whitespace/numeric strings and authored descriptions remain intact. Check the displayed result as well as standalone verification.
 - Balanced and aggressive modes report visible-risk actions clearly.
 - Failed individual actions appear as skipped or failed without crashing the app.
 
@@ -146,6 +152,7 @@ Expected result:
 - Output files are written to the selected folder during the current app session.
 - The selected output folder is not restored after restart and is not written to `settings.json`.
 - No recent files, processing history, result paths, report paths, or internal logs are restored after restart.
+- Damaged/legacy settings display recovery guidance. Invalid custom limits block execution with a connected field error; explicit valid saves persist. A failed save remains visible and retry works. See [settings evidence](DESKTOP_SETTINGS_2026-10-15.md) for automated scope.
 - Overwrite prevention creates a suffixed output path instead of replacing an existing file.
 
 ## CLI Checks On Windows
@@ -200,6 +207,7 @@ Windows QA passes only when:
 - Original file preservation is confirmed.
 - Generated output opens in an HWPX-compatible viewer.
 - Any blocker is documented in `docs/KNOWN_LIMITATIONS.md`.
+- The current-commit evidence ledger records artifact hash, OS/Hancom versions, representative large-document results and measured long-duration restart results separately from synthetic automation.
 - Internal distribution evidence references `docs/INTERNAL_DISTRIBUTION.md` and `docs/SECURITY_REVIEW.md`.
 
 Do not mark the product release complete if any item above is unverified.
