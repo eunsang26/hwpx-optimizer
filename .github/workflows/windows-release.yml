@@ -54,7 +54,7 @@ jobs:
         run: node scripts/bench/measure-size-estimates.mjs
 
       - name: Upload installer artifact
-        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || inputs.upload_artifact == true
+        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.upload_artifact == true)
         uses: actions/upload-artifact@v4
         with:
           name: hwpx-optimizer-windows-installer
