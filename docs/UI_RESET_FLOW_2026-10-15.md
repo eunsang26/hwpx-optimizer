@@ -33,6 +33,7 @@
 ## 검증과 범위
 
 - 전체 Vitest 78개 파일·586개 테스트 통과·1개 건너뛰기, 타입 검사·빌드 통과.
+- Windows/Node 24.21.0, 커밋 `c0e09db`의 [릴리즈 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38659239767): 78개 파일·586개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·배포 audit·초기화 검사를 포함한 Electron 스모크·ASAR/native 검사 통과. 합성 입력만 사용하고 산출물 업로드를 비활성화했다.
 - `npm run desktop:smoke:built`에 실제 화면 초기화, 포커스 복귀, 정책 유지, 저장 결과 바이트 보존 검사를 추가했다.
 - 로컬 실행 확인 기록 `.tmp/ui-audit/reset-2026-10-15/checks.json`: 실제 단일·일괄 최적화, Enter 실행, 반복 파일 선택, 최소 창, 원본 해시와 저장 파일 유지, page error 0개.
 - 모든 접근성 준수를 판정한 것은 아니다. 초기화 동작 이외의 모달·오류 복구·확대/대비는 OPT-024/025에서 이어간다.
