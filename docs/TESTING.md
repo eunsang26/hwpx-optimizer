@@ -136,6 +136,10 @@ Broader confidence still needs current-version real-document/Hancom checks, repr
 
 Real user sample files and local optimization outputs must not be committed. Root-level `sample*.hwpx`, `sample*.hwp`, `sample*.json`, `sample*.txt`, and `결과/` are ignored.
 
+## Benchmark Accounting
+
+Benchmark accounting is tested separately under `scripts/bench/test`: generated inputs in a manifest-verified test directory exercise actual ZIP/Sharp/repack operations with controlled RD curves and encoder stand-ins. Tests cover profitable survivors plus corrupt documents, partial/no-data JPEG exclusions, real/fixture scope consistency, tool loss and actual command report writing. They do not establish real jpegli capacity GO. `npm run typecheck` additionally checks bench source/tests without emitting JS. See [benchmark policy](../scripts/bench/README.md#failure-and-statistics-policy).
+
 ## Manual Desktop Checks
 
 Automated smoke checks exercise synthetic workflows and failure recovery. Visual fidelity in Hancom and target-machine integration still require manual checks. Before a desktop release, run:

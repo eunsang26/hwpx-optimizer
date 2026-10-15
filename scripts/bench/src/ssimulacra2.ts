@@ -54,7 +54,10 @@ export async function scoreSsimulacra2(referencePng: Buffer, distortedJpeg: Buff
       child.stderr?.on("data", (chunk: Buffer) => {
         stderr += chunk.toString();
       });
-      child.on("error", reject);
+      child.on("error", (error: NodeJS.ErrnoException) => {
+        reject(error.code === "ENOENT" || error.code === "EACCES"
+          ? new MetricToolMissingError(error.message) : error);
+      });
       child.on("close", (code) => {
         if (code === 0) resolve(out);
         else reject(new Error(`ssimulacra2 exited ${code}: ${stderr.trim() || out.trim()}`));

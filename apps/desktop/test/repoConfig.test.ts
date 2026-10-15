@@ -87,7 +87,7 @@ describe("repository runtime and cleanup configuration", () => {
       "npm run clean:build && tsc -b packages/core packages/io packages/cli apps/desktop && npm run desktop:assets"
     );
     expect(packageJson.scripts?.typecheck).toBe(
-      "tsc -b packages/core packages/io packages/cli apps/desktop --pretty false"
+      "tsc -b packages/core packages/io packages/cli apps/desktop --pretty false && tsc -p scripts/bench/tsconfig.json --pretty false"
     );
     expect(packageJson.scripts?.["desktop:local:win:self-signed"]).toContain("sign-self-signed-release-artifacts.mjs");
     expect(packageJson.scripts?.["release:check:win-portable"]).toContain("npm run desktop:local:win:self-signed");

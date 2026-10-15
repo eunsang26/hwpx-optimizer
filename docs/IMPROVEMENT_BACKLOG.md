@@ -29,7 +29,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-022 | P3 | 벤치마크 실패 문서 추적과 판정 | bench | M | 없음 | 대기 | 미정 |
+| OPT-022 | P3 | 벤치마크 실패 문서 추적과 판정 | bench | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 대기 | Codex |
 | OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 대기 | Codex |
@@ -281,10 +281,12 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 
 대상: `scripts/bench/src/runBench.ts`, `report.ts`, corpus tests.
 
-- [ ] 문서별 처리 실패와 제외 이유를 보고서에 남긴다.
-- [ ] 실패 문서를 중앙값에서 조용히 제외해 GO가 되지 않도록 판정 정책을 정한다.
-- [ ] 실제 corpus와 fixture의 통계 범위를 맞추고 실패/부분 성공 fixture로 확인한다.
-- [ ] 측정 도구 미설치 INVALID와 정상 NO-GO를 구분하는 기존 정책을 유지한다.
+- [x] 문서별 처리 실패와 제외 이유를 보고서에 남긴다.
+- [x] 실패 문서를 중앙값에서 조용히 제외해 GO가 되지 않도록 판정 정책을 정한다.
+- [x] 실제 corpus와 fixture의 통계 범위를 맞추고 실패/부분 성공 fixture로 확인한다.
+- [x] 측정 도구 미설치 INVALID와 정상 NO-GO를 구분하는 기존 정책을 유지한다.
+
+검증 기록: 2026-10-15 Linux/Node 24.13.0. 문서별 상태·실패 단계/이미지·제외 이유·통계 포함 여부와 실제 denominator를 기록한다. 문서 실패·응답 누락 또는 JPEG 문서 전체 미측정은 좋은 문서의 중앙값만으로 GO가 되지 않는다. 부분 iso-quality miss의 기존 20% 기준은 유지한다. real/fixture 범위를 JPEG·PNG·CPU·wall-clock·성장량·Axis B에 동일하게 적용하며 fixture 실패는 별도 진단이다. 도구 누락/실행 중 소실은 INVALID, 문서 오류·정상 기준 미달은 NO-GO이며 보고서 작성 시 exit 0을 유지한다. 실제 ZIP/Sharp/repack과 제어된 곡선·후보를 사용한 합성 manifest corpus, partial/no-data, 실제 spawn ENOENT, 격리한 실제 명령의 보고서 작성과 원본 SHA256을 검증했다. bench 대상 45개 통과·1개 skip, 저장소 설정 포함 대상 52개 통과·1개 skip, 전체 93개 파일·751개 통과·1개 skip, bench 포함 typecheck·build·hygiene·runtime audit 통과. [정책·검증 범위](BENCHMARK_FAILURES_2026-10-15.md). 실제 비공개 corpus나 외부 metric/encoder로 capacity GO를 입증한 것은 아니다.
 
 ### OPT 023 화면과 흐름 기반 UX
 

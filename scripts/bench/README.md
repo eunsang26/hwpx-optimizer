@@ -53,7 +53,7 @@ Override with:
 export HWPX_BENCH_SSIMULACRA2=/path/to/ssimulacra2
 ```
 
-If SSIMULACRA2 is missing, `rd` still writes a report but marks the run **INVALID** (`metric-tool-missing`). If jpegli is missing, the jpegli row is disabled (`jpegli-unavailable`).
+If SSIMULACRA2 is missing, `rd` still writes a report but marks the run **INVALID** (`metric-tool-missing`). Missing jpegli similarly produces **INVALID** (`jpegli-unavailable`). A configured executable that cannot be spawned is recorded in the same way, including when it disappears during a document; earlier results remain visible and remaining documents are marked skipped.
 
 ## Real corpus setup (`HWPX_BENCH_DIR`)
 
@@ -68,6 +68,8 @@ npm run bench:manifest
 3. Commit only the updated `corpus.manifest.json` (SHA-256 hashes and sizes, no file contents).
 
 When `HWPX_BENCH_DIR` is unset or empty, the bench runs **fixtures only**. That smoke path is useful for CI and local wiring checks, but it is **INVALID for investment GO** (`invalidReason: synthetic-only`).
+
+A matching empty corpus is also **INVALID** (`empty-corpus`). A manifest mismatch runs only fixtures and remains **INVALID**; it does not make fixture results evidence about the real corpus.
 
 ## RD capacity run (jpegli GO)
 
@@ -90,12 +92,17 @@ Primary statistic: **median per-document package-byte savings %** at iso-quality
 
 | Field | Meaning |
 | --- | --- |
-| `go` | `true` only when corpus is GO-eligible, jpeg exclusion ≤ 20%, and median savings ≥ 15% |
-| `goReason` | Human-readable reason when `go` is false |
-| `corpus.goEligible` | `false` for synthetic-only or manifest mismatch |
-| `corpus.invalidReason` | e.g. `synthetic-only`, `manifest-mismatch`, `metric-tool-missing`, `jpegli-unavailable` |
+| `go` | `true` only with an eligible nonempty real corpus, available tools, complete document processing, a matched JPEG in each JPEG-bearing document, JPEG exclusion ≤ 20%, and median savings ≥ 15% |
+| `goReason` | Stable reason code, including `document-processing-failed`, `document-no-valid-jpegs`, `jpeg-exclusion-too-high` or `median-below-threshold` |
+| `corpus.goEligible` | `false` for synthetic-only, manifest mismatch or an empty real corpus |
+| `corpus.invalidReason` | Corpus eligibility reason: `synthetic-only`, `manifest-mismatch`, `empty-corpus` |
+| `invalidReasons` | Run invalidity reasons, retaining corpus eligibility and the blocking tool problem together |
+| `corpus.documentCount` / `statistics.documentCount` | Number of documents in the selected statistics scope, including failed/skipped/no-data documents. Fixture-only runs now report their fixture count instead of zero |
+| `corpus.realDocumentCount` / `fixtureDocumentCount` | Source counts; fixtures never enlarge the real-corpus denominator |
+| `documents` | One row per loaded document: source/relative name, status, stage/image/reason/message, measured stats or null, statistics inclusion and median exclusion reason |
+| `statistics` | Explicit `real` or `fixture` scope; failed/partial/no-data/skipped counts and the actual median document count |
 | `jpegli.medianPackageSavingsPercent` | Primary GO metric |
-| `jpegli.jpegExclusionRatio` | Share of JPEG images with no iso-quality match; > 20% invalidates GO |
+| `jpegli.jpegTotal` / `jpegExcluded` / `jpegExclusionRatio` | Counts and share of JPEG images without an iso-quality match in completed scoped measurements; > 20% yields NO-GO |
 | `softFlags` | Investigation hints (encode CPU > 2×, Axis B failures, recompress-grow) — do not alone flip GO |
 
 **CI ≠ GO:** CI runs fixture/invariant tests only. A green CI run without `HWPX_BENCH_DIR` and external metric tools does not approve jpegli investment.
@@ -103,6 +110,16 @@ Primary statistic: **median per-document package-byte savings %** at iso-quality
 **Capacity-GO ≠ integration approval:** Even a GO on real corpus does not approve Windows packaging, wasm vs native cost, or product integration — those are separate follow-ons.
 
 Axis B (`computeVisualMetrics` on original BinData) is secondary and recorded for diagnostics; it does not flip the primary GO boolean.
+
+### Failure and statistics policy
+
+All JPEG savings/exclusions, PNG control bytes, CPU/wall-clock medians, growth counts and Axis B soft flags use **the same source scope**: real documents when present, otherwise fixtures for an invalid smoke run. Fixture rows remain in the report as diagnostics, with `fixture-diagnostic` as their median exclusion reason. Their successes or ordinary processing errors cannot change a real-corpus verdict.
+
+A read/ZIP/decode/encode/metric/repack exception records the document as `error`, with the failing stage, optional image path and error text. Its stats are null rather than invented zero samples. Other documents continue. **Any selected document error prevents GO**, even if the successful-document median exceeds 15%. The reported median is descriptive for the surviving measurements; failed/missing/skipped document counts remain visible. Missing outcomes also fail closed.
+
+An iso-quality curve miss is a measured exclusion, recorded per image. A document with both matches and misses is `partial`; it retains a package comparison and counts every JPEG in the 20% exclusion limit. If a JPEG-bearing document has no matches at all, it is `no-data` (`no-valid-jpegs`) and prevents GO even when other large documents dilute the global exclusion ratio. A document with no JPEGs is explicitly `no-data` (`no-jpeg-images`); it has no savings/wall-clock sample, but its completed PNG control measurement remains in scope. If no document has a primary sample, the result is NO-GO. Document failures and threshold misses are **NO-GO**; corpus/tool invalidity is **INVALID** and takes precedence. Neither changes the exit-zero-when-written contract.
+
+Reports contain local relative document/image names and diagnostic error text, which can include local paths. Keep `out/` local; do not upload private reports or corpus bytes. CI tests use generated inputs, controlled curves/encoder stand-ins and isolated copies of the command. They validate accounting and report publication, not real SSIMULACRA2/jpegli capacity. [Failure-tracking evidence](../../docs/BENCHMARK_FAILURES_2026-10-15.md).
 
 ## Hangul WebP/AVIF compatibility spike
 
@@ -134,11 +151,12 @@ Open each `.hwpx` in **≥2 Hangul versions**, complete `CHECKLIST.md`, and copy
 
 ```bash
 npm test -- scripts/bench
-npm run bench:spike
 npm run bench -- rd --profile balanced
 ```
 
 Expect the RD smoke run to write `out/rd-report.json` with `go: false` and `invalidReason: synthetic-only` (and often `metric-tool-missing` or `jpegli-unavailable` when CLIs are absent).
+
+`npm run typecheck` also checks the benchmark source/tests with `scripts/bench/tsconfig.json`; no benchmark JS is emitted or added to release artifacts. Run the separate spike only with an authorized local template as described above.
 
 ## npm scripts
 
