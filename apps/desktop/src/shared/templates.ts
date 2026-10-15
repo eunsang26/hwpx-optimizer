@@ -121,7 +121,7 @@ export function batchItemRowActionsHtml(
     if (item.reportPath) actions.push(rowButton("open-report", index, "리포트"));
   }
   if (!options.running && isRemovable(item.status)) {
-    actions.push(rowButton("remove", index, "제거"));
+    actions.push(rowButton("remove", index, "목록에서 제거"));
   }
   return actions.join("");
 }
@@ -131,7 +131,7 @@ function rowButton(action: string, index: number, label: string): string {
 }
 
 function isRemovable(status: BatchItemStatus): boolean {
-  return status === "failed" || status === "cancelled";
+  return status === "pending" || status === "failed" || status === "cancelled";
 }
 
 export function imageComparePairHtml(pair: ImagePreviewPair): string {

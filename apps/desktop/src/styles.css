@@ -2923,10 +2923,6 @@ body[data-view="empty"] .empty-policy-review {
   font-size: var(--fs-caption);
 }
 
-body[data-view="single"] .file-toolbar {
-  display: none;
-}
-
 body[data-view="single"] .policy-toolbar-batch {
   display: none !important;
 }
@@ -2965,7 +2961,6 @@ body[data-view="batch"] .file-panel {
   box-shadow: none;
 }
 
-body[data-view="batch"] .file-toolbar,
 body[data-view="batch"] .batch-summary {
   display: none;
 }

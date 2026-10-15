@@ -116,6 +116,10 @@ Desktop smoke tests cover:
 
 The smoke test uses a synthetic local HWPX under `.tmp/electron-smoke` by default. When `HWPX_OPT_SMOKE_INPUT` is set, the app copies that local file into `.tmp/electron-smoke` for the run. `HWPX_OPT_SMOKE_MODE` can be `safe`, `balanced`, or `aggressive`; invalid values fall back to `safe`. It does not upload data, and sample files remain ignored by git.
 
+The smoke additionally runs 11 named workflow regressions in `apps/desktop/src/main/workflowSmoke.ts`. They use actual visible DOM controls, the sandboxed preload, IPC handlers and the production worker, covering selection/addition/removal, single/batch cancellation and retry, selected-only batch completion, and document/aggregate report write failures. Each case verifies original/sentinel SHA-256 hashes; cancellation/reset cases compare the entire directory tree. Completed pairs are cross-verified against the original document and checked against measured report sizes. `desktop-workflow-complete` is emitted only after every case passes. Deliberate cancellation and blocked report paths produce expected handled IPC errors in the logs; the process must still exit zero with both workflow and final smoke completion markers.
+
+The UI cancellation gate pauses delivery after the real worker returns, before publication, making UI/IPC ordering deterministic. Separate Vitest `documentCancellation.test.ts` tests pause real worker CPU phases and asynchronous filesystem operations to prove termination, rollback, timeout and restart behavior. Static repository tests retain manifest, packaging, version and privacy configuration checks; UI state is verified by execution rather than renderer source snippets. See [workflow evidence and scope](DESKTOP_WORKFLOW_TESTS_2026-10-15.md).
+
 ## Fixture Strategy
 
 Synthetic HWPX fixtures live in `packages/core/test/fixtures.ts`. They build ZIP packages with controlled XML and resource entries.
@@ -137,7 +141,7 @@ Real user sample files and local optimization outputs must not be committed. Roo
 
 ## Manual Desktop Checks
 
-Automated smoke checks only confirm that Electron can create and load the app window. Before a desktop release, still run:
+Automated smoke checks exercise synthetic workflows and failure recovery. Visual fidelity in Hancom and target-machine integration still require manual checks. Before a desktop release, run:
 
 1. `npm run build`
 2. `npm run desktop:start`

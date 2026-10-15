@@ -44,6 +44,7 @@ const allowedOutputDirectories = new Set<string>();
 const allowedGeneratedPaths = new Set<string>();
 let settingsSaveQueue: Promise<void> = Promise.resolve();
 let smokeDialogFilePaths: string[] | undefined;
+let smokeDialogSelection: { consumed: boolean } | undefined;
 let smokeBlockedExternalRequests = 0;
 // Packaged Windows EXEs treat unknown `--flags` as Chromium switches ("bad option").
 // Prefer HWPX_OPT_SMOKE_TEST=1 for packaged smoke; keep argv for Linux `electron` launches.
@@ -174,6 +175,7 @@ function registerIpc(): void {
       for (const filePath of smokeDialogFilePaths) {
         await registerAllowedInputPath(filePath);
       }
+      if (smokeDialogSelection) smokeDialogSelection.consumed = true;
       return [...smokeDialogFilePaths];
     }
     const options: OpenDialogOptions = {
@@ -945,7 +947,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     batchUi.perFileState.limit !== "mb40" ||
     batchUi.perFileState.optimizeText !== "선택 파일 일괄 최적화" ||
     batchUi.perFileState.qualityTitle !== "품질 · 파일별 자동" ||
-    batchUi.perFileState.pendingRemoveActions !== 0 ||
+    batchUi.perFileState.pendingRemoveActions !== 2 ||
     batchUi.perFileState.selectedRows !== 2 ||
     !batchUi.aggregateMeta?.includes("예상 합계") ||
     batchUi.aggregateScope !== "aggregate" ||
@@ -1318,6 +1320,19 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   await window.webContents.executeJavaScript(`
     window.hwpxOptimizer.saveSettings({ batchTargetMode: "per-file" })
   `);
+  const { runWorkflowRegressionSmoke } = await import("./main/workflowSmoke.js");
+  await runWorkflowRegressionSmoke(window, {
+    directory: smokeDir,
+    fixture: createSmokeHwpxFixture,
+    selectFiles: paths => {
+      smokeDialogFilePaths = paths;
+      smokeDialogSelection = { consumed: false };
+      return smokeDialogSelection;
+    },
+    registerInput: registerAllowedInputPath,
+    worker: documentWorkerClient,
+    operations: documentOperations
+  });
 }
 
 function parseSmokeMode(value: string | undefined): OptimizationMode {

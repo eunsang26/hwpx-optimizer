@@ -86,7 +86,8 @@ describe("template HTML builders", () => {
 
     const pending: BatchItemLike = { path: "/x/b.hwpx", fileName: "b.hwpx", status: "pending" };
     const idleHtml = batchItemRowActionsHtml(pending, 1, { running: false });
-    expect(idleHtml).toBe("");
+    expect(idleHtml).toContain('data-action="remove"');
+    expect(idleHtml).toContain("목록에서 제거");
 
     const busyHtml = batchItemRowActionsHtml(pending, 1, { running: true });
     expect(busyHtml).toBe("");

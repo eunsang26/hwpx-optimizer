@@ -2411,7 +2411,7 @@ function setStatus(message: string): void {
 }
 
 function statusTone(message: string): "info" | "success" | "warning" {
-  if (/실패|오류|없습니다|초과|권한|손상|아닙니다|보류|우회|지원/i.test(message)) return "warning";
+  if (/실패|오류|못했습니다|없습니다|초과|권한|손상|아닙니다|보류|우회|지원/i.test(message)) return "warning";
   if (/완료|성공|통과|변경했습니다|저장/i.test(message)) return "success";
   return "info";
 }
@@ -2837,23 +2837,25 @@ async function runBatch(): Promise<void> {
   state.batchRunCompleted = true;
   cancelButton.disabled = true;
   hideProgressPanel();
-  const batchReportPath = await saveBatchSummaryReport();
+  const { reportPath: batchReportPath, error: reportError } = await saveBatchSummaryReport();
   state.batchReportPath = batchReportPath;
   renderBatchList();
   renderBatchResultPanel();
   const completed = state.batchItems.filter((item) => item.status === "done").length;
   const failed = state.batchItems.filter((item) => item.status === "failed").length;
   setStatus(
-    batchReportPath
+    reportError
+      ? `일괄 처리는 끝났지만 리포트를 저장하지 못했습니다. ${reportError}`
+      : batchReportPath
       ? `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}. 리포트: ${fileNameFromPath(batchReportPath)}`
       : `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}.`
   );
 }
 
-async function saveBatchSummaryReport(): Promise<string | undefined> {
-  if (!state.settings?.saveReport || state.batchItems.length === 0) return undefined;
+async function saveBatchSummaryReport(): Promise<{ reportPath?: string; error?: string }> {
+  if (!state.settings?.saveReport || state.batchItems.length === 0) return {};
   const firstInputPath = state.batchItems[0]?.path;
-  if (!firstInputPath) return undefined;
+  if (!firstInputPath) return {};
   try {
     const result = await window.hwpxOptimizer.saveBatchReport({
       firstInputPath,
@@ -2874,10 +2876,9 @@ async function saveBatchSummaryReport(): Promise<string | undefined> {
           savedPercent: item.savedPercent
         }))
     });
-    return result.reportPath;
+    return result;
   } catch (error) {
-    setStatus(`일괄 처리는 끝났지만 리포트를 저장하지 못했습니다. ${errorMessage(error)}`);
-    return undefined;
+    return { error: errorMessage(error) };
   }
 }
 

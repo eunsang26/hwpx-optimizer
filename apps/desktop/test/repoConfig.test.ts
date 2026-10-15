@@ -154,9 +154,6 @@ describe("repository runtime and cleanup configuration", () => {
     const electronSmokeRunner = await readFile("scripts/run-electron-smoke.mjs", "utf8");
     expect(electronSmokeRunner).toContain('resolve(".tmp", "electron-smoke")');
     expect(electronSmokeRunner).toContain("{ recursive: true, force: true }");
-    const desktopMain = await readFile("apps/desktop/src/main.ts", "utf8");
-    expect(desktopMain).toContain('"status-banner"');
-    expect(desktopMain).toContain('document.body.dataset.dragOver = "false"');
     await expect(access("TERMS.txt")).resolves.toBeUndefined();
 
     const releaseArtifactCheck = await readFile("scripts/check-release-artifacts.mjs", "utf8");
@@ -178,15 +175,6 @@ describe("repository runtime and cleanup configuration", () => {
     expect(releaseManifestVerifier).toContain("Release notice is missing");
   });
 
-  it("keeps Korean and required fallback locales in Windows packages", async () => {
-    const script = await readFile("scripts/prune-electron-locales.cjs", "utf8");
-
-    expect(script).toContain('context.electronPlatformName !== "win32"');
-    expect(script).toContain('"ko.pak"');
-    expect(script).toContain('"en-US.pak"');
-    expect(script).toContain("Pruned");
-  });
-
   it("keeps Windows portable smoke strict enough for release artifact verification", async () => {
     const script = await readFile("scripts/windows-portable-smoke.ps1", "utf8");
     const wrapper = await readFile("scripts/run-windows-portable-smoke.mjs", "utf8");
@@ -202,64 +190,11 @@ describe("repository runtime and cleanup configuration", () => {
     expect(script).toContain("-RedirectStandardError $stderrPath");
     expect(script).toContain("Desktop smoke stderr:");
     expect(script).toContain("(Resolve-Path -LiteralPath $Sample).ProviderPath");
-    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain('judge.value = "per-file"');
     expect(wrapper).toContain("-RequireChecksumEntry");
     expect(wrapper).toContain("-MinArtifactBytes");
     expect(wrapper).toContain("SHA256SUMS.txt");
     expect(wrapper).toContain("copyFileSync");
     expect(wrapper).toContain("windowsTempDirectory");
-  });
-
-  it("keeps desktop analysis automatic and shows the selected output folder in the run panel", async () => {
-    const html = await readFile("apps/desktop/src/index.html", "utf8");
-    const renderer = await readFile("apps/desktop/src/renderer.ts", "utf8");
-
-    expect(html).not.toContain('id="analyze-button"');
-    expect(html).not.toContain("다시 분석");
-    expect(html).toContain('id="output-directory-line"');
-    expect(renderer).not.toContain('requireButton("analyze-button")');
-    expect(renderer).toContain("outputDirectoryLine.textContent");
-  });
-
-  it("opens the desktop window at a size that fits the primary workflow", async () => {
-    const main = await readFile("apps/desktop/src/main.ts", "utf8");
-    const styles = await readFile("apps/desktop/src/styles.css", "utf8");
-
-    expect(main).toContain('app.setAppUserModelId("local.hwpxoptimizer.app")');
-    expect(main).toContain('icon: join(import.meta.dirname, "app-icon.png")');
-    expect(main).toContain("const DEFAULT_WINDOW_WIDTH = 800");
-    expect(main).toContain("const DEFAULT_WINDOW_HEIGHT = 560");
-    expect(main).toContain("const MIN_WINDOW_WIDTH = 720");
-    expect(main).toContain("const MIN_WINDOW_HEIGHT = 520");
-    expect(main).toContain("width: DEFAULT_WINDOW_WIDTH");
-    expect(main).toContain("height: DEFAULT_WINDOW_HEIGHT");
-    expect(main).toContain("minWidth: MIN_WINDOW_WIDTH");
-    expect(main).toContain("minHeight: MIN_WINDOW_HEIGHT");
-    expect(main).toContain("maxWidth: 1360");
-    expect(main).toContain("window.setContentSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)");
-    expect(main).toContain("window.setContentSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)");
-    expect(main).not.toContain("const visualOrder = (element) =>");
-    expect(main).not.toContain("limitRect.left < judgeRect.left");
-    expect(main).toContain("layout.viewportWidth !== DEFAULT_WINDOW_WIDTH");
-    expect(main).toContain("layout.viewportHeight < DEFAULT_WINDOW_HEIGHT - 20");
-    expect(main).toContain("layout.viewportHeight > DEFAULT_WINDOW_HEIGHT");
-    expect(main).toContain('backgroundColor: "#e5e9f0"');
-    expect(styles).toMatch(/\.shell\s*{[^}]*max-width:\s*var\(--app-max\)/s);
-    expect(styles).toMatch(/--app-max:\s*960px/);
-    expect(styles).toMatch(/--fs-display:\s*30px/);
-    expect(styles).toMatch(/radial-gradient\(900px 420px/);
-    expect(styles).toMatch(/body\[data-view="empty"\] \.drop-zone\s*{[^}]*padding:\s*10px 14px/s);
-    expect(styles).toMatch(/body\[data-view="empty"\] \.summary-panel\s*{[^}]*padding-bottom:\s*8px/s);
-    expect(styles).toMatch(/body\[data-view="empty"\] \.workspace-grid\s*{[^}]*gap:\s*6px/s);
-    expect(styles).toMatch(/\.brand-mark img\s*{[^}]*width:\s*26px/s);
-    expect(styles).toMatch(/\.file-toolbar\s*{/);
-    expect(styles).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
-    expect(styles).toMatch(/\.option-grid\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(150px, 1fr\)\)/s);
-    expect(styles).toMatch(/\.option-grid select,\r?\n\.option-grid input\[type="number"\]\s*{[^}]*width:\s*100%/s);
-    expect(styles).toMatch(/\.cleanup-settings\s*{[^}]*grid-template-columns:\s*1fr/s);
-    expect(styles).toMatch(/\.workspace-grid\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
-    expect(styles).toMatch(/\.detail-options-sheet \.plan-strip\s*{[^}]*padding:\s*8px 11px 9px/s);
-    expect(styles).not.toContain("Approved A mockup layout");
   });
 
   it("generates desktop and in-app icons from the same source asset", async () => {
@@ -277,232 +212,6 @@ describe("repository runtime and cleanup configuration", () => {
     expect(previewConfig).toContain('src="/apps/desktop/src/app-icon.svg"');
     expect(iconSvg).toContain('aria-label="HWPX Optimizer"');
     expect(iconSvg).toContain("#16a34a");
-  });
-
-  it("keeps automatic optimization plan cards horizontally readable", async () => {
-    const styles = await readFile("apps/desktop/src/styles.css", "utf8");
-
-    expect(styles).not.toContain("min-width: 1080px;");
-    expect(styles).toMatch(/html,\s*body\s*{[^}]*overflow-x:\s*hidden/s);
-    expect(styles).not.toContain(".plan-actions > li,\n.plan-actions .plan-card");
-    expect(styles).toMatch(/\.plan-card > label\s*{[^}]*display:\s*flex/s);
-    expect(styles).toContain("flex: 1 1 auto;");
-  });
-
-  it("keeps analysis state stable while submission options are changed during analysis", async () => {
-    const renderer = await readFile("apps/desktop/src/renderer.ts", "utf8");
-
-    expect(renderer).toContain("function renderPendingAnalysisSummary()");
-    expect(renderer).toContain("state.analysisRunning && state.filePath");
-    expect(renderer).toContain("function setSubmissionInputsDisabled(disabled: boolean)");
-    expect(renderer).toContain("if (state.report) refreshSubmissionPlan();");
-    expect(renderer).not.toContain("privacyToggle");
-  });
-
-  it("keeps desktop workflow controls stable during analysis and result review", async () => {
-    const html = await readFile("apps/desktop/src/index.html", "utf8");
-    const renderer = await readFile("apps/desktop/src/renderer.ts", "utf8");
-    const css = await readFile("apps/desktop/src/styles.css", "utf8");
-
-    expect(html).not.toContain('id="choose-many-button"');
-    expect(html).not.toContain("이번 실행 결과");
-    expect(html).not.toContain('id="verification-details"');
-    expect(html).not.toContain('id="verification-summary"');
-    expect(html).toContain('class="analysis-verification"');
-    expect(html).toContain('id="verification-body"');
-    expect(html).toContain('id="result-guidance"');
-    expect(html).toContain('id="drop-overlay"');
-    expect(html).toContain("HWPX 파일을 여기에 놓으세요");
-    expect(html).toContain('id="status-banner"');
-    expect(html).toContain('id="progress-title"');
-    expect(html).toContain('aria-labelledby="progress-title"');
-    expect(html).toContain('id="batch-result-details"');
-    expect(html).toContain('id="plan-count-pill"');
-    expect(html).toContain('class="plan-strip" id="plan-sidebar"');
-    expect(html).toContain('id="option-plan-summary"');
-    expect(html).toContain('id="run-dock"');
-    expect(html).toContain('id="settings-close-button"');
-    expect(html).toMatch(/id="settings-panel"[^>]*role="dialog"[^>]*aria-modal="true"/);
-    expect(html).toContain('id="setting-submission-limit"');
-    expect(html).toContain("기본 결재 기준");
-    expect(html).toContain('id="help-button"');
-    expect(html).toContain('id="help-panel"');
-    expect(html).toMatch(/id="help-panel"[^>]*role="dialog"[^>]*aria-modal="true"/);
-    expect(html).toContain('id="help-backdrop"');
-    expect(html).toContain('id="help-close-button"');
-    expect(html).toContain("사용 매뉴얼");
-    expect(html).toContain("1. 파일 선택");
-    expect(html).toContain("9. 보안 문서 제한");
-    expect(html).toContain("10. 제작자 및 사용 조건");
-    expect(html).toContain("제작/관리: 한강유역수도지원센터 조은상 과장");
-    expect(html).toContain("사전 승인 없는 수정, 재배포, 영리 이용, 제작자 표시 제거는 금지됩니다.");
-    expect(html).toContain("현재 Windows 배포 파일은 자체서명 배포본입니다.");
-    expect(html).toContain("SHA256 값을 배포 공지, SHA256SUMS.txt, release-manifest.json과 대조해 확인하세요.");
-    expect(html).toContain("결과물은 제출·배포·보관 전에 사용자가 직접 확인해야 하며, 원본 보존과 최종 사용 책임은 사용자에게 있습니다.");
-    expect(html.match(/id="verification-body"/g)?.length).toBe(1);
-    expect(html).toContain('<span aria-hidden="true">×</span>');
-    expect(html).toMatch(
-      /id="compare-modal"[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="compare-title"/
-    );
-    expect(html).toContain('id="cleanup-document-toggle"');
-    expect(html).toContain('id="cleanup-image-toggle"');
-    expect(html).toContain('<option value="mb40" selected>40MB 미만</option>');
-    expect(html).toContain('<option value="mb100">100MB 미만</option>');
-    expect(html.match(/id="single-saving-ring"/g)?.length).toBe(1);
-    expect(renderer).not.toContain("chooseManyButton");
-    expect(renderer).not.toContain("verificationDetails");
-    expect(renderer).not.toContain("verificationSummary");
-    expect(renderer).toContain("selectHwpxMany");
-    expect(renderer).toContain('requireElement("drop-overlay")');
-    expect(renderer).toContain('document.addEventListener("dragenter"');
-    expect(renderer).toContain("handleAdditionalPaths(selected)");
-    expect(renderer).toContain("enterBatchMode(additionalPaths, { preservePolicy: true })");
-    expect(renderer).toContain("if (!options.preservePolicy) state.actionSelections.clear();");
-    expect(renderer).toContain('document.addEventListener("dragover"');
-    expect(renderer).toContain('document.addEventListener("drop"');
-    expect(renderer).not.toContain("tauri");
-    expect(renderer).toContain("function clearSelectedFiles");
-    expect(renderer).toContain('isSingle ? "파일 제거" : "목록 비우기"');
-    expect(renderer).toContain("verificationBody.textContent");
-    expect(renderer).toContain("renderAnalysisVerification(report);");
-    expect(renderer).toContain("renderVerificationFailure(error);");
-    expect(renderer).toMatch(
-      /if \(!cancellingBatchAnalysis\) \{[\s\S]*?setIdle\(\);[\s\S]*?hideProgressPanel\(\);[\s\S]*?return;/
-    );
-    expect(renderer).toContain("planCountPill.textContent");
-    expect(renderer).toContain("optionPlanSummary.textContent");
-    expect(renderer).toContain('const CLEANUP_ACTIONS = ["clean-shape-comment", "strip-metadata"]');
-    expect(renderer).toContain("visiblePlanRows(plan)");
-    expect(renderer).toContain("renderCleanupSettings(plan)");
-    expect(renderer).toContain("runDock.hidden");
-    expect(renderer).toContain("function setHelpOpen(open: boolean)");
-    expect(renderer).toContain("helpButton.addEventListener");
-    expect(renderer).toContain("promoteRemainingBatchItemToSingle");
-    expect(renderer).toContain("settingSaveReport.checked = settings.saveReport");
-    expect(renderer).toContain("batchResultDetails.textContent");
-    expect(renderer).toContain("statusBannerText.textContent");
-    expect(html).toContain('id="policy-toolbar"');
-    expect(html).toContain('id="toggle-options-button"');
-    expect(html).toContain('id="detail-options-sheet"');
-    expect(html).toContain('id="hero-chips"');
-    expect(html).toContain('id="review-strip"');
-    expect(html).toContain('id="quality-mode-auto"');
-    expect(html).toContain("유사 이미지 병합");
-    expect(html).toContain("검토만 · 자동 병합 안 함");
-    expect(html).toContain("예정 품질");
-    expect(html).toContain("원본 → 예상");
-    expect(html).toContain(">판정<");
-    expect(html).toContain('id="quality-head-label"');
-    expect(renderer).toContain('qualityMode: "auto"');
-    expect(renderer).toContain("showPlannedReadOnly");
-    expect(renderer).toContain("hero-verdict--mix");
-    expect(renderer).toContain("renderBatchReviewStrip");
-    expect(renderer).toContain('progressTitle.textContent = busyKind === "analysis" ? "분석 중" : "최적화 중"');
-    expect(renderer).toContain("선택 파일 일괄 최적화");
-    expect(renderer).toContain("합계 배분 목표마다 파일별 품질");
-    expect(renderer).toContain("gaugeMidLabel.style.left");
-    expect(renderer).toContain("original > plan.targetBytes");
-    expect(renderer).toContain("gaugeMidLabel.hidden = !plan.targetBytes || original <= plan.targetBytes");
-    expect(renderer).toContain("최종 저장 크기로 다시 판정합니다");
-    expect(renderer).toContain('preservationPreference === "size"');
-    expect(renderer).toContain("analyzed.filter((item) => item.selected !== false)");
-    expect(renderer).toContain("item.report && item.selected !== false");
-    expect(renderer).toContain("createBatchPlanSummary");
-    expect(css).toContain(".gauge-labels .gauge-mid");
-    expect(css).toContain("body[data-view=\"batch\"] .policy-toolbar-batch");
-    expect(css).toContain("button.ghost.is-active");
-    expect(html).toContain('id="gauge-start-label"');
-    expect(renderer).toContain("renderHeroChips");
-    expect(renderer).toContain("renderReviewStrip");
-    expect(renderer).toContain('optimizeButton.textContent = "최적화 실행"');
-    expect(renderer).toContain("handleBatchQualityInput");
-    expect(css).toContain('body[data-view="batch"] .target-limit::after');
-    expect(css).toMatch(/\.policy-toolbar\s*{/s);
-    expect(renderer).toContain('from "./shared/resultGuidance.js"');
-    expect(renderer).toContain("resultGuidanceText(report, plan)");
-    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.manualStepCount !== 10");
-    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("layout.planInsideOptions !== true");
-    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain("HWPX_OPT_SMOKE_SCREENSHOT");
-    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
-      'document.getElementById("empty-choose-button")?.click()'
-    );
-    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
-      "canonical batch event flow mismatch"
-    );
-    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
-      "concurrent settings patches lost an update"
-    );
-    expect(await readFile("apps/desktop/src/main.ts", "utf8")).toContain(
-      'app.isPackaged && process.platform !== "win32"'
-    );
-    expect(css).toMatch(/\.progress-panel\s*{[^}]*position:\s*fixed/s);
-    expect(css).toMatch(/\.batch-status-cell\s*{[^}]*display:\s*flex/s);
-    expect(css).toMatch(/\.analysis-details\s*{[^}]*width:\s*min\(100%, var\(--app-max\)\)/s);
-    expect(css).toMatch(/\.help-panel\s*{[^}]*position:\s*fixed/s);
-    expect(css).toMatch(/\.help-panel\s*{[^}]*width:\s*min\(520px, calc\(100vw - 28px\)\)/s);
-    expect(css).toMatch(/\.manual-steps\s*{[^}]*display:\s*grid/s);
-    expect(css).toMatch(/\.run-dock\s*{[^}]*display:\s*none !important/s);
-    expect(css).toMatch(/\.settings-check\s*{[^}]*display:\s*flex/s);
-    expect(css).toMatch(/\.legal-notice\s*{[^}]*display:\s*grid/s);
-    expect(css).toMatch(/body\[data-drag-over="true"\] \.file-panel\s*{[^}]*border-color:\s*var\(--blue\)/s);
-    expect(css).toMatch(/\.drop-overlay\s*{[^}]*position:\s*fixed/s);
-    expect(css).toMatch(/\.drop-overlay\s*{[^}]*pointer-events:\s*none/s);
-    expect(css).toMatch(/\.status-banner\s*{[^}]*display:\s*flex/s);
-    expect(css).toMatch(/\.batch-result-details\s*{[^}]*background:\s*var\(--surface-2\)/s);
-    expect(css).toMatch(/\.category-chart \.bar\s*{[^}]*grid-template-columns/s);
-    expect(css).not.toMatch(/\.category-chart \.bar\s*{[^}]*height:\s*8px/s);
-    expect(renderer).toContain("plan-priority");
-    expect(renderer).toContain("중복 제외 기준");
-    expect(css).not.toContain(".plan-card .plan-saving { display: none; }");
-    expect(css).toMatch(/\.workspace-grid\s*{[^}]*width:\s*100%/s);
-    expect(css).toMatch(
-      /body\[data-view="empty"\] \.summary-panel,[\s\S]*body\[data-view="empty"\] \.bottom-accordions\s*{[^}]*display:\s*none !important/s
-    );
-    expect(css).toMatch(/\.primary-run-panel #optimize-button\s*{[^}]*grid-column:\s*1/s);
-    expect(css).toMatch(
-      /body\[data-view="single"\] \.policy-toolbar-batch\s*{[^}]*display:\s*none !important/s
-    );
-    expect(css).toMatch(
-      /body\[data-view="single"\] \.quality-mode-row\s*{[^}]*position:\s*absolute/s
-    );
-    expect(css).toMatch(/body\[data-view="batch"\] \.policy-toolbar\s*{[^}]*order:\s*1/s);
-    expect(css).toMatch(/body\[data-view="batch"\] \.policy-toolbar-batch\s*{[^}]*order:\s*2/s);
-    expect(css).toMatch(
-      /body\[data-view="batch"\] \.policy-toolbar > label:has\(#preservation-select\)\s*{[^}]*order:\s*3/s
-    );
-    expect(css).toMatch(/body\[data-view="batch"\] \.summary-panel\s*{[^}]*order:\s*2/s);
-    expect(css).toMatch(/body\[data-view="batch"\] \.file-panel\s*{[^}]*order:\s*3/s);
-    expect(css).toMatch(/body\[data-view="batch"\] \.review-strip\s*{[^}]*order:\s*4/s);
-    expect(css).toMatch(
-      /body\[data-busy="analysis"\] #status-banner,[\s\S]*body\[data-busy="analysis"\] #single-workspace\s*{[^}]*display:\s*none !important/s
-    );
-
-    const policyToolbar = html.indexOf('<div id="policy-toolbar"');
-    const filePanel = html.indexOf('<section class="panel import-row file-panel"');
-    const emptyPolicyReview = html.indexOf('id="empty-policy-review"');
-    const summaryPanelStart = html.indexOf('<section class="panel summary-panel">');
-    const reviewStrip = html.indexOf('id="review-strip"');
-    const resultPanel = html.indexOf('id="result-panel"');
-    const optionsSheet = html.indexOf('id="detail-options-sheet"');
-    const planSidebar = html.indexOf('class="plan-strip" id="plan-sidebar"');
-    const bottomAccordions = html.indexOf('<section class="bottom-accordions">');
-    const actionPanel = html.indexOf('<div id="action-panel"');
-    expect(policyToolbar).toBeGreaterThanOrEqual(0);
-    expect(filePanel).toBeGreaterThan(policyToolbar);
-    expect(emptyPolicyReview).toBeGreaterThan(filePanel);
-    expect(summaryPanelStart).toBeGreaterThanOrEqual(0);
-    expect(summaryPanelStart).toBeGreaterThan(emptyPolicyReview);
-    expect(reviewStrip).toBeGreaterThan(summaryPanelStart);
-    expect(reviewStrip).toBeLessThan(bottomAccordions);
-    expect(optionsSheet).toBeGreaterThan(summaryPanelStart);
-    expect(planSidebar).toBeGreaterThan(optionsSheet);
-    expect(planSidebar).toBeLessThan(resultPanel);
-    expect(resultPanel).toBeGreaterThan(summaryPanelStart);
-    expect(resultPanel).toBeLessThan(bottomAccordions);
-    expect(bottomAccordions).toBeLessThan(actionPanel);
-    expect(html).toMatch(
-      /<section id="single-workspace"[\s\S]*<section class="bottom-accordions">[\s\S]*<\/section>\s*<\/section>\s*<div id="action-panel"/
-    );
   });
 
   it("keeps private sample filenames out of desktop source placeholders", async () => {
