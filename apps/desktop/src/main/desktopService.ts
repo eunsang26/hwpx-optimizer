@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
-import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
+import type { ImagePreviewPair, OptimizationReport, AnalysisReport, CompletedOptimizationReport } from "@hwpx-optimizer/core";
 import { PathClaimRegistry, removeOwnedArtifact, writeArtifactSet, writeStagedFile } from "@hwpx-optimizer/io";
 import type { OwnedArtifact, SaveOptions } from "@hwpx-optimizer/io";
 import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
@@ -45,7 +45,7 @@ const MAX_CACHED_INPUT_BYTES = 256 * 1024 * 1024;
 
 export type DesktopAnalysisResult = {
   filePath: string;
-  report: OptimizationReport;
+  report: AnalysisReport;
 };
 
 export type DesktopOptimizeInput = {
@@ -67,10 +67,10 @@ export type DesktopProtectedInput = { filePath: string; dev: string; ino: string
 export type DesktopOptimizeResult = {
   outputPath: string;
   reportPath?: string;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 };
 
-export type DesktopPreparedOptimization = { output: Uint8Array; report: OptimizationReport };
+export type DesktopPreparedOptimization = { output: Uint8Array; report: CompletedOptimizationReport };
 
 export type DesktopBatchReportItem = {
   input: string;
@@ -344,7 +344,7 @@ export async function optimizeByMode(
   targetBytes?: number,
   onProgress?: (progress: DesktopProgress) => void,
   jpegQuality?: number
-): Promise<{ output: Buffer; report: OptimizationReport }> {
+): Promise<{ output: Buffer; report: CompletedOptimizationReport }> {
   const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
   if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes, onProgress });
   const advanced = {

@@ -301,6 +301,7 @@ describe("optimizeHwpxBufferSafe", () => {
       "opportunities-structure",
       "opportunities",
       "opportunities-aggressive",
+      "opportunities-safe",
       "report"
     ]);
   });

@@ -789,6 +789,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           judge.dispatchEvent(new Event("change", { bubbles: true }));
           const perFileState = {
             heroMeta: document.getElementById("summary-verdict")?.textContent,
+            scope: judge.value,
+            limit: document.getElementById("submission-limit-select")?.value,
             optimizeText: optimize.textContent,
             qualityTitle: document.getElementById("quality-head-label")?.textContent,
             pendingRemoveActions: document.querySelectorAll('#batch-list [data-action="remove"]').length,
@@ -846,6 +848,7 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           resolve({
             perFileState,
             aggregateMeta,
+            aggregateScope: judge.value,
             allocatedRows,
             excludedState,
             manualState,
@@ -867,12 +870,15 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     timedOut?: boolean;
     perFileState?: {
       heroMeta?: string;
+      scope?: string;
+      limit?: string;
       optimizeText?: string;
       qualityTitle?: string;
       pendingRemoveActions?: number;
       selectedRows?: number;
     };
     aggregateMeta?: string;
+    aggregateScope?: string;
     allocatedRows?: number;
     excludedState?: {
       status?: string;
@@ -904,13 +910,15 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (
     batchUi.timedOut ||
     !batchUi.perFileState ||
-    !batchUi.perFileState.heroMeta?.includes("파일별 기준") ||
-    !batchUi.perFileState.heroMeta?.includes("40MB") ||
+    !batchUi.perFileState.heroMeta?.includes("예상 합계") ||
+    batchUi.perFileState.scope !== "per-file" ||
+    batchUi.perFileState.limit !== "mb40" ||
     batchUi.perFileState.optimizeText !== "선택 파일 일괄 최적화" ||
     batchUi.perFileState.qualityTitle !== "품질 · 파일별 자동" ||
     batchUi.perFileState.pendingRemoveActions !== 0 ||
     batchUi.perFileState.selectedRows !== 2 ||
-    !batchUi.aggregateMeta?.includes("선택 합계 배분") ||
+    !batchUi.aggregateMeta?.includes("예상 합계") ||
+    batchUi.aggregateScope !== "aggregate" ||
     batchUi.allocatedRows !== 2 ||
     batchUi.excludedState?.status !== "제외" ||
     !batchUi.excludedState.size?.includes("—") ||
@@ -1041,6 +1049,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
           resolve({
             doneRows: Array.from(document.querySelectorAll("#batch-list .status"))
               .filter((item) => item.textContent === "완료").length,
+            actualSummary: document.getElementById("summary-result-line")?.textContent?.includes("실제 합계"),
+            actualRows: Array.from(document.querySelectorAll("#batch-list .batch-size-cell")).every(cell => cell.textContent?.includes("실제")),
             resultVisible: document.getElementById("batch-result-panel")?.getClientRects().length > 0
           });
           return;
@@ -1053,8 +1063,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       };
       poll();
     })
-  `)) as { timedOut?: boolean; doneRows?: number; resultVisible?: boolean };
-  if (completedBatchUi.timedOut || completedBatchUi.doneRows !== 3 || completedBatchUi.resultVisible !== true) {
+  `)) as { timedOut?: boolean; doneRows?: number; resultVisible?: boolean; actualSummary?: boolean; actualRows?: boolean };
+  if (completedBatchUi.timedOut || completedBatchUi.doneRows !== 3 || completedBatchUi.resultVisible !== true || !completedBatchUi.actualSummary || !completedBatchUi.actualRows) {
     throw new Error(`Desktop smoke failed: real batch completion flow mismatch ${JSON.stringify(completedBatchUi)}`);
   }
 
@@ -1166,6 +1176,11 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       return {
         originalSize: analysis.report.originalSize,
         analysisMode: analysis.report.analysis?.mode,
+        reportPhasesValid: analysis.report.kind === "analysis" && detailed.report.kind === "analysis" &&
+          analysis.report.optimizedSize === undefined && analysis.report.targetStatus === undefined &&
+          typeof analysis.report.estimatedSize === "number" && result.report.kind === "optimization" &&
+          result.report.estimatedSize === undefined,
+        outputBytes: result.report.optimizedSize,
         detailedAnalysisMode: detailed.report.analysis?.mode,
         invalidAnalysisRejected,
         outputPath: result.outputPath,
@@ -1177,6 +1192,8 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     })()
   `)) as {
     originalSize?: number;
+    reportPhasesValid?: boolean;
+    outputBytes?: number;
     analysisMode?: string;
     detailedAnalysisMode?: string;
     invalidAnalysisRejected?: boolean;
@@ -1195,6 +1212,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     new Promise(resolve => setTimeout(() => resolve(document.getElementById("progress-panel")?.hidden), 30))
   `);
   if (!lateProgressHidden) throw new Error("Desktop smoke failed: late progress reopened the idle progress panel");
+  if (!workflow.reportPhasesValid || workflow.outputBytes !== (await readFileFs(workflow.outputPath!)).length) {
+    throw new Error("Desktop smoke failed: forecast and measured report contracts crossed the IPC boundary incorrectly");
+  }
   if (workflow.analysisMode !== "quick" || workflow.detailedAnalysisMode !== "deep" || !workflow.invalidAnalysisRejected) {
     throw new Error("Desktop smoke failed: analysis mode did not cross the preload/IPC/worker boundary");
   }

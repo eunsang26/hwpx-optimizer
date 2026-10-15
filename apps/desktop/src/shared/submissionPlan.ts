@@ -1,4 +1,5 @@
 import type { OptimizationOpportunityGroup, OptimizationReport } from "@hwpx-optimizer/core";
+import { evaluatePackageSizeEstimate, targetStatusForBytes } from "./corePlanning.js";
 import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
 import {
   classifyTargetVerdict,
@@ -233,7 +234,7 @@ export function createSubmissionPlan(
       ? Math.max(0, Math.floor(report.originalSize * ESTIMATED_SAVING_DISPLAY_RATIO))
       : rawExpectedSavingBytes;
   const expectedSavingBytes = Math.min(rawExpectedSavingBytes, savingCapBytes);
-  const wasCapped = rawExpectedSavingBytes > expectedSavingBytes;
+  const wasCapped = !report.estimates && rawExpectedSavingBytes > expectedSavingBytes;
   const rawJpegBaselineBytes = jpegBaselineBytesFromGroups(selectedGroups);
   const fullSavingBytes = estimateNonOverlappingSavingBytes(allGroups);
   const selectedSavingBytes = estimateNonOverlappingSavingBytes(selectedGroups);
@@ -241,27 +242,31 @@ export function createSubmissionPlan(
   // Prefer ZIP-aware analysis projection when it belongs to these opportunity groups.
   // Fixtures/overrides that keep a stale optimizedSize fall back to entry savings.
   const entryBaselineSizeBytes = Math.max(0, report.originalSize - expectedSavingBytes);
-  const baselineSummarySizeBytes =
-    resolveProjectedBaselineBytes({
+  const model = report.estimates?.[mode];
+  const modelResult = model ? evaluatePackageSizeEstimate(model, mode === "safe" || !changed ? undefined : selectedActions) : undefined;
+  const baselineSummarySizeBytes = modelResult?.size ?? (report.kind === "analysis"
+    ? Math.round(report.originalSize - Math.max(0, report.originalSize - (report.estimatedSize ?? report.originalSize)) * selectionRatio)
+    :
+    (resolveProjectedBaselineBytes({
       originalSize: report.originalSize,
       projectedSize: report.optimizedSize,
       fullSavingBytes,
       selectedSavingBytes,
       fallbackSizeBytes: entryBaselineSizeBytes
-    }) ?? entryBaselineSizeBytes;
-  const jpegBaselineBytes = Math.round(rawJpegBaselineBytes * Math.max(0.25, selectionRatio || 1));
+    }) ?? entryBaselineSizeBytes));
+  const jpegBaselineBytes = modelResult?.jpegBytes ?? (report.kind === "analysis" ? 0 : Math.round(rawJpegBaselineBytes * Math.max(0.25, selectionRatio || 1)));
   const targetBytes = resolveSubmissionLimitBytes(input.submissionLimit);
   const sizeEstimate = (quality: number): number =>
     estimateSizeAtJpegQuality({
       originalBytes: report.originalSize,
       baselineExpectedBytes: baselineSummarySizeBytes,
-      baselineQuality: BASELINE_JPEG_QUALITY_BALANCED,
+      baselineQuality: mode === "aggressive" ? JPEG_QUALITY_FLOOR : BASELINE_JPEG_QUALITY_BALANCED,
       quality,
       floor: JPEG_QUALITY_FLOOR,
       ceiling: JPEG_QUALITY_CEILING,
       jpegBaselineBytes
     });
-  const projectedAggressive = resolveProjectedBaselineBytes({
+  const projectedAggressive = report.kind === "analysis" ? undefined : resolveProjectedBaselineBytes({
     originalSize: report.originalSize,
     projectedSize: report.aggressiveProjectedOptimizedSize,
     fullSavingBytes,
@@ -271,7 +276,7 @@ export function createSubmissionPlan(
   const floorExpectedBytes =
     mode === "safe"
       ? baselineSummarySizeBytes
-      : (projectedAggressive ?? sizeEstimate(JPEG_QUALITY_FLOOR));
+      : modelResult ? sizeEstimate(JPEG_QUALITY_FLOOR) : (projectedAggressive ?? sizeEstimate(JPEG_QUALITY_FLOOR));
 
   // Aggressive always uses the quality floor (manual JPEG % is ignored).
   const manualQuality =
@@ -486,8 +491,8 @@ function meetsTarget(sizeBytes: number, targetBytes: number): boolean {
 
 function targetStatusFor(originalSize: number, expectedSize: number, targetBytes: number | undefined): PlanStatus {
   if (!targetBytes) return "no-target";
-  if (meetsTarget(originalSize, targetBytes)) return "already-under-target";
-  return meetsTarget(expectedSize, targetBytes) ? "target-met" : "target-missed";
+  const status = targetStatusForBytes(originalSize, expectedSize, targetBytes);
+  return status === "already-under-target" ? status : status === "met" ? "target-met" : "target-missed";
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
 import type { DesktopImagePreviewInput } from "./shared/imagePreview.js";
 import type { CancellationResult } from "./shared/cancellation.js";
 
@@ -16,7 +17,7 @@ const api = {
   },
   loadSettings: () => ipcRenderer.invoke("settings:load"),
   saveSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("settings:save", patch),
-  analyze: (filePath: string, options?: { analysisMode?: "quick" | "deep" }) => ipcRenderer.invoke("hwpx:analyze", filePath, options),
+  analyze: (filePath: string, options?: { analysisMode?: "quick" | "deep" }): Promise<DesktopAnalysisResult> => ipcRenderer.invoke("hwpx:analyze", filePath, options),
   optimize: (input: {
     filePath: string;
     mode: "safe" | "balanced" | "aggressive";
@@ -25,7 +26,7 @@ const api = {
     actions?: string[];
     targetBytes?: number;
     jpegQuality?: number;
-  }) => ipcRenderer.invoke("hwpx:optimize", input),
+  }): Promise<DesktopOptimizeResult> => ipcRenderer.invoke("hwpx:optimize", input),
   cancelAnalyze: (): Promise<CancellationResult> => ipcRenderer.invoke("hwpx:cancel-analyze"),
   cancelOptimize: (): Promise<CancellationResult> => ipcRenderer.invoke("hwpx:cancel-optimize"),
   onOptimizeProgress: (callback: (progress: { percent: number; item: string }) => void): (() => void) => {

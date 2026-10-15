@@ -403,7 +403,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(renderer).toContain("gaugeMidLabel.style.left");
     expect(renderer).toContain("original > plan.targetBytes");
     expect(renderer).toContain("gaugeMidLabel.hidden = !plan.targetBytes || original <= plan.targetBytes");
-    expect(renderer).toContain("하한 품질까지 여지");
+    expect(renderer).toContain("최종 저장 크기로 다시 판정합니다");
     expect(renderer).toContain('preservationPreference === "size"');
     expect(renderer).toContain("analyzed.filter((item) => item.selected !== false)");
     expect(renderer).toContain("item.report && item.selected !== false");

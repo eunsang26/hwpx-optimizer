@@ -169,7 +169,8 @@ describe("batchView helpers", () => {
       report,
       savedBytes: 4096,
       savedPercent: 12.5,
-      expectedSizeBytes: 12_000,
+      expectedSizeBytes: 20_000,
+      actualSizeBytes: 12_000,
       targetStatusLabel: "기준 미달",
       jpegQualityDisplay: 60,
       qualityEditable: false

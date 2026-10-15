@@ -13,14 +13,15 @@ import {
 import type { ImageOptimizationProfile } from "./opportunities.js";
 import { nowMs, PerformanceTimer } from "./performance.js";
 import { createSafeOptimizationPlan } from "./planner.js";
-import { projectPackageSizeFromOpportunities } from "./projectPackageSize.js";
+import { createPackageSizeEstimate } from "./projectPackageSize.js";
+import { evaluatePackageSizeEstimate } from "./planning.js";
 import { createAnalysisReport, createOptimizationReport } from "./report.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
 import { detectStructuralOptimizationOpportunities } from "./structuralOpportunities.js";
 import { verifyHwpxOutput } from "./verifier.js";
 import { writeHwpxPackage } from "./writer.js";
-import type { AppliedAction, HwpxPackage, OptimizationOpportunity, OptimizationReport, PackageAnalysis, AnalysisMode } from "./types.js";
+import type { AppliedAction, HwpxPackage, OptimizationOpportunity, OptimizationReport, AnalysisReport, CompletedOptimizationReport, PackageAnalysis, AnalysisMode } from "./types.js";
 
 export type OptimizeProgress = { percent: number; item: string };
 
@@ -56,14 +57,14 @@ const aggressiveProjectionProfile: ImageOptimizationProfile = {
 export async function analyzeHwpxBuffer(
   input: Buffer,
   options: { targetBytes?: number; analysisMode?: AnalysisMode; imageConcurrency?: number } = {}
-): Promise<OptimizationReport> {
+): Promise<AnalysisReport> {
   return withDecodedImageCache(() => analyzeHwpxBufferInCache(input, options));
 }
 
 async function analyzeHwpxBufferInCache(
   input: Buffer,
   options: { targetBytes?: number; analysisMode?: AnalysisMode; imageConcurrency?: number } = {}
-): Promise<OptimizationReport> {
+): Promise<AnalysisReport> {
   const timer = new PerformanceTimer();
   const targetBytes = normalizeTargetBytes(options.targetBytes);
   const analysisMode = options.analysisMode ?? "quick";
@@ -96,15 +97,34 @@ async function analyzeHwpxBufferInCache(
       detectImageOpportunities(pkg, aggressiveProjectionProfile, opportunityOptions)
     )
   ];
-  const projectedOptimizedSize = projectPackageSizeFromOpportunities(pkg, opportunities);
-  const aggressiveProjectedOptimizedSize = projectPackageSizeFromOpportunities(pkg, aggressiveOpportunities, {
-    palettePng: true
-  });
+  // Safe only executes lossless structural changes; do not borrow aggressive
+  // palette/resize savings for a different preservation policy.
+  const safeOpportunities = structuralOpportunities.filter(o => o.defaultEnabledIn.includes("safe"));
+  safeOpportunities.push(...await timer.measure("opportunities-safe", () =>
+    detectImageOpportunities(pkg, { ...balancedImageProfile, maxEdge: Number.MAX_SAFE_INTEGER, displayScale: Number.MAX_SAFE_INTEGER },
+      { ...opportunityOptions, safeOnly: true })
+  ));
+  const estimates = {
+    safe: createPackageSizeEstimate(pkg, safeOpportunities),
+    balanced: createPackageSizeEstimate(pkg, [...opportunities, ...safeOpportunities]),
+    aggressive: createPackageSizeEstimate(pkg, aggressiveOpportunities)
+  };
+  const projectedOptimizedSize = evaluatePackageSizeEstimate(estimates.balanced).size;
+  const aggressiveProjectedOptimizedSize = evaluatePackageSizeEstimate(estimates.aggressive).size;
+  const reportOpportunityMap = new Map(opportunities.map(opportunity => [opportunity.id, opportunity]));
+  for (const opportunity of safeOpportunities) {
+    const previous = reportOpportunityMap.get(opportunity.id);
+    reportOpportunityMap.set(opportunity.id, previous ? {
+      ...previous, defaultEnabledIn: [...new Set([...previous.defaultEnabledIn, ...opportunity.defaultEnabledIn])]
+    } : opportunity);
+  }
+  const reportOpportunities = [...reportOpportunityMap.values()];
   return createReportWithPerformance(timer, () =>
-    createAnalysisReport(analysis, input.byteLength, opportunities, {
+    createAnalysisReport(analysis, input.byteLength, reportOpportunities, {
       analysis: { mode: analysisMode, imageSizes: analysisMode === "deep" ? "encoded" : "estimated",
         visualDuplicatesChecked: analysisMode === "deep" },
       targetBytes,
+      estimates,
       projectedOptimizedSize,
       aggressiveProjectedOptimizedSize
     })
@@ -113,14 +133,14 @@ async function analyzeHwpxBufferInCache(
 
 export async function optimizeHwpxBufferSafe(input: Buffer, options: SafeOptimizeOptions = {}): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
   return withDecodedImageCache(() => optimizeHwpxBufferSafeInCache(input, options));
 }
 
 async function optimizeHwpxBufferSafeInCache(input: Buffer, options: SafeOptimizeOptions = {}): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
   const targetBytes = normalizeTargetBytes(options.targetBytes);
   const timer = new PerformanceTimer();
@@ -197,7 +217,7 @@ export async function optimizeHwpxBufferBalanced(
   options: OptimizeOptions = {}
 ): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
   return withDecodedImageCache(() => optimizeHwpxBufferAdvanced(input, {
     options,
@@ -218,7 +238,7 @@ async function optimizeHwpxBufferAdvanced(
   }
 ): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
   const options = {
     ...settings.options,
@@ -290,7 +310,7 @@ async function optimizeHwpxBufferAdvanced(
   // balanced default (88). Try the balanced default first to short-circuit common cases.
   const baseQuality = clampJpegQuality(settings.profile.jpegQuality);
   const baseCandidate = await runProfile(profileForJpegQuality(settings.profile, baseQuality, "balanced"));
-  let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
+  let best: { output: Buffer; report: CompletedOptimizationReport; targetMet: boolean } | undefined;
   if (baseCandidate) {
     best = chooseBestCandidate(undefined, baseCandidate, options.targetBytes);
   }
@@ -336,7 +356,7 @@ async function optimizeHwpxBufferAdvanced(
 
 function normalizeTargetBytes(value: number | undefined): number | undefined {
   if (value === undefined) return undefined;
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!Number.isSafeInteger(Math.floor(value)) || Math.floor(value) <= 0) {
     throw new Error("targetBytes must be a positive number.");
   }
   return Math.floor(value);
@@ -370,7 +390,7 @@ async function optimizeHwpxBufferWithProfile(
   }
 ): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
   const pkg = settings.pkg;
   const analysis = settings.analysis;
@@ -520,10 +540,10 @@ function writeCompressionLevel(targetBytes: number | undefined): number {
 }
 
 function chooseBestCandidate(
-  previous: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined,
-  candidate: { output: Buffer; report: OptimizationReport },
+  previous: { output: Buffer; report: CompletedOptimizationReport; targetMet: boolean } | undefined,
+  candidate: { output: Buffer; report: CompletedOptimizationReport },
   targetBytes: number | undefined
-): { output: Buffer; report: OptimizationReport; targetMet: boolean } {
+): { output: Buffer; report: CompletedOptimizationReport; targetMet: boolean } {
   const targetMet = candidateMeetsTarget(candidate.output.byteLength, targetBytes);
   const current = { ...candidate, targetMet };
   if (!previous) return current;
@@ -737,7 +757,7 @@ export async function optimizeHwpxBufferAggressive(
   options: OptimizeOptions = {}
 ): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
   return withDecodedImageCache(() => optimizeHwpxBufferAdvanced(input, {
     options,

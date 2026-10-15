@@ -21,3 +21,6 @@ await mkdir(fontsTarget, { recursive: true });
 for (const fontFile of await readdir(fontsSource)) {
   await copyFile(join(fontsSource, fontFile), join(fontsTarget, fontFile));
 }
+
+// Renderer runs without Node/bare-module resolution. Keep one implementation.
+await copyFile(join(root, "../../packages/core/dist/planning.js"), join(root, "dist/shared/corePlanning.js"));

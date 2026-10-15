@@ -3,7 +3,8 @@ import {
   applyOptimizationResultToBatchItem,
   batchResultTitleForCounts,
   selectionModeForPaths,
-  summarizeBatchItems
+  summarizeBatchItems,
+  actualTargetStatusLabel
 } from "./shared/batchView.js";
 import { escapeHtml, fileNameFromPath, looksLikeOptimizedFileName } from "./shared/format.js";
 import { actionLabel, errorLabel, groupWarnings, modeLabel, modeWarningMessage, progressLabel } from "./shared/labels.js";
@@ -53,6 +54,9 @@ type BatchItem = {
   selected: boolean;
   status: "pending" | "running" | "done" | "failed" | "cancelled";
   report?: OptimizationReport;
+  analysisReport?: OptimizationReport;
+  actualSizeBytes?: number;
+  actualSizeLabel?: string;
   outputPath?: string;
   reportPath?: string;
   originalSizeBytes?: number;
@@ -1148,6 +1152,8 @@ function renderSingleSummary(plan: SubmissionPlan): void {
   selectedFileCard.hidden = false;
   dropZone.hidden = true;
   singleOriginalSize.textContent = plan.originalSizeLabel;
+  requireElement("single-size-basis").textContent = "예상";
+  singleSavingRing.closest(".saving-ring")?.setAttribute("aria-label", "예상 절감률");
   singleExpectedSize.textContent = plan.expectedSizeLabel.replace(/^약 /, "");
   const savingPercent = percentFromPlan(plan);
   singleSavingRing.textContent = `${savingPercent.toFixed(2)}%`;
@@ -1240,13 +1246,16 @@ function renderBatchSummary(): void {
   );
   // Hero/pass-rate always describe files that will actually run (selected).
   const summaryItems = analyzed.filter((item) => item.selected !== false);
+  const selectedItems = state.batchItems.filter(item => item.selected !== false);
+  const allCompleted = selectedItems.length > 0 && selectedItems.every(item => item.status === "done" && item.report?.optimizedSize !== undefined);
+  const partialCompletion = (state.batchRunCompleted && !allCompleted) || selectedItems.some(item => item.status === "failed" || item.status === "cancelled");
   const originalTotal = summaryItems.reduce((sum, item) => sum + (item.originalSizeBytes ?? 0), 0);
-  const expectedTotal = summaryItems.reduce((sum, item) => sum + (item.expectedSizeBytes ?? item.originalSizeBytes ?? 0), 0);
+  const expectedTotal = summaryItems.reduce((sum, item) => sum + (item.status === "done" ? item.actualSizeBytes ?? item.report?.optimizedSize ?? item.originalSizeBytes ?? 0 : item.status === "failed" || item.status === "cancelled" ? item.originalSizeBytes ?? 0 : item.expectedSizeBytes ?? item.originalSizeBytes ?? 0), 0);
   const saving = Math.max(0, originalTotal - expectedTotal);
   const savingPercent = originalTotal > 0 ? (saving / originalTotal) * 100 : 0;
-  const passed = summaryItems.filter((item) => item.targetStatusLabel === "제출 가능").length;
-  const needMore = summaryItems.filter((item) => item.targetStatusLabel === "더 압축 필요").length;
-  const hardMiss = summaryItems.filter((item) => item.targetStatusLabel === "기준 미달").length;
+  const passed = summaryItems.filter((item) => (item.targetStatusLabel === "제출 가능" || item.targetStatusLabel === "제출 가능 예상")).length;
+  const needMore = summaryItems.filter((item) => (item.targetStatusLabel === "더 압축 필요" || item.targetStatusLabel === "추가 압축 필요 예상")).length;
+  const hardMiss = summaryItems.filter((item) => (item.targetStatusLabel === "기준 미달" || item.targetStatusLabel === "기준 초과 예상")).length;
   const warning = needMore + hardMiss;
   const plannedCount = summaryItems.length;
   const batchTargetBytes = resolveBatchTargetBytes();
@@ -1278,20 +1287,25 @@ function renderBatchSummary(): void {
   summaryExpected.textContent = summaryItems.length ? formatBytes(expectedTotal) : "-";
   summarySaving.textContent = summaryItems.length ? formatBytes(saving) : "-";
   summaryPercent.textContent = summaryItems.length ? `${savingPercent.toFixed(1)}%` : "-";
+  if (allCompleted) {
+    mixVerdict = state.batchTargetMode === "aggregate" && batchTargetBytes
+      ? expectedTotal < batchTargetBytes ? "전체 목표 달성" : "전체 기준 초과"
+      : warning > 0 ? "기준 초과 확인 필요" : "처리 완료";
+    const actualMiss = state.batchTargetMode === "aggregate" ? Boolean(batchTargetBytes && expectedTotal >= batchTargetBytes) : warning > 0;
+    mixClass = actualMiss ? "hard-miss" : "pass";
+  } else if (partialCompletion) { mixVerdict = "미완료 파일 확인 필요"; mixClass = "hard-miss"; }
   summaryStatus.innerHTML = `<span class="success-dot" aria-hidden="true"></span>${mixVerdict}`;
   summaryStatus.classList.toggle("hero-verdict--mix", mixClass === "mix");
   summaryStatus.classList.toggle("hero-verdict--bad", mixClass === "hard-miss");
   summaryResultLine.textContent = summaryItems.length
-    ? `${targetModeLabel} · ${targetStatusSummary}`
+    ? `${targetModeLabel} · ${allCompleted ? "실제 합계" : partialCompletion ? "일부 완료 · 예상 포함" : "예상 합계"} ${formatBytes(expectedTotal)}`
     : "예상 결과: -";
   summaryTargetLine.textContent = batchTargetSummaryLine(batchTargetBytes);
   const batchScopeLine = document.createElement("span");
   batchScopeLine.textContent =
-    state.batchTargetMode === "aggregate" ? "선택 합계 배분" : "파일별 기준";
+    allCompleted ? "실제 합계" : partialCompletion ? "일부 완료 · 예상 포함" : "예상 합계";
   const batchTargetLine = document.createElement("b");
-  batchTargetLine.textContent = batchTargetBytes
-    ? `${Math.round(batchTargetBytes / (1024 * 1024))}MB`
-    : "제한 없음";
+  batchTargetLine.textContent = formatBytes(expectedTotal);
   summaryVerdict.replaceChildren(batchScopeLine, batchTargetLine);
   summaryVerdict.dataset.status =
     mixClass === "pass" ? "pass" : mixClass === "hard-miss" ? "hard-miss" : "need-more";
@@ -1309,28 +1323,19 @@ function renderBatchSummary(): void {
           : `합계 초과 · 파일 ${passed}/${plannedCount}`
         : `통과 ${passed}/${plannedCount}`;
   summaryAnalysisBasis.hidden = plannedCount === 0;
-  summaryAnalysisBasis.textContent = summaryItems.some(item => item.report?.analysis?.mode === "quick")
+  summaryAnalysisBasis.textContent = allCompleted ? "저장된 결과 파일의 실제 바이트 합계로 판정했습니다." : partialCompletion ? "실패·취소·미완료 파일이 있어 제출 가능 여부를 확정할 수 없습니다." : summaryItems.some(item => item.report?.analysis?.mode === "quick")
     ? "빠른 분석 추정값 · 픽셀·유사 이미지 중복 미검사 · 최종 용량은 저장 후 확인하세요."
     : "예상 용량은 실제 저장 결과와 다를 수 있습니다.";
   const passRate =
     plannedCount === 0
       ? 0
       : state.batchTargetMode === "aggregate"
-        ? !batchTargetBytes || originalTotal < batchTargetBytes || expectedTotal < batchTargetBytes
+        ? !batchTargetBytes || expectedTotal < batchTargetBytes
           ? 100
           : Math.min(99, Math.round((batchTargetBytes / Math.max(expectedTotal, 1)) * 100))
         : (passed / plannedCount) * 100;
   targetTrackFill.style.width = `${passRate}%`;
-  targetTrackFill.dataset.status =
-    state.batchTargetMode === "aggregate"
-      ? mixClass === "mix"
-        ? "over"
-        : "pass"
-      : hardMiss > 0
-        ? "hard-miss"
-        : warning > 0
-          ? "over"
-          : "pass";
+  targetTrackFill.dataset.status = mixClass === "hard-miss" ? "hard-miss" : mixClass === "mix" ? "over" : "pass";
   targetTrackLimit.style.left = `${passRate}%`;
   targetTrackLimit.hidden = plannedCount === 0;
   gaugeStartLabel.textContent = state.batchTargetMode === "aggregate" ? "합계" : "통과율";
@@ -1394,9 +1399,9 @@ function renderBatchReviewStrip(
     fonts += (report.resourceDiagnostics ?? []).filter((entry) => entry.kind === "font").length;
     ole += (report.resourceDiagnostics ?? []).filter((entry) => entry.kind === "ole").length;
   }
-  const hardMiss = summaryItems.some((item) => item.targetStatusLabel === "기준 미달");
+  const hardMiss = summaryItems.some((item) => (item.targetStatusLabel === "기준 미달" || item.targetStatusLabel === "기준 초과 예상"));
   reviewStripTitle.textContent = hardMiss
-    ? "최대 압축으로도 부족"
+    ? "최대 압축 추정값도 기준 초과"
     : state.qualityMode === "auto"
       ? "품질 %는 자동"
       : "품질 %는 일괄 수동";
@@ -1429,10 +1434,10 @@ function createBatchPlanSummary(): BatchPlanSummary | undefined {
     if (!item.report) continue;
     // Finished rows: use actual optimize outcome already stored on the item.
     if (item.status === "done") {
-      expectedSizeBytes += item.expectedSizeBytes ?? item.report.optimizedSize ?? 0;
+      expectedSizeBytes += item.actualSizeBytes ?? item.report.optimizedSize ?? item.originalSizeBytes ?? 0;
       expectedSavingBytes += item.savedBytes ?? 0;
       if (
-        item.targetStatusLabel === "제출 가능" ||
+        (item.targetStatusLabel === "제출 가능" || item.targetStatusLabel === "제출 가능 예상") ||
         item.targetStatusLabel === "목표 제한 없음"
       ) {
         metCount += 1;
@@ -1568,7 +1573,7 @@ function aggregateTargetStatusText(
   targetBytes: number | undefined
 ): string {
   if (!targetBytes) return "전체 목표 제한 없음";
-  if (originalTotal < targetBytes) return "이미 전체 목표 미만";
+  if (originalTotal < targetBytes && expectedTotal < targetBytes) return "원본·예상 합계 목표 미만";
   if (expectedTotal < targetBytes) return "전체 목표 달성 예상";
   return "전체 목표 주의 필요";
 }
@@ -1708,7 +1713,7 @@ function renderQualityControls(plan?: SubmissionPlan): void {
     qualityHint.textContent = isBatch
       ? "슬라이더·숫자는 선택된 모든 파일에 같은 %를 넣습니다. 행에서 숫자를 바꾸면 그 파일만 덮어씁니다."
       : plan?.targetBytes
-        ? `수동 ${state.jpegQuality}%. 기준을 넘으면 「더 압축 필요」(하한 품질까지 여지 있을 때) 또는 「기준 미달」(여지 없을 때).`
+        ? `수동 ${state.jpegQuality}%. 제출 가능 여부는 추정이며 최종 저장 크기로 다시 판정합니다.`
         : "지정한 JPEG 품질로 압축합니다.";
   } else {
     const planned = plan?.plannedJpegQuality;
@@ -1719,7 +1724,7 @@ function renderQualityControls(plan?: SubmissionPlan): void {
         ? "상단 슬라이더 없음. 합계 배분 목표마다 파일별 품질을 따로 탐색합니다."
         : "상단 슬라이더 없음. 각 파일이 제출 기준에 맞춰 품질을 따로 정합니다."
       : plan?.targetBytes
-        ? `자동: 목표에 맞춰 품질 이분 탐색 → 예정 ${planned ?? DEFAULT_JPEG_QUALITY}%. 하한 품질까지 해도 안 되면 기준 미달.`
+        ? `자동: 목표에 맞춰 품질 탐색 → 예정 ${planned ?? DEFAULT_JPEG_QUALITY}%. 실제 품질·용량은 저장 후 확인하세요.`
         : "목표가 없으면 기본 균형 품질을 사용합니다.";
   }
 }
@@ -1766,7 +1771,7 @@ function renderReviewStrip(plan?: SubmissionPlan): void {
   const ole = (state.report.resourceDiagnostics ?? []).filter((item) => item.kind === "ole").length;
   const reviewNotes = plan.planNotes.filter((note) => note.kind === "review");
   const hardMiss = plan.verdict === "hard-miss";
-  reviewStripTitle.textContent = hardMiss ? "최대 압축으로도 부족" : "자동으로 건드리지 않음";
+  reviewStripTitle.textContent = hardMiss ? "최대 압축 추정값도 기준 초과" : "자동으로 건드리지 않음";
   reviewStripDetail.textContent = hardMiss
     ? "폰트/유사 병합·원본 이미지 교체 등 수동 검토가 필요합니다."
     : "폰트·유사 이미지는 품질 계획에서 제외됩니다.";
@@ -2095,6 +2100,28 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
       ? [metricHtml("제출 목표", `${formatBytes(report.targetBytes)} · ${targetStatusText(report.targetStatus)}`)]
       : [])
   ].join("");
+  requireElement("single-size-basis").textContent = "실제";
+  const ring = singleSavingRing.closest(".saving-ring") as HTMLElement | null;
+  ring?.setAttribute("aria-label", "실제 절감률");
+  ring?.style.setProperty("--ring-deg", `${Math.max(0, Math.min(360, (report.savedPercent ?? 0) * 3.6))}deg`);
+  singleExpectedSize.textContent = formatBytes(optimizedSize);
+  summaryExpected.textContent = formatBytes(optimizedSize);
+  summarySaving.textContent = formatBytes(savedBytes);
+  summaryPercent.textContent = `${(report.savedPercent ?? 0).toFixed(2)}%`;
+  singleSavingRing.textContent = summaryPercent.textContent;
+  const actualVerdict = actualTargetStatusLabel(report) ?? "결과 확인 필요";
+  summaryStatus.textContent = actualVerdict;
+  targetRow.dataset.verdict = report.targetStatus === "missed" ? "hard-miss" : "pass";
+  summaryStatus.classList.toggle("hero-verdict--bad", report.targetStatus === "missed");
+  summaryResultLine.textContent = `실제 결과: ${formatBytes(optimizedSize)}`;
+  const actualSize = document.createElement("b");
+  actualSize.textContent = formatBytes(optimizedSize);
+  summaryVerdict.replaceChildren("실제 ", actualSize);
+  summaryVerdict.dataset.status = report.targetStatus === "missed" ? "hard-miss" : "pass";
+  summaryVerdictDetail.textContent = actualVerdict;
+  summaryAnalysisBasis.textContent = "저장된 결과 파일의 실제 바이트 크기로 판정했습니다.";
+  targetTrackFill.style.width = `${report.originalSize > 0 ? Math.min(100, optimizedSize / report.originalSize * 100) : 0}%`;
+  targetTrackFill.dataset.status = report.targetStatus === "missed" ? "hard-miss" : "pass";
   requireElement("output-path").textContent = `결과 파일: ${fileNameFromPath(outputPath)}`;
   requireElement("report-path").textContent = reportPath
     ? `현재 리포트: ${fileNameFromPath(reportPath)}`
@@ -2132,6 +2159,7 @@ function renderBatchResultPanel(): void {
   batchResultLine.textContent = batchStatusLine;
   batchResultStats.innerHTML = [
     metricHtml("완료", `${done.length}개`),
+    metricHtml("완료 파일 실제 합계", formatBytes(done.reduce((sum, item) => sum + (item.report?.optimizedSize ?? 0), 0))),
     metricHtml("총 절감", formatBytes(totalSavedBytes)),
     metricHtml("실패", `${failed.length}개`),
     metricHtml("리포트", state.batchReportPath ? "저장됨" : "꺼짐")
@@ -2167,6 +2195,9 @@ function resetBatchCompletedItems(): void {
   for (const item of state.batchItems) {
     if (item.status !== "done" && item.status !== "failed" && item.status !== "cancelled") continue;
     item.status = "pending";
+    item.report = item.analysisReport ?? (item.report?.kind === "analysis" ? item.report : undefined);
+    item.actualSizeBytes = undefined;
+    item.actualSizeLabel = undefined;
     item.outputPath = undefined;
     item.reportPath = undefined;
     item.savedBytes = undefined;
@@ -2176,6 +2207,7 @@ function resetBatchCompletedItems(): void {
   }
   state.batchReportPath = undefined;
   state.batchRunCompleted = false;
+  refreshBatchPlanItems();
   renderBatchList();
   renderBatchResultPanel();
   setStatus(`${resetCount}개 파일을 다시 최적화할 수 있습니다.`);
@@ -2622,6 +2654,7 @@ async function analyzeBatchItems(): Promise<void> {
         renderProgress(6 + percentBase, `${item.fileName} 분석 중`);
         const response = await window.hwpxOptimizer.analyze(item.path);
         item.report = response.report;
+        item.analysisReport = response.report;
         item.originalSizeBytes = response.report.originalSize;
         const targetAllocation = summarizeAggregateTargetAllocation(state.batchItems);
         const plan = createSubmissionPlan(response.report, {

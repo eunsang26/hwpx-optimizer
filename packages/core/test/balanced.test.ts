@@ -753,7 +753,7 @@ describe("balanced optimization", () => {
     );
   });
 
-  it("does not report strip-metadata separately for JPEGs that will be resized", async () => {
+  it("keeps safe metadata as an alternative without selecting it alongside balanced JPEG resize", async () => {
     const jpeg = await createJpegWithLargeMetadata({
       width: 2400,
       height: 1800,
@@ -773,8 +773,11 @@ describe("balanced optimization", () => {
     expect(report.opportunities).toContainEqual(
       expect.objectContaining({ action: "resize-jpeg", target: "BinData/photo.jpg" })
     );
-    expect(report.opportunities).not.toContainEqual(
+    expect(report.opportunities.filter(opportunity => opportunity.defaultEnabledIn.includes("balanced"))).not.toContainEqual(
       expect.objectContaining({ action: "strip-metadata", target: "BinData/photo.jpg" })
+    );
+    expect(report.opportunities).toContainEqual(
+      expect.objectContaining({ action: "strip-metadata", target: "BinData/photo.jpg", defaultEnabledIn: ["safe"] })
     );
   });
 
@@ -795,8 +798,11 @@ describe("balanced optimization", () => {
     expect(report.opportunities).toContainEqual(
       expect.objectContaining({ action: "resize-jpeg", target: "BinData/wide.jpg" })
     );
-    expect(report.opportunities).not.toContainEqual(
+    expect(report.opportunities.filter(opportunity => opportunity.defaultEnabledIn.includes("balanced"))).not.toContainEqual(
       expect.objectContaining({ action: "strip-metadata", target: "BinData/wide.jpg" })
+    );
+    expect(report.opportunities).toContainEqual(
+      expect.objectContaining({ action: "strip-metadata", target: "BinData/wide.jpg", defaultEnabledIn: ["safe"] })
     );
   });
 

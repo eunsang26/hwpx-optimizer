@@ -1,3 +1,4 @@
+import type { AnalysisReport, CompletedOptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
 
 type DesktopSettings = {
@@ -32,7 +33,8 @@ let settings: DesktopSettings = {
   batchTargetMode: "per-file"
 };
 
-const sampleReport = {
+const sampleReport: CompletedOptimizationReport = {
+  kind: "optimization",
   originalSize,
   optimizedSize,
   savedBytes,
@@ -160,9 +162,13 @@ const api: HwpxOptimizerApi = {
   },
   analyze: async (filePath, options) => {
     const mode = options?.analysisMode ?? "quick";
-    return delay({ filePath, report: { ...sampleReport, analysis: { mode,
+    const { optimizedSize: _size, savedBytes: _saved, savedPercent: _percent, targetStatus: _status, targetMissReason: _reason, ...common } = sampleReport;
+    const analysisReport: AnalysisReport = { ...common, kind: "analysis",
+      estimatedSize: optimizedSize, estimatedSavingBytes: savedBytes, estimatedSavingPercent: savedBytes / originalSize * 100,
+      analysis: { mode,
       imageSizes: mode === "deep" ? "encoded" as const : "estimated" as const,
-      visualDuplicatesChecked: mode === "deep" } } }, 350);
+      visualDuplicatesChecked: mode === "deep" } };
+    return delay({ filePath, report: analysisReport }, 350);
   },
   optimize: async (input) => {
     const steps = [

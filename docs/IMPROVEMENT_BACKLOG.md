@@ -22,7 +22,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 대기 | 미정 |
+| OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 대기 | 미정 |
 | OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 대기 | 미정 |
 | OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 대기 | 미정 |
@@ -204,10 +204,12 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 
 대상: `types.ts`, `report.ts`, `projectPackageSize.ts`, `submissionPlan.ts`, `targetPlan.ts`.
 
-- [ ] estimated size와 actual size를 타입 및 보고서에서 구분한다.
-- [ ] 최적화 전은 예상 제출 가능, 최적화 후는 실제 결과에 따른 판정을 표시한다.
-- [ ] 사진·차트·BMP·JPEG·PNG·중복 혼합 corpus에서 목표 경계와 예측 오차를 기록한다.
-- [ ] CLI·desktop 목표 배분의 공통 계약을 정의하고 엄격한 `< targetBytes`를 유지한다.
+- [x] estimated size와 actual size를 타입 및 보고서에서 구분한다.
+- [x] 최적화 전은 예상 제출 가능, 최적화 후는 실제 결과에 따른 판정을 표시한다.
+- [x] 사진·차트·BMP·JPEG·PNG·중복 혼합 corpus에서 목표 경계와 예측 오차를 기록한다.
+- [x] CLI·desktop 목표 배분의 공통 계약을 정의하고 엄격한 `< targetBytes`를 유지한다.
+
+검증 기록: 2026-10-15 Linux/Node 24.13.0. 전체 86개 파일·672개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. 추정 전용/실측 전용 타입을 core→서비스→preload에 전달하고 ZIP 기준 모드별 모델을 사용한다. 합성 9/9 조합·27/27 엄격한 목표 경계, 원본 해시, 로컬 실제 단일/일괄 화면·처음으로·재실행·부분 실패를 확인했다. quick의 큰 오차와 deep 잔여 오차를 포함한 [전체 기록](SIZE_ESTIMATES_2026-10-15.md). Windows와 실제 패키지 검증 후 완료 상태를 확정한다.
 
 ### OPT 016 폰트 패키징
 

@@ -248,7 +248,8 @@ describe("runCli", () => {
     const text = renderHumanReport("/x/input.hwpx", {
       ...minimalReport,
       originalSize: 20 * 1024 * 1024,
-      optimizedSize: 4 * 1024 * 1024,
+      kind: "analysis",
+      estimatedSize: 4 * 1024 * 1024,
       opportunityGroups: [
         {
           action: "convert-bmp-to-png",
@@ -735,7 +736,7 @@ describe("runCli", () => {
     const report = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8"));
     expect(report).toMatchObject({ jobs: 4, jobsEffective: 4, jobsRequested: 12 });
     expect(report.totals.failed).toBe(0); expect(report.results).toHaveLength(5);
-  });
+  }, 15_000); // Four native-image workers compete with the full suite during startup.
   it("reports zero effective workers when there are no input documents", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-worker-empty-"));
     const outDir = join(dir, "out");

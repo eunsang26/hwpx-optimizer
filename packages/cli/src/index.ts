@@ -7,6 +7,8 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   MAX_BATCH_WORKERS,
+  allocateTargetShareBytes,
+  targetStatusForBytes,
   analyzeHwpxBuffer,
   estimateNonOverlappingSavingBytes,
   verifyHwpxOutput,
@@ -681,18 +683,9 @@ function allocateBatchTargetBytes(
 ): Map<string, number> {
   const totalOriginalSize = files.reduce((sum, file) => sum + (originalSizeByFile.get(file) ?? 0), 0);
   if (totalOriginalSize <= 0) return new Map(files.map((file) => [file, 1]));
-  const raw = files.map((file) => {
-    const size = originalSizeByFile.get(file) ?? 0;
-    const exact = (batchTargetBytes * size) / totalOriginalSize;
-    return { file, bytes: Math.floor(exact), fraction: exact - Math.floor(exact) };
-  });
-  let allocated = raw.reduce((sum, item) => sum + item.bytes, 0);
-  for (const item of [...raw].sort((left, right) => right.fraction - left.fraction)) {
-    if (allocated >= batchTargetBytes) break;
-    item.bytes += 1;
-    allocated += 1;
-  }
-  return new Map(raw.map((item) => [item.file, Math.max(1, item.bytes)]));
+  return new Map(files.map(file => [file, allocateTargetShareBytes({
+    targetBytes: batchTargetBytes, itemBytes: originalSizeByFile.get(file) ?? 0, totalBytes: totalOriginalSize
+  }) ?? 1]));
 }
 
 function createBatchTargetFields(
@@ -714,7 +707,7 @@ function createBatchTargetFields(
     };
   }
   // Match core "미만" semantics: strict < on the aggregate output.
-  if (totalOptimizedSize < batchTargetBytes) {
+  if (targetStatusForBytes(totalOriginalSize, totalOptimizedSize, batchTargetBytes) !== "missed") {
     return {
       batchTargetBytes,
       batchTargetStatus: totalOriginalSize < batchTargetBytes ? "already-under-target" : "met"
@@ -744,7 +737,7 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
     `Analysis: ${report.analysis?.mode ?? "coverage not recorded"}`,
     ...(report.analysis ? [`Image candidate sizes: ${report.analysis.imageSizes}; final ZIP size is confirmed after saving.`] : []),
     `Original: ${formatBytes(report.originalSize)}`,
-    ...(report.targetBytes ? [`Target: ${formatBytes(report.targetBytes)} (${report.targetStatus ?? "unknown"})`] : []),
+    ...(report.targetBytes ? [`${report.kind === "analysis" ? "Estimated target" : "Target"}: ${formatBytes(report.targetBytes)} (${report.kind === "analysis" ? report.estimatedTargetStatus ?? "unknown" : report.targetStatus ?? "unknown"})`] : []),
     `Images: ${report.images.length}`,
     `BMP candidates: ${report.images.filter((image) => image.isBmpCandidate).length}`,
     `Images with metadata: ${report.images.filter((image) => image.hasMetadata).length}`,
@@ -820,9 +813,8 @@ function createHumanReportInsights(report: OptimizationReport): string[] {
 }
 
 function projectedPackageSavingBytes(report: OptimizationReport): number {
-  if (report.optimizedSize !== undefined && Number.isFinite(report.optimizedSize)) {
-    return Math.max(0, Math.min(report.originalSize, report.originalSize - report.optimizedSize));
-  }
+  if (report.estimatedSize !== undefined) return Math.max(0, report.originalSize - report.estimatedSize);
+  if (report.kind === "optimization" && report.optimizedSize !== undefined) return Math.max(0, report.originalSize - report.optimizedSize);
   return Math.max(
     0,
     Math.min(report.originalSize, estimateNonOverlappingSavingBytes(report.opportunityGroups))
@@ -831,7 +823,7 @@ function projectedPackageSavingBytes(report: OptimizationReport): number {
 
 function printTargetSummary(report: OptimizationReport): void {
   if (!report.targetBytes) return;
-  console.log(`Target: ${formatBytes(report.targetBytes)} (${report.targetStatus ?? "unknown"})`);
+  console.log(`${report.kind === "analysis" ? "Estimated target" : "Target"}: ${formatBytes(report.targetBytes)} (${report.kind === "analysis" ? report.estimatedTargetStatus ?? "unknown" : report.targetStatus ?? "unknown"})`);
   if (report.targetMissReason) console.log(`Target note: ${report.targetMissReason}`);
 }
 

@@ -226,3 +226,10 @@ These limits do not bound total RSS: ZIP buffers, active decodes, native interme
 - Do not create an output if verification fails.
 - Keep safe mode free of resizing, lossy JPEG changes, BMP conversion, font changes, OLE changes, style rewrites, and layout recalculation.
 - If behavior is uncertain, skip the action and report a warning.
+
+
+### Estimated and measured byte contracts
+
+Analysis APIs return `AnalysisReport` (`kind: "analysis"`) with `estimatedSize`, estimated savings and `estimatedTargetStatus`; measured size/savings/target status are forbidden there. Optimization APIs and desktop preload/services return `CompletedOptimizationReport` (`kind: "optimization"`) with actual output bytes. The broad `OptimizationReport` remains available for legacy report readers. Consumers of new analysis JSON must move from `optimizedSize` to `estimatedSize`.
+
+Analysis retains the source ZIP length and validated per-entry compressed sizes. Separate safe/balanced/aggressive models adjust only changed payloads, choosing alternatives per resource. Deep measures encoded candidate DEFLATE sizes, still distinct from final ZIP, quality rollback and target search. Quick never encodes images. `core/planning` supplies pure strict-limit classification, integer proportional allocation and model evaluation. Desktop source imports its browser-safe subpath; asset copying places that exact compiled module at a local renderer ESM path. CLI and desktop share floor rounding, including tiny/exhausted ceilings. Desktop redistributes remaining budget sequentially, consuming measured completed outputs and retaining failed/cancelled originals. Finished rows keep forecasts and actuals in separate fields and retain analysis for retry. See `SIZE_ESTIMATES_2026-10-15.md` for corpus errors, exact-limit boundaries and native UI evidence.

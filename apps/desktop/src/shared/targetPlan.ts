@@ -26,21 +26,21 @@ export function classifyTargetVerdict(input: {
     const slack = target - input.expectedBytes;
     return {
       verdict: "pass",
-      label: "제출 가능",
-      detail: `기준까지 여유 ${formatBytesShort(slack)}`
+      label: "제출 가능 예상",
+      detail: `예상 여유 ${formatBytesShort(slack)}`
     };
   }
   if (input.floorExpectedBytes < target && !input.atFloor) {
     return {
       verdict: "need-more",
-      label: "더 압축 필요",
-      detail: `현재 초과 ${formatBytesShort(input.expectedBytes - target)} · 하한 품질까지 가면 통과 가능`
+      label: "추가 압축 필요 예상",
+      detail: `현재 초과 ${formatBytesShort(input.expectedBytes - target)} · 하한 품질에서 통과 예상`
     };
   }
   return {
     verdict: "hard-miss",
-    label: "기준 미달",
-    detail: `하한 품질까지 적용해도 초과 ${formatBytesShort(Math.max(0, input.floorExpectedBytes - target))}`
+    label: "기준 초과 예상",
+    detail: `하한 품질 추정값도 초과 ${formatBytesShort(Math.max(0, input.floorExpectedBytes - target))}`
   };
 }
 

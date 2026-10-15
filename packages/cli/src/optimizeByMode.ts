@@ -3,7 +3,7 @@ import {
   optimizeHwpxBufferBalanced,
   optimizeHwpxBufferSafe
 } from "@hwpx-optimizer/core";
-import type { OptimizationReport } from "@hwpx-optimizer/core";
+import type { CompletedOptimizationReport } from "@hwpx-optimizer/core";
 
 export type OptimizationMode = "safe" | "balanced" | "aggressive";
 
@@ -149,7 +149,7 @@ export async function optimizeByMode(
   mode: OptimizationMode,
   options: OptimizeByModeOptions,
   targetBytesOverride?: number
-): Promise<{ output: Buffer; report: OptimizationReport }> {
+): Promise<{ output: Buffer; report: CompletedOptimizationReport }> {
   const targetBytes = targetBytesOverride ?? parseTargetBytes(options);
   const imageConcurrency = options.imageConcurrency;
   if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes, imageConcurrency });

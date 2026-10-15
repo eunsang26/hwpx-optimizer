@@ -1,3 +1,4 @@
+import { deflateRawSync } from "node:zlib";
 import { SHARP_INPUT_OPTIONS } from "./resourceLimits.js";
 import sharp from "sharp";
 import { readBmpInfo } from "./bmp.js";
@@ -70,7 +71,7 @@ export type TransformImageAction =
 export async function detectOptimizationOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile = balancedImageProfile,
-  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number } = {}
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number; safeOnly?: boolean } = {}
 ): Promise<OptimizationOpportunity[]> {
   return collectOpportunities(pkg, profile, "exact", options);
 }
@@ -78,7 +79,7 @@ export async function detectOptimizationOpportunities(
 export async function detectEstimatedOptimizationOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile = balancedImageProfile,
-  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number } = {}
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number; safeOnly?: boolean } = {}
 ): Promise<OptimizationOpportunity[]> {
   return collectOpportunities(pkg, profile, "estimated", options);
 }
@@ -87,11 +88,12 @@ async function collectOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile,
   confidence: OpportunityConfidence,
-  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number }
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number; safeOnly?: boolean }
 ): Promise<OptimizationOpportunity[]> {
   const opportunities: OptimizationOpportunity[] = [];
+  const compressedCandidates = new Map<string, number>();
   const resizeBudgets = getRecommendedImagePixelBudgets(pkg, profile.displayScale);
-  await addDuplicateImageOpportunities(pkg, opportunities, options.duplicateMode ?? "visual", options.imageConcurrency);
+  if (!options.safeOnly) await addDuplicateImageOpportunities(pkg, opportunities, options.duplicateMode ?? "visual", options.imageConcurrency);
 
   for (const entry of pkg.entries) {
     if (entry.kind !== "image") continue;
@@ -102,9 +104,10 @@ async function collectOpportunities(
     // Hangul packages sometimes store JPEG payloads under a .png href. Drive the
     // JPEG pipeline from decoded format so we never re-encode those as PNG.
     const jpegPayload = isJpeg(entry.path) || isJpegFormat(metadata.format);
-    if (jpegPayload && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
+    if (!options.safeOnly && jpegPayload && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
       const afterSize = await measureOrEstimateImageSize({
         confidence,
+        measured: bytes => compressedCandidates.set(entry.path, bytes),
         size: entry.size,
         transform: () => resizeJpeg(entry.data, resizeBudget, profile),
         estimate: () => estimateJpegResizeSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
@@ -133,9 +136,10 @@ async function collectOpportunities(
       continue;
     }
 
-    if (isBmp(entry.path)) {
+    if (!options.safeOnly && isBmp(entry.path)) {
       const afterSize = await measureOrEstimateImageSize({
         confidence,
+        measured: bytes => compressedCandidates.set(entry.path, bytes),
         size: entry.size,
         transform: () => convertBmpToPng(entry.data, metadata.width, metadata.height, resizeBudget, profile),
         estimate: () => estimateBmpPngSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
@@ -159,9 +163,10 @@ async function collectOpportunities(
       continue;
     }
 
-    if (isTiff(entry.path)) {
+    if (!options.safeOnly && isTiff(entry.path)) {
       const afterSize = await measureOrEstimateImageSize({
         confidence,
+        measured: bytes => compressedCandidates.set(entry.path, bytes),
         size: entry.size,
         transform: () => convertTiffToPng(entry.data, metadata.width, metadata.height, resizeBudget, profile),
         // TIFF compression varies; this is a header-based heuristic, not a measured encode.
@@ -187,9 +192,10 @@ async function collectOpportunities(
     }
 
     if (isPng(entry.path)) {
-      if (shouldResize(metadata.width, metadata.height, resizeBudget, profile)) {
+      if (!options.safeOnly && shouldResize(metadata.width, metadata.height, resizeBudget, profile)) {
         const afterSize = await measureOrEstimateImageSize({
           confidence,
+          measured: bytes => compressedCandidates.set(entry.path, bytes),
           size: entry.size,
           transform: () => resizePng(entry.data, resizeBudget, profile),
           estimate: () => estimatePngResizeSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
@@ -216,6 +222,7 @@ async function collectOpportunities(
       if (entry.size >= PNG_OPTIMIZE_MIN_BYTES) {
         const afterSize = await measureOrEstimateImageSize({
           confidence,
+          measured: bytes => compressedCandidates.set(entry.path, bytes),
           size: entry.size,
           transform: () => optimizePng(entry.data, profile),
           estimate: () => Math.round(entry.size * (profile.pngPalette ? 0.8 : 0.95))
@@ -237,7 +244,12 @@ async function collectOpportunities(
     }
   }
 
-  addShapeCommentOpportunities(pkg, opportunities);
+  for (const opportunity of opportunities) {
+    const compressed = compressedCandidates.get(opportunity.target);
+    if (compressed !== undefined && opportunity.action !== "consolidate-duplicate-images" && opportunity.action !== "strip-metadata") opportunity.compressedAfterSize = compressed;
+  }
+  if (options.safeOnly) for (const opportunity of opportunities) opportunity.defaultEnabledIn = ["safe"];
+  if (!options.safeOnly) addShapeCommentOpportunities(pkg, opportunities);
   return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
 }
 
@@ -246,9 +258,11 @@ async function measureOrEstimateImageSize(input: {
   size: number;
   transform: () => Promise<Buffer>;
   estimate: () => number;
+  measured: (bytes: number) => void;
 }): Promise<number | null> {
   if (input.confidence === "estimated") return input.estimate();
   const candidate = await tryTransform(input.transform);
+  if (candidate) input.measured(deflateRawSync(candidate, { level: 9 }).length);
   return candidate ? candidate.byteLength : null;
 }
 
@@ -309,7 +323,7 @@ function addJpegMetadataOpportunity(
     confidence,
     risk: "safe",
     visualImpact: "none",
-    defaultEnabledIn: ["balanced", "aggressive"]
+    defaultEnabledIn: ["safe", "balanced", "aggressive"]
   });
 }
 

@@ -55,7 +55,7 @@ const CATEGORY_ORDER: HwpxEntryKind[] = ["image", "xml", "font", "ole", "bindata
 const ESTIMATED_SAVING_DISPLAY_RATIO = 0.95;
 
 export function createAnalysisViewModel(report: OptimizationReport): AnalysisViewModel {
-  const estimatedSavingRaw = estimateNonOverlappingSavingBytes(report.opportunityGroups);
+  const estimatedSavingRaw = report.estimatedSavingBytes ?? estimateNonOverlappingSavingBytes(report.opportunityGroups);
   const cap = Math.max(0, Math.floor(report.originalSize * ESTIMATED_SAVING_DISPLAY_RATIO));
   const cappedSaving = report.originalSize > 0 ? Math.min(estimatedSavingRaw, cap) : estimatedSavingRaw;
   const wasCapped = estimatedSavingRaw > cappedSaving;

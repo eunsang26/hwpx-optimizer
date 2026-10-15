@@ -52,6 +52,7 @@ export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOpt
     throw new Error("Invalid HWPX package: duplicate or inconsistent decoded ZIP entry names");
   }
   const declaredSizes = new Map(declaredEntries.filter(entry => !entry.isDirectory).map(entry => [entry.path, entry.uncompressedSize]));
+  const declaredCompressedSizes = new Map(declaredEntries.filter(entry => !entry.isDirectory).map(entry => [entry.path, entry.compressedSize]));
   if (files.length > limits.maxEntries) {
     throw new Error(`Invalid HWPX package: too many entries (${files.length}; limit ${limits.maxEntries})`);
   }
@@ -76,7 +77,8 @@ export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOpt
       path,
       data,
       size: data.byteLength,
-      kind: classifyEntry(path)
+      kind: classifyEntry(path),
+      compressedSize: declaredCompressedSizes.get(path)
     });
   }
 
@@ -85,7 +87,7 @@ export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOpt
   for (const entry of entries) {
     if (entry.kind === "xml") assertWellFormedXml(decodeDocumentXml(entry.data, entry.path), entry.path);
   }
-  return { entries };
+  return { entries, sourceSize: input.byteLength };
 }
 
 /** JSZip replaces declared-empty CompressedObjects without checking their bytes. */

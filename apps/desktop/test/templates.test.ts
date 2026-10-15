@@ -124,25 +124,25 @@ describe("template HTML builders", () => {
       originalSizeLabel: "89.72 MiB",
       expectedSizeLabel: "6.89 MiB",
       targetLabel: "20MB",
-      targetStatusLabel: "제출 가능",
+      targetStatusLabel: "제출 가능 예상",
       qualityLabel: "88%",
       jpegQualityDisplay: 88
     };
     const warning: BatchItemLike = {
       ...passing,
-      targetStatusLabel: "더 압축 필요"
+      targetStatusLabel: "추가 압축 필요 예상"
     };
 
-    expect(batchItemRowHtml(passing, 0, { running: false })).toContain('<span class="status pass">제출 가능</span>');
+    expect(batchItemRowHtml(passing, 0, { running: false })).toContain('<span class="status pass">제출 가능 예상</span>');
     expect(batchItemRowHtml(passing, 0, { running: false })).toContain("기준 20MB");
-    expect(batchItemRowHtml(passing, 0, { running: false })).toContain("89.72 MiB → <strong>6.89 MiB</strong>");
+    expect(batchItemRowHtml(passing, 0, { running: false })).toContain("89.72 MiB → <strong>6.89 MiB (예상)</strong>");
     expect(batchItemRowHtml(passing, 0, { running: false })).toContain('class="row-q-btn"');
     expect(batchItemRowHtml(passing, 0, { running: false })).toContain("88%");
     expect(
       batchItemRowHtml({ ...passing, qualityEditable: true, jpegQualityOverride: 88 }, 0, { running: false })
     ).toContain('class="batch-quality-input"');
     expect(batchItemRowHtml(warning, 0, { running: false })).toContain(
-      '<span class="status warning">더 압축 필요</span>'
+      '<span class="status warning">추가 압축 필요 예상</span>'
     );
   });
 
@@ -155,7 +155,7 @@ describe("template HTML builders", () => {
       originalSizeLabel: "89.72 MiB",
       expectedSizeLabel: "5.15 MiB",
       targetLabel: "40 MB 미만",
-      targetStatusLabel: "기준 미달",
+      targetStatusLabel: "기준 초과 예상",
       qualityLabel: "95%",
       jpegQualityDisplay: 95
     };

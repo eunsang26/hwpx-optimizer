@@ -44,6 +44,9 @@ jobs:
       - name: Measure synthetic ZIP, cache and worker resource limits
         run: node scripts/bench/measure-resource-limits.mjs
 
+      - name: Measure synthetic estimated versus actual sizes and strict target boundaries
+        run: node scripts/bench/measure-size-estimates.mjs
+
       - name: Upload installer artifact
         if: github.event_name == 'push' || inputs.upload_artifact == true
         uses: actions/upload-artifact@v4
