@@ -21,7 +21,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-011 | P2 | 출력과 보고서 저장 실패 계약 통일 | CLI, desktop | M | OPT-004, OPT-010 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-012 | P2 | 취소와 시간 제한 중 저장 복구 | desktop | M | OPT-011 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-013 | P2 | quick 분석 비용과 옵션 일관성 | core, desktop | M | OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 대기 | 미정 |
+| OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 대기 | 미정 |
 | OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 대기 | 미정 |
 | OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 대기 | 미정 |
@@ -191,6 +191,8 @@ Windows 검증: 커밋 `831bdba`, Node 24.21.0. [CLI ZIP/native 실행](https://
 - [ ] worker 수와 이미지 동시성의 곱을 제어하고 지원 한도를 정의한다.
 - [ ] ZIP64·위조 선언 크기·큰 디코드에서 제한이 실제 할당 전에 작동하는지 확인한다.
 - [ ] 모든 문서 처리는 로컬에서 수행한다.
+
+진행 기록 1: 2026-10-15, ZIP 읽기 제한을 먼저 수정했다. ZIP64 end/locator와 항목의 64비트 크기·offset을 사전 검사하며 unsafe integer·범위 오류·과다 항목·누락 필드를 loader 전에 거부한다. 작은 ZIP64와 앞에 prefix가 붙은 ZIP의 호환성은 유지한다. 메타데이터 개수 한도는 폴더를 포함한 전체 record에 적용한다. 실제 압축 해제는 청크를 확인한 뒤 누적해 위조된 작은 선언 크기와 Unicode 이름 변경에도 항목/전체 크기 제한이 작동한다. 전체 항목을 먼저 합치는 allocation과 중복 Buffer 복사를 제거했다. 대상 2개 파일·32개 테스트 및 전체 84개 파일·637개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·Electron 스모크 통과. 이미지 raw cache·동시성·peak RSS 측정과 Windows 검증은 계속 진행한다. OPT-014는 완료 처리하지 않는다.
 
 ### OPT 015 추정과 실측
 
