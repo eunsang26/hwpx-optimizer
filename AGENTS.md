@@ -12,7 +12,7 @@ This is a TypeScript npm workspaces monorepo for a local-only HWPX optimizer.
 
 ## Build, Test, and Development Commands
 
-- `npm install`: install workspace dependencies. Use Node.js 20+.
+- `npm install`: install workspace dependencies. Use Node.js 22.12.0+ (24.21.0 recommended).
 - `npm test`: run all Vitest tests.
 - `npm test -- packages/core/test/optimizer.test.ts`: run one targeted test file first while developing.
 - `npm run typecheck`: run `tsc -b` across core, CLI, and desktop projects.

@@ -24,7 +24,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-014 | P2 | 디코드 메모리와 worker 동시성 한도 | core, CLI | L | OPT-002 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-015 | P2 | 추정과 실측 크기 계약 구분 | core, desktop | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-016 | P2 | Windows 패키지 폰트와 라이선스 포함 | packaging | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-017 | P2 | PR 검증 workflow 추가 | CI | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 대기 | 미정 |
 | OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 대기 | 미정 |
 | OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 대기 | 미정 |
@@ -225,10 +225,12 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 
 대상: `.github/workflows`.
 
-- [ ] `pull_request`에서 테스트·타입 검사·빌드·합성 corpus·Linux 스모크를 실행한다.
-- [ ] 정기 또는 릴리즈 Windows 테스트에서 native sharp와 포터블 실행을 검증한다.
-- [ ] 실제 업무 샘플과 결과물을 CI에 업로드하지 않는다.
-- [ ] Node 지원 버전과 Windows 런타임 검증을 명시한다.
+- [x] `pull_request`에서 테스트·타입 검사·빌드·합성 corpus·Linux 스모크를 실행한다.
+- [x] 정기 또는 릴리즈 Windows 테스트에서 native sharp와 포터블 실행을 검증한다.
+- [x] 실제 업무 샘플과 결과물을 CI에 업로드하지 않는다.
+- [x] Node 지원 버전과 Windows 런타임 검증을 명시한다.
+
+검증 기록: 2026-10-15. 커밋 `a367781`의 실제 [PR Checks](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38685871025)가 `pull_request` 이벤트로 자동 실행되어 Linux/Node 22.12.0·24.21.0과 재사용 Windows CLI/Node 24.21.0의 세 작업이 모두 통과했다. 각 87개 파일·684개 테스트 통과·1개 건너뛰기, 타입 검사·빌드 통과. Linux 합성 corpus 2/2와 실제 Electron 전체 흐름, Windows 실제 ZIP optimize/verify/batch/launcher·native sharp·manifest·배포 audit를 확인했다. 최초 깨끗한 Linux에서 발견한 Windows PE fixture 누락과 Electron sandbox 권한을 명시적인 준비 단계로 수정했으며 테스트 제외·sandbox 비활성화 없이 재검증했다. `f10cd57`의 별도 [Windows 데스크톱 배포 검증](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38685431801)도 패키지/native·오프라인 폰트·전체 스모크까지 통과했다. 두 실행의 artifact 수는 각각 0개이며 업로드 단계는 모두 skipped. PR/main/merge queue 트리거, Node 지원 범위와 권한 및 branch protection의 구분은 [CI 운영 계약](TESTING.md#pull-request-and-windows-ci)에 명시했다. actionlint 1.7.12로 세 workflow를 검사했다. 로컬에서도 전체 684개 테스트·타입 검사·빌드·합성 corpus·Electron 스모크 통과.
 
 ### OPT 018 동작 통합 테스트
 
