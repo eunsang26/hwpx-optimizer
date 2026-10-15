@@ -35,6 +35,9 @@ jobs:
       - name: Run Windows release gate
         run: npm run release:check:win:ci
 
+      - name: Measure synthetic desktop processing and save gaps
+        run: node scripts/bench/measure-desktop-cancellation.mjs
+
       - name: Upload installer artifact
         if: github.event_name == 'push' || inputs.upload_artifact == true
         uses: actions/upload-artifact@v4

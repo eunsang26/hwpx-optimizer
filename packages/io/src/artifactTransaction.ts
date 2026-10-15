@@ -13,7 +13,14 @@ export type ArtifactOperations = {
   write?: typeof writeStagedFile;
   publish?: (stage: string, target: string, claims: PathClaimRegistry) => Promise<OwnedArtifact>;
 };
-type SaveOptions = { overwrite?: boolean; claims?: PathClaimRegistry; operations?: ArtifactOperations };
+export type ArtifactCommitState = { committed: boolean };
+export type SaveOptions = {
+  overwrite?: boolean;
+  claims?: PathClaimRegistry;
+  operations?: ArtifactOperations;
+  signal?: AbortSignal;
+  commitState?: ArtifactCommitState;
+};
 
 export class ArtifactSaveError extends Error {
   constructor(readonly failedTarget: string, cause: unknown, readonly recoveryPaths: string[], rollbackErrors: string[]) {
@@ -82,6 +89,7 @@ async function discardBackup(backup: Backup): Promise<string[]> {
 
 /** A caught save failure rolls the whole set back. Forced termination recovery is a separate concern. */
 export async function publishArtifactSet(artifacts: StagedArtifact[], options: SaveOptions = {}): Promise<string[]> {
+  options.signal?.throwIfAborted();
   await assertArtifactPathsDistinct(artifacts.flatMap(({ stage, target }) => [stage, target]));
   if (options.overwrite && options.claims) throw new Error("Overwrite cannot use pre-existing non-overwrite reservations.");
   const claims = options.claims ?? new PathClaimRegistry();
@@ -91,6 +99,7 @@ export async function publishArtifactSet(artifacts: StagedArtifact[], options: S
     // Validate every destination and stage before moving any existing file.
     for (const state of states) {
       failedTarget = state.target;
+      options.signal?.throwIfAborted();
       if (!(await inspect(state.stage))?.isFile()) throw new Error(`Invalid staged artifact: ${state.stage}`);
       if (options.overwrite) {
         state.previous = await inspect(state.target);
@@ -107,6 +116,7 @@ export async function publishArtifactSet(artifacts: StagedArtifact[], options: S
     if (options.overwrite) {
       for (const state of states) {
         failedTarget = state.target;
+        options.signal?.throwIfAborted();
         if (state.previous) {
           const directory = await mkdtemp(join(dirname(state.target), ".hwpx-save-"));
           state.backup = { directory };
@@ -118,15 +128,21 @@ export async function publishArtifactSet(artifacts: StagedArtifact[], options: S
           if (!unchanged(moved, snapshot(state.target, state.previous))) throw new Error("Destination changed during backup");
         }
         await claims.claimExact(state.target);
+        options.signal?.throwIfAborted();
       }
     } else if (!options.claims) {
       for (const state of states) { failedTarget = state.target; await claims.claimExact(state.target); }
     }
     for (const state of states) {
       failedTarget = state.target;
-      state.published = await (options.operations?.publish ?? ((stage, target, registry) => registry.publish(stage, target)))
+      options.signal?.throwIfAborted();
+      state.published = await (options.operations?.publish ?? ((stage, target, registry) => registry.publish(stage, target, { signal: options.signal })))
         (state.stage, state.target, claims);
+      options.signal?.throwIfAborted();
     }
+    // This synchronous decision separates rollback from committed cleanup. No
+    // cancellation check may turn a committed pair into a cancelled result.
+    if (options.commitState) options.commitState.committed = true;
   } catch (error) {
     const rollbackErrors: string[] = [];
     const recoveryPaths = new Set<string>();
@@ -163,6 +179,7 @@ export async function publishArtifactSet(artifacts: StagedArtifact[], options: S
 export async function writeArtifactSet(
   artifacts: Array<{ target: string; data: Buffer | string }>, options: SaveOptions = {}
 ): Promise<string[]> {
+  options.signal?.throwIfAborted();
   await assertArtifactPathsDistinct(artifacts.map(({ target }) => target));
   const claims = options.claims ?? (options.overwrite ? undefined : new PathClaimRegistry());
   const stages: OwnedArtifact[] = [];
@@ -172,7 +189,9 @@ export async function writeArtifactSet(
   try {
     if (claims && !options.claims) for (const { target } of artifacts) await claims.claimExact(target);
     for (const { target, data } of artifacts) {
-      stages.push(await (options.operations?.write ?? writeStagedFile)(`${target}.tmp-${randomUUID()}`, data));
+      options.signal?.throwIfAborted();
+      stages.push(await (options.operations?.write ?? writeStagedFile)(`${target}.tmp-${randomUUID()}`, data, { signal: options.signal }));
+      options.signal?.throwIfAborted();
     }
     warnings.push(...await publishArtifactSet(artifacts.map(({ target }, index) => ({ target, stage: stages[index]!.path })),
       { ...options, claims }));

@@ -181,8 +181,8 @@ const api: HwpxOptimizerApi = {
       report: sampleReport
     };
   },
-  cancelAnalyze: async () => undefined,
-  cancelOptimize: async () => undefined,
+  cancelAnalyze: async () => ({ cancelled: false }),
+  cancelOptimize: async () => ({ cancelled: false }),
   onOptimizeProgress: (callback) => {
     progressListeners.add(callback);
     return () => progressListeners.delete(callback);

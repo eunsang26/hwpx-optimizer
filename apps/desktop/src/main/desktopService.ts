@@ -3,7 +3,7 @@ import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "
 import { basename, dirname, extname, join, resolve } from "node:path";
 import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
 import { PathClaimRegistry, removeOwnedArtifact, writeArtifactSet, writeStagedFile } from "@hwpx-optimizer/io";
-import type { OwnedArtifact } from "@hwpx-optimizer/io";
+import type { OwnedArtifact, SaveOptions } from "@hwpx-optimizer/io";
 import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
 import type { DesktopImagePreviewInput } from "../shared/imagePreview.js";
@@ -69,6 +69,8 @@ export type DesktopOptimizeResult = {
   reportPath?: string;
   report: OptimizationReport;
 };
+
+export type DesktopPreparedOptimization = { output: Uint8Array; report: OptimizationReport };
 
 export type DesktopBatchReportItem = {
   input: string;
@@ -147,6 +149,14 @@ export async function optimizeDesktopFile(
   input: DesktopOptimizeInput,
   onProgress?: (progress: DesktopProgress) => void
 ): Promise<DesktopOptimizeResult> {
+  const prepared = await prepareDesktopOptimization(input, onProgress);
+  return saveDesktopOptimization(input, prepared, onProgress);
+}
+
+/** Worker-side computation only: no artifact reservation or output writes. */
+export async function prepareDesktopOptimization(
+  input: DesktopOptimizeInput, onProgress?: (progress: DesktopProgress) => void
+): Promise<DesktopPreparedOptimization> {
   onProgress?.({ percent: 10, item: "Reading HWPX package" });
   let source: Buffer | undefined = (await readSupportedInput(input.filePath, { maxInputBytes: input.maxInputBytes })).data;
 
@@ -159,6 +169,20 @@ export async function optimizeDesktopFile(
     input.jpegQuality
   );
   source = undefined;
+
+  // A no-savings result can reuse the input buffer. Do not retain a cache view
+  // into an ArrayBuffer whose ownership is about to transfer to main.
+  for (const [path, cached] of cachedInputs) if (cached.data.buffer === result.output.buffer) cachedInputs.delete(path);
+  return result;
+}
+
+/** Main-side publication survives a terminated computation worker. */
+export async function saveDesktopOptimization(
+  input: DesktopOptimizeInput, result: DesktopPreparedOptimization,
+  onProgress?: (progress: DesktopProgress) => void,
+  saveOptions: Pick<SaveOptions, "signal" | "commitState" | "operations"> = {}
+): Promise<DesktopOptimizeResult> {
+  saveOptions.signal?.throwIfAborted();
 
   onProgress?.({ percent: 88, item: "Preparing output file" });
   let outputPath = await nextOutputPath(
@@ -186,7 +210,8 @@ export async function optimizeDesktopFile(
       [...protectedInputs.values(), ...(input.protectedInputs ?? [])]
     );
     onProgress?.({ percent: 95, item: "Writing optimized document" });
-    const saveWarnings = await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent, claims);
+    const output = Buffer.from(result.output.buffer, result.output.byteOffset, result.output.byteLength);
+    const saveWarnings = await writeOptimizationArtifacts(outputPath, output, reportPath, reportContent, claims, saveOptions);
     result.report.warnings.push(...saveWarnings);
 
     onProgress?.({ percent: 99, item: "Finalizing optimized document" });
@@ -459,12 +484,13 @@ async function statSupportedLocalInput(
 
 async function writeOptimizationArtifacts(
   outputPath: string, output: Buffer, reportPath: string | undefined, reportContent: string | undefined,
-  claims?: PathClaimRegistry
+  claims?: PathClaimRegistry,
+  options: Pick<SaveOptions, "signal" | "commitState" | "operations"> = {}
 ): Promise<string[]> {
   return writeArtifactSet([
     { target: outputPath, data: output },
     ...(reportPath && reportContent ? [{ target: reportPath, data: reportContent }] : [])
-  ], claims ? { claims } : { overwrite: true });
+  ], { ...options, ...(claims ? { claims } : { overwrite: true }) });
 }
 
 async function writeJsonArtifact(path: string, content: string, claims?: PathClaimRegistry): Promise<void> {

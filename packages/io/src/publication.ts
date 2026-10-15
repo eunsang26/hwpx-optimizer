@@ -31,10 +31,11 @@ export async function removeOwnedArtifact(artifact: OwnedArtifact): Promise<void
   }
 }
 
-export async function writeStagedFile(path: string, data: Buffer | string): Promise<OwnedArtifact> {
+export async function writeStagedFile(path: string, data: Buffer | string, options: { signal?: AbortSignal } = {}): Promise<OwnedArtifact> {
+  options.signal?.throwIfAborted();
   const handle = await open(path, "wx", 0o600);
   try {
-    await handle.writeFile(data);
+    await handle.writeFile(data, { signal: options.signal });
     return artifactIdentity(path, await handle.stat({ bigint: true }));
   } catch (error) {
     const partial = artifactIdentity(path, await handle.stat({ bigint: true }));
@@ -46,21 +47,25 @@ export async function writeStagedFile(path: string, data: Buffer | string): Prom
 
 /** Creates a new final entry; never replaces a file that appears during publication. */
 export async function publishExclusiveFile(
-  stage: string, target: string, operations: { link: typeof link } = { link }
+  stage: string, target: string, operations: { link?: typeof link; signal?: AbortSignal } = {}
 ): Promise<OwnedArtifact> {
+  operations.signal?.throwIfAborted();
   const source = await lstat(stage, { bigint: true });
   if (!source.isFile()) throw new Error(`Staged artifact is not a regular file: ${stage}`);
   let expected = artifactIdentity(target, source);
   try {
-    await operations.link(stage, target);
+    await (operations.link ?? link)(stage, target);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (!["EXDEV", "ENOSYS", "ENOTSUP", "EOPNOTSUPP", "EPERM"].includes(code ?? "")) throw error;
+    operations.signal?.throwIfAborted();
     // FAT and some mounts cannot link. Stream into a newly opened inode while
     // retaining the exclusive-name guarantee. Never use overwrite-capable rename.
     const handle = await open(target, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
     try {
-      for await (const chunk of createReadStream(stage)) await handle.writeFile(chunk);
+      for await (const chunk of createReadStream(stage, { signal: operations.signal })) {
+        await handle.writeFile(chunk, { signal: operations.signal });
+      }
       expected = artifactIdentity(target, await handle.stat({ bigint: true }));
     } catch (copyError) {
       const partial = artifactIdentity(target, await handle.stat({ bigint: true }));
@@ -125,7 +130,8 @@ export class PathClaimRegistry {
     try { await this.onClaim?.(claim); return claim.path; }
     catch (error) { await this.release(claim.path); throw error; }
   }
-  async publish(stage: string, path: string): Promise<OwnedArtifact> {
+  async publish(stage: string, path: string, options: { signal?: AbortSignal } = {}): Promise<OwnedArtifact> {
+    options.signal?.throwIfAborted();
     const claim = this.claimed.get(path);
     if (!claim) throw new Error(`Artifact path was not reserved: ${path}`);
     const current = await lstat(path, { bigint: true });
@@ -133,7 +139,7 @@ export class PathClaimRegistry {
       throw new Error(`Artifact reservation changed; replacement preserved: ${path}`);
     }
     await rmdir(path);
-    const artifact = await publishExclusiveFile(stage, path);
+    const artifact = await publishExclusiveFile(stage, path, options);
     this.claimed.delete(path);
     return artifact;
   }

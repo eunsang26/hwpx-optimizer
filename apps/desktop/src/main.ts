@@ -14,8 +14,10 @@ if (app.isPackaged && process.platform !== "win32") {
 }
 import { mkdir, readFile as readFileFs, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { Worker } from "node:worker_threads";
+import { DocumentWorkerClient } from "./main/documentWorkerClient.js";
+import { DocumentOperations } from "./main/documentOperations.js";
 import {
+  saveDesktopOptimization,
   normalizeDesktopSettings,
   persistentDesktopSettingsPatch,
   registerDesktopInput,
@@ -23,32 +25,17 @@ import {
   verifyDesktopFile,
   writeDesktopBatchReport
 } from "./main/desktopService.js";
-import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
 import type { DesktopProtectedInput } from "./main/desktopService.js";
 import type { DesktopSettings, DesktopSettingsPatch, OptimizationMode } from "./main/desktopService.js";
 
 let mainWindow: BrowserWindow | null = null;
-let documentWorker: Worker | null = null;
-let activeAnalyzeWorker: Worker | null = null;
-let activeOptimizeWorker: Worker | null = null;
-let pendingDocumentOperation: "analyze" | "optimize" | null = null;
-let nextWorkerRequestId = 1;
-// Watchdog: if the worker hangs (stuck sharp call, infinite loop) the IPC promise
-// would otherwise never settle, leaving pendingDocumentOperation stuck so every
-// later request is refused. Terminate and reject after this budget instead.
-const DOCUMENT_OPERATION_TIMEOUT_MS = 300_000;
+const documentWorkerClient = new DocumentWorkerClient();
+const documentOperations = new DocumentOperations();
+let quitAfterOperations = false;
 const DEFAULT_WINDOW_WIDTH = 800;
 const DEFAULT_WINDOW_HEIGHT = 560;
 const MIN_WINDOW_WIDTH = 720;
 const MIN_WINDOW_HEIGHT = 520;
-const pendingWorkerRequests = new Map<
-  number,
-  {
-    resolve: (value: unknown) => void;
-    reject: (reason?: unknown) => void;
-    onProgress?: (progress: { percent: number; item: string }) => void;
-  }
->();
 const allowedInputPaths = new Set<string>();
 const protectedInputIdentities = new Map<string, DesktopProtectedInput>();
 const allowedOutputDirectories = new Set<string>();
@@ -127,9 +114,20 @@ app.on("window-all-closed", () => {
   app.quit();
 });
 
-app.on("before-quit", () => {
-  void documentWorker?.terminate();
-  documentWorker = null;
+app.on("before-quit", (event) => {
+  if (documentOperations.busy) {
+    event.preventDefault();
+    if (!quitAfterOperations) {
+      quitAfterOperations = true;
+      void documentOperations.close().finally(async () => {
+        try { await documentWorkerClient.dispose(); }
+        finally { app.quit(); }
+      });
+    }
+    return;
+  }
+  void documentOperations.close();
+  void documentWorkerClient.dispose();
 });
 
 function registerIpc(): void {
@@ -207,18 +205,13 @@ function registerIpc(): void {
     return registered;
   });
 
-  ipcMain.handle("hwpx:analyze", async (_event, filePath: string) => {
-    if (pendingDocumentOperation || activeAnalyzeWorker || activeOptimizeWorker) {
-      throw new Error("Another analysis is already running.");
-    }
-    pendingDocumentOperation = "analyze";
-    try {
+  ipcMain.handle("hwpx:analyze", async (_event, filePath: string) =>
+    documentOperations.run("analyze", async ({ signal, progress }) => {
       const allowedPath = await requireAllowedInputPath(filePath);
-      return await runAnalyzeWorker(allowedPath);
-    } finally {
-      if (pendingDocumentOperation === "analyze") pendingDocumentOperation = null;
-    }
-  });
+      progress({ percent: 10, item: "Analyzing document structure" });
+      return documentWorkerClient.analyze(allowedPath, signal);
+    })
+  );
 
   ipcMain.handle(
     "hwpx:optimize",
@@ -234,45 +227,30 @@ function registerIpc(): void {
         jpegQuality?: number;
       }
     ) => {
-      if (pendingDocumentOperation || activeAnalyzeWorker || activeOptimizeWorker) {
-        throw new Error("Another optimization is already running.");
-      }
       validateOptimizeInput(input);
-      pendingDocumentOperation = "optimize";
-      try {
+      return documentOperations.run("optimize", async (context) => {
         const filePath = await requireAllowedInputPath(input.filePath);
         const outputDirectory = input.outputDirectory
           ? await requireAllowedOutputDirectory(input.outputDirectory)
           : undefined;
         const settings = await loadSettings();
         const effectiveSettings = outputDirectory ? { ...settings, saveNextToOriginal: false } : settings;
-        const result = await runOptimizeWorker({ ...input, filePath, outputDirectory, settings: effectiveSettings,
-          protectedInputs: [...protectedInputIdentities.values()] }, (progress) => {
-          mainWindow?.webContents.send("hwpx:optimize-progress", progress);
-        });
+        const trustedInput = { ...input, filePath, outputDirectory, settings: effectiveSettings,
+          protectedInputs: [...protectedInputIdentities.values()] };
+        const prepared = await documentWorkerClient.prepare(trustedInput, context.signal, context.progress);
+        const result = await saveDesktopOptimization(trustedInput, prepared, context.progress, context);
         await registerGeneratedPath(result.outputPath);
         if (result.reportPath) await registerGeneratedPath(result.reportPath);
+        context.progress({ percent: 100, item: "Optimization complete" });
         return result;
-      } finally {
-        if (pendingDocumentOperation === "optimize") pendingDocumentOperation = null;
-      }
+      }, (progress) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("hwpx:optimize-progress", progress);
+      });
     }
   );
 
-  ipcMain.handle("hwpx:cancel-optimize", async () => {
-    const worker = activeOptimizeWorker;
-    if (!worker) return { cancelled: false };
-    await worker.terminate();
-    mainWindow?.webContents.send("hwpx:optimize-progress", { percent: 0, item: "Optimization cancelled" });
-    return { cancelled: true };
-  });
-
-  ipcMain.handle("hwpx:cancel-analyze", async () => {
-    const worker = activeAnalyzeWorker;
-    if (!worker) return { cancelled: false };
-    await worker.terminate();
-    return { cancelled: true };
-  });
+  ipcMain.handle("hwpx:cancel-optimize", () => documentOperations.cancel("optimize"));
+  ipcMain.handle("hwpx:cancel-analyze", () => documentOperations.cancel("analyze"));
 
   ipcMain.handle("hwpx:verify", async (_event, filePath: string) => verifyDesktopFile(await requireKnownDocumentPath(filePath)));
 
@@ -1322,144 +1300,7 @@ function validateOptimizeInput(input: {
   }
 }
 
-function runAnalyzeWorker(filePath: string): Promise<DesktopAnalysisResult> {
-  const worker = ensureDocumentWorker();
-  activeAnalyzeWorker = worker;
-  return postWorkerRequest<DesktopAnalysisResult>({ type: "analyze", filePath }, undefined, {
-    timeoutMs: DOCUMENT_OPERATION_TIMEOUT_MS
-  }).finally(() => {
-    if (activeAnalyzeWorker === worker) activeAnalyzeWorker = null;
-  });
-}
-
-function runOptimizeWorker(
-  input: {
-    filePath: string;
-    mode: OptimizationMode;
-    outputDirectory?: string;
-    outputMode?: "single" | "batch";
-    actions?: string[];
-    targetBytes?: number;
-    jpegQuality?: number;
-    settings: DesktopSettings;
-    protectedInputs: DesktopProtectedInput[];
-  },
-  onProgress: (progress: { percent: number; item: string }) => void
-): Promise<DesktopOptimizeResult> {
-  const worker = ensureDocumentWorker();
-  activeOptimizeWorker = worker;
-  return postWorkerRequest<DesktopOptimizeResult>({ type: "optimize", input }, onProgress, {
-    timeoutMs: DOCUMENT_OPERATION_TIMEOUT_MS
-  })
-    .then((result) => {
-      onProgress({ percent: 100, item: "Optimization complete" });
-      return result;
-    })
-    .finally(() => {
-      if (activeOptimizeWorker === worker) activeOptimizeWorker = null;
-    });
-}
-
 async function warmDocumentWorker(): Promise<void> {
-  try {
-    await postWorkerRequest({ type: "warm" });
-  } catch {
-    // Warm-up is opportunistic; the next real request will recreate the worker.
-  }
+  try { await documentWorkerClient.warm(); }
+  catch { /* Opportunistic: the next request recreates a stopped worker. */ }
 }
-
-function ensureDocumentWorker(): Worker {
-  if (documentWorker) return documentWorker;
-  const worker = new Worker(join(import.meta.dirname, "main", "documentWorker.js"));
-  documentWorker = worker;
-  worker.on("message", (message: DocumentWorkerMessage) => {
-    const pending = pendingWorkerRequests.get(message.id);
-    if (!pending) return;
-    if (message.type === "progress") {
-      pending.onProgress?.({ percent: message.percent, item: message.item });
-      return;
-    }
-    pendingWorkerRequests.delete(message.id);
-    if (message.type === "error") {
-      pending.reject(new Error(message.message));
-      return;
-    }
-    pending.resolve(message.type === "warm-complete" ? { ok: true } : message.result);
-  });
-  worker.on("error", (error) => rejectPendingWorkerRequests(error));
-  worker.on("exit", (code) => {
-    if (documentWorker === worker) documentWorker = null;
-    const error = code === 0 ? new Error("Document worker exited unexpectedly.") : new Error("Operation cancelled.");
-    rejectPendingWorkerRequests(error);
-  });
-  return worker;
-}
-
-function postWorkerRequest<T = { ok: true }>(
-  request: DocumentWorkerRequestInput,
-  onProgress?: (progress: { percent: number; item: string }) => void,
-  options: { timeoutMs?: number } = {}
-): Promise<T> {
-  const worker = ensureDocumentWorker();
-  const id = nextWorkerRequestId;
-  nextWorkerRequestId += 1;
-  return new Promise<T>((resolve, reject) => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    pendingWorkerRequests.set(id, {
-      resolve: (value) => {
-        if (timer) clearTimeout(timer);
-        resolve(value as T);
-      },
-      reject: (reason) => {
-        if (timer) clearTimeout(timer);
-        reject(reason);
-      },
-      onProgress
-    });
-    if (options.timeoutMs && options.timeoutMs > 0) {
-      timer = setTimeout(() => {
-        if (!pendingWorkerRequests.has(id)) return;
-        pendingWorkerRequests.delete(id);
-        reject(new Error("문서 작업이 시간 내에 완료되지 않아 중단했습니다."));
-        // Terminating triggers the worker "exit" handler, which rejects any
-        // other pending requests and clears the busy flags.
-        void worker.terminate();
-      }, options.timeoutMs);
-    }
-    worker.postMessage({ id, ...request });
-  });
-}
-
-function rejectPendingWorkerRequests(error: Error): void {
-  for (const pending of pendingWorkerRequests.values()) {
-    pending.reject(error);
-  }
-  pendingWorkerRequests.clear();
-  pendingDocumentOperation = null;
-  activeAnalyzeWorker = null;
-  activeOptimizeWorker = null;
-}
-
-type DocumentWorkerRequestInput =
-  | { type: "warm" }
-  | { type: "analyze"; filePath: string }
-  | {
-      type: "optimize";
-      input: {
-        filePath: string;
-        mode: OptimizationMode;
-        outputDirectory?: string;
-        outputMode?: "single" | "batch";
-        actions?: string[];
-        targetBytes?: number;
-        jpegQuality?: number;
-        settings: DesktopSettings;
-        protectedInputs: DesktopProtectedInput[];
-      };
-    };
-
-type DocumentWorkerMessage =
-  | { id: number; type: "warm-complete" }
-  | { id: number; type: "progress"; percent: number; item: string }
-  | { id: number; type: "complete"; result: DesktopAnalysisResult | DesktopOptimizeResult }
-  | { id: number; type: "error"; message: string };

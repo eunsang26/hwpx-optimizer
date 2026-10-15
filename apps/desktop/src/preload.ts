@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { DesktopImagePreviewInput } from "./shared/imagePreview.js";
+import type { CancellationResult } from "./shared/cancellation.js";
 
 const api = {
   selectHwpx: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-hwpx"),
@@ -25,8 +26,8 @@ const api = {
     targetBytes?: number;
     jpegQuality?: number;
   }) => ipcRenderer.invoke("hwpx:optimize", input),
-  cancelAnalyze: () => ipcRenderer.invoke("hwpx:cancel-analyze"),
-  cancelOptimize: () => ipcRenderer.invoke("hwpx:cancel-optimize"),
+  cancelAnalyze: (): Promise<CancellationResult> => ipcRenderer.invoke("hwpx:cancel-analyze"),
+  cancelOptimize: (): Promise<CancellationResult> => ipcRenderer.invoke("hwpx:cancel-optimize"),
   onOptimizeProgress: (callback: (progress: { percent: number; item: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: { percent: number; item: string }) => callback(progress);
     ipcRenderer.on("hwpx:optimize-progress", listener);

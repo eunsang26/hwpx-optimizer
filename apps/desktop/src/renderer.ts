@@ -34,6 +34,7 @@ import type {
   SubmissionLimit,
   SubmissionPlan
 } from "./shared/submissionPlan.js";
+import { isDocumentCancellation } from "./shared/cancellation.js";
 
 const JPEG_QUALITY_FLOOR = 60;
 const JPEG_QUALITY_CEILING = 95;
@@ -403,8 +404,11 @@ async function init(): Promise<void> {
       // cancelled status with a normal result (best-effort backend cancel).
       analysisSequence += 1;
       state.analysisRunning = false;
-      await window.hwpxOptimizer.cancelAnalyze();
-      setStatus("분석을 취소했습니다.");
+      cancelButton.disabled = true;
+      try {
+        const outcome = await window.hwpxOptimizer.cancelAnalyze();
+        setStatus(outcome.error ? errorMessage(outcome.error) : outcome.cancelled ? "분석을 취소했습니다." : "분석 작업이 이미 종료되었습니다.");
+      } catch (error) { setStatus(errorMessage(error)); }
       if (!cancellingBatchAnalysis) {
         setIdle();
         hideProgressPanel();
@@ -412,12 +416,21 @@ async function init(): Promise<void> {
       }
       return;
     }
-    if (state.batchRunning) {
+    const cancellingBatch = state.batchRunning;
+    if (cancellingBatch) {
       state.batchCancelled = true;
     }
-    await window.hwpxOptimizer.cancelOptimize();
-    setStatus("최적화를 취소했습니다.");
-    setIdle();
+    cancelButton.disabled = true;
+    setStatus("취소를 요청했습니다. 저장 중인 파일을 정리하고 있습니다...");
+    try {
+      const outcome = await window.hwpxOptimizer.cancelOptimize();
+      if (cancellingBatch && !state.batchRunning) return;
+      if (outcome.cancelled) setStatus("최적화를 취소했습니다.");
+      else if (outcome.error) setStatus(errorMessage(outcome.error));
+      else if (outcome.completed) setStatus(cancellingBatch
+        ? "현재 파일의 저장은 완료되었습니다. 남은 대기 파일의 처리를 중단합니다."
+        : "저장이 이미 완료되었습니다. 결과 파일을 확인하세요.");
+    } catch (error) { setStatus(errorMessage(error)); }
   });
   settingsButton.addEventListener("click", () => setSettingsOpen(!settingsPanel.classList.contains("is-open")));
   settingsCloseButton.addEventListener("click", () => setSettingsOpen(false));
@@ -1907,8 +1920,8 @@ async function optimizeCurrentFile(): Promise<void> {
     succeeded = true;
   } catch (error) {
     if (state.filePath === requestFilePath) {
-      renderVerificationFailure(error);
-      setStatus(errorMessage(error));
+      if (isDocumentCancellation(error)) setStatus("최적화를 취소했습니다.");
+      else { renderVerificationFailure(error); setStatus(errorMessage(error)); }
     }
   } finally {
     state.optimizeRunning = false;
@@ -2609,8 +2622,9 @@ async function analyzeBatchItems(): Promise<void> {
         renderBatchList();
       } catch (error) {
         analyzedCount += 1;
-        item.status = state.batchCancelled ? "cancelled" : "failed";
-        item.error = state.batchCancelled ? undefined : errorMessage(error);
+        const cancelled = isDocumentCancellation(error);
+        item.status = cancelled ? "cancelled" : "failed";
+        item.error = cancelled ? undefined : errorMessage(error);
         renderBatchList();
       }
     }
@@ -2746,7 +2760,7 @@ async function runBatch(): Promise<void> {
       });
       Object.assign(item, applyOptimizationResultToBatchItem(item, response));
     } catch (error) {
-      if (state.batchCancelled) {
+      if (isDocumentCancellation(error)) {
         item.status = "cancelled";
       } else {
         item.status = "failed";

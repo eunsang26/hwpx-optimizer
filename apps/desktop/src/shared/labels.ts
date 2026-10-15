@@ -116,6 +116,8 @@ export function progressLabel(item: string): string {
 }
 
 export function errorLabel(message: string): string {
+  const recovery = message.match(/Rollback incomplete; preserved recovery files: (.+)$/s);
+  if (recovery) return `기존 파일을 모두 복원하지 못했습니다. 새로 생긴 파일은 보존했습니다. 복구 폴더와 상세 오류: ${recovery[1]}`;
   const exact = ERROR_LABELS[message];
   if (exact) return exact;
   for (const pattern of ERROR_PATTERNS) {

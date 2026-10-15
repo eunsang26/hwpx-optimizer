@@ -181,7 +181,7 @@ Before saving a pair, the transaction rejects equal destinations, canonical path
 
 Rollback removes only unchanged artifacts created by the transaction and restores old entries exclusively. If a new user file blocks restoration, it is preserved and the error identifies the retained backup directory for recovery. Cleanup trouble after a successful commit returns a warning rather than changing a complete save into a failure; CLI prints these warnings, batch summaries retain them, and desktop includes them in the returned warnings. Stored optimization reports describe optimization; subsequent filesystem-cleanup warnings belong to the save operation.
 
-These rules do not provide a multi-file crash transaction or isolate intermediate names from concurrent readers. Forced termination can interrupt the backup/publish/restore sequence; automatic cancellation and restart recovery remain tracked as OPT-012 in `IMPROVEMENT_BACKLOG.md`.
+These rules do not provide a multi-file crash transaction or isolate intermediate names from concurrent readers. Desktop computation workers never publish files, so terminating a worker cannot interrupt the main-owned save. Cooperative cancellation, inactivity timeouts and normal application shutdown await rollback before releasing the operation lock. Abrupt termination of the main process or power loss can still interrupt backup/publish/restore; there is no durable restart journal, and remaining `.hwpx-save-*` directories may require manual recovery.
 
 ## Desktop Boundary
 
@@ -201,7 +201,11 @@ Selected inputs are protected even when output overwrite is enabled. The main pr
 
 The runtime preload script is copied from `apps/desktop/src/preload.cjs` so Electron loads a CommonJS preload file reliably under the app's ESM package settings. `apps/desktop/src/preload.ts` remains the TypeScript API shape used by renderer code.
 
-Analysis and optimization run through `apps/desktop/src/main/documentWorker.ts`, a persistent Node worker thread that keeps large HWPX processing off the Electron main process. The main process relays coarse progress messages to the renderer and can terminate the active document operation when the user cancels.
+Analysis and optimization computation run through `apps/desktop/src/main/documentWorker.ts`, a persistent Node worker thread. It returns verified bytes and the optimization report without reserving or writing output names. Dedicated ArrayBuffers transfer ownership to main; small or pooled buffers are copied. Input-cache views sharing the transferred buffer are evicted before transfer so later analysis cannot reuse detached bytes.
+
+`documentWorkerClient.ts` owns request IDs and worker generations. Cancellation waits for worker termination, ignores late replies from the stopping generation, and isolates its pending requests from a replacement worker. Unexpected exits retain a distinct error with the exit code. `documentOperations.ts` serializes authorization, computation, main-owned asynchronous publication and recovery. Its five-minute inactivity timer resets on real progress rather than imposing a total-duration limit; a timeout identifies the last stage and remains distinct from user cancellation.
+
+The main process passes an AbortSignal through staging and exclusive publication. Aborting before the synchronous commit decision rolls back the pair; after that decision, cancellation cannot turn a completed save into a cancelled result. Cancel acknowledgement and the busy lock wait for cleanup. Recovery errors preserve user replacements and identify retained backups. Normal application shutdown closes the operation queue, waits for recovery or committed cleanup, and then disposes the worker. Image computation remains off the main thread. See `DESKTOP_CANCELLATION_2026-10-15.md` for phase tests, native UI checks, synthetic timing and crash-recovery limits.
 
 ## Safety Rules
 

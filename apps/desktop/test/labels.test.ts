@@ -32,6 +32,8 @@ describe("shared labels", () => {
   it("translates known runtime errors to user-facing Korean messages", () => {
     expect(errorLabel("Analysis cancelled.")).toBe("분석이 취소되었습니다.");
     expect(errorLabel("Optimization cancelled.")).toBe("최적화가 취소되었습니다.");
+    expect(errorLabel("Could not save. Rollback incomplete; preserved recovery files: C:/output/.hwpx-save-123. EPERM: restore denied"))
+      .toContain("C:/output/.hwpx-save-123");
     expect(errorLabel("Unsupported HWP binary file: save or export the document as .hwpx before optimizing")).toBe(
       "HWP 파일은 직접 최적화할 수 없습니다. 한글에서 HWPX로 저장/내보낸 뒤 다시 선택하세요."
     );
