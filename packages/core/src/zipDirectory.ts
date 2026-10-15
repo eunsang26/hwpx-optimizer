@@ -4,6 +4,9 @@ export type ZipDirectoryEntry = {
   isDirectory: boolean;
   generalPurposeBitFlag: number;
   uncompressedSize: number;
+  compressedSize: number;
+  compressedStart: number;
+  compressionMethod: number;
 };
 const invalid = (reason: string): Error => new Error(`Invalid HWPX package: ${reason}`);
 
@@ -94,7 +97,8 @@ export function readZipDirectory(input: Buffer, maxEntries: number): ZipDirector
     if (local < 0 || local + 30 > directoryStart || input.readUInt32LE(local) !== 0x04034b50) throw invalid("invalid local ZIP header offset");
     const dataStart = local + 30 + input.readUInt16LE(local + 26) + input.readUInt16LE(local + 28);
     if (compressedSize > directoryStart - dataStart || dataStart > directoryStart) throw invalid("compressed entry is outside the archive");
-    entries.push({ path, isDirectory: path.endsWith("/"), generalPurposeBitFlag: input.readUInt16LE(offset + 8), uncompressedSize });
+    entries.push({ path, isDirectory: path.endsWith("/"), generalPurposeBitFlag: input.readUInt16LE(offset + 8), uncompressedSize,
+      compressedSize, compressedStart: dataStart, compressionMethod: input.readUInt16LE(offset + 10) });
     offset = next;
   }
   if (entries.length !== count) throw invalid("central directory entry count mismatch");

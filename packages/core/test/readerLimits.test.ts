@@ -94,6 +94,31 @@ describe("ZIP preflight and bounded expansion", () => {
     await expect(readHwpxPackage(input, { limits: { maxEntryBytes: 64 * 1024 } })).rejects.toThrow(/entry exceeds supported size/);
     expect(concat.mock.calls.every(([chunks]) => chunks.reduce((sum, chunk) => sum + chunk.length, 0) <= 64 * 1024)).toBe(true);
   });
+  it.each(["DEFLATE", "STORE"] as const)("rejects a nonempty %s resource declared as zero before the loader can discard it", async compression => {
+    const zip = new JSZip(); zip.file("mimetype", "application/hwp+zip"); zip.file("Contents/content.hpf", "<root/>"); zip.file("Contents/section0.xml", "<root/>");
+    zip.file("BinData/payload.bin", Buffer.alloc(1024 * 1024, 7));
+    const input = forgeDeclaredSize(await zip.generateAsync({ type: "nodebuffer", compression }), "BinData/payload.bin", 0);
+    const load = vi.spyOn(JSZip, "loadAsync");
+    await expect(readHwpxPackage(input)).rejects.toThrow(/entry exceeds declared size/);
+    expect(load).not.toHaveBeenCalled();
+  });
+  it.each([true, false])("accepts an empty DEFLATE entry with explicit stream bytes=%s", async hasStreamBytes => {
+    const original = await createHwpxFixture({ entries: { "BinData/empty.bin": Buffer.alloc(0) } });
+    const oldEnd = original.length - 22, directory = original.readUInt32LE(oldEnd + 16);
+    const compressed = hasStreamBytes ? Buffer.from([3, 0]) : Buffer.alloc(0);
+    const input = Buffer.concat([original.subarray(0, directory), compressed, original.subarray(directory)]);
+    const end = input.length - 22; input.writeUInt32LE(directory + compressed.length, end + 16);
+    for (let offset = directory + compressed.length; offset < end;) {
+      const nameLength = input.readUInt16LE(offset + 28);
+      if (input.subarray(offset + 46, offset + 46 + nameLength).toString() === "BinData/empty.bin") {
+        const local = input.readUInt32LE(offset + 42);
+        input.writeUInt16LE(8, local + 8); input.writeUInt32LE(compressed.length, local + 18);
+        input.writeUInt16LE(8, offset + 10); input.writeUInt32LE(compressed.length, offset + 20);
+      }
+      offset += 46 + nameLength + input.readUInt16LE(offset + 30) + input.readUInt16LE(offset + 32);
+    }
+    expect((await readHwpxPackage(input)).entries.find(entry => entry.path === "BinData/empty.bin")?.data.length).toBe(0);
+  });
   it("rejects expansion above the declaration even when configured limits are larger", async () => {
     const input = forgeDeclaredSize(await createHwpxFixture({ entries: { "BinData/payload.bin": Buffer.alloc(2 * 1024 * 1024) } }), "BinData/payload.bin", 32);
     await expect(readHwpxPackage(input)).rejects.toThrow(/entry exceeds declared size/);

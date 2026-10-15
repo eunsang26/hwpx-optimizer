@@ -1,8 +1,12 @@
 import JSZip from "jszip";
+import { promisify } from "node:util";
+import { inflateRaw } from "node:zlib";
 import { readZipDirectory } from "./zipDirectory.js";
 import type { ZipDirectoryEntry } from "./zipDirectory.js";
 import type { HwpxEntry, HwpxEntryKind, HwpxPackage } from "./types.js";
 import { assertWellFormedXml, decodeDocumentXml } from "./xmlDocument.js";
+
+const inflateEmptyEntry = promisify(inflateRaw);
 
 const PROTECTED_DOCUMENT_ERROR =
   "보안 처리된 문서는 최적화 대상이 아닙니다. 암호화, DRM, 전자서명, 권한 제한을 해제하거나 우회하지 않습니다.";
@@ -31,6 +35,7 @@ export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOpt
   const declaredEntries = readZipDirectory(input, limits.maxEntries);
   if (declaredEntries.some(entry => (entry.generalPurposeBitFlag & 1) === 1)) throw new Error(PROTECTED_DOCUMENT_ERROR);
   assertDeclaredEntriesWithinLimits(declaredEntries, limits);
+  await assertDeclaredEmptyEntries(input, declaredEntries);
 
   let zip: JSZip;
   try {
@@ -81,6 +86,23 @@ export async function readHwpxPackage(input: Buffer, options: ReadHwpxPackageOpt
     if (entry.kind === "xml") assertWellFormedXml(decodeDocumentXml(entry.data, entry.path), entry.path);
   }
   return { entries };
+}
+
+/** JSZip replaces declared-empty CompressedObjects without checking their bytes. */
+async function assertDeclaredEmptyEntries(input: Buffer, entries: ZipDirectoryEntry[]): Promise<void> {
+  for (const entry of entries) {
+    if (entry.uncompressedSize !== 0) continue;
+    if (entry.compressedSize === 0 && (entry.compressionMethod === 0 || entry.compressionMethod === 8)) continue;
+    if (entry.compressionMethod === 8) {
+      try {
+        const decoded = await inflateEmptyEntry(input.subarray(entry.compressedStart, entry.compressedStart + entry.compressedSize), { maxOutputLength: 1 });
+        if (decoded.length === 0) continue;
+      } catch (error) {
+        throw new Error("Invalid HWPX package: entry exceeds declared size " + entry.path, { cause: error });
+      }
+    }
+    throw new Error("Invalid HWPX package: entry exceeds declared size " + entry.path);
+  }
 }
 
 /** Accumulate only checked chunks; never allocate the full untrusted entry first. */

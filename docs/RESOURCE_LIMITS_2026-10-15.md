@@ -44,13 +44,15 @@ Linux / Node 24.13.0:
 
 한도 검사는 청크가 생성된 다음, 저장 배열에 넣거나 전체 항목을 합치기 전에 실행한다. JSZip의 현재 압축 입력 블록은 pause/destroy 뒤에도 일부 처리될 수 있다. 따라서 한도 외 allocation이나 CPU 비용이 0이라는 주장은 아니다. 크기 한도는 허용할 전체 리소스의 크기를 제한하며 decompressor의 transient 메모리까지 같은 값으로 제한하지 않는다.
 
+0바이트 선언도 별도로 검사한다. JSZip은 uncompressed size가 0이면 compressed object를 빈 파일로 바꿔 실제 바이트 검사를 생략한다. 실제 payload가 있는 STORE/DEFLATE 항목의 size를 0으로 바꾼 재현 테스트 2개가 수정 전 실패했다. 이제 compressed 범위가 있는 빈 선언은 loader 전에 검사하고, DEFLATE의 확인 출력은 `maxOutputLength: 1`로 제한해 nonempty 결과를 거부한다. 정상 빈 STORE, 빈 DEFLATE stream 및 기존 zero-length DEFLATE entry는 계속 읽는다.
+
 ## 자동 및 화면 검증
 
 ZIP64·실제 streaming·Unicode 이름 경계, byte-budget eviction, pending decode 공유, 실패/동시 scope 격리·종료 후 재삽입 방지, 실제 oversized BMP의 RGB allocation 방지, oversized PNG의 분석/최적화 중 원본 보존, 불필요한 JPEG raw decode 제거, preview 출력 크기 제한, worker 실제 동시 실행과 CLI 요청/실제 수 보고를 검사한다.
 
 실제 Electron/로컬 Playwright로 유효한 25MP PNG가 든 합성 문서를 열고 상세 분석 및 최적화 후 원본 이미지와 입력 해시를 보존하는지 검사했다. 한도 초과 이유는 한국어로 표시한다. 실제 크기 위조 ZIP은 거부하며 결과를 오표시하지 않고 다음 문서를 다시 열 수 있다. 완료 후 늦은 100% 진행 이벤트가 결과를 가리던 문제도 수정하고 Electron smoke와 실제 IPC 재전송으로 회귀 검증한다. 캡처·접근성 트리·실행 기록은 `.tmp/ui-audit/resource-limits-2026-10-15/`에만 있다.
 
-Linux 최종 전체 85개 파일·657개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·배포 audit·Electron 스모크 통과. 실제 화면 실행 시각은 2026-10-15 01:37:11 UTC이며 page error 0건이다. 세 화면을 직접 확인했다. Windows 검증은 진행 중이다.
+Linux 최종 전체 85개 파일·661개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·합성 corpus 2/2·배포 audit·Electron 스모크 통과. 실제 화면 실행 시각은 2026-10-15 01:48:00 UTC이며 page error 0건이다. 세 화면을 직접 확인했다. Windows 검증은 진행 중이다.
 
 ## 남은 한계
 
