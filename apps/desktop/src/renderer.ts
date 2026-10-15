@@ -1,6 +1,7 @@
+import { BatchPlanner } from "./renderer/batchPlanning.js";
+import { RendererWorkflow, type BatchItem, type DesktopSettings, type AppState, type BatchTargetMode } from "./renderer/workflowState.js";
 import {
   appendUniquePaths,
-  applyOptimizationResultToBatchItem,
   batchResultTitleForCounts,
   selectionModeForPaths,
   summarizeBatchItems,
@@ -18,10 +19,8 @@ import { createAnalysisViewModel, formatBytes } from "./shared/viewModel.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
 import {
-  allocateRemainingAggregateTargetBytes,
   summarizeAggregateTargetAllocation
 } from "./shared/batchTargetAlloc.js";
-import type { AggregateTargetAllocationSummary } from "./shared/batchTargetAlloc.js";
 import { resultGuidanceText } from "./shared/resultGuidance.js";
 import {
   createSubmissionPlan,
@@ -38,68 +37,14 @@ import type {
 import { analysisBasisLabel } from "./shared/analysisCoverage.js";
 import { isDocumentCancellation } from "./shared/cancellation.js";
 
-const JPEG_QUALITY_FLOOR = 60;
-const JPEG_QUALITY_CEILING = 95;
-const DEFAULT_JPEG_QUALITY = 88;
+import { JPEG_QUALITY_FLOOR, DEFAULT_JPEG_QUALITY, clampJpegQuality } from "./shared/qualityPolicy.js";
+import { CLEANUP_ACTIONS } from "./shared/actionCatalog.js";
 
 declare global {
   interface Window {
     hwpxOptimizer: HwpxOptimizerApi;
   }
 }
-
-type BatchItem = {
-  path: string;
-  fileName: string;
-  selected: boolean;
-  status: "pending" | "running" | "done" | "failed" | "cancelled";
-  report?: OptimizationReport;
-  analysisReport?: OptimizationReport;
-  actualSizeBytes?: number;
-  actualSizeLabel?: string;
-  outputPath?: string;
-  reportPath?: string;
-  originalSizeBytes?: number;
-  expectedSizeBytes?: number;
-  originalSizeLabel?: string;
-  expectedSizeLabel?: string;
-  targetLabel?: string;
-  targetStatusLabel?: string;
-  qualityLabel?: string;
-  jpegQualityDisplay?: number;
-  qualityEditable?: boolean;
-  jpegQualityOverride?: number;
-  allocatedTargetLabel?: string;
-  savedBytes?: number;
-  savedPercent?: number;
-  error?: string;
-};
-
-type BatchTargetMode = "aggregate" | "per-file";
-
-type AppState = {
-  filePath?: string;
-  report?: OptimizationReport;
-  result?: { outputPath: string; reportPath?: string; report: OptimizationReport };
-  batchReportPath?: string;
-  mode: "safe" | "balanced" | "aggressive";
-  outputDirectory?: string;
-  settings?: DesktopSettings;
-  actionSelections: Map<SubmissionActionId, boolean>;
-  submissionLimit: SubmissionLimit;
-  preservationPreference: PreservationPreference;
-  batchTargetMode: BatchTargetMode;
-  qualityMode: "auto" | "manual";
-  jpegQuality: number;
-  currentPlan?: SubmissionPlan;
-  batchItems: BatchItem[];
-  batchAnalyzing: boolean;
-  batchRunning: boolean;
-  batchCancelled: boolean;
-  batchRunCompleted: boolean;
-  analysisRunning: boolean;
-  optimizeRunning: boolean;
-};
 
 type DisplayPlanRow = {
   label: string;
@@ -124,41 +69,15 @@ type BatchPlanSummary = {
   rows: DisplayPlanRow[];
 };
 
-const state: AppState = {
-  mode: "safe",
-  actionSelections: new Map(),
-  submissionLimit: { id: "mb40" },
-  preservationPreference: "recommended",
-  batchTargetMode: "per-file",
-  qualityMode: "auto",
-  jpegQuality: DEFAULT_JPEG_QUALITY,
-  batchItems: [],
-  batchAnalyzing: false,
-  batchRunning: false,
-  batchCancelled: false,
-  batchRunCompleted: false,
-  analysisRunning: false,
-  optimizeRunning: false
-};
+const workflow = new RendererWorkflow();
+const state = workflow.state;
+const batchPlanner = new BatchPlanner(state);
 
 let settingsSaveSequence = 0;
-let analysisSequence = 0;
 let progressAnimationTimer: number | undefined;
 let displayedProgressPercent = 0;
 let targetProgressPercent = 0;
 let dragDepth = 0;
-const CLEANUP_ACTIONS = ["clean-shape-comment", "strip-metadata"] as const satisfies readonly SubmissionActionId[];
-
-type DesktopSettings = {
-  defaultMode: AppState["mode"];
-  saveNextToOriginal: boolean;
-  saveReport: boolean;
-  preventOverwrite: boolean;
-  showAggressiveWarning: boolean;
-  submissionLimit: SubmissionLimit;
-  preservationPreference: PreservationPreference;
-  batchTargetMode: BatchTargetMode;
-};
 
 const dropOverlay = requireElement("drop-overlay");
 const dropZone = requireElement("drop-zone");
@@ -349,7 +268,7 @@ async function init(): Promise<void> {
 
   batchClearButton.addEventListener("click", () => {
     if (state.batchRunning || state.batchAnalyzing) return;
-    clearSelectedFiles(document.body.dataset.view === "batch" ? "배치 목록을 비웠습니다." : "선택한 파일을 제거했습니다.");
+    clearSelectedFiles(state.view === "batch" ? "배치 목록을 비웠습니다." : "선택한 파일을 제거했습니다.");
   });
 
   batchRunButton.addEventListener("click", () => {
@@ -375,15 +294,13 @@ async function init(): Promise<void> {
     const index = Number(target.dataset.batchIndex);
     const item = Number.isInteger(index) ? state.batchItems[index] : undefined;
     if (!item) return;
-    item.selected = target.checked;
+    workflow.selectBatchItem(index, target.checked);
     refreshBatchPlans();
     renderBatchList();
   });
   batchSelectAll.addEventListener("change", () => {
     if (state.batchRunning || state.batchAnalyzing) return;
-    for (const item of state.batchItems) {
-      if (item.status === "pending") item.selected = batchSelectAll.checked;
-    }
+    workflow.selectAllPending(batchSelectAll.checked);
     refreshBatchPlans();
     renderBatchList();
   });
@@ -397,7 +314,7 @@ async function init(): Promise<void> {
   });
 
   optimizeButton.addEventListener("click", () => {
-    if (document.body.dataset.view === "batch") {
+    if (state.view === "batch") {
       void runBatch();
       return;
     }
@@ -407,17 +324,16 @@ async function init(): Promise<void> {
   cancelButton.addEventListener("click", async () => {
     if (state.analysisRunning || state.batchAnalyzing) {
       const cancellingBatchAnalysis = state.batchAnalyzing;
-      state.batchCancelled = cancellingBatchAnalysis;
       // Invalidate the in-flight analyze so a late resolve can't overwrite the
       // cancelled status with a normal result (best-effort backend cancel).
-      analysisSequence += 1;
+      workflow.cancelAnalysis();
       cancelButton.disabled = true;
       try {
         const outcome = await window.hwpxOptimizer.cancelAnalyze();
         setStatus(outcome.error ? errorMessage(outcome.error) : outcome.cancelled ? "분석을 취소했습니다." : "분석 작업이 이미 종료되었습니다.");
       } catch (error) { setStatus(errorMessage(error)); }
       if (!cancellingBatchAnalysis) {
-        state.analysisRunning = false;
+        workflow.finishCancelledAnalysis();
         setIdle();
         hideProgressPanel();
         if (state.report && state.filePath) deepAnalysisButton.focus();
@@ -427,7 +343,7 @@ async function init(): Promise<void> {
     }
     const cancellingBatch = state.batchRunning;
     if (cancellingBatch) {
-      state.batchCancelled = true;
+      workflow.cancelBatch();
     }
     cancelButton.disabled = true;
     setStatus("취소를 요청했습니다. 저장 중인 파일을 정리하고 있습니다...");
@@ -754,7 +670,7 @@ async function handleAdditionalPaths(paths: string[]): Promise<void> {
     setStatus("처리 중에는 새 파일을 추가할 수 없습니다. 완료 후 다시 시도하세요.");
     return;
   }
-  if (document.body.dataset.view === "batch" && state.batchItems.length > 0) {
+  if (state.view === "batch" && state.batchItems.length > 0) {
     const existingPaths = state.batchItems.map((item) => item.path);
     const mergedPaths = appendUniquePaths(existingPaths, paths);
     const additionalPaths = mergedPaths.slice(existingPaths.length);
@@ -765,7 +681,7 @@ async function handleAdditionalPaths(paths: string[]): Promise<void> {
     enterBatchMode(additionalPaths, { preservePolicy: true });
     return;
   }
-  if (document.body.dataset.view === "single" && state.filePath) {
+  if (state.view === "single" && state.filePath) {
     const merged = appendUniquePaths([state.filePath], paths);
     if (merged.length === 1) {
       setStatus("이미 선택한 파일입니다.");
@@ -1447,17 +1363,7 @@ function createBatchPlanSummary(): BatchPlanSummary | undefined {
       continue;
     }
     if (item.status === "failed" || item.status === "cancelled") continue;
-    const jpegQuality =
-      state.preservationPreference === "size" || state.preservationPreference === "preserve"
-        ? undefined
-        : item.jpegQualityOverride ??
-          (state.qualityMode === "manual" ? state.jpegQuality : undefined);
-    const plan = createSubmissionPlan(item.report, {
-      submissionLimit: batchSubmissionLimitForItem(item, targetAllocation),
-      preservationPreference: state.preservationPreference,
-      actionOverrides: state.actionSelections,
-      ...(jpegQuality !== undefined ? { jpegQuality } : {})
-    });
+    const plan = batchPlanner.createPlan(item, item.report, targetAllocation);
     expectedSizeBytes += plan.expectedSizeBytes;
     expectedSavingBytes += Math.max(0, item.report.originalSize - plan.expectedSizeBytes);
     if (plan.targetStatus === "target-missed") {
@@ -1585,58 +1491,11 @@ function fileTargetStatusText(passed: number, warning: number, targetBytes: numb
   return "파일별 분석 대기";
 }
 
-function batchSubmissionLimitForItem(
-  item: BatchItem,
-  targetAllocation?: AggregateTargetAllocationSummary
-): SubmissionLimit {
-  if (state.batchTargetMode === "per-file") return state.submissionLimit;
-  const targetBytes = batchTargetBytesForItem(item, targetAllocation);
-  return targetBytes ? { id: "custom", customBytes: targetBytes } : { id: "none" };
-}
-
-function batchTargetBytesForItem(
-  item: BatchItem,
-  targetAllocation = summarizeAggregateTargetAllocation(state.batchItems)
-): number | undefined {
-  const batchTargetBytes = resolveBatchTargetBytes();
-  if (!batchTargetBytes || !item.originalSizeBytes) return undefined;
-  if (state.batchTargetMode === "per-file") return batchTargetBytes;
-  if (!item.selected) return undefined;
-  return allocateRemainingAggregateTargetBytes({
-    batchTargetBytes,
-    completedOutputBytes: targetAllocation.completedOutputBytes,
-    itemOriginalBytes: item.originalSizeBytes,
-    pendingOriginalTotal: targetAllocation.pendingOriginalTotal
-  });
-}
-
-function batchTargetLabelForItem(
-  item: BatchItem,
-  targetAllocation?: AggregateTargetAllocationSummary
-): string {
-  if (state.batchTargetMode === "aggregate" && !item.selected) return "선택 제외";
-  const targetBytes = batchTargetBytesForItem(item, targetAllocation);
-  return targetBytes ? `${formatBytes(targetBytes)} 미만` : "제한 없음";
-}
-
-function batchAllocatedTargetLabelForItem(
-  item: BatchItem,
-  targetAllocation?: AggregateTargetAllocationSummary
-): string | undefined {
-  if (state.batchTargetMode !== "aggregate") return undefined;
-  const targetBytes = batchTargetBytesForItem(item, targetAllocation);
-  return targetBytes ? `배분 목표 ${formatBytes(targetBytes)}` : undefined;
-}
-
 function percentFromPlan(plan: SubmissionPlan): number {
   const original = state.report?.originalSize ?? 0;
   return original > 0 ? (plan.expectedSavingBytes / original) * 100 : 0;
 }
 
-function clampJpegQuality(value: number): number {
-  if (!Number.isFinite(value)) return DEFAULT_JPEG_QUALITY;
-  return Math.max(JPEG_QUALITY_FLOOR, Math.min(JPEG_QUALITY_CEILING, Math.round(value)));
-}
 
 function jpegQualityForOptimize(item?: BatchItem): number | undefined {
   // Aggressive always runs at the engine floor — never forward a manual %.
@@ -1660,7 +1519,7 @@ function renderQualityControls(plan?: SubmissionPlan): void {
     return;
   }
 
-  const isBatch = document.body.dataset.view === "batch";
+  const isBatch = state.view === "batch";
   const maxMode = state.preservationPreference === "size";
   const effectiveQualityMode = maxMode ? "auto" : state.qualityMode;
   qualityModeAuto.setAttribute("aria-pressed", effectiveQualityMode === "auto" ? "true" : "false");
@@ -1826,42 +1685,14 @@ function handleBatchQualityInput(input: HTMLInputElement): void {
   refreshBatchPlans();
 }
 
-function qualityDisplayForBatchItem(item: BatchItem, plan: SubmissionPlan): number | undefined {
-  if (state.preservationPreference === "preserve") return undefined;
-  if (state.preservationPreference === "size") return JPEG_QUALITY_FLOOR;
-  if (item.jpegQualityOverride !== undefined) return item.jpegQualityOverride;
-  if (state.qualityMode === "manual") return state.jpegQuality;
-  return plan.plannedJpegQuality;
-}
-
-function qualityLabelForBatchItem(item: BatchItem, plan: SubmissionPlan): string {
-  const display = qualityDisplayForBatchItem(item, plan);
-  if (display === undefined) return "-";
-  if (state.preservationPreference === "size") return `${display}% · 하한`;
-  if (item.jpegQualityOverride !== undefined || state.qualityMode === "manual") return `${display}%`;
-  if (state.qualityMode === "auto" && state.preservationPreference === "recommended" && plan.verdict === "need-more") {
-    return `~${display}%↓`;
-  }
-  return `${display}%`;
-}
-
 async function loadFile(path: string): Promise<void> {
-  if (state.batchRunning || state.batchAnalyzing || state.analysisRunning || state.optimizeRunning) {
+  if (!workflow.selectSingle(path)) {
     setStatus("처리 중에는 새 파일을 열 수 없습니다. 완료 후 다시 시도하세요.");
     return;
   }
-  document.body.dataset.view = "single";
+  document.body.dataset.view = state.view;
   document.body.dataset.result = "";
-  state.batchItems = [];
-  state.batchRunCompleted = false;
   batchPanel.hidden = true;
-  state.filePath = path;
-  state.report = undefined;
-  state.result = undefined;
-  state.batchReportPath = undefined;
-  state.currentPlan = undefined;
-  state.analysisRunning = true;
-  state.actionSelections.clear();
   singleWorkspace.hidden = false;
   actionPanel.hidden = true;
   actionCheckboxes.innerHTML = "";
@@ -1889,16 +1720,13 @@ async function loadFile(path: string): Promise<void> {
 
 async function analyzeFile(path: string, analysisMode: "quick" | "deep" = "quick"): Promise<void> {
   const previousReport = state.report;
-  const runId = ++analysisSequence;
+  const runId = workflow.beginAnalysis(path);
   try {
-    state.analysisRunning = true;
     setBusy("문서를 분석하는 중입니다...", { cancelable: true, kind: "analysis" });
     renderProgress(18, "파일을 불러와 분석을 준비하는 중입니다");
     const response = await window.hwpxOptimizer.analyze(path, { analysisMode });
-    if (runId !== analysisSequence || state.filePath !== path) return;
+    if (!workflow.acceptAnalysis(runId, response.report, analysisMode)) return;
     renderProgress(82, "문서 구조 · 이미지 · 목표 맞춤 품질 추정…");
-    state.report = response.report;
-    if (analysisMode === "quick") state.actionSelections.clear();
     renderAnalysis(response.report);
     if (analysisMode === "deep") analysisDetails.open = true;
     refreshSubmissionPlan();
@@ -1907,14 +1735,13 @@ async function analyzeFile(path: string, analysisMode: "quick" | "deep" = "quick
     setStatus(analysisMode === "deep" ? "상세 분석이 완료되었습니다. 최적화 계획을 확인하세요."
       : "빠른 분석이 완료되었습니다. 세부 분석 보기에서 상세 검사를 실행할 수 있습니다.");
   } catch (error) {
-    if (runId === analysisSequence) {
+    if (workflow.isCurrentAnalysis(runId)) {
       setStatus(isDocumentCancellation(error) ? "분석을 취소했습니다." : errorMessage(error));
       if (previousReport && analysisMode === "deep") refreshSubmissionPlan();
       else renderEmptySummary();
     }
   } finally {
-    if (runId === analysisSequence) {
-      state.analysisRunning = false;
+    if (workflow.finishAnalysis(runId)) {
       setIdle();
       hideProgressPanel();
       if (analysisMode === "deep") { analysisDetails.open = true; deepAnalysisButton.focus(); }
@@ -1923,12 +1750,8 @@ async function analyzeFile(path: string, analysisMode: "quick" | "deep" = "quick
 }
 
 async function optimizeCurrentFile(): Promise<void> {
-  if (!state.filePath || !state.report || state.optimizeRunning) return;
-  // Capture the file this run belongs to. If the user loads a different file
-  // while this optimize is in flight, the resolved result must not overwrite the
-  // newer file's view.
-  const requestFilePath = state.filePath;
-  state.optimizeRunning = true;
+  const requestFilePath = workflow.beginOptimization();
+  if (!requestFilePath) return;
   let succeeded = false;
   try {
     setBusy(`${modeLabel(state.mode)} 모드로 최적화하는 중입니다...`, { cancelable: true });
@@ -1942,8 +1765,7 @@ async function optimizeCurrentFile(): Promise<void> {
       targetBytes: state.currentPlan?.targetBytes ?? resolveSubmissionLimitBytes(state.submissionLimit),
       ...(jpegQualityForOptimize() !== undefined ? { jpegQuality: jpegQualityForOptimize() } : {})
     });
-    if (state.filePath !== requestFilePath) return;
-    state.result = response;
+    if (!workflow.acceptOptimization(requestFilePath, response)) return;
     renderResult(response.report, response.outputPath, response.reportPath);
     setStatus("최적화가 완료되었습니다. 파일을 열어 제출 전 상태를 확인하세요.");
     succeeded = true;
@@ -1953,8 +1775,7 @@ async function optimizeCurrentFile(): Promise<void> {
       else { renderVerificationFailure(error); setStatus(errorMessage(error)); }
     }
   } finally {
-    state.optimizeRunning = false;
-    if (state.filePath === requestFilePath) {
+    if (workflow.finishOptimization(requestFilePath)) {
       setIdle();
       if (!succeeded) resetProgressAnimation();
       hideProgressPanel();
@@ -2191,22 +2012,7 @@ function batchResultDetailsText(input: { done: BatchItem[]; failed: BatchItem[];
 
 function resetBatchCompletedItems(): void {
   if (state.batchRunning || state.batchAnalyzing) return;
-  let resetCount = 0;
-  for (const item of state.batchItems) {
-    if (item.status !== "done" && item.status !== "failed" && item.status !== "cancelled") continue;
-    item.status = "pending";
-    item.report = item.analysisReport ?? (item.report?.kind === "analysis" ? item.report : undefined);
-    item.actualSizeBytes = undefined;
-    item.actualSizeLabel = undefined;
-    item.outputPath = undefined;
-    item.reportPath = undefined;
-    item.savedBytes = undefined;
-    item.savedPercent = undefined;
-    item.error = undefined;
-    resetCount += 1;
-  }
-  state.batchReportPath = undefined;
-  state.batchRunCompleted = false;
+  const resetCount = workflow.retryBatch();
   refreshBatchPlanItems();
   renderBatchList();
   renderBatchResultPanel();
@@ -2427,7 +2233,7 @@ function setAllActionSelections(enabled: boolean): void {
 }
 
 function currentPlanActions(): SubmissionActionId[] {
-  if (document.body.dataset.view === "batch") {
+  if (state.view === "batch") {
     return createBatchPlanSummary()?.rows.flatMap((row) => row.actions ?? []) ?? [];
   }
   return state.currentPlan ? visiblePlanRows(state.currentPlan).flatMap((row) => row.actions) : [];
@@ -2452,18 +2258,11 @@ function syncActionCheckboxIndeterminateState(): void {
 }
 
 function enterBatchMode(paths: string[], options: { preservePolicy?: boolean } = {}): void {
-  if (state.batchRunning || state.batchAnalyzing || state.analysisRunning || state.optimizeRunning) {
+  if (!workflow.appendBatch(paths, options.preservePolicy)) {
     setStatus("처리 중에는 새 파일을 추가할 수 없습니다. 완료 후 다시 시도하세요.");
     return;
   }
-  document.body.dataset.view = "batch";
-  state.filePath = undefined;
-  state.report = undefined;
-  state.result = undefined;
-  state.batchReportPath = undefined;
-  state.batchRunCompleted = false;
-  state.currentPlan = undefined;
-  if (!options.preservePolicy) state.actionSelections.clear();
+  document.body.dataset.view = state.view;
   resultPanel.hidden = true;
   resultGuidance.textContent = "";
   resetVerificationPanel();
@@ -2473,17 +2272,6 @@ function enterBatchMode(paths: string[], options: { preservePolicy?: boolean } =
   selectedFileCard.hidden = true;
   dropZone.hidden = true;
 
-  const seen = new Set(state.batchItems.map((item) => item.path));
-  for (const path of paths) {
-    if (seen.has(path)) continue;
-    seen.add(path);
-    state.batchItems.push({
-      path,
-      fileName: fileNameFromPath(path),
-      selected: true,
-      status: "pending"
-    });
-  }
   refreshSubmissionPlan();
   selectedFileCard.hidden = true;
   dropZone.hidden = true;
@@ -2515,8 +2303,8 @@ function renderBatchList(): void {
 
 function renderSelectionClearButton(): void {
   const busy = state.batchAnalyzing || state.batchRunning || state.analysisRunning || state.optimizeRunning;
-  const isBatch = document.body.dataset.view === "batch" && state.batchItems.length > 0;
-  const isSingle = document.body.dataset.view === "single" && Boolean(state.filePath);
+  const isBatch = state.view === "batch" && state.batchItems.length > 0;
+  const isSingle = state.view === "single" && Boolean(state.filePath);
   batchClearButton.disabled = busy || (!isBatch && !isSingle);
   batchClearButton.innerHTML = `<span class="trash-icon" aria-hidden="true"></span>${isSingle ? "파일 제거" : "목록 비우기"}`;
   startOverButtons[0]!.hidden = !isBatch && !isSingle;
@@ -2531,19 +2319,10 @@ function returnToStart(): void {
 }
 
 function clearSelectedFiles(message: string): void {
-  analysisSequence += 1;
-  document.body.dataset.view = "empty";
+  workflow.clearSelection();
+  document.body.dataset.view = state.view;
   document.body.dataset.result = "";
   document.body.dataset.batchResult = "";
-  state.filePath = undefined;
-  state.report = undefined;
-  state.result = undefined;
-  state.currentPlan = undefined;
-  state.batchItems = [];
-  state.batchReportPath = undefined;
-  state.batchRunCompleted = false;
-  state.batchCancelled = false;
-  state.actionSelections.clear();
   batchList.innerHTML = "";
   batchPanel.hidden = true;
   batchResultPanel.hidden = true;
@@ -2579,19 +2358,10 @@ function clearSelectedFiles(message: string): void {
 }
 
 function promoteRemainingBatchItemToSingle(item: BatchItem): void {
-  analysisSequence += 1;
-  document.body.dataset.view = "single";
+  workflow.promote(item);
+  document.body.dataset.view = state.view;
   document.body.dataset.result = "";
   document.body.dataset.batchResult = "";
-  state.filePath = item.path;
-  state.report = item.report;
-  state.result = undefined;
-  state.currentPlan = undefined;
-  state.batchItems = [];
-  state.batchReportPath = undefined;
-  state.batchRunCompleted = false;
-  state.batchCancelled = false;
-  state.actionSelections.clear();
   batchList.innerHTML = "";
   batchPanel.hidden = true;
   batchResultPanel.hidden = true;
@@ -2618,8 +2388,6 @@ function promoteRemainingBatchItemToSingle(item: BatchItem): void {
     return;
   }
 
-  state.report = undefined;
-  state.analysisRunning = true;
   renderPendingAnalysisSummary();
   setStatus("남은 1개 파일을 단일 모드로 전환하고 분석합니다.");
   void analyzeFile(item.path);
@@ -2635,8 +2403,7 @@ function setDragOver(active: boolean): void {
 async function analyzeBatchItems(): Promise<void> {
   const pendingItems = state.batchItems.filter((item) => !item.report && item.status === "pending");
   if (pendingItems.length > 0) {
-    state.batchAnalyzing = true;
-    state.batchCancelled = false;
+    workflow.beginBatchAnalysis();
     setBusy("파일 목록을 분석하는 중입니다...", { cancelable: true, kind: "analysis" });
     renderProgress(4, "일괄 분석을 준비하는 중입니다");
     renderBatchList();
@@ -2645,7 +2412,7 @@ async function analyzeBatchItems(): Promise<void> {
   try {
     for (const item of state.batchItems) {
       if (state.batchCancelled) {
-        if (item.status === "pending" && !item.report) item.status = "cancelled";
+        if (item.status === "pending" && !item.report) workflow.cancelBatchItem(item);
         continue;
       }
       if (item.report || item.status !== "pending") continue;
@@ -2653,30 +2420,9 @@ async function analyzeBatchItems(): Promise<void> {
         const percentBase = pendingItems.length > 0 ? (analyzedCount / pendingItems.length) * 88 : 0;
         renderProgress(6 + percentBase, `${item.fileName} 분석 중`);
         const response = await window.hwpxOptimizer.analyze(item.path);
-        item.report = response.report;
-        item.analysisReport = response.report;
-        item.originalSizeBytes = response.report.originalSize;
+        workflow.recordBatchAnalysis(item, response.report);
         const targetAllocation = summarizeAggregateTargetAllocation(state.batchItems);
-        const plan = createSubmissionPlan(response.report, {
-          submissionLimit: batchSubmissionLimitForItem(item, targetAllocation),
-          preservationPreference: state.preservationPreference,
-          actionOverrides: state.actionSelections,
-          ...(state.qualityMode === "manual" && state.preservationPreference !== "preserve"
-            ? { jpegQuality: state.jpegQuality }
-            : {})
-        });
-        item.expectedSizeBytes = plan.expectedSizeBytes;
-        item.originalSizeLabel = plan.originalSizeLabel;
-        item.expectedSizeLabel = plan.expectedSizeLabel.replace(/^약 /, "");
-        item.targetLabel = batchTargetLabelForItem(item, targetAllocation);
-        item.targetStatusLabel = plan.verdictLabel;
-        item.qualityLabel = qualityLabelForBatchItem(item, plan);
-        item.jpegQualityDisplay = qualityDisplayForBatchItem(item, plan);
-        item.qualityEditable =
-          state.preservationPreference !== "size" &&
-          state.preservationPreference !== "preserve" &&
-          (state.qualityMode === "manual" || item.jpegQualityOverride !== undefined);
-        item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item, targetAllocation);
+        batchPlanner.refresh(item, targetAllocation);
         analyzedCount += 1;
         renderProgress(
           6 + (pendingItems.length > 0 ? (analyzedCount / pendingItems.length) * 88 : 88),
@@ -2686,8 +2432,7 @@ async function analyzeBatchItems(): Promise<void> {
       } catch (error) {
         analyzedCount += 1;
         const cancelled = isDocumentCancellation(error);
-        item.status = cancelled ? "cancelled" : "failed";
-        item.error = cancelled ? undefined : errorMessage(error);
+        workflow.failBatchItem(item, cancelled ? undefined : errorMessage(error));
         renderBatchList();
       }
     }
@@ -2698,7 +2443,7 @@ async function analyzeBatchItems(): Promise<void> {
     }
   } finally {
     if (pendingItems.length > 0) {
-      state.batchAnalyzing = false;
+      workflow.finishBatchAnalysis();
       setIdle();
       hideProgressPanel();
     }
@@ -2718,28 +2463,7 @@ function refreshBatchPlanItems(): void {
     if (!item.report) continue;
     // Terminal rows keep the actual optimize outcome — do not re-estimate from the result report.
     if (item.status === "done" || item.status === "failed" || item.status === "cancelled") continue;
-    const jpegQuality =
-      state.preservationPreference === "size" || state.preservationPreference === "preserve"
-        ? undefined
-        : item.jpegQualityOverride ??
-          (state.qualityMode === "manual" ? state.jpegQuality : undefined);
-    const plan = createSubmissionPlan(item.report, {
-      submissionLimit: batchSubmissionLimitForItem(item, targetAllocation),
-      preservationPreference: state.preservationPreference,
-      actionOverrides: state.actionSelections,
-      ...(jpegQuality !== undefined ? { jpegQuality } : {})
-    });
-    item.expectedSizeBytes = plan.expectedSizeBytes;
-    item.expectedSizeLabel = plan.expectedSizeLabel.replace(/^약 /, "");
-    item.targetLabel = batchTargetLabelForItem(item, targetAllocation);
-    item.targetStatusLabel = plan.verdictLabel;
-    item.qualityLabel = qualityLabelForBatchItem(item, plan);
-    item.jpegQualityDisplay = qualityDisplayForBatchItem(item, plan);
-    item.qualityEditable =
-      state.preservationPreference !== "size" &&
-      state.preservationPreference !== "preserve" &&
-      (state.qualityMode === "manual" || item.jpegQualityOverride !== undefined);
-    item.allocatedTargetLabel = batchAllocatedTargetLabelForItem(item, targetAllocation);
+    batchPlanner.refresh(item, targetAllocation);
   }
 }
 
@@ -2756,11 +2480,12 @@ function handleBatchRowAction(button: HTMLButtonElement): void {
     void window.hwpxOptimizer.openPath(item.reportPath);
   } else if (action === "remove") {
     if (state.batchRunning || state.batchAnalyzing) return;
-    state.batchItems.splice(index, 1);
+    if (!workflow.removeBatchItem(index)) return;
     if (state.batchItems.length === 0) {
       batchPanel.hidden = true;
       dropZone.hidden = false;
-      document.body.dataset.view = "empty";
+      workflow.clearSelection();
+      document.body.dataset.view = state.view;
       singleWorkspace.hidden = false;
       renderEmptySummary();
       setStatus("배치 목록을 비웠습니다.");
@@ -2779,9 +2504,7 @@ async function runBatch(): Promise<void> {
     setStatus("처리할 파일을 하나 이상 선택하세요.");
     return;
   }
-  state.batchRunning = true;
-  state.batchRunCompleted = false;
-  state.batchCancelled = false;
+  workflow.beginBatch();
   setBusy(`${selectedPending}개 파일을 처리합니다.`, {
     cancelable: true
   });
@@ -2793,10 +2516,10 @@ async function runBatch(): Promise<void> {
     // Unchecked files stay pending and are intentionally skipped.
     if (item.status !== "pending" || !item.selected) continue;
     if (state.batchCancelled) {
-      item.status = "cancelled";
+      workflow.cancelBatchItem(item);
       continue;
     }
-    item.status = "running";
+    workflow.beginBatchItem(item);
     const targetAllocation = summarizeAggregateTargetAllocation(state.batchItems);
     renderBatchList();
     // Reset per item so each file's own 0->100 progress (from onOptimizeProgress)
@@ -2805,11 +2528,7 @@ async function runBatch(): Promise<void> {
     renderProgress(2, `${index + 1}/${state.batchItems.length} ${item.fileName} 처리 중`);
     try {
       const plan = item.report
-        ? createSubmissionPlan(item.report, {
-            submissionLimit: batchSubmissionLimitForItem(item, targetAllocation),
-            preservationPreference: state.preservationPreference,
-            actionOverrides: state.actionSelections
-          })
+        ? batchPlanner.createPlan(item, item.report, targetAllocation, false)
         : undefined;
       const jpegQuality = jpegQualityForOptimize(item);
       const response = await window.hwpxOptimizer.optimize({
@@ -2818,27 +2537,25 @@ async function runBatch(): Promise<void> {
         outputDirectory: state.outputDirectory,
         outputMode: "batch",
         actions: selectedActionsForPlan(plan),
-        targetBytes: batchTargetBytesForItem(item, targetAllocation),
+        targetBytes: batchPlanner.targetBytes(item, targetAllocation),
         ...(jpegQuality !== undefined ? { jpegQuality } : {})
       });
-      Object.assign(item, applyOptimizationResultToBatchItem(item, response));
+      workflow.completeBatchItem(item, response);
     } catch (error) {
       if (isDocumentCancellation(error)) {
-        item.status = "cancelled";
+        workflow.cancelBatchItem(item);
       } else {
-        item.status = "failed";
-        item.error = errorMessage(error);
+        workflow.failBatchItem(item, errorMessage(error));
       }
     }
     renderBatchList();
   }
 
-  state.batchRunning = false;
-  state.batchRunCompleted = true;
+  workflow.finishBatch();
   cancelButton.disabled = true;
   hideProgressPanel();
   const { reportPath: batchReportPath, error: reportError } = await saveBatchSummaryReport();
-  state.batchReportPath = batchReportPath;
+  workflow.setBatchReport(batchReportPath);
   renderBatchList();
   renderBatchResultPanel();
   const completed = state.batchItems.filter((item) => item.status === "done").length;

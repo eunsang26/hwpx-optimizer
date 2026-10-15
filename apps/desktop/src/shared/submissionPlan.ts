@@ -1,3 +1,5 @@
+import { ACTION_CATALOG, type SubmissionActionBucket } from "./actionCatalog.js";
+import { JPEG_QUALITY_FLOOR, JPEG_QUALITY_CEILING, DEFAULT_JPEG_QUALITY as BASELINE_JPEG_QUALITY_BALANCED } from "./qualityPolicy.js";
 import type { OptimizationOpportunityGroup, OptimizationReport } from "@hwpx-optimizer/core";
 import { evaluatePackageSizeEstimate, targetStatusForBytes } from "./corePlanning.js";
 import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
@@ -24,12 +26,9 @@ export type SubmissionLimitId =
 export type PreservationPreference = "preserve" | "recommended" | "size";
 export type PlanStatus = "target-met" | "target-missed" | "already-under-target" | "no-target";
 export type PlanKind = "automatic" | "custom";
-export type SubmissionActionBucket = "image" | "metadata" | "author";
+export type { SubmissionActionBucket } from "./actionCatalog.js";
 export type SubmissionActionId = OptimizationOpportunityGroup["action"];
 
-const JPEG_QUALITY_FLOOR = 60;
-const JPEG_QUALITY_CEILING = 95;
-const BASELINE_JPEG_QUALITY_BALANCED = 88;
 
 export type SubmissionLimit = {
   id: SubmissionLimitId;
@@ -119,45 +118,6 @@ export const PRESERVATION_LABELS: Record<PreservationPreference, string> = {
   size: "용량 우선"
 };
 
-const ACTION_DISPLAY_LABELS: Partial<Record<OptimizationOpportunityGroup["action"], string>> = {
-  "minify-xml": "문서 XML 정리",
-  "remove-unused": "사용하지 않는 파일 제거",
-  "resize-jpeg": "큰 JPEG 리사이즈",
-  "resize-png": "큰 PNG 리사이즈",
-  "convert-bmp-to-png": "BMP를 PNG로 변환",
-  "convert-tiff-to-png": "TIFF를 PNG로 변환",
-  "consolidate-duplicate-images": "중복 이미지 참조 정리",
-  "strip-metadata": "EXIF 제외 이미지 정보 제거",
-  "optimize-png": "PNG 무손실 최적화",
-  "clean-shape-comment": "작성자·편집 흔적 정리"
-};
-
-const ACTION_BUCKETS: Partial<Record<OptimizationOpportunityGroup["action"], SubmissionActionBucket>> = {
-  "minify-xml": "metadata",
-  "remove-unused": "metadata",
-  "resize-jpeg": "image",
-  "resize-png": "image",
-  "convert-bmp-to-png": "image",
-  "convert-tiff-to-png": "image",
-  "consolidate-duplicate-images": "image",
-  "strip-metadata": "metadata",
-  "optimize-png": "metadata",
-  "clean-shape-comment": "author"
-};
-
-const ACTION_PRIORITY_ORDER: Partial<Record<SubmissionActionId, number>> = {
-  "consolidate-duplicate-images": 10,
-  "remove-unused": 20,
-  "minify-xml": 30,
-  "strip-metadata": 40,
-  "optimize-png": 50,
-  "clean-shape-comment": 60,
-  "convert-bmp-to-png": 70,
-  "convert-tiff-to-png": 80,
-  "resize-jpeg": 90,
-  "resize-png": 100
-};
-
 const ESTIMATED_SAVING_DISPLAY_RATIO = 0.95;
 
 export function modeForPreservation(preference: PreservationPreference): OptimizationMode {
@@ -209,7 +169,7 @@ export function createSubmissionPlan(
       actions: [toggle.action],
       selectedActions: checked ? [toggle.action] : [],
       bucket,
-      label: ACTION_DISPLAY_LABELS[toggle.action] ?? toggle.label,
+      label: ACTION_CATALOG[toggle.action]?.planLabel ?? toggle.label,
       count: toggle.count,
       checked,
       partiallyChecked: false,
@@ -431,11 +391,11 @@ function createPriorityActionRows(actionRows: RawSubmissionActionRow[]): Submiss
 }
 
 function actionBucket(action: OptimizationOpportunityGroup["action"]): SubmissionActionBucket {
-  return ACTION_BUCKETS[action] ?? "image";
+  return ACTION_CATALOG[action]?.bucket ?? "image";
 }
 
 function actionPriority(action: SubmissionActionId): number {
-  return ACTION_PRIORITY_ORDER[action] ?? 100;
+  return ACTION_CATALOG[action]?.priority ?? 100;
 }
 
 function clampRatio(value: number): number {

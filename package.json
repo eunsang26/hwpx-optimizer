@@ -95,6 +95,7 @@
       "apps/desktop/dist/main.js",
       "apps/desktop/dist/preload.js",
       "apps/desktop/dist/renderer.js",
+      "apps/desktop/dist/renderer/**/*.js",
       "apps/desktop/dist/main/**/*.js",
       "apps/desktop/dist/shared/**/*.js",
       "apps/desktop/dist/**/*.cjs",

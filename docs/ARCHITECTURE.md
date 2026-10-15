@@ -199,6 +199,20 @@ Selected inputs are protected even when output overwrite is enabled. The main pr
 
 `apps/desktop/src/main.ts` owns Electron window and IPC wiring. `apps/desktop/src/preload.ts` exposes a narrow bridge to the renderer. `apps/desktop/src/renderer.ts` owns DOM updates and user interaction.
 
+The desktop responsibilities are split into the following modules:
+
+| Module | Responsibility |
+| --- | --- |
+| `main/documentController.ts` | Authorizes analysis/optimization/report/preview requests, runs document operations, and closes the queue before disposing its worker. It receives settings and dependencies without importing Electron. Its request types are also used by the typed preload bridge. |
+| `main/pathPermissions.ts` | Owns session-scoped canonical input/output/generated-path grants and original filesystem identities. A worker restart cannot reset these grants or identities. |
+| `main/documentOperations.ts`, `main/documentWorkerClient.ts` | Own operation cancellation/cleanup and worker request/generation lifetimes, respectively. IPC handlers delegate rather than reimplementing these lifetimes. |
+| `main/smoke/runtime.ts`, `main/smoke/desktopSmoke.ts` | Test-only diagnostics, offline probe, dialog adapter and desktop assertions; loaded dynamically only in smoke mode. The separate `main/workflowSmoke.ts` runs the 11 behavior regressions. |
+| `renderer/workflowState.ts` | Owns single/batch document selection, analysis tokens, cancellation, completion and retry transitions, without DOM/IPC/filesystem dependencies. Document view state lives in the model; renderer code projects it into DOM attributes. |
+| `renderer/batchPlanning.ts` | Shares row plans and target/quality decoration between initial analysis, policy refresh, summaries and execution. It uses the common strict integer allocator through `shared/batchTargetAlloc.ts`. Completed rows retain measured outcomes. |
+| `shared/actionCatalog.ts`, `shared/qualityPolicy.ts`, `shared/windowConfig.ts` | Supply one desktop action catalog, JPEG bounds/default/clamping and window dimensions. Context-specific labels retain their established wording. The typed catalog requires every known action's bucket and priority. |
+
+The renderer remains the event/DOM adapter and owns display-only formatting and editable policy controls. Its document lifecycle mutations go through `RendererWorkflow`; no state module reads DOM attributes. Packaged files explicitly include `dist/renderer/**/*.js` as well as main/shared modules. The existing real Electron workflow smoke exercises the modules together; independent tests check cancelled analysis finalizers, mixed-result retry, remaining aggregate budget, permission denial, original protection after worker recreation and shutdown ordering.
+
 The runtime preload script is copied from `apps/desktop/src/preload.cjs` so Electron loads a CommonJS preload file reliably under the app's ESM package settings. `apps/desktop/src/preload.ts` remains the TypeScript API shape used by renderer code.
 
 Analysis and optimization computation run through `apps/desktop/src/main/documentWorker.ts`, a persistent Node worker thread. It returns verified bytes and the optimization report without reserving or writing output names. Dedicated ArrayBuffers transfer ownership to main; small or pooled buffers are copied. Input-cache views sharing the transferred buffer are evicted before transfer so later analysis cannot reuse detached bytes.

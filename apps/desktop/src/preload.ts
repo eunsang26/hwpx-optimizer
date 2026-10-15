@@ -1,3 +1,4 @@
+import type { DesktopOptimizeRequest, DesktopBatchReportRequest } from "./main/documentController.js";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
 import type { DesktopImagePreviewInput } from "./shared/imagePreview.js";
@@ -18,15 +19,7 @@ const api = {
   loadSettings: () => ipcRenderer.invoke("settings:load"),
   saveSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("settings:save", patch),
   analyze: (filePath: string, options?: { analysisMode?: "quick" | "deep" }): Promise<DesktopAnalysisResult> => ipcRenderer.invoke("hwpx:analyze", filePath, options),
-  optimize: (input: {
-    filePath: string;
-    mode: "safe" | "balanced" | "aggressive";
-    outputDirectory?: string;
-    outputMode?: "single" | "batch";
-    actions?: string[];
-    targetBytes?: number;
-    jpegQuality?: number;
-  }): Promise<DesktopOptimizeResult> => ipcRenderer.invoke("hwpx:optimize", input),
+  optimize: (input: DesktopOptimizeRequest): Promise<DesktopOptimizeResult> => ipcRenderer.invoke("hwpx:optimize", input),
   cancelAnalyze: (): Promise<CancellationResult> => ipcRenderer.invoke("hwpx:cancel-analyze"),
   cancelOptimize: (): Promise<CancellationResult> => ipcRenderer.invoke("hwpx:cancel-optimize"),
   onOptimizeProgress: (callback: (progress: { percent: number; item: string }) => void): (() => void) => {
@@ -35,23 +28,7 @@ const api = {
     return () => ipcRenderer.off("hwpx:optimize-progress", listener);
   },
   verify: (filePath: string) => ipcRenderer.invoke("hwpx:verify", filePath),
-  saveBatchReport: (input: {
-    firstInputPath: string;
-    outputDirectory?: string;
-    mode: "safe" | "balanced" | "aggressive";
-    batchTargetBytes?: number;
-    items: Array<{
-      input: string;
-      status: "done" | "failed" | "cancelled";
-      output?: string;
-      report?: string;
-      error?: string;
-      originalSize?: number;
-      optimizedSize?: number;
-      savedBytes?: number;
-      savedPercent?: number;
-    }>;
-  }): Promise<{ reportPath: string }> => ipcRenderer.invoke("hwpx:save-batch-report", input),
+  saveBatchReport: (input: DesktopBatchReportRequest): Promise<{ reportPath: string }> => ipcRenderer.invoke("hwpx:save-batch-report", input),
   previewImageDiffs: (input: DesktopImagePreviewInput) =>
     ipcRenderer.invoke("hwpx:image-preview", input),
   showItem: (filePath: string) => ipcRenderer.invoke("shell:show-item", filePath),
