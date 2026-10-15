@@ -162,6 +162,7 @@ const chooseButton = requireButton("choose-button");
 const chooseFolderButton = requireButton("choose-folder-button");
 const emptyChooseButton = requireButton("empty-choose-button");
 const emptyFolderButton = requireButton("empty-folder-button");
+const startOverButtons = ["start-over-button", "result-start-over-button", "batch-start-over-button"].map(requireButton);
 const optimizeButton = requireButton("optimize-button");
 const batchPanel = requireElement("batch-panel");
 const batchList = requireElement("batch-list");
@@ -453,6 +454,7 @@ async function init(): Promise<void> {
     if (state.batchReportPath) void window.hwpxOptimizer.openPath(state.batchReportPath);
   });
   batchRetryButton.addEventListener("click", resetBatchCompletedItems);
+  for (const button of startOverButtons) button.addEventListener("click", returnToStart);
   reverifyButton.addEventListener("click", reverifyCurrentResult);
   compareButton.addEventListener("click", openImageCompareModal);
   compareCloseButton.addEventListener("click", closeImageCompareModal);
@@ -938,6 +940,10 @@ function refreshSubmissionPlan(): void {
 }
 
 function renderDefaultPlan(): void {
+  requireElement("empty-policy-title").textContent = resolveSubmissionLimitBytes(state.submissionLimit)
+    ? `제출 기준 ${targetLabelForDisplay()} 미만` : "제출 용량 제한 없음";
+  requireElement("empty-policy-description").textContent =
+    `${state.batchTargetMode === "aggregate" ? "전체 합계 판정" : "파일별 판정"} · ${preservationSelect.selectedOptions[0]?.textContent ?? modeLabel(state.mode)}`;
   planTitle.textContent = "자동 최적화 계획";
   planSummary.textContent = "파일을 분석하면 예상 절감량을 표시합니다.";
   planTotal.textContent = "예상 절감 0 B";
@@ -2218,6 +2224,7 @@ let compareReturnFocus: HTMLElement | null = null;
 
 async function openImageCompareModal(): Promise<void> {
   if (!state.filePath || !state.result) return;
+  const requestResult = state.result;
   compareReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   compareModal.hidden = false;
   compareCloseButton.focus();
@@ -2229,6 +2236,7 @@ async function openImageCompareModal(): Promise<void> {
       optimizedPath: state.result.outputPath,
       resourceMappings: state.result.report.resourceMappings
     });
+    if (state.result !== requestResult || compareModal.hidden) return;
     if (pairs.length === 0) {
       compareSummary.textContent = "변경된 이미지가 없습니다.";
       compareList.innerHTML = "<p class=\"empty\">표시할 이미지 변경 사항이 없습니다.</p>";
@@ -2237,6 +2245,7 @@ async function openImageCompareModal(): Promise<void> {
     compareSummary.textContent = `상위 ${pairs.length}개 이미지 변경 사항을 표시합니다.`;
     compareList.innerHTML = pairs.map(imageComparePairHtml).join("");
   } catch (error) {
+    if (state.result !== requestResult || compareModal.hidden) return;
     compareSummary.textContent = "이미지 비교를 불러오지 못했습니다.";
     compareList.innerHTML = `<p class="empty">${escapeHtml(errorMessage(error))}</p>`;
   }
@@ -2254,10 +2263,12 @@ function closeImageCompareModal(): void {
 
 async function reverifyCurrentResult(): Promise<void> {
   if (!state.result) return;
+  const requestResult = state.result;
   reverifyButton.disabled = true;
   setStatus("결과 파일을 다시 검증하는 중입니다...");
   try {
     const response = await window.hwpxOptimizer.verify(state.result.outputPath);
+    if (state.result !== requestResult) return;
     setStatus(response.ok ? "결과 파일이 유효합니다." : "검증 결과를 받지 못했습니다.");
     analysisDetailSummary.innerHTML =
       '<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>재검증 완료</span>';
@@ -2265,6 +2276,7 @@ async function reverifyCurrentResult(): Promise<void> {
       ? "결과 파일 재검증을 통과했습니다."
       : "재검증 응답을 받았지만 통과 여부를 확인하지 못했습니다.";
   } catch (error) {
+    if (state.result !== requestResult) return;
     setStatus(`검증 실패: ${errorMessage(error)}`);
     analysisDetailSummary.innerHTML =
       '<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>검증 실패</span>';
@@ -2429,11 +2441,20 @@ function renderBatchList(): void {
 }
 
 function renderSelectionClearButton(): void {
-  const busy = state.batchAnalyzing || state.batchRunning || state.analysisRunning;
+  const busy = state.batchAnalyzing || state.batchRunning || state.analysisRunning || state.optimizeRunning;
   const isBatch = document.body.dataset.view === "batch" && state.batchItems.length > 0;
   const isSingle = document.body.dataset.view === "single" && Boolean(state.filePath);
   batchClearButton.disabled = busy || (!isBatch && !isSingle);
   batchClearButton.innerHTML = `<span class="trash-icon" aria-hidden="true"></span>${isSingle ? "파일 제거" : "목록 비우기"}`;
+  startOverButtons[0]!.hidden = !isBatch && !isSingle;
+  for (const button of startOverButtons) button.disabled = busy;
+}
+
+function returnToStart(): void {
+  if (state.batchAnalyzing || state.batchRunning || state.analysisRunning || state.optimizeRunning) return;
+  clearSelectedFiles("처음 화면으로 돌아왔습니다. 저장된 결과 파일은 유지됩니다. 새 파일을 선택하세요.");
+  window.scrollTo(0, 0);
+  emptyChooseButton.focus();
 }
 
 function clearSelectedFiles(message: string): void {
@@ -2448,6 +2469,7 @@ function clearSelectedFiles(message: string): void {
   state.batchItems = [];
   state.batchReportPath = undefined;
   state.batchRunCompleted = false;
+  state.batchCancelled = false;
   state.actionSelections.clear();
   batchList.innerHTML = "";
   batchPanel.hidden = true;
@@ -2458,10 +2480,23 @@ function clearSelectedFiles(message: string): void {
   actionPanel.hidden = true;
   actionCheckboxes.innerHTML = "";
   resultPanel.hidden = true;
+  resultSummary.innerHTML = "";
+  analysisGrid.innerHTML = "";
+  opportunityList.innerHTML = "";
+  warningList.innerHTML = "";
+  categoryChart.innerHTML = "";
+  analysisDetailSummary.innerHTML = '<span class="search-icon" aria-hidden="true"></span><strong>세부 분석 보기</strong><span>분석 대기</span>';
+  batchResultStats.innerHTML = "";
+  batchResultDetails.textContent = "";
+  requireElement("output-path").textContent = "";
+  requireElement("report-path").textContent = "";
   resultGuidance.textContent = "";
   fileName.textContent = "HWPX 파일 가져오기";
   fileMeta.innerHTML = "<strong>창 어디에든</strong> 끌어다 놓거나, 아래 버튼으로 선택하세요.";
   resetVerificationPanel();
+  closeImageCompareModal();
+  hideProgressPanel();
+  resetProgressAnimation();
   renderSubmissionControls();
   renderDefaultPlan();
   renderEmptySummary();

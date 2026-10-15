@@ -29,6 +29,9 @@
             <span id="status-text" class="sr-only">대기 중입니다.</span>
           </div>
           <div class="top-actions">
+            <button id="start-over-button" type="button" class="chrome-button start-over-button" hidden>
+              처음으로
+            </button>
             <button id="help-button" type="button" class="chrome-button" title="도움말" aria-label="도움말">
               <span class="help-icon" aria-hidden="true"></span>
               도움말
@@ -181,10 +184,10 @@
           </section>
         </section>
 
-        <section id="empty-policy-review" class="empty-policy-review" aria-label="기본 최적화 정책">
+        <section id="empty-policy-review" class="empty-policy-review" aria-label="현재 최적화 정책">
           <div>
-            <strong>결재 기본값 40MB 미만</strong>
-            <p>파일별 판정 · 균형은 목표에 맞춰 필요한 만큼만 줄입니다.</p>
+            <strong id="empty-policy-title">제출 기준 40MB 미만</strong>
+            <p id="empty-policy-description">파일별 판정 · 균형 · 목표 맞춤</p>
           </div>
         </section>
 
@@ -319,6 +322,7 @@
               <button id="batch-open-folder-button" type="button">폴더 보기</button>
               <button id="batch-open-report-button" type="button" class="ghost" disabled>결과 리포트 (JSON)</button>
               <button id="batch-retry-button" type="button" class="ghost">다시 최적화</button>
+              <button id="batch-start-over-button" type="button" class="ghost">처음으로</button>
             </div>
           </section>
 
@@ -334,6 +338,7 @@
                 <button id="compare-button" class="ghost" disabled>결과 비교</button>
                 <button id="reverify-button" class="ghost" disabled>다시 검증</button>
                 <button id="open-report-button" class="ghost" disabled>현재 리포트</button>
+                <button id="result-start-over-button" type="button" class="ghost">처음으로</button>
               </div>
             </div>
             <div id="result-summary" class="metric-grid"></div>

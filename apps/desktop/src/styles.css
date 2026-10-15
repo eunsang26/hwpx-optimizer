@@ -364,6 +364,18 @@ body[data-view="empty"] .shell {
   color: var(--ink);
 }
 
+.start-over-button {
+  margin-right: 6px;
+  border: 1px solid var(--blue-tint);
+  background: var(--blue-soft);
+  color: var(--blue-deep);
+}
+
+.start-over-button:hover:not(:disabled) {
+  background: var(--blue-tint);
+  color: var(--blue-deep);
+}
+
 /* Safety row sits inline inside .brand-row to keep the masthead single-line */
 .safety-row {
   display: inline-flex;

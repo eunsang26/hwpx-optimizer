@@ -1241,6 +1241,30 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
   if (spoofedDropRegistration.length !== 0) {
     throw new Error("Desktop smoke failed: spoofed dropped-file path was registered");
   }
+  const savedOutputBeforeReset = await readFileFs(workflow.outputPath!);
+  const resetUi = await window.webContents.executeJavaScript(`
+    (() => {
+      const controls = ["submission-limit-select", "preservation-select", "batch-target-mode-select"];
+      const policy = controls.map((id) => document.getElementById(id)?.value).join("|");
+      document.getElementById("start-over-button")?.click();
+      return {
+        view: document.body.dataset.view,
+        focus: document.activeElement?.id,
+        batchRows: document.querySelectorAll("#batch-list tr").length,
+        resultHidden: document.getElementById("result-panel")?.hidden,
+        batchResultHidden: document.getElementById("batch-result-panel")?.hidden,
+        progressHidden: document.getElementById("progress-panel")?.hidden,
+        optimizeDisabled: document.getElementById("optimize-button")?.disabled,
+        resetHidden: document.getElementById("start-over-button")?.hidden,
+        policyRetained: policy === controls.map((id) => document.getElementById(id)?.value).join("|")
+      };
+    })()
+  `);
+  if (resetUi.view !== "empty" || resetUi.focus !== "empty-choose-button" || resetUi.batchRows !== 0 ||
+      !resetUi.resultHidden || !resetUi.batchResultHidden || !resetUi.progressHidden || !resetUi.optimizeDisabled ||
+      !resetUi.resetHidden || !resetUi.policyRetained || !(await readFileFs(workflow.outputPath!)).equals(savedOutputBeforeReset)) {
+    throw new Error(`Desktop smoke failed: return to start did not reset the view and retain saved files/settings ${JSON.stringify(resetUi)}`);
+  }
   await window.webContents.executeJavaScript(`
     window.hwpxOptimizer.saveSettings({ batchTargetMode: "per-file" })
   `);
