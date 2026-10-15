@@ -126,7 +126,7 @@ describe("repository runtime and cleanup configuration", () => {
     expect(packageJson.build?.asarUnpack).toEqual(["node_modules/@img/sharp-win32-x64/**/*"]);
     expect(packageJson.build?.extraFiles).toContainEqual({ from: "TERMS.txt", to: "TERMS.txt" });
     expect(packageJson.build?.afterPack).toBe("scripts/prune-electron-locales.cjs");
-    expect(packageJson.build?.electronLanguages).toEqual(["ko"]);
+    expect(packageJson.build?.electronLanguages).toEqual(["ko", "en-US"]);
     expect(packageJson.build?.files).toContain("!node_modules/**/README*");
     expect(packageJson.build?.files).toContain("!node_modules/**/CHANGELOG*");
     expect(packageJson.build?.files).toContain("!node_modules/**/CHANGES*");
@@ -178,12 +178,12 @@ describe("repository runtime and cleanup configuration", () => {
     expect(releaseManifestVerifier).toContain("Release notice is missing");
   });
 
-  it("keeps Windows package locale pruning scoped to Korean", async () => {
+  it("keeps Korean and required fallback locales in Windows packages", async () => {
     const script = await readFile("scripts/prune-electron-locales.cjs", "utf8");
 
     expect(script).toContain('context.electronPlatformName !== "win32"');
     expect(script).toContain('"ko.pak"');
-    expect(script).not.toContain('"en-US.pak"');
+    expect(script).toContain('"en-US.pak"');
     expect(script).toContain("Pruned");
   });
 

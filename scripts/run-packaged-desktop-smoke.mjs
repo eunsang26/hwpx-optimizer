@@ -36,17 +36,7 @@ delete env.HWPX_OPT_SMOKE_SCREENSHOT;
 const result = spawnSync(isolatedExecutable, [], { cwd: workspace, env, encoding: "utf8", timeout: 180_000, maxBuffer: 8 * 1024 * 1024 });
 process.stdout.write(result.stdout ?? ""); process.stderr.write(result.stderr ?? "");
 if (result.error) throw result.error;
-if (result.status !== 0) {
-  // Diagnostic only: a Korean-only locale set is a candidate startup failure.
-  // Never convert the release result to success using a modified copy.
-  await cp(resolve("node_modules/electron/dist/locales/en-US.pak"), join(isolatedApp, "locales/en-US.pak"));
-  const diagnosticCwd = await mkdtemp(join(tmpdir(), "hwpx-locale-diagnostic-"));
-  const diagnostic = spawnSync(isolatedExecutable, [], { cwd: diagnosticCwd, env, encoding: "utf8", timeout: 30_000, maxBuffer: 8 * 1024 * 1024 });
-  process.stdout.write(diagnostic.stdout ?? ""); process.stderr.write(diagnostic.stderr ?? "");
-  console.log(JSON.stringify({ check: "diagnostic-only-add-en-US-locale", exitCode: diagnostic.status,
-    complete: /"check":"desktop-smoke-complete"/.test(diagnostic.stdout ?? ""), error: diagnostic.error?.message }));
-  throw new Error(`Unmodified packaged desktop smoke failed (${result.status ?? result.signal}); diagnostic copy is not a release pass; workspace: ${workspace}`);
-}
+if (result.status !== 0) throw new Error(`Packaged desktop smoke failed (${result.status ?? result.signal}); workspace: ${workspace}`);
 // Reject an accidental dev executable or an early exit without the font proof.
 const proofs = (result.stdout ?? "").split(/\r?\n/).flatMap(line => {
   try { return [JSON.parse(line)]; }

@@ -72,7 +72,8 @@
     },
     "afterPack": "scripts/prune-electron-locales.cjs",
     "electronLanguages": [
-      "ko"
+      "ko",
+      "en-US"
     ],
     "asarUnpack": [
       "node_modules/@img/sharp-win32-x64/**/*"
