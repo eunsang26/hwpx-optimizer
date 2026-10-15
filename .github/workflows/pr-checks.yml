@@ -64,6 +64,13 @@ jobs:
       - name: Run synthetic regression corpus
         run: npm run quality:corpus
 
+      - name: Prepare Electron sandbox on the disposable Linux runner
+        run: |
+          node node_modules/electron/install.js
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+          stat -c '%U:%G %a' node_modules/electron/dist/chrome-sandbox
+
       - name: Run Linux Electron smoke with synthetic documents
         run: npm run desktop:smoke:built
 
