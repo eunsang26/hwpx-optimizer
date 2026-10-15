@@ -14,6 +14,7 @@ if (app.isPackaged && process.platform !== "win32") {
 }
 import { mkdir, readFile as readFileFs, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { DocumentWorkerClient } from "./main/documentWorkerClient.js";
 import { DocumentOperations } from "./main/documentOperations.js";
 import { assertOfflineBundledFonts } from "./main/offlineFontSmoke.js";
@@ -84,7 +85,7 @@ async function createWindow(): Promise<BrowserWindow> {
     event.preventDefault();
   });
 
-  await mainWindow.loadFile(join(import.meta.dirname, "index.html"));
+  await mainWindow.loadURL(pathToFileURL(join(import.meta.dirname, "index.html")).href);
   return mainWindow;
 }
 
@@ -99,9 +100,7 @@ app.whenReady()
       catch { /* Expected cancellation by our request policy. */ }
       if (connected || smokeBlockedExternalRequests !== before + 1) throw new Error("Desktop smoke failed: external network policy did not cancel the probe.");
       console.log(JSON.stringify({ check: "external-network-block", packaged: app.isPackaged, blocked: true }));
-      // Packaged runs verify outbound blocking independently of Chromium emulation;
-      // source runs additionally emulate offline. Local file access stays enabled.
-      if (!app.isPackaged) session.defaultSession.enableNetworkEmulation({ offline: true });
+      session.defaultSession.enableNetworkEmulation({ offline: true });
     }
     if (process.env.HWPX_OPT_EXPECT_PACKAGED === "1" && !app.isPackaged) throw new Error("Expected an actual packaged desktop executable.");
     registerIpc();

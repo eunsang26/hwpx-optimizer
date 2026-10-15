@@ -52,7 +52,7 @@ export async function assertOfflineBundledFonts(window: BrowserWindow, packaged:
       rendered.push({ weight: Number(id.split("-").at(-1)), fonts: used });
     }
     console.log(JSON.stringify({ check: "offline-bundled-font", packaged, externalNetworkBlocked: true,
-      networkEmulation: !packaged,
+      networkEmulation: true,
       fontUrl: loaded.fontUrl, assets, rendered }));
   } finally {
     if (debuggerApi.isAttached()) debuggerApi.detach();

@@ -12,7 +12,7 @@ let directory: string;
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), "hwpx-release-artifacts-")); });
 afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
 
-async function createDesktopArchive(omit?: "io-package" | "io-entry" | "font" | "license" | "changed-font" | "changed-license"): Promise<void> {
+async function createDesktopArchive(omit?: "io-package" | "io-entry" | "font" | "license" | "changed-font" | "changed-license" | "index"): Promise<void> {
   const source = join(directory, "app");
   for (const name of ["core", "io"]) {
     const root = join(source, "node_modules", "@hwpx-optimizer", name);
@@ -23,6 +23,12 @@ async function createDesktopArchive(omit?: "io-package" | "io-entry" | "font" | 
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, file === "package.json" ? '{"type":"module"}' : "export {};\n");
     }
+  }
+  for (const file of ["index.html", "styles.css", "renderer.js", "preload.cjs", "main.cjs", "main.js"]) {
+    if (file === "index.html" && omit === "index") continue;
+    const path = join(source, "apps/desktop/dist", file);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, file === "index.html" ? "<!doctype html><title>fixture</title>" : "/* synthetic fixture */");
   }
   const fontFolder = join(source, "apps/desktop/dist/fonts");
   await mkdir(fontFolder, { recursive: true });
@@ -54,5 +60,14 @@ describe("packaged offline font assets", () => {
     await createDesktopArchive(kind);
     await expect(execFileAsync(process.execPath, [checker], { cwd: directory }))
       .rejects.toMatchObject({ code: 1, stderr: expect.stringContaining("Required desktop font assets are missing or changed") });
+  });
+});
+
+
+describe("desktop renderer entry", () => {
+  it("rejects an actual ASAR without its HTML entry even if fonts are bundled", async () => {
+    await createDesktopArchive("index");
+    await expect(execFileAsync(process.execPath, [checker], { cwd: directory }))
+      .rejects.toMatchObject({ code: 1, stderr: expect.stringContaining("Required desktop boot assets are missing or empty") });
   });
 });

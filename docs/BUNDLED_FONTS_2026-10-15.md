@@ -13,12 +13,12 @@ OPT-016의 패키징 변경과 검증 기록이다. 앱의 글꼴은 `Pretendard
 
 ## 로딩 검증
 
-일반 Electron 스모크와 패키지 스모크는 첫 페이지를 열기 전에 HTTP/HTTPS/WS/WSS 요청 차단을 적용한다. 예약된 `.invalid` 주소로 고정 검증 요청을 시도하고, 차단 hook의 호출과 요청 실패를 함께 확인한다. DNS/소켓에 도달하기 전에 요청이 취소되었는지 검증하며 문서나 사용자 데이터를 넣지 않는다. 소스 실행은 추가로 세션 오프라인 모의를 적용한다. 패키지 실행은 네트워크 모의와 분리해 외부 요청 차단 자체를 검증한다. 로컬 ASAR 파일 접근은 허용한다. `document.fonts.load`로 두께 400과 700의 글꼴이 로드되었는지 확인한 뒤, 한글·영문·숫자 문자열 `한글 문서 압축 ABC0123`을 렌더한다. Chromium의 `CSS.getPlatformFontsForNode`로 실제 사용 글꼴을 읽어 Pretendard·`isCustomFont: true`·양수 glyph 수를 요구한다. CSS에 이름만 지정했거나 시스템 fallback으로 그려지는 상태는 통과하지 않는다.
+일반 Electron 스모크와 패키지 스모크는 첫 페이지를 열기 전에 HTTP/HTTPS/WS/WSS 요청 차단을 적용한다. 예약된 `.invalid` 주소로 고정 검증 요청을 시도하고, 차단 hook의 호출과 요청 실패를 함께 확인한다. DNS/소켓에 도달하기 전에 요청이 취소되었는지 검증하며 문서나 사용자 데이터를 넣지 않는다. 소스와 패키지 실행 모두 외부 요청 차단 검증 뒤 세션 오프라인 모의를 적용한다. 파일 URL은 `pathToFileURL`로 정규화한다. 패키지 진입 HTML·CSS·renderer·preload·main 파일의 존재와 비어 있지 않은 내용도 실제 ASAR에서 검사한다. `document.fonts.load`로 두께 400과 700의 글꼴이 로드되었는지 확인한 뒤, 한글·영문·숫자 문자열 `한글 문서 압축 ABC0123`을 렌더한다. Chromium의 `CSS.getPlatformFontsForNode`로 실제 사용 글꼴을 읽어 Pretendard·`isCustomFont: true`·양수 glyph 수를 요구한다. CSS에 이름만 지정했거나 시스템 fallback으로 그려지는 상태는 통과하지 않는다.
 
 `desktop:smoke:packaged:win`은 Windows용 실제 배포 디렉터리를 다음 조건으로 검사한다.
 
 1. 시스템/사용자 폰트 등록과 폰트 폴더에 Pretendard가 없는지 읽기 전용 PowerShell로 검사한다. 설치된 환경이면 깨끗한 환경 증거를 만들 수 없으므로 실패한다. 글꼴을 설치하거나 삭제하지 않는다.
-2. 빌드한 앱 디렉터리 전체를 체크아웃 밖의 새 임시 폴더로 복사한다. 저장소의 `node_modules`로 누락된 의존성을 보완할 수 없다. `NODE_PATH`·`NODE_OPTIONS` 주입과 외부 문서 입력도 사용하지 않는다.
+2. Windows 8.3 TEMP 별칭을 realpath로 정규화하고, 빌드한 앱 디렉터리 전체를 체크아웃 밖의 새 임시 폴더로 복사해 ASAR 바이트/해시 동일성을 확인한다. 저장소의 `node_modules`로 누락된 의존성을 보완할 수 없다. `NODE_PATH`·`NODE_OPTIONS` 주입과 외부 문서 입력도 사용하지 않는다.
 3. 새 cwd와 userData/cache로 복사된 EXE를 실행한다. `app.isPackaged`와 실제 `resources/app.asar/.../PretendardVariable.woff2` URL을 요구한다.
 4. 외부 요청 차단과 custom-font 검증 뒤 합성 문서의 분석·압축·검증·저장·일괄·초기화 전체 스모크를 실행한다. 정상 종료 코드뿐 아니라 요청 차단·폰트 증거와 전체 워크플로 완료 마커를 요구한다. 180초를 넘기거나 증거가 없으면 실패한다.
 
@@ -26,7 +26,7 @@ Windows release workflow는 기존 릴리즈 게이트 뒤 이 패키지 스모�
 
 ## Linux 검증
 
-2026-10-15 Node 24.13.0/Electron 42.11.13. 실제 ASAR를 만드는 대상 테스트 7개와 관련 repo 구성 검사를 먼저 실행했다. 전체 Vitest 86개 파일·676개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·실제 Electron 스모크·기존 합성 corpus 2/2가 통과했다. 후속 요청 차단 검사 버전은 공유 호스트 부하로 기본 병렬 실행이 시간 제한에 걸려, `npm test -- --maxWorkers=2`로 동일한 전체 676개를 다시 통과시켰다. 테스트나 제한 시간은 변경하지 않았다.
+2026-10-15 Node 24.13.0/Electron 42.11.13. 실제 ASAR를 만드는 대상 테스트 8개와 관련 repo 구성 검사를 먼저 실행했다. 전체 Vitest 86개 파일·677개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·실제 Electron 스모크·기존 합성 corpus 2/2가 통과했다. 후속 요청 차단 검사 버전은 공유 호스트 부하로 기본 병렬 실행이 시간 제한에 걸려, `npm test -- --maxWorkers=2`로 동일한 전체 676개를 다시 통과시켰다. UI 진입 파일 검사 추가 뒤에는 같은 병렬 제한으로 677개가 통과했다. 테스트나 제한 시간은 변경하지 않았다.
 
 - 실제 ASAR에 두 파일이 있는 경우를 수락하고 font/license 누락과 변경 네 가지 경우를 거부했다.
 - 네트워크 오프라인 상태에서 두께 400·700 모두 Pretendard custom font로 16 glyph를 렌더했다.

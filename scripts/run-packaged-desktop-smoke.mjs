@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, stat } from "node:fs/promises";
+import { cp, mkdtemp, readFile, realpath, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { createHash } from "node:crypto";
 
 if (process.platform !== "win32") throw new Error("Packaged desktop smoke requires Windows; it cannot be skipped as a passing test.");
 const executable = resolve(process.argv[2] ?? "release/win-unpacked/HWPX Optimizer.exe");
@@ -16,10 +17,16 @@ if (preflight.status !== 0) throw new Error(`Clean font preflight failed (${pref
 
 // Copy outside the checkout so missing dependencies cannot resolve from its node_modules.
 // Fresh cwd also creates a fresh userData/cache; the source app directory is unchanged.
-const workspace = await mkdtemp(join(tmpdir(), "hwpx-packaged-smoke-"));
+// Resolve Windows 8.3 TEMP aliases before launching Chromium/ASAR file loading.
+const workspace = await realpath(await mkdtemp(join(tmpdir(), "hwpx-packaged-smoke-")));
 const isolatedApp = join(workspace, "app");
 await cp(dirname(executable), isolatedApp, { recursive: true, force: false, errorOnExist: true });
 const isolatedExecutable = join(isolatedApp, basename(executable));
+const sourceAsar = await readFile(join(dirname(executable), "resources/app.asar"));
+const copiedAsar = await readFile(join(isolatedApp, "resources/app.asar"));
+if (!copiedAsar.equals(sourceAsar)) throw new Error("Copied app.asar differs from the built package.");
+console.log(JSON.stringify({ check: "copied-packaged-asar", bytes: copiedAsar.length,
+  sha256: createHash("sha256").update(copiedAsar).digest("hex"), identical: true }));
 const env = { ...process.env, HWPX_OPT_SMOKE_TEST: "1", HWPX_OPT_EXPECT_PACKAGED: "1" };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.NODE_PATH;
@@ -35,7 +42,7 @@ const proofs = (result.stdout ?? "").split(/\r?\n/).flatMap(line => {
   try { return [JSON.parse(line)]; }
   catch { return []; }
 });
-if (!proofs.some(proof => proof.check === "offline-bundled-font" && proof.packaged === true && proof.externalNetworkBlocked === true &&
+if (!proofs.some(proof => proof.check === "offline-bundled-font" && proof.packaged === true && proof.externalNetworkBlocked === true && proof.networkEmulation === true &&
     /\/resources\/app\.asar\/apps\/desktop\/dist\/fonts\/PretendardVariable\.woff2$/i.test(proof.fontUrl) && proof.rendered?.length === 2)) {
   throw new Error("Packaged desktop exited without the required offline custom-font proof.");
 }

@@ -118,6 +118,23 @@ if (missingWorkspaceRuntimes.length > 0) {
   process.exit(1);
 }
 
+const desktopBootFiles = ["index.html", "styles.css", "renderer.js", "preload.cjs", "main.cjs", "main.js"];
+const bootViolations = [];
+for (const artifact of asarArtifacts) {
+  for (const file of desktopBootFiles) {
+    const entry = `apps/desktop/dist/${file}`;
+    if (!artifact.entries.includes(entry) || !asar.extractFile(artifact.label, normalize(entry)).length) {
+      bootViolations.push(`${artifact.label}: missing or empty ${entry}`);
+    }
+  }
+}
+if (bootViolations.length) {
+  console.error("Release artifact check failed. Required desktop boot assets are missing or empty:");
+  for (const violation of bootViolations) console.error(`- ${violation}`);
+  process.exit(1);
+}
+console.log(`Verified desktop boot assets in ${asarArtifacts.length} ASAR archive(s).`);
+
 // Inspect actual archive contents, not only electron-builder source patterns.
 const desktopFontPaths = ["PretendardVariable.woff2", "OFL.txt"];
 const fontViolations = [];
