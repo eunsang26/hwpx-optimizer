@@ -207,6 +207,8 @@ Analysis and optimization computation run through `apps/desktop/src/main/documen
 
 The main process passes an AbortSignal through staging and exclusive publication. Aborting before the synchronous commit decision rolls back the pair; after that decision, cancellation cannot turn a completed save into a cancelled result. Cancel acknowledgement and the busy lock wait for cleanup. Recovery errors preserve user replacements and identify retained backups. Normal application shutdown closes the operation queue, waits for recovery or committed cleanup, and then disposes the worker. Image computation remains off the main thread. See `DESKTOP_CANCELLATION_2026-10-15.md` for phase tests, native UI checks, synthetic timing and crash-recovery limits.
 
+Core analysis normalizes the omitted mode to `quick` across inventory, structural opportunities and image opportunities. Quick performs header/byte analysis and estimates image candidates; it does not decode pixels, compute visual duplicate hashes or encode images. Deep enables those diagnostics and candidate encode measurements. Desktop initial single and batch imports use quick; the single-file detail panel can request deep through the validated preload/IPC/worker path. Reports disclose the work performed in optional `analysis` coverage metadata, and the renderer labels deferred checks and estimated sizes. Older reports without metadata retain unknown coverage. Candidate encode measurements remain distinct from actual final ZIP bytes. See `QUICK_ANALYSIS_2026-10-15.md` for measurements.
+
 ## Safety Rules
 
 - Never overwrite the original input file.

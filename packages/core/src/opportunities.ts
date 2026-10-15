@@ -159,12 +159,12 @@ async function collectOpportunities(
     }
 
     if (isTiff(entry.path)) {
-      const afterSize = await measureTiffPngSize({
-        data: entry.data,
-        width: metadata.width,
-        height: metadata.height,
-        resizeBudget,
-        profile
+      const afterSize = await measureOrEstimateImageSize({
+        confidence,
+        size: entry.size,
+        transform: () => convertTiffToPng(entry.data, metadata.width, metadata.height, resizeBudget, profile),
+        // TIFF compression varies; this is a header-based heuristic, not a measured encode.
+        estimate: () => estimatePngResizeSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
       });
       if (afterSize === null) continue;
       addOpportunityIfSmaller(opportunities, {
@@ -310,19 +310,6 @@ function addJpegMetadataOpportunity(
     visualImpact: "none",
     defaultEnabledIn: ["balanced", "aggressive"]
   });
-}
-
-async function measureTiffPngSize(input: {
-  data: Buffer;
-  width?: number;
-  height?: number;
-  resizeBudget?: { width: number; height: number };
-  profile: ImageOptimizationProfile;
-}): Promise<number | null> {
-  const candidate = await tryTransform(() =>
-    convertTiffToPng(input.data, input.width, input.height, input.resizeBudget, input.profile)
-  );
-  return candidate ? candidate.byteLength : null;
 }
 
 function addShapeCommentOpportunities(pkg: HwpxPackage, opportunities: OptimizationOpportunity[]): void {

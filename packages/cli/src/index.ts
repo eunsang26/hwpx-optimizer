@@ -740,16 +740,18 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
   const lines = [
     "HWPX Optimization Report",
     `File: ${inputPath}`,
+    `Analysis: ${report.analysis?.mode ?? "coverage not recorded"}`,
+    ...(report.analysis ? [`Image candidate sizes: ${report.analysis.imageSizes}; final ZIP size is confirmed after saving.`] : []),
     `Original: ${formatBytes(report.originalSize)}`,
     ...(report.targetBytes ? [`Target: ${formatBytes(report.targetBytes)} (${report.targetStatus ?? "unknown"})`] : []),
     `Images: ${report.images.length}`,
     `BMP candidates: ${report.images.filter((image) => image.isBmpCandidate).length}`,
     `Images with metadata: ${report.images.filter((image) => image.hasMetadata).length}`,
     `Duplicate image groups: ${report.duplicateImages.length}`,
-    `Same-visual duplicate image groups: ${report.sameVisualDuplicateImages.length}`,
+    `Same-visual duplicate image groups: ${report.analysis?.mode === "quick" ? "not checked (use --analysis-mode deep)" : report.sameVisualDuplicateImages.length}`,
     `Unused BinData candidates: ${report.unusedBinData.length}`,
     `Risky resources: ${report.riskyResources.length}`,
-    `Near-duplicate image candidates: ${report.nearDuplicateImages?.length ?? 0}`,
+    `Near-duplicate image candidates: ${report.analysis?.mode === "quick" ? "not checked (use --analysis-mode deep)" : report.nearDuplicateImages?.length ?? 0}`,
     `Resource diagnostics: ${report.resourceDiagnostics?.length ?? 0}`,
     `Projected package saving: ${formatBytes(projectedPackageSavingBytes(report))}`
   ];

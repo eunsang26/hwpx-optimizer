@@ -67,7 +67,7 @@ describe("desktop service", () => {
     await expect(verifyDesktopFile(result.outputPath)).resolves.toEqual({ ok: true });
   });
 
-  it("uses deep analysis by default so near-dup review groups can populate", async () => {
+  it("provides near-duplicate review groups when detailed analysis is requested", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
     const sharp = (await import("sharp")).default;
@@ -96,7 +96,7 @@ describe("desktop service", () => {
       })
     );
 
-    const analysis = await analyzeDesktopFile(inputPath);
+    const analysis = await analyzeDesktopFile(inputPath, { analysisMode: "deep" });
 
     expect(analysis.report.performance?.stages.map((stage) => stage.name)).toContain("analyze");
     expect(analysis.report.nearDuplicateImages).toEqual([
@@ -107,7 +107,7 @@ describe("desktop service", () => {
     ]);
   });
 
-  it("still allows quick analysis when callers opt out of deep diagnostics", async () => {
+  it("uses quick analysis by default without visual duplicate diagnostics", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
     const png = await import("sharp").then(({ default: sharp }) =>
@@ -133,8 +133,10 @@ describe("desktop service", () => {
       })
     );
 
-    const analysis = await analyzeDesktopFile(inputPath, { analysisMode: "quick" });
+    const analysis = await analyzeDesktopFile(inputPath);
 
+    expect(analysis.report.analysis?.mode).toBe("quick");
+    expect(analysis.report.duplicateImages).toHaveLength(1);
     expect(analysis.report.sameVisualDuplicateImages).toEqual([]);
     expect(analysis.report.nearDuplicateImages).toEqual([]);
   });

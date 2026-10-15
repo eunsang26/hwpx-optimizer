@@ -3250,3 +3250,19 @@ summary:focus-visible,
     -webkit-backdrop-filter: none !important;
   }
 }
+
+.analysis-method {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+.analysis-method p { flex: 1 1 280px; margin: 0; }
+
+.analysis-basis {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}

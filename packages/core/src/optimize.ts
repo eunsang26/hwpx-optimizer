@@ -19,7 +19,7 @@ import { readHwpxPackage } from "./reader.js";
 import { detectStructuralOptimizationOpportunities } from "./structuralOpportunities.js";
 import { verifyHwpxOutput } from "./verifier.js";
 import { writeHwpxPackage } from "./writer.js";
-import type { AppliedAction, HwpxPackage, OptimizationOpportunity, OptimizationReport, PackageAnalysis } from "./types.js";
+import type { AppliedAction, HwpxPackage, OptimizationOpportunity, OptimizationReport, PackageAnalysis, AnalysisMode } from "./types.js";
 
 export type OptimizeProgress = { percent: number; item: string };
 
@@ -42,7 +42,6 @@ type SafeOptimizeOptions = {
   analysisMode?: AnalysisMode;
   imageConcurrency?: number;
 };
-type AnalysisMode = "quick" | "deep";
 
 /** Aggressive auto runs at the JPEG quality floor — project sizes with that encode. */
 const aggressiveProjectionProfile: ImageOptimizationProfile = {
@@ -59,31 +58,34 @@ export async function analyzeHwpxBuffer(
 ): Promise<OptimizationReport> {
   const timer = new PerformanceTimer();
   const targetBytes = normalizeTargetBytes(options.targetBytes);
+  const analysisMode = options.analysisMode ?? "quick";
   const pkg = await timer.measure("read", () => readHwpxPackage(input));
   const analysis = await timer.measure("analyze", () =>
-    analyzeHwpxPackage(pkg, { ...analysisOptions(options.analysisMode ?? "quick"), imageConcurrency: options.imageConcurrency })
+    analyzeHwpxPackage(pkg, { ...analysisOptions(analysisMode), imageConcurrency: options.imageConcurrency })
   );
-  const duplicateMode = options.analysisMode === "quick" ? "byte" : "visual";
+  const duplicateMode: "byte" | "visual" = analysisMode === "quick" ? "byte" : "visual";
   const opportunityOptions = {
-    duplicateMode: duplicateMode as "byte" | "visual",
+    duplicateMode,
     imageConcurrency: options.imageConcurrency
   };
-  // Measure real encode sizes (exact) so UI projections match optimize output.
+  const detectImageOpportunities = analysisMode === "deep"
+    ? detectOptimizationOpportunities : detectEstimatedOptimizationOpportunities;
+  // Quick inspects headers and byte hashes; deep measures candidate encodes.
   const structuralOpportunities = await timer.measure("opportunities-structure", () =>
     detectStructuralOptimizationOpportunities(pkg, analysis, {
-      imageConcurrency: options.imageConcurrency
+      duplicateMode, imageConcurrency: options.imageConcurrency
     })
   );
   const opportunities = [
     ...structuralOpportunities,
     ...await timer.measure("opportunities", () =>
-      detectOptimizationOpportunities(pkg, balancedImageProfile, opportunityOptions)
+      detectImageOpportunities(pkg, balancedImageProfile, opportunityOptions)
     )
   ];
   const aggressiveOpportunities = [
     ...structuralOpportunities,
     ...await timer.measure("opportunities-aggressive", () =>
-      detectOptimizationOpportunities(pkg, aggressiveProjectionProfile, opportunityOptions)
+      detectImageOpportunities(pkg, aggressiveProjectionProfile, opportunityOptions)
     )
   ];
   const projectedOptimizedSize = projectPackageSizeFromOpportunities(pkg, opportunities);
@@ -92,6 +94,8 @@ export async function analyzeHwpxBuffer(
   });
   return createReportWithPerformance(timer, () =>
     createAnalysisReport(analysis, input.byteLength, opportunities, {
+      analysis: { mode: analysisMode, imageSizes: analysisMode === "deep" ? "encoded" : "estimated",
+        visualDuplicatesChecked: analysisMode === "deep" },
       targetBytes,
       projectedOptimizedSize,
       aggressiveProjectedOptimizedSize

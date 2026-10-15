@@ -573,6 +573,10 @@ describe("runCli", () => {
     const text = await readFile(reportPath, "utf8");
     expect(text).toContain("결과 해석:");
     expect(text).toContain("가장 큰 절감 후보: clean-shape-comment");
+    expect(text).toContain("Analysis: quick");
+    expect(text).toContain("Image candidate sizes: estimated");
+    expect(text).toContain("Same-visual duplicate image groups: not checked");
+    expect(text).toContain("Near-duplicate image candidates: not checked");
   });
 
   it("accepts --report as an alias for human-readable report output", async () => {

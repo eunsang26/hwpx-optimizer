@@ -170,7 +170,16 @@ export type ResourceMapping = {
   outputId?: string;
 };
 
+export type AnalysisMode = "quick" | "deep";
+export type AnalysisCoverage = {
+  mode: AnalysisMode;
+  imageSizes: "estimated" | "encoded";
+  visualDuplicatesChecked: boolean;
+};
+
 export type OptimizationReport = {
+  /** Analysis work actually performed; absent on older and optimization reports. */
+  analysis?: AnalysisCoverage;
   /** Surviving image identities in the returned output, including duplicate aliases. */
   resourceMappings?: ResourceMapping[];
   originalSize: number;
@@ -199,7 +208,7 @@ export type OptimizationReport = {
   opportunityGroups: OptimizationOpportunityGroup[];
   /**
    * ZIP-aware package size projection for aggressive/auto floor quality.
-   * Present on analysis reports when exact aggressive opportunities were measured.
+   * Present on analysis reports; candidate sizes can be estimated or measured.
    */
   aggressiveProjectedOptimizedSize?: number;
   warnings: string[];

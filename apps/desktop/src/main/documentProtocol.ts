@@ -2,7 +2,7 @@ import type { DesktopAnalysisResult, DesktopOptimizeInput, DesktopPreparedOptimi
 
 export type DocumentWorkerRequest =
   | { type: "warm" }
-  | { type: "analyze"; filePath: string }
+  | { type: "analyze"; filePath: string; analysisMode?: "quick" | "deep" }
   | { type: "optimize"; input: DesktopOptimizeInput };
 
 export type DocumentWorkerMessage =

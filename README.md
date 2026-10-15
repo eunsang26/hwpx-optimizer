@@ -260,7 +260,7 @@ npm run cli -- batch ./docs --mode balanced --out ./optimized --jobs 2
 | `--allow-larger`                  | `optimize`, `batch` | 결과가 원본보다 커도 허용 (기본은 거부)                            |
 | `--overwrite`                     | `optimize`, `batch` | 같은 이름이 있을 때 덮어쓰기 (기본은 새 이름 자동 부여)            |
 | `--max-input-bytes`               | 모든 명령           | 처리할 입력 최대 크기(byte). 기본 512 MiB                          |
-| `--analysis-mode quick\|deep`     | `analyze`, `report` | 빠른 분석 vs 더 깊은 검사                                          |
+| `--analysis-mode quick\|deep`     | `analyze`, `report` | 기본 quick: 헤더·바이트 검사와 크기 추정. deep: 픽셀·유사 이미지 검사와 후보 인코딩 측정                                          |
 | `--jobs N`                        | `batch`             | 동시 처리 개수 (1~4)                                              |
 
 원본 파일 경로와 동일한 위치를 결과·리포트 경로로 지정하면 안전을 위해 작업이 거부됩니다.

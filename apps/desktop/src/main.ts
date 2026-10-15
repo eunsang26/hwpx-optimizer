@@ -205,11 +205,15 @@ function registerIpc(): void {
     return registered;
   });
 
-  ipcMain.handle("hwpx:analyze", async (_event, filePath: string) =>
+  ipcMain.handle("hwpx:analyze", async (_event, filePath: string, options?: { analysisMode?: "quick" | "deep" }) =>
     documentOperations.run("analyze", async ({ signal, progress }) => {
+      if (options !== undefined && (!options || typeof options !== "object" ||
+        (options.analysisMode !== undefined && !["quick", "deep"].includes(options.analysisMode)))) {
+        throw new Error("Unsupported analysis mode.");
+      }
       const allowedPath = await requireAllowedInputPath(filePath);
       progress({ percent: 10, item: "Analyzing document structure" });
-      return documentWorkerClient.analyze(allowedPath, signal);
+      return documentWorkerClient.analyze(allowedPath, signal, options?.analysisMode);
     })
   );
 
@@ -1148,6 +1152,10 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       const unsubscribe = window.hwpxOptimizer.onOptimizeProgress((item) => progress.push(item));
       const saved = await window.hwpxOptimizer.saveSettings({ outputDirectory: ${JSON.stringify(smokeDir)} });
       const analysis = await window.hwpxOptimizer.analyze(${JSON.stringify(smokeInputPath)});
+      let invalidAnalysisRejected = false;
+      try { await window.hwpxOptimizer.analyze(${JSON.stringify(smokeInputPath)}, { analysisMode: "invalid" }); }
+      catch { invalidAnalysisRejected = true; }
+      const detailed = await window.hwpxOptimizer.analyze(${JSON.stringify(smokeInputPath)}, { analysisMode: "deep" });
       const result = await window.hwpxOptimizer.optimize({
         filePath: ${JSON.stringify(smokeInputPath)},
         mode: ${JSON.stringify(smokeMode)},
@@ -1157,6 +1165,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
       unsubscribe();
       return {
         originalSize: analysis.report.originalSize,
+        analysisMode: analysis.report.analysis?.mode,
+        detailedAnalysisMode: detailed.report.analysis?.mode,
+        invalidAnalysisRejected,
         outputPath: result.outputPath,
         reportPath: result.reportPath,
         verified: verification.ok,
@@ -1166,6 +1177,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
     })()
   `)) as {
     originalSize?: number;
+    analysisMode?: string;
+    detailedAnalysisMode?: string;
+    invalidAnalysisRejected?: boolean;
     outputPath?: string;
     reportPath?: string;
     verified?: boolean;
@@ -1175,6 +1189,9 @@ async function runSmokeAssertions(window: BrowserWindow): Promise<void> {
 
   if (!workflow.originalSize || workflow.originalSize <= 0) {
     throw new Error("Desktop smoke failed: analysis did not return a document size");
+  }
+  if (workflow.analysisMode !== "quick" || workflow.detailedAnalysisMode !== "deep" || !workflow.invalidAnalysisRejected) {
+    throw new Error("Desktop smoke failed: analysis mode did not cross the preload/IPC/worker boundary");
   }
   if (!workflow.outputPath?.endsWith("_optimized.hwpx")) {
     throw new Error(`Desktop smoke failed: unexpected output path ${String(workflow.outputPath)}`);

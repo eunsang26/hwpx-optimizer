@@ -25,7 +25,7 @@ async function handleRequest(message: WorkerRequest): Promise<void> {
       return;
     }
     if (message.type === "analyze") {
-      const result = await analyzeDesktopFile(message.filePath);
+      const result = await analyzeDesktopFile(message.filePath, { analysisMode: message.analysisMode });
       post({ id: message.id, type: "complete", result });
       return;
     }

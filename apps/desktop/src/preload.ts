@@ -16,7 +16,7 @@ const api = {
   },
   loadSettings: () => ipcRenderer.invoke("settings:load"),
   saveSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("settings:save", patch),
-  analyze: (filePath: string) => ipcRenderer.invoke("hwpx:analyze", filePath),
+  analyze: (filePath: string, options?: { analysisMode?: "quick" | "deep" }) => ipcRenderer.invoke("hwpx:analyze", filePath, options),
   optimize: (input: {
     filePath: string;
     mode: "safe" | "balanced" | "aggressive";

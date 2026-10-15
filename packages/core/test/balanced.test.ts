@@ -687,7 +687,7 @@ describe("balanced optimization", () => {
       image1: { path: "BinData/tiny.tif", mediaType: "image/tiff", data: tiff }
     });
 
-    const report = await analyzeHwpxBuffer(fixture);
+    const report = await analyzeHwpxBuffer(fixture, { analysisMode: "deep" });
 
     expect(report.opportunities).not.toContainEqual(
       expect.objectContaining({ action: "convert-tiff-to-png", target: "BinData/tiny.tif" })
@@ -788,7 +788,7 @@ describe("balanced optimization", () => {
       image1: { path: "BinData/wide.jpg", mediaType: "image/jpeg", data: jpeg }
     });
 
-    const report = await analyzeHwpxBuffer(fixture);
+    const report = await analyzeHwpxBuffer(fixture, { analysisMode: "deep" });
 
     // Exact opportunity measurement uses the real encode path; if resize+recompress
     // shrinks the file it wins over strip-metadata-only.

@@ -1,6 +1,6 @@
 import { minifyXmlBuffer } from "./xmlMinify.js";
 import { canRemoveUnusedResource } from "./resourcePolicy.js";
-import { findImageConsolidationGroups } from "./imageDuplicates.js";
+import { findByteIdenticalImageGroups, findImageConsolidationGroups } from "./imageDuplicates.js";
 import type {
   HwpxPackage,
   OptimizationOpportunity,
@@ -10,14 +10,13 @@ import type {
 export async function detectStructuralOptimizationOpportunities(
   pkg: HwpxPackage,
   analysis: PackageAnalysis,
-  options: { imageConcurrency?: number } = {}
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number } = {}
 ): Promise<OptimizationOpportunity[]> {
   const opportunities: OptimizationOpportunity[] = [];
   const duplicateMemberPaths = new Set(
     (
-      await findImageConsolidationGroups(pkg, {
-        imageConcurrency: options.imageConcurrency
-      })
+      options.duplicateMode === "byte" ? findByteIdenticalImageGroups(pkg)
+        : await findImageConsolidationGroups(pkg, { imageConcurrency: options.imageConcurrency })
     ).flatMap((group) => group.paths)
   );
   const riskyResourcePaths = new Set(analysis.riskyResources.map((resource) => resource.path));

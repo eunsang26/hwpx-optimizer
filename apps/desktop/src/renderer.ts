@@ -34,6 +34,7 @@ import type {
   SubmissionLimit,
   SubmissionPlan
 } from "./shared/submissionPlan.js";
+import { analysisBasisLabel } from "./shared/analysisCoverage.js";
 import { isDocumentCancellation } from "./shared/cancellation.js";
 
 const JPEG_QUALITY_FLOOR = 60;
@@ -197,6 +198,9 @@ const progressTitle = requireElement("progress-title");
 const progressBar = requireElement("progress-bar");
 const progressItem = requireElement("progress-item");
 const analysisGrid = requireElement("analysis-grid");
+const analysisMethod = requireElement("analysis-method");
+const summaryAnalysisBasis = requireElement("summary-analysis-basis");
+const deepAnalysisButton = requireElement("deep-analysis-button") as HTMLButtonElement;
 const categoryChart = requireElement("category-chart");
 const opportunityList = requireElement("opportunity-list");
 const actionPanel = requireElement("action-panel");
@@ -403,15 +407,16 @@ async function init(): Promise<void> {
       // Invalidate the in-flight analyze so a late resolve can't overwrite the
       // cancelled status with a normal result (best-effort backend cancel).
       analysisSequence += 1;
-      state.analysisRunning = false;
       cancelButton.disabled = true;
       try {
         const outcome = await window.hwpxOptimizer.cancelAnalyze();
         setStatus(outcome.error ? errorMessage(outcome.error) : outcome.cancelled ? "분석을 취소했습니다." : "분석 작업이 이미 종료되었습니다.");
       } catch (error) { setStatus(errorMessage(error)); }
       if (!cancellingBatchAnalysis) {
+        state.analysisRunning = false;
         setIdle();
         hideProgressPanel();
+        if (state.report && state.filePath) deepAnalysisButton.focus();
         return;
       }
       return;
@@ -431,6 +436,10 @@ async function init(): Promise<void> {
         ? "현재 파일의 저장은 완료되었습니다. 남은 대기 파일의 처리를 중단합니다."
         : "저장이 이미 완료되었습니다. 결과 파일을 확인하세요.");
     } catch (error) { setStatus(errorMessage(error)); }
+  });
+  deepAnalysisButton.addEventListener("click", () => {
+    if (!state.filePath || state.analysisRunning || state.optimizeRunning || state.batchRunning || state.batchAnalyzing) return;
+    void analyzeFile(state.filePath, "deep");
   });
   settingsButton.addEventListener("click", () => setSettingsOpen(!settingsPanel.classList.contains("is-open")));
   settingsCloseButton.addEventListener("click", () => setSettingsOpen(false));
@@ -1193,8 +1202,9 @@ function renderTargetGauge(plan: SubmissionPlan): void {
   summaryVerdict.replaceChildren(expectedLine, roomLine);
   summaryVerdict.dataset.status = plan.verdict === "pass" ? "pass" : plan.verdict;
   summaryVerdict.hidden = false;
-  summaryVerdictDetail.textContent =
-    plan.verdict === "no-target" ? "제출 기준이 없습니다." : plan.verdictDetail;
+  summaryVerdictDetail.textContent = plan.verdict === "no-target" ? "제출 기준이 없습니다." : plan.verdictDetail;
+  summaryAnalysisBasis.textContent = analysisBasisLabel(state.report);
+  summaryAnalysisBasis.hidden = false;
 }
 
 function clearTargetGauge(): void {
@@ -1210,6 +1220,8 @@ function clearTargetGauge(): void {
   summaryVerdict.hidden = true;
   delete summaryVerdict.dataset.status;
   summaryVerdictDetail.textContent = "제출 기준 대비 예상 용량을 보여줍니다.";
+  summaryAnalysisBasis.hidden = true;
+  summaryAnalysisBasis.textContent = "";
   heroChips.hidden = true;
   reviewStrip.hidden = true;
   summaryGrid.hidden = true;
@@ -1295,6 +1307,10 @@ function renderBatchSummary(): void {
           ? `합계 ${formatBytes(expectedTotal)}`
           : `합계 초과 · 파일 ${passed}/${plannedCount}`
         : `통과 ${passed}/${plannedCount}`;
+  summaryAnalysisBasis.hidden = plannedCount === 0;
+  summaryAnalysisBasis.textContent = summaryItems.some(item => item.report?.analysis?.mode === "quick")
+    ? "빠른 분석 추정값 · 픽셀·유사 이미지 중복 미검사 · 최종 용량은 저장 후 확인하세요."
+    : "예상 용량은 실제 저장 결과와 다를 수 있습니다.";
   const passRate =
     plannedCount === 0
       ? 0
@@ -1387,6 +1403,7 @@ function renderBatchReviewStrip(
     ? "폰트/유사 병합·원본 이미지 교체 등 수동 검토가 필요합니다."
     : "세부 옵션에서 작업만 on/off · 유사 병합 기본 끔";
   const chips: string[] = [];
+  if (summaryItems.some(item => item.report?.analysis?.mode === "quick")) chips.push("유사 이미지 미검사");
   if (fonts > 0) chips.push(`폰트 ${fonts}`);
   if (near > 0) chips.push(`유사 ${near}`);
   if (ole > 0) chips.push(`OLE ${ole}`);
@@ -1753,6 +1770,7 @@ function renderReviewStrip(plan?: SubmissionPlan): void {
     ? "폰트/유사 병합·원본 이미지 교체 등 수동 검토가 필요합니다."
     : "폰트·유사 이미지는 품질 계획에서 제외됩니다.";
   const chips: string[] = [];
+  if (state.report.analysis?.mode === "quick") chips.push("유사 이미지 미검사");
   if (fonts > 0) chips.push(`폰트 ${fonts}`);
   if (near > 0) chips.push(`유사 ${near}`);
   if (ole > 0) chips.push(`OLE ${ole}`);
@@ -1863,32 +1881,37 @@ async function loadFile(path: string): Promise<void> {
   await analyzeFile(path);
 }
 
-async function analyzeFile(path: string): Promise<void> {
+async function analyzeFile(path: string, analysisMode: "quick" | "deep" = "quick"): Promise<void> {
+  const previousReport = state.report;
   const runId = ++analysisSequence;
   try {
     state.analysisRunning = true;
     setBusy("문서를 분석하는 중입니다...", { cancelable: true, kind: "analysis" });
     renderProgress(18, "파일을 불러와 분석을 준비하는 중입니다");
-    const response = await window.hwpxOptimizer.analyze(path);
+    const response = await window.hwpxOptimizer.analyze(path, { analysisMode });
     if (runId !== analysisSequence || state.filePath !== path) return;
     renderProgress(82, "문서 구조 · 이미지 · 목표 맞춤 품질 추정…");
     state.report = response.report;
-    state.actionSelections.clear();
+    if (analysisMode === "quick") state.actionSelections.clear();
     renderAnalysis(response.report);
+    if (analysisMode === "deep") analysisDetails.open = true;
     refreshSubmissionPlan();
     renderRunDock(state.currentPlan);
     renderProgress(100, "분석 완료");
-    setStatus("분석이 완료되었습니다. 최적화 방식을 선택하세요.");
+    setStatus(analysisMode === "deep" ? "상세 분석이 완료되었습니다. 최적화 계획을 확인하세요."
+      : "빠른 분석이 완료되었습니다. 세부 분석 보기에서 상세 검사를 실행할 수 있습니다.");
   } catch (error) {
     if (runId === analysisSequence) {
-      setStatus(errorMessage(error));
-      renderEmptySummary();
+      setStatus(isDocumentCancellation(error) ? "분석을 취소했습니다." : errorMessage(error));
+      if (previousReport && analysisMode === "deep") refreshSubmissionPlan();
+      else renderEmptySummary();
     }
   } finally {
     if (runId === analysisSequence) {
       state.analysisRunning = false;
       setIdle();
       hideProgressPanel();
+      if (analysisMode === "deep") { analysisDetails.open = true; deepAnalysisButton.focus(); }
     }
   }
 }
@@ -1991,6 +2014,8 @@ function stopProgressAnimation(): void {
 
 function renderAnalysis(report: OptimizationReport): void {
   const view = createAnalysisViewModel(report);
+  analysisMethod.textContent = analysisBasisLabel(report);
+  deepAnalysisButton.textContent = report.analysis?.mode === "deep" ? "상세 분석 다시 실행" : "상세 분석";
   selectedOriginalMeta.textContent = `원본 ${view.originalSizeLabel}`;
   selectedModifiedMeta.textContent = `수정일: ${new Date().toISOString().slice(0, 16).replace("T", " ")}`;
   analysisDetails.open = false;
@@ -2331,6 +2356,8 @@ function setIdle(): void {
 }
 
 function setSubmissionInputsDisabled(disabled: boolean): void {
+  deepAnalysisButton.hidden = Boolean(state.result);
+  deepAnalysisButton.disabled = disabled || !state.filePath || !state.report || Boolean(state.result);
   submissionLimitSelect.disabled = disabled;
   customLimitInput.disabled = disabled;
   preservationSelect.disabled = disabled;
@@ -2495,6 +2522,8 @@ function clearSelectedFiles(message: string): void {
   resultPanel.hidden = true;
   resultSummary.innerHTML = "";
   analysisGrid.innerHTML = "";
+  analysisMethod.textContent = "";
+  deepAnalysisButton.disabled = true;
   opportunityList.innerHTML = "";
   warningList.innerHTML = "";
   categoryChart.innerHTML = "";

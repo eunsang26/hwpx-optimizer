@@ -1,4 +1,5 @@
 import type {
+  AnalysisCoverage,
   AppliedAction,
   OptimizationAction,
   OptimizationOpportunity,
@@ -15,6 +16,7 @@ export function createAnalysisReport(
   originalSize = analysis.totalSize,
   opportunities: OptimizationOpportunity[] = [],
   options: {
+    analysis?: AnalysisCoverage;
     targetBytes?: number;
     performance?: PerformanceSummary;
     /** Prefer ZIP-aware projection from `projectPackageSizeFromOpportunities`. */
@@ -31,6 +33,7 @@ export function createAnalysisReport(
       ? Math.max(0, Math.min(originalSize, Math.round(options.projectedOptimizedSize)))
       : fallbackProjected;
   return {
+    ...(options.analysis ? { analysis: options.analysis } : {}),
     originalSize,
     optimizedSize: projectedOptimizedSize,
     savedBytes: Math.max(0, originalSize - projectedOptimizedSize),

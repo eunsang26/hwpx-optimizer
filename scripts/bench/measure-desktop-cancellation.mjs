@@ -53,7 +53,7 @@ try {
     const input = { filePath, mode: spec.mode, jpegQuality: 90,
       settings: { ...defaultDesktopSettings, saveReport: true } };
     const analysisStart = performance.now();
-    const analysis = await client.analyze(filePath, new AbortController().signal);
+    const analysis = await client.analyze(filePath, new AbortController().signal, "deep");
     if (analysis.report.originalSize !== bytes.length) throw new Error("Synthetic analysis size mismatch");
     const analysisMs = performance.now() - analysisStart;
     const start = performance.now(); let previous = start;

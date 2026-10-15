@@ -85,6 +85,16 @@ describe("real document worker cancellation and restart", () => {
       expect((await readFile(input)).equals(source)).toBe(true);
     }, 15_000
   );
+  it("forwards default quick and explicit detailed analysis through the real worker", async () => {
+    source = await createReportLikeHwpxFixture(); await writeFile(input, source);
+    const worker = client(); const run = manager();
+    const quick = await run.run("analyze", ({ signal }) => worker.analyze(input, signal));
+    const deep = await run.run("analyze", ({ signal }) => worker.analyze(input, signal, "deep"));
+    expect(quick.report.analysis).toEqual({ mode: "quick", imageSizes: "estimated", visualDuplicatesChecked: false });
+    expect(deep.report.analysis).toEqual({ mode: "deep", imageSizes: "encoded", visualDuplicatesChecked: true });
+    expect(quick.report.nearDuplicateImages).toEqual([]);
+    expect((await readFile(input)).equals(source)).toBe(true);
+  }, 15_000);
   it("reports unexpected worker exit separately and isolates the next worker generation", async () => {
     let generation = 0;
     const worker = new DocumentWorkerClient(() => new Worker(bootstrap, { execArgv: ["--conditions=development"],

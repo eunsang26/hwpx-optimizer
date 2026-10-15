@@ -158,7 +158,12 @@ const api: HwpxOptimizerApi = {
     settings = { ...settings, ...patch };
     return settings;
   },
-  analyze: async (filePath) => delay({ filePath, report: sampleReport }, 350),
+  analyze: async (filePath, options) => {
+    const mode = options?.analysisMode ?? "quick";
+    return delay({ filePath, report: { ...sampleReport, analysis: { mode,
+      imageSizes: mode === "deep" ? "encoded" as const : "estimated" as const,
+      visualDuplicatesChecked: mode === "deep" } } }, 350);
+  },
   optimize: async (input) => {
     const steps = [
       [10, "Reading HWPX package", 120],

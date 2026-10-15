@@ -16,8 +16,8 @@ export class DocumentWorkerClient {
   async warm(): Promise<void> {
     await this.request({ type: "warm" }, AbortSignal.timeout(DOCUMENT_IDLE_TIMEOUT_MS));
   }
-  analyze(filePath: string, signal: AbortSignal): Promise<DesktopAnalysisResult> {
-    return this.request({ type: "analyze", filePath }, signal);
+  analyze(filePath: string, signal: AbortSignal, analysisMode: "quick" | "deep" = "quick"): Promise<DesktopAnalysisResult> {
+    return this.request({ type: "analyze", filePath, analysisMode }, signal);
   }
   prepare(input: DesktopOptimizeInput, signal: AbortSignal, progress: (item: DesktopProgress) => void): Promise<DesktopPreparedOptimization> {
     return this.request({ type: "optimize", input }, signal, progress);
