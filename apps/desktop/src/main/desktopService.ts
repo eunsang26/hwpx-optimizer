@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
-import { PathClaimRegistry, removeOwnedArtifact, writeStagedFile } from "@hwpx-optimizer/io";
+import { PathClaimRegistry, removeOwnedArtifact, writeArtifactSet, writeStagedFile } from "@hwpx-optimizer/io";
 import type { OwnedArtifact } from "@hwpx-optimizer/io";
 import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
 import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
@@ -186,7 +186,8 @@ export async function optimizeDesktopFile(
       [...protectedInputs.values(), ...(input.protectedInputs ?? [])]
     );
     onProgress?.({ percent: 95, item: "Writing optimized document" });
-    await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent, claims);
+    const saveWarnings = await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent, claims);
+    result.report.warnings.push(...saveWarnings);
 
     onProgress?.({ percent: 99, item: "Finalizing optimized document" });
     return { outputPath, reportPath, report: result.report };
@@ -457,38 +458,13 @@ async function statSupportedLocalInput(
 }
 
 async function writeOptimizationArtifacts(
-  outputPath: string,
-  output: Buffer,
-  reportPath: string | undefined,
-  reportContent: string | undefined,
+  outputPath: string, output: Buffer, reportPath: string | undefined, reportContent: string | undefined,
   claims?: PathClaimRegistry
-): Promise<void> {
-  const outputTmpPath = temporaryPath(outputPath);
-  const reportTmpPath = reportPath && reportContent ? temporaryPath(reportPath) : undefined;
-  const stages: OwnedArtifact[] = [];
-  let reportArtifact: OwnedArtifact | undefined;
-  try {
-    if (!claims) {
-      await assertArtifactTargetIsWritable(outputPath);
-      if (reportPath) await assertArtifactTargetIsWritable(reportPath);
-    }
-    const outputStage = await writeStagedFile(outputTmpPath, output);
-    stages.push(outputStage);
-    if (reportPath && reportContent && reportTmpPath) {
-      const reportStage = await writeStagedFile(reportTmpPath, reportContent);
-      stages.push(reportStage);
-      if (claims) reportArtifact = await claims.publish(reportTmpPath, reportPath);
-      else {
-        await rename(reportTmpPath, reportPath);
-        reportArtifact = { ...reportStage, path: reportPath };
-      }
-    }
-    if (claims) await claims.publish(outputTmpPath, outputPath);
-    else await rename(outputTmpPath, outputPath);
-  } catch (error) {
-    if (reportArtifact) await removeOwnedArtifact(reportArtifact);
-    throw error;
-  } finally { await Promise.all(stages.map(removeOwnedArtifact)); }
+): Promise<string[]> {
+  return writeArtifactSet([
+    { target: outputPath, data: output },
+    ...(reportPath && reportContent ? [{ target: reportPath, data: reportContent }] : [])
+  ], claims ? { claims } : { overwrite: true });
 }
 
 async function writeJsonArtifact(path: string, content: string, claims?: PathClaimRegistry): Promise<void> {

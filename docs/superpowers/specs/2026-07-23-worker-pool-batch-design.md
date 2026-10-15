@@ -4,6 +4,8 @@
 - Status: Revised x2 after Codex review (gpt-5.6-sol) + self-review — ready to plan
 - Scope: CLI `batch` subcommand only. Desktop (single interactive document + its existing single worker) is unchanged. Core stays pure (no fs/terminal I/O).
 
+> Historical design note: the save/recovery descriptions below predate OPT-003/010/011. Current behavior uses an owned private batch workspace, empty-directory reservations and exclusive publication. CLI batch, single CLI and desktop document/report saves now share whole-pair rollback on handled failures, including overwrite mode. See [the filesystem publication boundary](../../ARCHITECTURE.md#filesystem-publication-boundary) for the current contract; the older weaker overwrite guarantee and generic temp-file sweep below no longer apply.
+
 ## 1. Problem & Goal
 
 `hwpx-opt batch <dir>` optimizes every `.hwpx` in a folder. Today it runs on a

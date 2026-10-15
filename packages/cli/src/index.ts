@@ -15,7 +15,7 @@ import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
 import { ACTION_CATALOG, optimizeByMode, parseActionList, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
 import type { OptimizationMode } from "./optimizeByMode.js";
 import { PathClaimRegistry } from "./pathClaims.js";
-import { removeOwnedArtifact, writeStagedFile } from "@hwpx-optimizer/io";
+import { ArtifactSaveError, publishArtifactSet, removeOwnedArtifact, writeArtifactSet, writeStagedFile } from "@hwpx-optimizer/io";
 import type { OwnedArtifact } from "@hwpx-optimizer/io";
 import { BatchWorkspace } from "./batchWorkspace.js";
 import { WorkerPool } from "./workerPool.js";
@@ -513,10 +513,11 @@ async function runBatchInWorkspace(
         const commit = await commitBatchJob(meta, claims);
         if (!commit.ok) {
           await cleanupFailedJob(meta, claims, uncommittedClaimedPaths);
-          results[meta.index] = { input: meta.file, status: "failed", stage: "write-output", error: commit.error };
-          console.error(`${progressPrefix} failed at write-output: ${commit.error}`);
+          results[meta.index] = { input: meta.file, status: "failed", stage: commit.stage, error: commit.error };
+          console.error(`${progressPrefix} failed at ${commit.stage}: ${commit.error}`);
           continue;
         }
+        for (const warning of commit.warnings) console.error(`${progressPrefix} Warning: ${warning}`);
         uncommittedClaimedPaths.delete(meta.outputPath);
         uncommittedClaimedPaths.delete(meta.reportPath);
 
@@ -530,7 +531,8 @@ async function runBatchInWorkspace(
           originalSize: jobResult.originalSize,
           optimizedSize: jobResult.optimizedSize,
           savedBytes,
-          savedPercent
+          savedPercent,
+          ...(commit.warnings.length ? { saveWarnings: commit.warnings } : {})
         };
         console.log(`${progressPrefix} optimized -${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
       }
@@ -619,29 +621,19 @@ type BatchJobMeta = {
   claimed: boolean;
 };
 
-async function commitBatchJob(meta: BatchJobMeta, claims: PathClaimRegistry): Promise<{ ok: true } | { ok: false; error: string }> {
-  let outputArtifact: OwnedArtifact | undefined;
+async function commitBatchJob(meta: BatchJobMeta, claims: PathClaimRegistry): Promise<
+  { ok: true; warnings: string[] } | { ok: false; stage: BatchFailureStage; error: string }
+> {
   try {
-    if (meta.claimed) outputArtifact = await claims.publish(meta.tempOutputPath, meta.outputPath);
-    else await rename(meta.tempOutputPath, meta.outputPath);
+    const warnings = await publishArtifactSet([
+      { stage: meta.tempOutputPath, target: meta.outputPath },
+      { stage: meta.tempReportPath, target: meta.reportPath }
+    ], meta.claimed ? { claims } : { overwrite: true });
+    return { ok: true, warnings };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, stage: error instanceof ArtifactSaveError && error.failedTarget === meta.reportPath
+      ? "write-report" : "write-output", error: error instanceof Error ? error.message : String(error) };
   }
-  try {
-    if (meta.claimed) await claims.publish(meta.tempReportPath, meta.reportPath);
-    else await rename(meta.tempReportPath, meta.reportPath);
-  } catch (error) {
-    if (outputArtifact) await removeOwnedArtifact(outputArtifact);
-    // --overwrite mode: outputPath now holds the freshly written, valid,
-    // non-empty optimized file -- the rename above already atomically replaced
-    // whatever was there before. Per spec (§7), --overwrite has a weaker
-    // guarantee: a failure between the output and report rename may leave the
-    // new output with a stale/missing report, but the output itself must never
-    // be rolled back or deleted here. Only the temp report gets cleaned up
-    // (by cleanupFailedJob, which never touches final paths when !claimed).
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
-  }
-  return { ok: true };
 }
 
 async function cleanupFailedJob(
@@ -872,66 +864,20 @@ function formatBytes(bytes: number): string {
 }
 
 async function writeOptimizationArtifacts(
-  outputPath: string,
-  output: Buffer,
-  reportPath: string,
-  reportContent: string,
+  outputPath: string, output: Buffer, reportPath: string, reportContent: string,
   options: { exclusive?: boolean } = {}
 ): Promise<void> {
-  if (options.exclusive) {
-    const claims = new PathClaimRegistry();
-    const stages: OwnedArtifact[] = [];
-    let reportArtifact: OwnedArtifact | undefined;
-    try {
-      // Obtain both names before writing either result.
-      await claims.claimExact(outputPath);
-      await claims.claimExact(reportPath);
-      const outputStage = await writeStagedFile(temporaryPath(outputPath), output);
-      stages.push(outputStage);
-      const reportStage = await writeStagedFile(temporaryPath(reportPath), reportContent);
-      stages.push(reportStage);
-      reportArtifact = await claims.publish(reportStage.path, reportPath);
-      await claims.publish(outputStage.path, outputPath);
-    } catch (error) {
-      if (reportArtifact) await removeOwnedArtifact(reportArtifact);
-      throw error;
-    } finally {
-      await Promise.all(stages.map(removeOwnedArtifact));
-      await claims.releaseAll();
-    }
-    return;
-  }
-
-  const outputTmpPath = temporaryPath(outputPath);
-  const reportTmpPath = temporaryPath(reportPath);
-  let reportPromoted = false;
-  try {
-    await assertArtifactTargetIsWritable(outputPath);
-    await assertArtifactTargetIsWritable(reportPath);
-    await writeFile(outputTmpPath, output);
-    await writeFile(reportTmpPath, reportContent);
-    await rename(reportTmpPath, reportPath);
-    reportPromoted = true;
-    await rename(outputTmpPath, outputPath);
-  } catch (error) {
-    await Promise.all([
-      rm(outputTmpPath, { force: true }),
-      rm(reportTmpPath, { force: true }),
-      reportPromoted ? rm(reportPath, { force: true }) : Promise.resolve()
-    ]);
-    throw error;
-  }
+  const warnings = await writeArtifactSet([
+    { target: outputPath, data: output }, { target: reportPath, data: reportContent }
+  ], { overwrite: !options.exclusive });
+  for (const warning of warnings) console.error(`Warning: ${warning}`);
 }
 
 async function assertArtifactTargetIsWritable(path: string): Promise<void> {
   try {
-    const target = await stat(path);
-    if (target.isDirectory()) {
-      throw new Error(`Refusing to write artifact over directory: ${path}`);
-    }
+    if ((await stat(path)).isDirectory()) throw new Error(`Refusing to write artifact over directory: ${path}`);
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
-    throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 }
 
@@ -952,6 +898,7 @@ type BatchFileResult =
       optimizedSize: number;
       savedBytes: number;
       savedPercent: number;
+      saveWarnings?: string[];
     }
   | { input: string; status: "failed"; stage: BatchFailureStage; error: string };
 

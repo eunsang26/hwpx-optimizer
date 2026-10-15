@@ -22,7 +22,7 @@ This file separates release blockers from non-blockers so the project does not o
 
 ## Non-Blockers For Continued Development
 
-- Non-overwrite saves reserve document/report names and publish complete staged bytes by hardlink where supported. On FAT or other filesystems without hardlinks, an exclusive copy preserves existing names but a reader can observe partial bytes during the copy. Forced termination recovery and overwrite-mode document/report rollback are still tracked in OPT-012 and OPT-011 respectively; no multi-file crash-atomic guarantee is made.
+- Document/report saves roll back the whole pair on a handled failure. Overwrite saves temporarily move old entries into private `.hwpx-save-*` directories. If a user replacement blocks restoration, it is preserved and the error lists recovery directories containing the old files. Forced termination recovery remains tracked as OPT-012; no multi-file crash-atomic or reader-isolation guarantee is made. On FAT or other filesystems without hardlinks, exclusive copying protects names but a reader can observe partial bytes during the copy.
 - Future reference graph additions should be driven by real HWPX samples that expose new reference forms.
 - Duplicate image consolidation does not automatically merge near-duplicates or lossy re-encodes whose decoded pixels differ.
 - PSNR and SSIM thresholds are conservative quality gates, not perceptual proof that every image is visually identical. Manual review is still appropriate for high-stakes documents.

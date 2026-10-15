@@ -173,11 +173,15 @@ Batch writes use a private `.hwpx-optimizer-batch.lock` workspace in the output 
 
 ## Filesystem Publication Boundary
 
-`packages/io/src/index.ts` is shared by CLI and desktop; core remains buffer-oriented and does not import it. Non-overwrite saves reserve names with exclusive directory creation. A document/report pair obtains both names before staging either artifact. Desktop saves and batch jobs select suffixes on conflicts; standalone CLI saves may report an explicit collision.
+`packages/io` is shared by CLI and desktop; core remains buffer-oriented and does not import it. `publication.ts` owns reservations and single-file publication; `artifactTransaction.ts` owns document/report saves. Non-overwrite saves reserve names with exclusive directory creation. A document/report pair obtains both names before staging either artifact. Desktop saves and batch jobs select suffixes on conflicts; standalone CLI saves may report an explicit collision.
 
 Stages use exclusive file creation. Publication removes only the unchanged, empty reservation and hardlinks the complete stage into the final name. Link creation fails if another file appears in the gap. On filesystems without hardlinks, publication streams into a file opened with `O_EXCL`, retaining the exclusive-name guarantee while bytes are copied. This fallback does not publish all bytes atomically. Cleanup checks filesystem identity, modification time, and size before deleting owned files; reservations never use recursive deletion.
 
-These rules prevent non-overwrite saves from replacing another operation's result or a user replacement file. They do not provide a multi-file crash transaction. Overwrite-mode document/report rollback and cancellation recovery remain separately tracked as OPT-011 and OPT-012 in `IMPROVEMENT_BACKLOG.md`.
+Before saving a pair, the transaction rejects equal destinations, canonical paths through symbolic links, and existing hardlink aliases. It validates every stage and destination before moving existing results. In overwrite mode, existing entries move into private sibling `.hwpx-save-*` directories until both new artifacts have been published. A handled write/publication failure rolls the entire pair back, including restoring a symbolic link itself without changing its referent. CLI single saves, CLI batch commits and desktop saves share this policy; batch failures identify the document or report stage and do not count as optimized results.
+
+Rollback removes only unchanged artifacts created by the transaction and restores old entries exclusively. If a new user file blocks restoration, it is preserved and the error identifies the retained backup directory for recovery. Cleanup trouble after a successful commit returns a warning rather than changing a complete save into a failure; CLI prints these warnings, batch summaries retain them, and desktop includes them in the returned warnings. Stored optimization reports describe optimization; subsequent filesystem-cleanup warnings belong to the save operation.
+
+These rules do not provide a multi-file crash transaction or isolate intermediate names from concurrent readers. Forced termination can interrupt the backup/publish/restore sequence; automatic cancellation and restart recovery remain tracked as OPT-012 in `IMPROVEMENT_BACKLOG.md`.
 
 ## Desktop Boundary
 

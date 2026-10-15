@@ -984,13 +984,7 @@ describe("runCli", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("keeps a promoted output in --overwrite mode when only the final report rename fails, cleaning just the temp report", async () => {
-    // Fix A: previously commitBatchJob unconditionally rolled the promoted output
-    // back to its temp path on report-rename failure, and cleanupFailedJob then
-    // deleted that temp -- in --overwrite mode the first rename already atomically
-    // replaced whatever was at the final path, so this sequence destroyed the
-    // freshly-written output. Per spec (SDD §7) --overwrite has a weaker
-    // guarantee: keep the new output, only the report may end up stale/missing.
+  it("does not publish a new output when the paired report destination is a directory", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const outDir = join(dir, "out");
     await mkdir(outDir, { recursive: true });
@@ -1001,9 +995,7 @@ describe("runCli", () => {
 
     expect(summary.failed).toBe(1);
     expect(summary.optimized).toBe(0);
-    const outputBuf = await readFile(join(outDir, "foo.optimized.hwpx"));
-    expect(outputBuf.length).toBeGreaterThan(0);
-    await expect(JSZip.loadAsync(outputBuf)).resolves.toBeDefined();
+    await expect(readFile(join(outDir, "foo.optimized.hwpx"))).rejects.toMatchObject({ code: "ENOENT" });
     const reportStats = await stat(join(outDir, "foo.optimized.hwpx.report.json"));
     expect(reportStats.isDirectory()).toBe(true);
     const entries = await readdir(outDir);
@@ -1011,10 +1003,7 @@ describe("runCli", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("does not delete a pre-existing --overwrite output when only the report rename fails afterward", async () => {
-    // Fix A (data loss): seed a real pre-existing output, then force the report
-    // rename to fail after the output rename has already succeeded (atomically
-    // replacing the pre-existing file). The user must not be left with nothing.
+  it("preserves the previous output when the paired report cannot be saved", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const outDir = join(dir, "out");
     await mkdir(outDir, { recursive: true });
@@ -1027,12 +1016,8 @@ describe("runCli", () => {
 
     expect(summary.failed).toBe(1);
     expect(summary.optimized).toBe(0);
-    const outputBuf = await readFile(join(outDir, "foo.optimized.hwpx"));
-    expect(outputBuf.length).toBeGreaterThan(0);
-    await expect(JSZip.loadAsync(outputBuf)).resolves.toBeDefined();
-    // It should be the freshly optimized output (the first rename already
-    // replaced the stale pre-existing file), not just "some bytes".
-    expect(outputBuf.equals(preExisting)).toBe(false);
+    expect(await readFile(join(outDir, "foo.optimized.hwpx"))).toEqual(preExisting);
+    expect((await readdir(outDir)).some((name) => name.startsWith(".hwpx-save-"))).toBe(false);
     await rm(dir, { recursive: true, force: true });
   });
 });
