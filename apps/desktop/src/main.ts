@@ -51,6 +51,9 @@ const isSmokeTest =
   process.argv.includes("--smoke-test") || process.env.HWPX_OPT_SMOKE_TEST === "1";
 if (isSmokeTest) {
   app.setPath("userData", join(process.cwd(), ".tmp", "electron-smoke"));
+  app.on("child-process-gone", (_event, details) => console.error(JSON.stringify({
+    check: "smoke-child-process-gone", type: details.type, reason: details.reason, exitCode: details.exitCode
+  })));
 }
 if (process.platform === "win32") {
   app.setAppUserModelId("local.hwpxoptimizer.app");
@@ -80,6 +83,14 @@ async function createWindow(): Promise<BrowserWindow> {
     }
   });
 
+  if (isSmokeTest) {
+    mainWindow.webContents.on("render-process-gone", (_event, details) => console.error(JSON.stringify({
+      check: "smoke-render-process-gone", reason: details.reason, exitCode: details.exitCode
+    })));
+    mainWindow.webContents.on("did-fail-load", (_event, errorCode, description, url, isMainFrame) => console.error(JSON.stringify({
+      check: "smoke-load-failed", errorCode, description, url, isMainFrame
+    })));
+  }
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   mainWindow.webContents.on("will-navigate", (event: Electron.Event) => {
     event.preventDefault();
