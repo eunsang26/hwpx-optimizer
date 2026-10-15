@@ -3261,3 +3261,11 @@ summary:focus-visible,
   font-size: 12px;
   line-height: 1.55;
 }
+
+/* Settings recovery and per-control limit errors remain visible until resolved. */
+.field-error { color: #9a3412; white-space: normal; max-width: 280px; font-size: 12px; }
+#custom-limit-field { flex-wrap: wrap; }
+#custom-limit-error { flex-basis: 100%; }
+input[aria-invalid="true"] { outline: 2px solid #b45309; outline-offset: 1px; }
+#settings-notice { align-items: center; }
+#settings-notice p { flex: 1; }

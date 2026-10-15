@@ -1,3 +1,5 @@
+import type { DesktopSettingsSnapshot as DesktopSettings } from "../shared/desktopSettings.js";
+export type { DesktopSettingsSnapshot as DesktopSettings } from "../shared/desktopSettings.js";
 import type { OptimizationReport } from "@hwpx-optimizer/core";
 import type { PreservationPreference, SubmissionActionId, SubmissionLimit, SubmissionPlan } from "../shared/submissionPlan.js";
 import { DEFAULT_JPEG_QUALITY } from "../shared/qualityPolicy.js";
@@ -56,17 +58,6 @@ export type AppState = {
   batchRunCompleted: boolean;
   analysisRunning: boolean;
   optimizeRunning: boolean;
-};
-
-export type DesktopSettings = {
-  defaultMode: AppState["mode"];
-  saveNextToOriginal: boolean;
-  saveReport: boolean;
-  preventOverwrite: boolean;
-  showAggressiveWarning: boolean;
-  submissionLimit: SubmissionLimit;
-  preservationPreference: PreservationPreference;
-  batchTargetMode: BatchTargetMode;
 };
 
 export function createRendererState(): AppState {

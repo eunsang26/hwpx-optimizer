@@ -53,6 +53,11 @@
         <p id="progress-item" aria-live="polite">대기 중입니다.</p>
       </section>
 
+      <section id="settings-notice" class="status-banner" hidden role="status" aria-live="polite" data-tone="warning">
+        <p id="settings-notice-text"></p>
+        <button id="settings-notice-dismiss" type="button" class="ghost" aria-label="설정 안내 닫기">닫기</button>
+      </section>
+
       <section id="status-banner" class="status-banner" hidden aria-live="polite">
         <span class="info-icon" aria-hidden="true"></span>
         <p id="status-banner-text">대기 중입니다.</p>
@@ -75,8 +80,9 @@
             </select>
           </label>
           <label id="custom-limit-field" hidden>
-            <strong>직접</strong>
-            <input id="custom-limit-input" type="number" min="1" step="1" inputmode="decimal" />
+            <strong>직접(MB)</strong>
+            <input id="custom-limit-input" type="number" min="0.00000095367431640625" max="1048576" step="any" inputmode="decimal" aria-describedby="custom-limit-error" />
+            <small id="custom-limit-error" class="field-error" role="alert" hidden></small>
           </label>
           <label>
             <strong>압축</strong>
@@ -508,7 +514,8 @@
         </label>
         <label id="setting-custom-limit-field" class="settings-field" hidden>
           직접 입력 (MB)
-          <input id="setting-custom-limit-input" type="number" min="1" step="1" inputmode="decimal" />
+          <input id="setting-custom-limit-input" type="number" min="0.00000095367431640625" max="1048576" step="any" inputmode="decimal" aria-describedby="setting-custom-limit-error" />
+          <small id="setting-custom-limit-error" class="field-error" role="alert" hidden></small>
         </label>
         <label class="settings-check"><input id="setting-save-next" type="checkbox" /><span>원본 파일 옆에 저장</span></label>
         <label class="settings-check"><input id="setting-save-report" type="checkbox" /><span>JSON 리포트 저장(선택)</span></label>

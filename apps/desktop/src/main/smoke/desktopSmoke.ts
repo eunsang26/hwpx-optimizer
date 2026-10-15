@@ -887,6 +887,8 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
     worker: documentWorkerClient,
     operations: documentOperations
   });
+  const { runSettingsSmoke } = await import("./settingsSmoke.js");
+  await runSettingsSmoke(window, app.getPath("userData"), smokeSecondInputPath, selection);
 }
 
 function parseSmokeMode(value: string | undefined): OptimizationMode {

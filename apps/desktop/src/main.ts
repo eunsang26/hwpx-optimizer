@@ -12,20 +12,20 @@ const { app, BrowserWindow: BrowserWindowClass, dialog, ipcMain, shell, session,
 if (app.isPackaged && process.platform !== "win32") {
   throw new Error("HWPX Optimizer packaged desktop builds support Windows only.");
 }
-import { mkdir, readFile as readFileFs, readdir, writeFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { DesktopDocumentController } from "./main/documentController.js";
 import type { DesktopOptimizeRequest, DesktopBatchReportRequest } from "./main/documentController.js";
-import { normalizeDesktopSettings, persistentDesktopSettingsPatch } from "./main/desktopService.js";
-import type { DesktopSettings, DesktopSettingsPatch } from "./main/desktopService.js";
+import { DesktopSettingsStore } from "./main/settingsStore.js";
+import type { DesktopSettingsPatch } from "./main/desktopService.js";
 import { DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT } from "./shared/windowConfig.js";
 
 let mainWindow: BrowserWindow | null = null;
 const documents = new DesktopDocumentController(loadSettings);
 const permissions = documents.permissions;
 let quitAfterOperations = false;
-let settingsSaveQueue: Promise<void> = Promise.resolve();
+const settingsStore = new DesktopSettingsStore(() => join(app.getPath("userData"), "settings.json"));
 // Packaged Windows EXEs treat unknown `--flags` as Chromium switches ("bad option").
 // Prefer HWPX_OPT_SMOKE_TEST=1 for packaged smoke; keep argv for Linux `electron` launches.
 const isSmokeTest =
@@ -101,15 +101,16 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", (event) => {
-  if (documents.busy) {
+  if (documents.busy || settingsStore.busy) {
     event.preventDefault();
     if (!quitAfterOperations) {
       quitAfterOperations = true;
-      void documents.close().finally(() => app.quit());
+      void documents.close().finally(() => settingsStore.close()).finally(() => app.quit());
     }
     return;
   }
   void documents.close();
+  void settingsStore.close();
 });
 
 function registerIpc(): void {
@@ -206,42 +207,8 @@ function registerIpc(): void {
   ipcMain.handle("shell:open-path", async (_event, filePath: string) => shell.openPath(await permissions.requireGenerated(filePath)));
 }
 
-async function loadSettings(): Promise<DesktopSettings> {
-  await settingsSaveQueue;
-  return readSettings();
-}
-
-async function readSettings(): Promise<DesktopSettings> {
-  try {
-    const raw = await readFileFs(settingsPath(), "utf8");
-    const parsed = JSON.parse(raw) as DesktopSettingsPatch;
-    return normalizeDesktopSettings({
-      ...persistentDesktopSettingsPatch(parsed),
-      settingsVersion: typeof parsed.settingsVersion === "number" ? parsed.settingsVersion : undefined
-    });
-  } catch {
-    return normalizeDesktopSettings(undefined);
-  }
-}
-
-function saveSettings(patch: DesktopSettingsPatch): Promise<DesktopSettings> {
-  const task = settingsSaveQueue.then(async () => {
-    const current = await readSettings();
-    const next = { ...current, ...persistentDesktopSettingsPatch(patch) };
-    await mkdir(app.getPath("userData"), { recursive: true });
-    await writeFile(settingsPath(), JSON.stringify(next, null, 2));
-    return next;
-  });
-  settingsSaveQueue = task.then(
-    () => undefined,
-    () => undefined
-  );
-  return task;
-}
-
-function settingsPath(): string {
-  return join(app.getPath("userData"), "settings.json");
-}
+function loadSettings() { return settingsStore.load(); }
+function saveSettings(patch: DesktopSettingsPatch) { return settingsStore.save(patch); }
 
 function blockExternalNetworkRequests(): void {
   session.defaultSession.webRequest.onBeforeRequest(

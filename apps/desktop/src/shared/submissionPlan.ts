@@ -1,3 +1,4 @@
+import { validCustomLimitBytes } from "./submissionLimits.js";
 import { ACTION_CATALOG, type SubmissionActionBucket } from "./actionCatalog.js";
 import { JPEG_QUALITY_FLOOR, JPEG_QUALITY_CEILING, DEFAULT_JPEG_QUALITY as BASELINE_JPEG_QUALITY_BALANCED } from "./qualityPolicy.js";
 import type { OptimizationOpportunityGroup, OptimizationReport } from "@hwpx-optimizer/core";
@@ -142,7 +143,7 @@ export function resolveSubmissionLimitBytes(limit: SubmissionLimit): number | un
   if (limit.id === "mb41") return 41 * 1024 * 1024;
   if (limit.id === "mb50") return 50 * 1024 * 1024;
   if (limit.id === "mb100") return 100 * 1024 * 1024;
-  if (limit.id === "custom" && limit.customBytes && limit.customBytes > 0) return limit.customBytes;
+  if (limit.id === "custom" && validCustomLimitBytes(limit.customBytes)) return limit.customBytes;
   return undefined;
 }
 

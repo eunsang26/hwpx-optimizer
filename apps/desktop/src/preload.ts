@@ -1,3 +1,4 @@
+import type { DesktopSettingsSnapshot } from "./shared/desktopSettings.js";
 import type { DesktopOptimizeRequest, DesktopBatchReportRequest } from "./main/documentController.js";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
@@ -16,8 +17,8 @@ const api = {
       .filter((path) => path.length > 0);
     return ipcRenderer.invoke("hwpx:register-dropped-paths", paths);
   },
-  loadSettings: () => ipcRenderer.invoke("settings:load"),
-  saveSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("settings:save", patch),
+  loadSettings: (): Promise<DesktopSettingsSnapshot> => ipcRenderer.invoke("settings:load"),
+  saveSettings: (patch: Record<string, unknown>): Promise<DesktopSettingsSnapshot> => ipcRenderer.invoke("settings:save", patch),
   analyze: (filePath: string, options?: { analysisMode?: "quick" | "deep" }): Promise<DesktopAnalysisResult> => ipcRenderer.invoke("hwpx:analyze", filePath, options),
   optimize: (input: DesktopOptimizeRequest): Promise<DesktopOptimizeResult> => ipcRenderer.invoke("hwpx:optimize", input),
   cancelAnalyze: (): Promise<CancellationResult> => ipcRenderer.invoke("hwpx:cancel-analyze"),

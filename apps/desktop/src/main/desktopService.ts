@@ -5,37 +5,12 @@ import type { ImagePreviewPair, OptimizationReport, AnalysisReport, CompletedOpt
 import { PathClaimRegistry, removeOwnedArtifact, writeArtifactSet, writeStagedFile } from "@hwpx-optimizer/io";
 import type { OwnedArtifact, SaveOptions } from "@hwpx-optimizer/io";
 import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
-import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
 import type { DesktopImagePreviewInput } from "../shared/imagePreview.js";
 
-export type OptimizationMode = "safe" | "balanced" | "aggressive";
-export type BatchTargetMode = "aggregate" | "per-file";
-
-export type DesktopSettings = {
-  settingsVersion?: number;
-  defaultMode: OptimizationMode;
-  saveNextToOriginal: boolean;
-  saveReport: boolean;
-  preventOverwrite: boolean;
-  showAggressiveWarning: boolean;
-  submissionLimit: SubmissionLimit;
-  preservationPreference: PreservationPreference;
-  batchTargetMode: BatchTargetMode;
-};
-
-export type DesktopSettingsPatch = Partial<DesktopSettings> & Record<string, unknown>;
-
-export const defaultDesktopSettings: DesktopSettings = {
-  settingsVersion: 3,
-  defaultMode: "balanced",
-  saveNextToOriginal: true,
-  saveReport: false,
-  preventOverwrite: true,
-  showAggressiveWarning: true,
-  submissionLimit: { id: "mb40" },
-  preservationPreference: "recommended",
-  batchTargetMode: "per-file"
-};
+export { defaultDesktopSettings, persistentDesktopSettingsPatch, normalizeDesktopSettings } from "../shared/desktopSettings.js";
+export type { OptimizationMode, BatchTargetMode, DesktopSettings, DesktopSettingsPatch } from "../shared/desktopSettings.js";
+import { isOptimizationMode } from "../shared/desktopSettings.js";
+import type { OptimizationMode, DesktopSettings } from "../shared/desktopSettings.js";
 
 const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
 const DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES = 200 * 1024 * 1024;
@@ -381,40 +356,6 @@ export async function nextOutputPath(
   throw new Error("Could not create a non-overwriting output path.");
 }
 
-export function persistentDesktopSettingsPatch(patch: DesktopSettingsPatch): Partial<DesktopSettings> {
-  const sanitized: Partial<DesktopSettings> = {};
-  if (isOptimizationMode(patch.defaultMode)) sanitized.defaultMode = patch.defaultMode;
-  if (patch.saveNextToOriginal === true) sanitized.saveNextToOriginal = true;
-  if (typeof patch.saveReport === "boolean") sanitized.saveReport = patch.saveReport;
-  if (typeof patch.preventOverwrite === "boolean") sanitized.preventOverwrite = patch.preventOverwrite;
-  if (typeof patch.showAggressiveWarning === "boolean") sanitized.showAggressiveWarning = patch.showAggressiveWarning;
-  if (isSubmissionLimit(patch.submissionLimit)) sanitized.submissionLimit = patch.submissionLimit;
-  if (isPreservationPreference(patch.preservationPreference)) sanitized.preservationPreference = patch.preservationPreference;
-  if (isBatchTargetMode(patch.batchTargetMode)) sanitized.batchTargetMode = patch.batchTargetMode;
-  return sanitized;
-}
-
-export function normalizeDesktopSettings(raw: Partial<DesktopSettings> | undefined): DesktopSettings {
-  const parsed = raw ?? {};
-  const migratedMode =
-    parsed.settingsVersion === undefined &&
-    parsed.defaultMode === "safe" &&
-    (parsed.preservationPreference ?? defaultDesktopSettings.preservationPreference) === "recommended"
-      ? "balanced"
-      : parsed.defaultMode;
-  const submissionLimit =
-    parsed.submissionLimit?.id === "mb41"
-      ? { id: "mb40" as const, customBytes: parsed.submissionLimit.customBytes }
-      : parsed.submissionLimit;
-  return {
-    ...defaultDesktopSettings,
-    ...parsed,
-    ...(submissionLimit ? { submissionLimit } : {}),
-    defaultMode: migratedMode ?? defaultDesktopSettings.defaultMode,
-    settingsVersion: defaultDesktopSettings.settingsVersion
-  };
-}
-
 export async function assertSupportedLocalInput(
   filePath: string,
   options: { maxInputBytes?: number } = {}
@@ -538,36 +479,4 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function isOptimizationMode(value: unknown): value is OptimizationMode {
-  return value === "safe" || value === "balanced" || value === "aggressive";
-}
-
-function isSubmissionLimit(value: unknown): value is SubmissionLimit {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as { id?: unknown; customBytes?: unknown };
-  if (
-    candidate.id !== "none" &&
-    candidate.id !== "mb5" &&
-    candidate.id !== "mb10" &&
-    candidate.id !== "mb20" &&
-    candidate.id !== "mb30" &&
-    candidate.id !== "mb40" &&
-    candidate.id !== "mb41" &&
-    candidate.id !== "mb50" &&
-    candidate.id !== "mb100" &&
-    candidate.id !== "custom"
-  ) {
-    return false;
-  }
-  return candidate.customBytes === undefined || typeof candidate.customBytes === "number";
-}
-
-function isPreservationPreference(value: unknown): value is PreservationPreference {
-  return value === "preserve" || value === "recommended" || value === "size";
-}
-
-function isBatchTargetMode(value: unknown): value is BatchTargetMode {
-  return value === "aggregate" || value === "per-file";
 }

@@ -1,3 +1,4 @@
+import { CUSTOM_LIMIT_MESSAGE, customLimitBytesFromMb, MIB } from "./shared/submissionLimits.js";
 import { BatchPlanner } from "./renderer/batchPlanning.js";
 import { RendererWorkflow, type BatchItem, type DesktopSettings, type AppState, type BatchTargetMode } from "./renderer/workflowState.js";
 import {
@@ -74,6 +75,7 @@ const state = workflow.state;
 const batchPlanner = new BatchPlanner(state);
 
 let settingsSaveSequence = 0;
+const invalidLimitInputs = new Set<HTMLInputElement>();
 let progressAnimationTimer: number | undefined;
 let displayedProgressPercent = 0;
 let targetProgressPercent = 0;
@@ -237,11 +239,13 @@ async function init(): Promise<void> {
   state.submissionLimit = settings.submissionLimit ?? { id: "mb40" };
   state.batchTargetMode = settings.batchTargetMode ?? "per-file";
   renderSettings({ ...settings, defaultMode: state.mode });
+  renderSettingsNotice(settings.settingsNotice?.message, settings.settingsNotice?.kind === "migrated" ? "info" : "warning");
+  requireButton("settings-notice-dismiss").addEventListener("click", () => renderSettingsNotice());
   renderSubmissionControls();
   renderQualityControls();
   const modeInput = modeInputs.find((input) => input.value === state.mode);
   if (modeInput) modeInput.checked = true;
-  if (settings.defaultMode !== state.mode) {
+  if (settings.defaultMode !== state.mode && !settings.settingsNotice) {
     void saveSettings({ defaultMode: state.mode });
   }
 
@@ -443,27 +447,9 @@ async function init(): Promise<void> {
     refreshSubmissionPlan();
   });
 
-  submissionLimitSelect.addEventListener("change", () => {
-    state.submissionLimit = {
-      id: submissionLimitSelect.value as SubmissionLimit["id"],
-      customBytes: state.submissionLimit.customBytes
-    };
-    renderSubmissionControls();
-    refreshSubmissionPlan();
-    refreshBatchPlans();
-    void saveSettings({ submissionLimit: state.submissionLimit });
-  });
-  customLimitInput.addEventListener("change", () => {
-    const value = Number(customLimitInput.value);
-    state.submissionLimit = {
-      id: "custom",
-      customBytes: Number.isFinite(value) && value > 0 ? value * 1024 * 1024 : undefined
-    };
-    renderSubmissionControls();
-    refreshSubmissionPlan();
-    refreshBatchPlans();
-    void saveSettings({ submissionLimit: state.submissionLimit });
-  });
+  submissionLimitSelect.addEventListener("change", () => changeSubmissionLimit(submissionLimitSelect.value as SubmissionLimit["id"]));
+  customLimitInput.addEventListener("input", () => validateCustomLimitDraft(customLimitInput));
+  customLimitInput.addEventListener("change", () => commitCustomLimit(customLimitInput));
   preservationSelect.addEventListener("change", () => {
     state.preservationPreference = preservationSelect.value as PreservationPreference;
     state.mode = modeForPreservation(state.preservationPreference);
@@ -563,28 +549,9 @@ async function init(): Promise<void> {
       preservationPreference: state.preservationPreference
     });
   });
-  settingSubmissionLimit.addEventListener("change", () => {
-    state.submissionLimit = {
-      id: settingSubmissionLimit.value as SubmissionLimit["id"],
-      customBytes: state.submissionLimit.customBytes
-    };
-    settingCustomLimitField.hidden = state.submissionLimit.id !== "custom";
-    renderSubmissionControls();
-    refreshSubmissionPlan();
-    refreshBatchPlans();
-    void saveSettings({ submissionLimit: state.submissionLimit });
-  });
-  settingCustomLimitInput.addEventListener("change", () => {
-    const value = Number(settingCustomLimitInput.value);
-    state.submissionLimit = {
-      id: "custom",
-      customBytes: Number.isFinite(value) && value > 0 ? value * 1024 * 1024 : undefined
-    };
-    renderSubmissionControls();
-    refreshSubmissionPlan();
-    refreshBatchPlans();
-    void saveSettings({ submissionLimit: state.submissionLimit });
-  });
+  settingSubmissionLimit.addEventListener("change", () => changeSubmissionLimit(settingSubmissionLimit.value as SubmissionLimit["id"]));
+  settingCustomLimitInput.addEventListener("input", () => validateCustomLimitDraft(settingCustomLimitInput));
+  settingCustomLimitInput.addEventListener("change", () => commitCustomLimit(settingCustomLimitInput));
   settingSaveNext.addEventListener("change", async () => {
     if (settingSaveNext.checked) {
       state.outputDirectory = undefined;
@@ -725,18 +692,83 @@ async function handleDroppedFiles(
   await handleAdditionalPaths(paths);
 }
 
-async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
-  const sequence = ++settingsSaveSequence;
-  const settings = (await window.hwpxOptimizer.saveSettings(patch)) as DesktopSettings;
-  if (sequence !== settingsSaveSequence) return;
+function renderSettingsNotice(message?: string, tone: "info" | "warning" = "warning"): void {
+  const notice = requireElement("settings-notice");
+  notice.hidden = !message;
+  notice.dataset.tone = tone;
+  requireElement("settings-notice-text").textContent = message ?? "";
+}
+
+function applySettingsSnapshot(settings: DesktopSettings): void {
   state.settings = settings;
-  state.submissionLimit = settings.submissionLimit ?? state.submissionLimit;
-  state.preservationPreference = settings.preservationPreference ?? state.preservationPreference;
-  state.batchTargetMode = settings.batchTargetMode ?? state.batchTargetMode;
+  state.submissionLimit = settings.submissionLimit;
+  state.preservationPreference = settings.preservationPreference;
+  state.batchTargetMode = settings.batchTargetMode;
+  state.mode = modeForPreservation(state.preservationPreference);
   renderSettings(settings);
   renderSubmissionControls();
+  renderQualityControls();
   if (state.report) refreshSubmissionPlan();
   if (state.batchItems.length > 0) refreshBatchPlans();
+}
+
+async function saveSettings(patch: Partial<DesktopSettings>): Promise<void> {
+  const sequence = ++settingsSaveSequence;
+  try {
+    const settings = (await window.hwpxOptimizer.saveSettings(patch)) as DesktopSettings;
+    if (sequence !== settingsSaveSequence) return;
+    applySettingsSnapshot(settings);
+    renderSettingsNotice();
+  } catch (error) {
+    if (sequence !== settingsSaveSequence) return;
+    try {
+      const previous = await window.hwpxOptimizer.loadSettings() as DesktopSettings;
+      if (sequence !== settingsSaveSequence) return;
+      applySettingsSnapshot(previous);
+    } catch { /* Keep the last successfully loaded snapshot if reading also fails. */ }
+    if (sequence === settingsSaveSequence) renderSettingsNotice(errorMessage(error));
+  }
+}
+
+function setCustomLimitError(input: HTMLInputElement, message = ""): void {
+  const error = requireElement(input === customLimitInput ? "custom-limit-error" : "setting-custom-limit-error");
+  error.textContent = message;
+  error.hidden = !message;
+  input.setAttribute("aria-invalid", String(Boolean(message)));
+  input.setCustomValidity(message);
+  if (message) invalidLimitInputs.add(input); else invalidLimitInputs.delete(input);
+}
+function hasInvalidCustomLimit(): boolean { return invalidLimitInputs.size > 0; }
+function validateCustomLimitDraft(input: HTMLInputElement): number | undefined {
+  const bytes = customLimitBytesFromMb(input.value);
+  setCustomLimitError(input, bytes === undefined ? CUSTOM_LIMIT_MESSAGE : "");
+  if (bytes === undefined) {
+    optimizeButton.disabled = true; batchRunButton.disabled = true; runDockButton.disabled = true;
+  } else { refreshSubmissionPlan(); refreshBatchPlans(); }
+  return bytes;
+}
+function commitCustomLimit(input: HTMLInputElement): void {
+  const bytes = validateCustomLimitDraft(input);
+  if (bytes === undefined) return;
+  setCustomLimitError(customLimitInput); setCustomLimitError(settingCustomLimitInput);
+  state.submissionLimit = { id: "custom", customBytes: bytes };
+  renderSubmissionControls(); refreshSubmissionPlan(); refreshBatchPlans();
+  void saveSettings({ submissionLimit: state.submissionLimit });
+}
+function changeSubmissionLimit(id: SubmissionLimit["id"]): void {
+  const previous = resolveSubmissionLimitBytes(state.submissionLimit) ?? 40 * MIB;
+  setCustomLimitError(customLimitInput); setCustomLimitError(settingCustomLimitInput);
+  state.submissionLimit = id === "custom" ? { id, customBytes: previous } : { id };
+  renderSubmissionControls(); renderSettings({ ...state.settings!, submissionLimit: state.submissionLimit });
+  refreshSubmissionPlan(); refreshBatchPlans();
+  void saveSettings({ submissionLimit: state.submissionLimit });
+}
+function ensureValidCustomLimit(): boolean {
+  const input = invalidLimitInputs.values().next().value;
+  if (!input) return true;
+  if (input === settingCustomLimitInput) setSettingsOpen(true);
+  input.focus();
+  return false;
 }
 
 function renderSettings(settings: DesktopSettings): void {
@@ -744,10 +776,8 @@ function renderSettings(settings: DesktopSettings): void {
   const settingLimit = settings.submissionLimit ?? state.submissionLimit;
   settingSubmissionLimit.value = settingLimit.id;
   settingCustomLimitField.hidden = settingLimit.id !== "custom";
-  settingCustomLimitInput.value =
-    settingLimit.id === "custom" && settingLimit.customBytes
-      ? String(Math.round((settingLimit.customBytes / (1024 * 1024)) * 100) / 100)
-      : "";
+  if (!invalidLimitInputs.has(settingCustomLimitInput)) settingCustomLimitInput.value =
+    settingLimit.id === "custom" && settingLimit.customBytes ? formatCustomLimitMb(settingLimit.customBytes) : "";
   settingSaveNext.checked = settings.saveNextToOriginal;
   settingSaveReport.checked = settings.saveReport;
   settingPreventOverwrite.checked = settings.preventOverwrite;
@@ -813,7 +843,7 @@ function applySessionSaveNextToOriginal(saveNextToOriginal: boolean): void {
 function renderSubmissionControls(): void {
   submissionLimitSelect.value = state.submissionLimit.id;
   customLimitField.hidden = state.submissionLimit.id !== "custom";
-  customLimitInput.value = state.submissionLimit.customBytes
+  if (!invalidLimitInputs.has(customLimitInput)) customLimitInput.value = state.submissionLimit.customBytes
     ? formatCustomLimitMb(state.submissionLimit.customBytes)
     : "";
   preservationSelect.value = state.preservationPreference;
@@ -824,8 +854,7 @@ function renderSubmissionControls(): void {
 // Preserve a fractional MB entry (e.g. 0.5) instead of rounding it to an integer
 // that no longer matches the stored byte value.
 function formatCustomLimitMb(customBytes: number): string {
-  const mb = customBytes / 1024 / 1024;
-  return Number.isInteger(mb) ? String(mb) : String(Number(mb.toFixed(2)));
+  return String(customBytes / MIB);
 }
 
 function refreshSubmissionPlan(): void {
@@ -876,7 +905,7 @@ function refreshSubmissionPlan(): void {
   renderPlanActions(plan);
   renderCleanupSettings(plan);
   syncActionCheckboxIndeterminateState();
-  optimizeButton.disabled = false;
+  optimizeButton.disabled = hasInvalidCustomLimit();
   renderSingleSummary(plan);
   renderRunDock(plan);
   renderModeWarning();
@@ -1291,7 +1320,7 @@ function renderBatchSummary(): void {
   renderBatchReviewStrip(summaryItems);
   optimizeButton.textContent = "선택 파일 일괄 최적화";
   optimizeButton.disabled =
-    state.batchAnalyzing || !state.batchItems.some((item) => item.selected !== false && item.status === "pending");
+    hasInvalidCustomLimit() || state.batchAnalyzing || !state.batchItems.some((item) => item.selected !== false && item.status === "pending");
   renderQualityControls();
   renderRunDock();
   renderBatchPlanSummary();
@@ -1454,7 +1483,11 @@ function outputDirectoryLabel(): string {
 function targetLabelForDisplay(): string {
   const bytes = resolveTargetBytesForDisplay();
   if (!bytes) return "제한 없음";
-  return bytes >= 1024 * 1024 ? `${Math.round(bytes / 1024 / 1024)}MB` : formatBytes(bytes);
+  return formatTargetLimitBytes(bytes);
+}
+
+function formatTargetLimitBytes(bytes: number): string {
+  return Number.isInteger(bytes / MIB) ? `${bytes / MIB}MB` : formatBytes(bytes);
 }
 
 function resolveTargetBytesForDisplay(): number | undefined {
@@ -1599,7 +1632,7 @@ function renderHeroChips(plan?: SubmissionPlan): void {
   chipPolicy.textContent = policy;
   chipPolicy.className = `hero-chip ${maxMode || state.qualityMode === "manual" ? "hero-chip--max" : "hero-chip--fit"}`;
   chipLimit.textContent = plan.targetBytes
-    ? `개별 · ${Math.round(plan.targetBytes / (1024 * 1024))}MB`
+    ? `개별 · ${formatTargetLimitBytes(plan.targetBytes)}`
     : "제한 없음";
   const q =
     state.qualityMode === "manual"
@@ -1614,7 +1647,7 @@ function renderHeroChips(plan?: SubmissionPlan): void {
   const original = state.report?.originalSize ?? 0;
   gaugeStartLabel.textContent = "0";
   gaugeMidLabel.textContent = plan.targetBytes
-    ? `${Math.round(plan.targetBytes / (1024 * 1024))}MB`
+    ? formatTargetLimitBytes(plan.targetBytes)
     : "목표";
   gaugeMidLabel.hidden = !plan.targetBytes || original <= plan.targetBytes;
   gaugeEndLabel.textContent = original > 0 ? formatBytes(original) : "원본";
@@ -1750,6 +1783,7 @@ async function analyzeFile(path: string, analysisMode: "quick" | "deep" = "quick
 }
 
 async function optimizeCurrentFile(): Promise<void> {
+  if (!ensureValidCustomLimit()) return;
   const requestFilePath = workflow.beginOptimization();
   if (!requestFilePath) return;
   let succeeded = false;
@@ -2187,7 +2221,7 @@ function setBusy(message: string, options: { cancelable: boolean; kind?: "analys
 }
 
 function setIdle(): void {
-  optimizeButton.disabled = !state.currentPlan;
+  optimizeButton.disabled = hasInvalidCustomLimit() || !state.currentPlan;
   setSubmissionInputsDisabled(false);
   renderSelectionClearButton();
   renderRunDock(state.currentPlan);
@@ -2292,7 +2326,7 @@ function renderBatchList(): void {
     .join("");
   const pendingItems = state.batchItems.filter((item) => item.status === "pending");
   const selectedPending = pendingItems.filter((item) => item.selected).length;
-  batchRunButton.disabled = state.batchAnalyzing || state.batchRunning || selectedPending === 0;
+  batchRunButton.disabled = hasInvalidCustomLimit() || state.batchAnalyzing || state.batchRunning || selectedPending === 0;
   batchSelectAll.disabled = busy || pendingItems.length === 0;
   batchSelectAll.checked = pendingItems.length > 0 && selectedPending === pendingItems.length;
   batchSelectAll.indeterminate = selectedPending > 0 && selectedPending < pendingItems.length;
@@ -2498,6 +2532,7 @@ function handleBatchRowAction(button: HTMLButtonElement): void {
 }
 
 async function runBatch(): Promise<void> {
+  if (!ensureValidCustomLimit()) return;
   if (state.batchRunning || state.batchItems.length === 0) return;
   const selectedPending = state.batchItems.filter((item) => item.status === "pending" && item.selected).length;
   if (selectedPending === 0) {
