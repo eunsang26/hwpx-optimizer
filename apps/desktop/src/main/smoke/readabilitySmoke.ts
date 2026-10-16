@@ -45,7 +45,9 @@ export async function runReadabilitySmoke(window: BrowserWindow, context: Contex
   const matrix = async (name: string, planned: boolean): Promise<void> => {
     for (const [width, height, zoom] of sizes) {
       window.setContentSize(width, height); window.webContents.setZoomFactor(zoom);
-      await new Promise(resolve => setTimeout(resolve, 30));
+      // Native zoom is asynchronous; Windows packaged rendering can take more than 30ms.
+      await waitFor(`Math.abs(innerWidth - ${width / zoom}) < 2 && Math.abs(innerHeight - ${height / zoom}) < 2`);
+      await evaluate(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
       const geometry = await evaluate<Record<string, unknown>>(`(() => {
         const workspace = document.getElementById("single-workspace"), dock = document.getElementById("run-dock");
         const box = workspace.getBoundingClientRect(), footer = dock.getBoundingClientRect();
