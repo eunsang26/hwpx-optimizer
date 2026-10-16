@@ -171,3 +171,5 @@ npm run build
 ```
 
 If a command fails, fix the cause or document the blocker before committing.
+
+Current personal-PC Hancom and large real-document observations are recorded in [the 2026-10-16 ledger](HANCOM_QA_2026-10-16.md), with source/artifact hashes, original-plus-mode checks, full-page rendering comparisons, exact target misses and remaining institutional-PC acceptance. Private inputs/renderings remain local and are never CI fixtures or uploaded artifacts.

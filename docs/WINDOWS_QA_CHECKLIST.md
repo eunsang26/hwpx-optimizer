@@ -2,11 +2,13 @@
 
 This checklist verifies the release candidate on a clean Windows machine. It is required before calling the desktop utility product-ready.
 
-## Current evidence — 2026-10-15
+## Current evidence — 2026-10-16
 
-[The current release evidence ledger](RELEASE_EVIDENCE_2026-10-15.md) records app 0.1.9 / runtime commit `22546ee`, Electron 42.11.13, sharp 0.35.5 and Node 24.21.0. Native Windows Server 2025 CI passed source and actual packaged Electron workflows (11 document + 4 settings cases each), ASAR/native/locale/offline-font checks, and synthetic size/resource measurements. Windows CLI ZIP execution passed independently. Every current CI document is synthetic; artifacts were not uploaded.
+[The current release evidence ledger](RELEASE_EVIDENCE_2026-10-15.md) records app 0.1.9 / runtime `209053f`, Electron 42.11.13 and sharp 0.35.5. Linux Node 22.12.0/24.21.0 and Windows Node 24.21.0 CI passed 792 tests (1 skipped), typecheck/build, and source/actual packaged Electron workflows (11 document + 4 settings + 9 HCI + 3 readability cases, including 40 size/zoom conditions). ASAR/native/locale/offline-font checks, NSIS and synthetic measurements passed. Windows CLI ZIP execution passed independently. CI used synthetic documents only; artifacts were not uploaded.
 
-**Current Hancom opening, representative large real documents, and institutional Windows 10/11 long-duration restart acceptance remain unverified.** The historical 2026-07-26 records below are retained with their original versions; they do not sign off the current commit. Enter actual environment, artifact SHA256, elapsed time/repetitions and results in the ledger before closing these manual checks. Short automatic restarts are not a soak test.
+[The current Hancom case](HANCOM_QA_2026-10-16.md) records a separately hashed unpacked package on a **personal Windows 11 Pro PC**, Hancom 13.0.0.711, and one user-authorized 94,078,344-byte real document. All three modes saved/verified/reset successfully and opened as 17 pages with identical extracted Unicode text; safe rendered identical pixels on every page. Balanced/aggressive image differences and all three missed 40MiB targets are recorded, not silently counted as passing submission size. The user reviewed the local balanced/aggressive comparison and reported no text/table/picture quality issue. Cancellation followed by retry and three same-folder saves also passed, with no partial files, unique document/report pairs, unchanged prior outputs and a fresh-process empty-state/settings check. This case has no embedded-font or OLE declarations and does not represent every real-document category.
+
+**Institutional Windows 10/11 long-duration/restart acceptance and institutional sign-off remain incomplete.** The historical July records retain their original versions. The current personal-PC short restart and settings/history checks are not institutional soak evidence. Record the target environment, artifact SHA256, actual elapsed time/repetitions and results before closing acceptance.
 
 ## Scope
 
@@ -19,8 +21,8 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 - A local HWPX sample file. Do not commit sample files.
 - A protected or signed HWPX-like test package, if available, for rejection-path confirmation. Do not use real confidential documents as test fixtures.
 - A release artifact from `release/`, either:
-  - `HWPX Optimizer-0.1.5-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
-  - `HWPX Optimizer-0.1.5-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
+  - `HWPX Optimizer-0.1.9-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
+  - `HWPX Optimizer-0.1.9-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
   - the NSIS installer produced by `npm run release:check:win`.
 
 ## Artifact Integrity
@@ -28,8 +30,8 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 From a PowerShell prompt in the project root:
 
 ```powershell
-Get-FileHash ".\release\HWPX Optimizer-0.1.5-x64.exe" -Algorithm SHA256
-Get-FileHash ".\release\HWPX Optimizer-0.1.5-x64.zip" -Algorithm SHA256
+Get-FileHash ".\release\HWPX Optimizer-0.1.9-x64.exe" -Algorithm SHA256
+Get-FileHash ".\release\HWPX Optimizer-0.1.9-x64.zip" -Algorithm SHA256
 ```
 
 Compare the hash with `release/SHA256SUMS.txt`.
