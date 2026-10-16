@@ -81,7 +81,8 @@ function extractParsedText(xml: string): string[] {
 
 function extractBinaryItemIdRefs(xml: string): Array<{ value: string; required: boolean }> {
   const refs: Array<{ value: string; required: boolean }> = [];
-  for (const [name, value] of extractParsedAttributes(xml)) {
+  for (const { name, value, optionalEmptyFontReference } of extractParsedAttributes(xml)) {
+    if (optionalEmptyFontReference) continue;
     if (isIdReferenceAttribute(name)) refs.push({ value,
       required: name.split(":").at(-1)?.toLowerCase() === "binaryitemidref" });
   }
@@ -89,13 +90,15 @@ function extractBinaryItemIdRefs(xml: string): Array<{ value: string; required: 
 }
 
 function extractParsedAttributeValues(xml: string): string[] {
-  return extractParsedAttributes(xml).map(([, value]) => value);
+  return extractParsedAttributes(xml).map(({ value }) => value);
 }
 
-function extractParsedAttributes(xml: string): Array<[string, string]> {
+type ParsedAttribute = { name: string; value: string; optionalEmptyFontReference: boolean };
+
+function extractParsedAttributes(xml: string): ParsedAttribute[] {
   try {
     const document = parseDocumentXml(xml);
-    const attrs: Array<[string, string]> = [];
+    const attrs: ParsedAttribute[] = [];
     collectParsedAttributes(document, attrs);
     return attrs;
   } catch {
@@ -103,18 +106,39 @@ function extractParsedAttributes(xml: string): Array<[string, string]> {
   }
 }
 
-function collectParsedAttributes(nodes: unknown, attrs: Array<[string, string]>): void {
+function collectParsedAttributes(
+  nodes: unknown,
+  attrs: ParsedAttribute[],
+  inheritedNamespaces: Record<string, string> = {}
+): void {
   if (!Array.isArray(nodes)) return;
   for (const node of nodes) {
     if (!isXmlNode(node)) continue;
     const nodeAttrs = getXmlAttributes(node);
+    const namespaces = { ...inheritedNamespaces };
+    for (const [name, value] of Object.entries(nodeAttrs ?? {})) {
+      if (typeof value === "string" && (name === "xmlns" || name.startsWith("xmlns:"))) {
+        namespaces[name === "xmlns" ? "" : name.slice(6)] = value;
+      }
+    }
+    const element = Object.keys(node).find(name => name !== ":@" && !name.startsWith("#") && !name.startsWith("?")) ?? "";
+    const prefix = element.includes(":") ? element.split(":")[0]! : "";
+    const namespace = namespaces[prefix];
+    const localName = element.split(":").at(-1);
+    const nonEmbeddedFont = (localName === "font" || localName === "substFont") &&
+      (namespace === "http://www.hancom.co.kr/hwpml/2011/head" ||
+        namespace === "http://www.owpml.org/owpml/2021/head") &&
+      (nodeAttrs?.isEmbedded === "0" || nodeAttrs?.isEmbedded === "false");
     if (nodeAttrs) {
       for (const [name, value] of Object.entries(nodeAttrs)) {
-        if (typeof value === "string") attrs.push([name, value]);
+        // Hancom emits an empty binaryItemIDRef for a non-embedded substitute font.
+        // Empty images, embedded fonts and nonempty unresolved IDs still require a resource.
+        if (typeof value === "string") attrs.push({ name, value,
+          optionalEmptyFontReference: nonEmbeddedFont && name === "binaryItemIDRef" && value === "" });
       }
     }
     for (const value of Object.values(node)) {
-      if (Array.isArray(value)) collectParsedAttributes(value, attrs);
+      if (Array.isArray(value)) collectParsedAttributes(value, attrs, namespaces);
     }
   }
 }

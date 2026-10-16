@@ -10,6 +10,50 @@ function manifest(items: string): string {
 }
 
 describe("package resource reference validation", () => {
+  it.each([
+    '<hh:substFont xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" isEmbedded="0" binaryItemIDRef=""/>',
+    '<renamed:substFont xmlns:renamed="http://www.hancom.co.kr/hwpml/2011/head" isEmbedded="false" binaryItemIDRef=""/>',
+    '<font xmlns="http://www.hancom.co.kr/hwpml/2011/head" isEmbedded="0" binaryItemIDRef=""/>',
+    '<hh:font xmlns:hh="http://www.owpml.org/owpml/2021/head" isEmbedded="false" binaryItemIDRef=""/>',
+    '<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"><hh:font isEmbedded="0"><hh:substFont isEmbedded="0" binaryItemIDRef=""/></hh:font></hh:head>'
+  ])("preserves an explicitly non-embedded font's empty reference: %s", async (font) => {
+    const input = await createHwpxFixture({ entries: { "Contents/header.xml": `<root>${font}</root>` } });
+    const analysis = await analyzeHwpxBuffer(input);
+    expect(analysis.warnings.join(" ")).not.toContain("binaryItemIDRef");
+    await expect(verifyHwpxOutput(input)).resolves.toBeUndefined();
+    const result = await optimizeHwpxBufferSafe(input);
+    await expect(verifyHwpxOutput(result.output, { original: input, mode: "safe" })).resolves.toBeUndefined();
+    const header = (await readHwpxPackage(result.output)).entries.find(entry => entry.path === "Contents/header.xml")!;
+    expect(header.data.toString()).toContain('binaryItemIDRef=""');
+  });
+  it.each([
+    '<hh:substFont xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" isEmbedded="1" binaryItemIDRef=""/>',
+    '<hh:font xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" isEmbedded="true" binaryItemIDRef=""/>',
+    '<hh:substFont xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" binaryItemIDRef=""/>',
+    '<hh:substFont xmlns:hh="urn:unknown" isEmbedded="0" binaryItemIDRef=""/>',
+    '<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"><hh:substFont xmlns:hh="urn:unknown" isEmbedded="0" binaryItemIDRef=""/></hh:head>',
+    '<substFont isEmbedded="0" binaryItemIDRef=""/>',
+    '<hc:img isEmbedded="0" binaryItemIDRef=""/>',
+    '<hh:substFont xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" isEmbedded="0" binaryItemIDRef=" "/>',
+    '<hh:substFont xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" isEmbedded="0" binaryItemIDRef="missing"/>'
+  ])("still rejects a missing required resource: %s", async (element) => {
+    const input = await createHwpxFixture({ entries: { "Contents/header.xml": `<root>${element}</root>` } });
+    await expect(verifyHwpxOutput(input)).rejects.toThrow(/binaryItemIDRef/);
+    await expect(optimizeHwpxBufferSafe(input)).rejects.toThrow(/binaryItemIDRef/);
+  });
+  it("keeps a declared font resource referenced even when isEmbedded is false", async () => {
+    const input = await createHwpxFixture({ entries: {
+      "Contents/content.hpf": manifest('<opf:item id="font1" href="../Fonts/font.ttf"/>'),
+      "Contents/header.xml": '<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"><hh:substFont isEmbedded="false" binaryItemIDRef="font1"/></hh:head>',
+      "Fonts/font.ttf": Buffer.from("synthetic protected font")
+    } });
+    const graph = buildReferenceGraph(await readHwpxPackage(input));
+    expect(graph.missingReferences).toEqual([]);
+    expect(graph.resources.get("Fonts/font.ttf")?.referenced).toBe(true);
+    const result = await optimizeHwpxBufferSafe(input);
+    expect((await readHwpxPackage(result.output)).entries.find(entry => entry.path === "Fonts/font.ttf")?.data)
+      .toEqual(Buffer.from("synthetic protected font"));
+  });
   it.each(["binaryItemIDRef", "hc:binaryItemIDRef"])("rejects an undeclared %s", async (attribute) => {
     const input = await createHwpxFixture({ entries: {
       "Contents/section0.xml": `<root><hc:img ${attribute}="missing"/></root>`
