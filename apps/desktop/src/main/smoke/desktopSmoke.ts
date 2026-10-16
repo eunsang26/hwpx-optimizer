@@ -184,10 +184,11 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
     layout.singleColumn !== true ||
     layout.emptySummaryHidden !== true ||
     layout.emptyReviewVisible !== true ||
-    layout.viewportWidth !== DEFAULT_WINDOW_WIDTH ||
+    // Fractional Windows display scaling can round a requested DIP up by one CSS pixel.
+    Math.abs((layout.viewportWidth ?? 0) - DEFAULT_WINDOW_WIDTH) > 1 ||
     !layout.viewportHeight ||
     layout.viewportHeight < DEFAULT_WINDOW_HEIGHT - 20 ||
-    layout.viewportHeight > DEFAULT_WINDOW_HEIGHT
+    layout.viewportHeight > DEFAULT_WINDOW_HEIGHT + 1
   ) {
     throw new Error(
       `Desktop smoke failed: canonical empty layout did not render in the compact default window ${JSON.stringify(layout)}`
