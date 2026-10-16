@@ -1,4 +1,5 @@
 import type { BrowserWindow as BrowserWindowInstance, OpenDialogOptions } from "electron";
+import { zoomFactorForInput } from "./shared/viewZoom.js";
 import type { DesktopImagePreviewInput } from "./shared/imagePreview.js";
 type BrowserWindow = BrowserWindowInstance;
 type ElectronApi = typeof import("electron");
@@ -61,6 +62,14 @@ async function createWindow(): Promise<BrowserWindow> {
   });
 
   smoke?.observeWindow(mainWindow);
+  const contents = mainWindow.webContents;
+  contents.once("dom-ready", () => contents.setZoomFactor(1));
+  contents.on("before-input-event", (event, input) => {
+    const zoom = zoomFactorForInput(contents.getZoomFactor(), input);
+    if (zoom === undefined) return;
+    event.preventDefault();
+    contents.setZoomFactor(zoom);
+  });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   mainWindow.webContents.on("will-navigate", (event: Electron.Event) => {
     event.preventDefault();

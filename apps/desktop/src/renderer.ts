@@ -806,7 +806,8 @@ function validateCustomLimitDraft(input: HTMLInputElement): number | undefined {
   const bytes = customLimitBytesFromMb(input.value);
   setCustomLimitError(input, bytes === undefined ? CUSTOM_LIMIT_MESSAGE : "");
   if (bytes === undefined) {
-    optimizeButton.disabled = true; batchRunButton.disabled = true; runDockButton.disabled = true;
+    optimizeButton.disabled = true; batchRunButton.disabled = true;
+    if (runDock.dataset.action === "optimize") runDockButton.disabled = true;
   } else { refreshSubmissionPlan(); refreshBatchPlans(); }
   return bytes;
 }
@@ -1268,7 +1269,8 @@ function renderBatchSummary(): void {
   const expectedTotal = summaryItems.reduce((sum, item) => sum + (item.status === "done" ? item.actualSizeBytes ?? item.report?.optimizedSize ?? item.originalSizeBytes ?? 0 : item.status === "failed" || item.status === "cancelled" ? item.originalSizeBytes ?? 0 : item.expectedSizeBytes ?? item.originalSizeBytes ?? 0), 0);
   const saving = Math.max(0, originalTotal - expectedTotal);
   const savingPercent = originalTotal > 0 ? (saving / originalTotal) * 100 : 0;
-  const passed = summaryItems.filter((item) => (item.targetStatusLabel === "제출 가능" || item.targetStatusLabel === "제출 가능 예상")).length;
+  const passed = summaryItems.filter(item => item.status !== "failed" && item.status !== "cancelled" &&
+    ["제출 가능", "제출 가능 예상", "목표 제한 없음"].includes(item.targetStatusLabel ?? "")).length;
   const needMore = summaryItems.filter((item) => (item.targetStatusLabel === "더 압축 필요" || item.targetStatusLabel === "추가 압축 필요 예상")).length;
   const hardMiss = summaryItems.filter((item) => (item.targetStatusLabel === "기준 미달" || item.targetStatusLabel === "기준 초과 예상")).length;
   const warning = needMore + hardMiss;
@@ -1330,12 +1332,12 @@ function renderBatchSummary(): void {
   const limitLabel = batchTargetBytes ? `${formatTargetLimitBytes(batchTargetBytes)} 미만` : "제한 없음";
   summaryVerdictDetail.textContent = plannedCount === 0 ? "선택된 분석 파일이 없습니다." :
     `${targetScope} ${limitLabel} · ${allCompleted ? "실제" : partialCompletion ? "미완료 포함" : "예상"} ${
-      state.batchTargetMode === "aggregate" ? `합계 ${formatBytes(expectedTotal)}` : `통과 ${passed}/${plannedCount}`}`;
+      state.batchTargetMode === "aggregate" ? `합계 ${formatBytes(expectedTotal)}` : `통과 ${passed}/${selectedItems.length}`}`;
   summaryAnalysisBasis.hidden = plannedCount === 0;
   summaryAnalysisBasis.textContent = allCompleted ? "저장된 결과 파일의 실제 바이트 합계로 판정했습니다." : partialCompletion ? "실패·취소·미완료 파일이 있어 제출 가능 여부를 확정할 수 없습니다." : summaryItems.some(item => item.report?.analysis?.mode === "quick")
     ? "빠른 분석 추정값 · 픽셀·유사 이미지 중복 미검사 · 최종 용량은 저장 후 확인하세요."
     : "예상 용량은 실제 저장 결과와 다를 수 있습니다.";
-  const passRate = plannedCount === 0 ? 0 : passed / plannedCount * 100;
+  const passRate = selectedItems.length === 0 ? 0 : passed / selectedItems.length * 100;
   const aggregateScale = Math.max(originalTotal, expectedTotal, 1);
   const aggregateFill = expectedTotal / aggregateScale * 100;
   const aggregateLimit = (batchTargetBytes ?? 0) / aggregateScale * 100;
@@ -1353,13 +1355,13 @@ function renderBatchSummary(): void {
         : "통과율"
       : state.batchTargetMode === "aggregate"
         ? batchTargetBytes ? formatTargetLimitBytes(batchTargetBytes) : "한도 없음"
-        : `${passed}/${plannedCount}`;
+        : `${passed}/${selectedItems.length}`;
   gaugeMidLabel.hidden = false;
   gaugeMidLabel.style.left = `${state.batchTargetMode === "aggregate" ? aggregateLimit : passRate}%`;
   gaugeMidLabel.hidden = plannedCount === 0 || (state.batchTargetMode === "aggregate" && hideAggregateLimit);
   gaugeEndLabel.textContent = state.batchTargetMode === "aggregate" ?
     aggregateScale === originalTotal ? `원본 ${formatBytes(originalTotal)}` : formatBytes(aggregateScale) : "";
-  if (state.batchTargetMode === "per-file") gaugeStartLabel.textContent = allCompleted ? "실제 통과율" : "예상 통과율";
+  if (state.batchTargetMode === "per-file") gaugeStartLabel.textContent = allCompleted ? "실제 통과율" : partialCompletion ? "통과 확인 / 선택 파일" : "예상 통과율";
   summaryGrid.hidden = false;
   heroChips.hidden = false;
   chipPolicy.textContent =
@@ -2441,6 +2443,7 @@ function returnToStart(): void {
   if (state.batchAnalyzing || state.batchRunning || state.analysisRunning || state.optimizeRunning) return;
   clearSelectedFiles("처음 화면으로 돌아왔습니다. 저장된 결과 파일은 유지됩니다. 새 파일을 선택하세요.");
   window.scrollTo(0, 0);
+  singleWorkspace.scrollTo(0, 0);
   emptyChooseButton.focus();
 }
 

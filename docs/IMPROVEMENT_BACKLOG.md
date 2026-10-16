@@ -36,7 +36,7 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-022 | P3 | 벤치마크 실패 문서 추적과 판정 | bench | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 대기 | Codex |
+| OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-026 | P1 | sharp·Electron 런타임 보안 패치와 배포 검증 | core, packaging | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 
 ## 작업별 완료 기준
@@ -339,6 +339,10 @@ Windows·CI 검증(`930da9b`, Node 22.12.0/24.21.0): [PR 검사](https://github.
 - [ ] 최소 지원 창 크기와 확대 상태에서 주요 행동과 내용이 잘리거나 겹치지 않는다.
 - [ ] 텍스트 대비·클릭 영역·설정 레이블·표와 긴 파일명의 가독성을 확인한다.
 - [ ] 변경 후 실제 화면을 다시 캡처해 확인하고 시각 검증 범위를 기록한다.
+
+구현·로컬 검증(2026-10-16): 본문을 독립 스크롤 영역으로 만들고 하단 작업 영역을 별도 배치해 겹침·중복 실행 버튼을 제거했다. 600 CSS 픽셀 이하에서 배치 표를 파일별 카드로 재배치하되 실제 접근성 트리의 표·행 이름을 유지한다. 긴 파일명·오류·완료 지표를 줄바꿈하고 보조 글자 대비와 클릭 영역을 보완했다. Ctrl + +/−/0으로 75–225% 확대·축소·초기화할 수 있으며 새 실행은 기본 크기로 시작한다. 일부 실패의 통과 수는 전체 선택 파일을 분모로 쓰고, 새 설정 오류가 이미 저장한 결과의 열기·확인을 막지 않는다.
+
+대상 4개 파일 45개 테스트, 전체 94개 파일 773개 통과·1개 skip, 타입 검사·빌드·hygiene 및 실제 Electron 문서 11개+설정 4개+HCI 9개+가독성 3개 흐름을 통과했다. 가독성은 5개 상태·8개 창/배율 조합의 40개 조건, native 확대 단축키, 실제 hit test, 긴 이름·부분 실패·설정 오류 복구·Chromium 접근성 트리를 확인한다. 변경 전 9개·후 14개 화면 및 기본 배율 재실행을 로컬 검증했다. [단계별 관찰과 범위](UI_READABILITY_2026-10-16.md). Windows 실제 패키지는 현재 구현 커밋에서 별도로 확인한다.
 
 ### OPT 026 배포 런타임 보안 패치
 

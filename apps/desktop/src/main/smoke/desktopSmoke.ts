@@ -263,7 +263,7 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
           const policyRect = document.getElementById("policy-toolbar")?.getBoundingClientRect();
           const fileRect = document.querySelector(".file-panel")?.getBoundingClientRect();
           const summaryRect = document.querySelector(".summary-panel")?.getBoundingClientRect();
-          const optimizeRect = optimize.getBoundingClientRect();
+          const dockRect = document.getElementById("run-dock")?.getBoundingClientRect();
           const outputRect = document.getElementById("output-button")?.getBoundingClientRect();
           const optionsRect = document.getElementById("toggle-options-button")?.getBoundingClientRect();
           const detailsRect = document.getElementById("analysis-details")?.getBoundingClientRect();
@@ -271,16 +271,9 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
           resolve({
             policyBeforeFile: Boolean(policyRect && fileRect && policyRect.top < fileRect.top),
             fileBeforeHero: Boolean(fileRect && summaryRect && fileRect.top < summaryRect.top),
-            ctaSingleRow:
-              Boolean(outputRect && optionsRect) &&
-              Math.abs(
-                optimizeRect.top + optimizeRect.height / 2 -
-                  ((outputRect?.top ?? 0) + (outputRect?.height ?? 0) / 2)
-              ) <= 1 &&
-              Math.abs(
-                optimizeRect.top + optimizeRect.height / 2 -
-                  ((optionsRect?.top ?? 0) + (optionsRect?.height ?? 0) / 2)
-              ) <= 1,
+            ctaSingleRow: Boolean(outputRect && optionsRect) &&
+              Math.abs(outputRect.top + outputRect.height / 2 - optionsRect.top - optionsRect.height / 2) <= 1,
+            dockSeparated: Boolean(dockRect && workspaceRect && dockRect.top >= workspaceRect.bottom && dockRect.bottom <= innerHeight),
             ctaVisible: [
               optimize.getClientRects().length > 0,
               document.getElementById("output-button")?.getClientRects().length > 0,
@@ -300,7 +293,11 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
               document.getElementById("target-track-limit")?.getClientRects().length > 0,
             targetLabelVisible:
               document.getElementById("gauge-mid-label")?.getClientRects().length > 0,
-            workspaceWidth: workspaceRect?.width ?? 0,
+            workspaceWidth: (() => {
+              const workspace = document.getElementById("single-workspace");
+              const style = getComputedStyle(workspace);
+              return workspace.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+            })(),
             detailsWidth: detailsRect?.width ?? 0,
             selectedFileName: document.getElementById("selected-file-name")?.textContent
           });
@@ -320,6 +317,7 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
     fileBeforeHero?: boolean;
     ctaSingleRow?: boolean;
     ctaVisible?: Array<boolean | undefined>;
+    dockSeparated?: boolean;
     reviewVisible?: boolean;
     emptyReviewHidden?: boolean;
     expectedMeta?: string;
@@ -339,6 +337,8 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
     selectedUi.policyBeforeFile !== true ||
     selectedUi.fileBeforeHero !== true ||
     selectedUi.ctaSingleRow !== true ||
+    selectedUi.dockSeparated !== true ||
+    JSON.stringify(selectedUi.ctaVisible) !== JSON.stringify([false, true, true]) ||
     selectedUi.reviewVisible !== true ||
     selectedUi.emptyReviewHidden !== true ||
     !selectedUi.expectedMeta?.includes("예상") ||
@@ -624,7 +624,7 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
 
   const completedBatchUi = (await window.webContents.executeJavaScript(`
     new Promise((resolve) => {
-      document.getElementById("optimize-button")?.click();
+      document.getElementById("run-dock-button")?.click();
       let attempts = 0;
       const poll = () => {
         attempts += 1;
@@ -891,6 +891,8 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
   await runSettingsSmoke(window, app.getPath("userData"), smokeSecondInputPath, selection);
   const { runInteractionSmoke } = await import("./interactionSmoke.js");
   await runInteractionSmoke(window, { directory: smokeDir, fixture: createSmokeHwpxFixture, worker: documentWorkerClient, selection });
+  const { runReadabilitySmoke } = await import("./readabilitySmoke.js");
+  await runReadabilitySmoke(window, { directory: smokeDir, fixture: createSmokeHwpxFixture, selection });
 }
 
 function parseSmokeMode(value: string | undefined): OptimizationMode {

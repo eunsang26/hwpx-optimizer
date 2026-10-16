@@ -182,7 +182,7 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
         await gate.wait(signal);
         return result;
       };
-      await click("#optimize-button");
+      await click("#run-dock-button");
       await until(() => gate.reached);
       await busyControls();
       await click("#cancel-button");
@@ -261,14 +261,14 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
       await mkdir(`${output}.report.json`);
       const before = await tree(directory);
       await select([inputs[3]], true);
-      await click("#optimize-button");
+      await click("#run-dock-button");
       await idle();
       assert.equal(await evaluate(`document.getElementById("result-panel").hidden`), true);
       assert.doesNotMatch(await text("status-text"), /최적화가 완료/);
       assert.equal(await evaluate(`document.getElementById("optimize-button").disabled`), false);
       assert.deepEqual(await tree(directory), before);
       await rm(`${output}.report.json`, { recursive: true });
-      await click("#optimize-button");
+      await click("#run-dock-button");
       await waitFor(`document.body.dataset.busy === "" && document.body.dataset.result === "visible"`);
       await assertPair(output, inputs[3]);
       await reset();
@@ -279,7 +279,7 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
     await checked("batch report failure remains visible and preserves completed document pairs", async () => {
       await mkdir(batchReport, { recursive: true });
       await select([inputs[0], inputs[1]], true, 2);
-      await click("#optimize-button");
+      await click("#run-dock-button");
       await waitFor(`document.body.dataset.busy === "" && document.body.dataset.batchResult === "visible" && document.getElementById("batch-result-panel").dataset.reportState !== "saving" && document.getElementById("batch-result-panel").hidden === false`);
       assert.match(await text("status-text"), /리포트를 저장하지 못했습니다/);
       assert.equal(await evaluate(`document.getElementById("status-banner").dataset.tone`), "warning");
@@ -301,7 +301,7 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
         await gate.wait(signal);
         return result;
       };
-      await click("#optimize-button");
+      await click("#run-dock-button");
       await until(() => gate.reached);
       await click("#cancel-button");
       await waitFor(`!document.body.dataset.busy && document.body.dataset.batchResult === "visible" && document.getElementById("batch-result-panel").dataset.reportState !== "saving"`);

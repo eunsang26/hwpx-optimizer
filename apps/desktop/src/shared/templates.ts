@@ -84,11 +84,11 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
       : item.originalSizeLabel && sizeLabel
       ? `${escapeHtml(item.originalSizeLabel)} → <strong>${escapeHtml(sizeLabel)} (${sizeBasis})</strong>`
       : escapeHtml(item.originalSizeLabel ?? sizeLabel ?? "-");
-  return `<tr${attentionClass} data-input-path="${escapeHtml(item.path)}"><td><input type="checkbox" class="batch-select" data-batch-index="${index}"${selectedAttr}${disabledAttr} aria-label="${escapeHtml(
+  return `<tr${attentionClass} role="row" data-input-path="${escapeHtml(item.path)}"><td role="cell"><input type="checkbox" class="batch-select" data-batch-index="${index}"${selectedAttr}${disabledAttr} aria-label="${escapeHtml(
     item.fileName
-  )} 선택" /></td><td class="name"><strong>${escapeHtml(item.fileName)}</strong>${
+  )} 선택" /></td><td class="name" role="rowheader"><strong>${escapeHtml(item.fileName)}</strong>${
     targetSub ? `<span class="sub">${escapeHtml(targetSub)}</span>` : ""
-  }</td><td class="batch-size-cell">${sizeCell}</td><td class="batch-quality-cell">${qualityCell}</td><td class="batch-status-cell"><span class="status-line"><span class="status ${statusClass}">${escapeHtml(
+  }</td><td class="batch-size-cell" role="cell"><span class="batch-cell-label" aria-hidden="true">원본 → 결과</span>${sizeCell}</td><td class="batch-quality-cell" role="cell"><span class="batch-cell-label" aria-hidden="true">품질</span>${qualityCell}</td><td class="batch-status-cell" role="cell"><span class="batch-cell-label" aria-hidden="true">판정·작업</span><span class="status-line"><span class="status ${statusClass}">${escapeHtml(
     statusLabel
   )}</span><span class="row-meta">${escapeHtml(meta)}</span></span><span class="row-actions">${actions}</span></td></tr>`;
 }
