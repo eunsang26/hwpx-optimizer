@@ -48,3 +48,9 @@ OPT-025는 최소 창에서 실행 막대가 본문을 덮고, 확대 시 가져
 보완 런타임 `ffc7169`의 [PR 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38855813209)는 Linux/Node 22.12.0·24.21.0 및 Windows CLI/Node 24.21.0의 세 작업이 모두 통과했다. 94개 파일·773개 테스트 통과·1개 skip, 타입 검사·빌드와 Linux 각각의 문서 11개+설정 4개+HCI 9개+가독성 3개 흐름(화면 조건 40개)을 확인했다. Windows CLI는 실제 ZIP/native 실행을 검사했다. artifact는 0개이며 업로드는 건너뛰었다.
 
 `ffc7169`의 Windows 실제 패키지는 글꼴·문서 11개·설정 4개·HCI 9개 검사를 통과한 뒤, 첫 단일 완료의 75% 전환에서 배율 반영 전 viewport를 읽어 가독성 검사가 실패했다. 기록된 viewport는 720×520으로, 기대한 960×693 CSS 픽셀과 달랐다. 고정 30ms 대기 대신 요청한 창 크기/배율의 실제 viewport 일치 및 두 animation frame을 확인한 뒤 배치를 검사하도록 보완했다. 이 실행도 최종 패키지 통과로 취급하지 않는다.
+
+## 최종 통과 기록
+
+런타임 `c80b3d1`의 [PR 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38856331254)와 [Windows 데스크톱 릴리즈 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38856329241)가 모두 통과했다. 94개 파일·773개 테스트 통과·1개 skip, 타입 검사·빌드를 확인했다. Linux/Node 22.12.0·24.21.0, Windows/Node 24.21.0 소스와 프로젝트 밖으로 복사한 실제 패키지에서 각각 11+4+9+3개 Electron 흐름 및 40개 화면 조건을 통과했다. Windows CLI의 실제 ZIP/native 실행도 통과했다. 패키지는 새 프로필·시스템 Pretendard 없음·외부 통신 차단 상태에서 실제 번들 글꼴의 한글/영문 glyph를 확인했다. NSIS·ASAR/native/로캘과 합성 성능·자원·목표 크기 측정까지 통과했다. 두 실행의 artifact는 0개, 업로드 단계는 skipped다. 배포 runtime moderate 이상 취약점은 0개이며 전체 개발·빌드 도구 advisory 20개(high 8·moderate 11·low 1)는 별도로 남아 있다.
+
+로컬 최종 검증에서도 773개 테스트·타입 검사·빌드·hygiene 및 별도 가상 화면의 27개 흐름·40개 조건을 통과했다. 위 전후 화면은 제품 UI가 같은 `7412856` 기준이며 `ffc7169`·`c80b3d1`은 검증 도구의 창 표시·배율 반영 대기만 보완한다. 문서만 수정한 후속 커밋의 원격 검사 결과와 이 런타임 검증을 혼동하지 않는다.
