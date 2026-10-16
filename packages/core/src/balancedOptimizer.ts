@@ -147,9 +147,11 @@ export async function applyBalancedOptimizationPlan(input: {
     if (outputPath !== outcome.entry.path) {
       occupiedPaths.delete(outcome.entry.path);
       occupiedPaths.add(outputPath);
+      pathUpdates.set(outcome.entry.path, outputPath);
+      mediaTypeUpdates.set(outputPath, outputMediaType(outputPath));
     }
-    pathUpdates.set(outcome.entry.path, outputPath);
-    mediaTypeUpdates.set(outputPath, outputMediaType(outputPath));
+    // Re-encoding the same path/format keeps the original href and MIME spelling.
+    // Only conversions/renames need manifest and direct-path reference rewrites.
     transformedEntries[outcome.index] = {
       ...outcome.entry,
       path: outputPath,

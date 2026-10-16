@@ -3,13 +3,41 @@ import { randomBytes } from "node:crypto";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 import { applyBalancedOptimizationPlan } from "../src/balancedOptimizer.js";
-import { analyzeHwpxBuffer, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
+import { analyzeHwpxBuffer, optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } from "../src/optimize.js";
 import { aggressiveImageProfile, balancedImageProfile } from "../src/opportunities.js";
 import { readHwpxPackage } from "../src/reader.js";
 import type { HwpxPackage, OptimizationPlan } from "../src/types.js";
 import { createHwpxFixture } from "./fixtures.js";
 
 describe("balanced optimization", () => {
+  it.each([
+    ["balanced", "BinData/image1.jpg"], ["balanced", "../BinData/image1.jpg"],
+    ["aggressive", "BinData/image1.jpg"], ["aggressive", "../BinData/image1.jpg"]
+  ] as const)("preserves same-path JPEG manifest spelling in %s (%s)", async (mode, href) => {
+    const width = 1000, height = 800;
+    const pixels = Buffer.alloc(width * height * 3);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const offset = (y * width + x) * 3;
+      pixels[offset] = Math.floor(x / width * 255);
+      pixels[offset + 1] = Math.floor(y / height * 255);
+      pixels[offset + 2] = Math.floor((x + y) / (width + height) * 255);
+    }
+    const jpeg = await sharp(pixels, { raw: { width, height, channels: 3 } }).jpeg({ quality: 100 }).toBuffer();
+    const input = await createHwpxFixture({ entries: {
+      "Contents/content.hpf": `<opf:package xmlns:opf="http://www.idpf.org/2007/opf"><opf:manifest><opf:item id="image1" href="${href}" media-type="image/jpg"/></opf:manifest></opf:package>`,
+      "Contents/section0.xml": '<root><hc:img binaryItemIDRef="image1"/></root>',
+      "BinData/image1.jpg": jpeg
+    } });
+    const optimize = mode === "balanced" ? optimizeHwpxBufferBalanced : optimizeHwpxBufferAggressive;
+    const result = await optimize(input, { jpegQuality: 65, actions: ["resize-jpeg"], allowLarger: true });
+    const output = await readHwpxPackage(result.output);
+    expect(output.entries.find(entry => entry.path === "Contents/content.hpf")?.data.toString())
+      .toContain(`href="${href}" media-type="image/jpg"`);
+    expect(output.entries.find(entry => entry.path === "BinData/image1.jpg")!.data.length).toBeLessThan(jpeg.length);
+    expect(result.report.actions.applied).toContainEqual(expect.objectContaining({
+      type: "resize-jpeg", target: "BinData/image1.jpg", outputPath: "BinData/image1.jpg"
+    }));
+  });
   it("uses max PNG compression by default for advanced modes", () => {
     expect(balancedImageProfile.pngCompressionLevel).toBe(9);
     expect(aggressiveImageProfile.pngCompressionLevel).toBe(9);
