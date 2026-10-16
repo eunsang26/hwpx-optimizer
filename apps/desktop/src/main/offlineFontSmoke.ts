@@ -10,9 +10,10 @@ export async function assertOfflineBundledFonts(window: BrowserWindow, packaged:
     if (!data.length) throw new Error(`Desktop font smoke failed: empty ${file}`);
     return { file, bytes: data.length, sha256: createHash("sha256").update(data).digest("hex") };
   }));
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     // Do not accept a computed font-family alone: it can name a failed web font.
-    const loaded = await window.webContents.executeJavaScript(`
+    const loaded = await Promise.race([window.webContents.executeJavaScript(`
       (async () => {
         await document.fonts.ready;
         const text = "한글 문서 압축 ABC0123";
@@ -32,7 +33,10 @@ export async function assertOfflineBundledFonts(window: BrowserWindow, packaged:
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         return { probes, fontUrl: new URL("./fonts/PretendardVariable.woff2", document.baseURI).href };
       })()
-    `) as { probes: string[]; fontUrl: string };
+    `), new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(() => reject(new Error("Desktop font smoke timed out waiting for visible font rendering")), 15000);
+    })]) as { probes: string[]; fontUrl: string };
+    clearTimeout(timeout);
     if (!loaded.fontUrl.startsWith("file:")) throw new Error("Desktop font smoke failed: font is not a local file");
 
     debuggerApi.attach("1.3");
@@ -55,6 +59,7 @@ export async function assertOfflineBundledFonts(window: BrowserWindow, packaged:
       networkEmulation: true,
       fontUrl: loaded.fontUrl, assets, rendered }));
   } finally {
+    clearTimeout(timeout);
     if (debuggerApi.isAttached()) debuggerApi.detach();
     await window.webContents.executeJavaScript(`
       for (const id of ["font-smoke-400", "font-smoke-700"]) document.getElementById(id)?.remove();

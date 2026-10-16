@@ -19,6 +19,10 @@ type SmokeContext = {
 
 export async function runDesktopSmoke(window: BrowserWindow, context: SmokeContext): Promise<void> {
   const { app, permissions, worker: documentWorkerClient, operations: documentOperations, selection } = context;
+  // Font painting and native input need a visible window, including on CI.
+  window.show();
+  window.focus();
+  window.webContents.focus();
   await assertOfflineBundledFonts(window, app.isPackaged);
   const smokeDir = join(app.getPath("userData"), "smoke-workspace");
   await rm(smokeDir, { recursive: true, force: true });
