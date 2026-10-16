@@ -1262,7 +1262,8 @@ function renderBatchSummary(): void {
   const summaryItems = analyzed.filter((item) => item.selected !== false);
   const selectedItems = state.batchItems.filter(item => item.selected !== false);
   const allCompleted = selectedItems.length > 0 && selectedItems.every(item => item.status === "done" && item.report?.optimizedSize !== undefined);
-  const partialCompletion = (state.batchRunCompleted && !allCompleted) || selectedItems.some(item => item.status === "failed" || item.status === "cancelled");
+  const partialCompletion = (state.batchRunCompleted && !allCompleted) || selectedItems.some(item =>
+    item.status === "failed" || item.status === "cancelled" || (!state.batchAnalyzing && !item.report));
   const originalTotal = summaryItems.reduce((sum, item) => sum + (item.originalSizeBytes ?? 0), 0);
   const expectedTotal = summaryItems.reduce((sum, item) => sum + (item.status === "done" ? item.actualSizeBytes ?? item.report?.optimizedSize ?? item.originalSizeBytes ?? 0 : item.status === "failed" || item.status === "cancelled" ? item.originalSizeBytes ?? 0 : item.expectedSizeBytes ?? item.originalSizeBytes ?? 0), 0);
   const saving = Math.max(0, originalTotal - expectedTotal);
@@ -2055,6 +2056,7 @@ function renderBatchResultPanel(): void {
   const done = state.batchItems.filter((item) => item.status === "done");
   const failed = state.batchItems.filter((item) => item.status === "failed");
   const cancelled = state.batchItems.filter((item) => item.status === "cancelled");
+  batchResultPanel.dataset.tone = failed.length > 0 || cancelled.length > 0 || state.batchReportStatus === "failed" ? "warning" : "success";
   const totalSavedBytes = done.reduce((sum, item) => sum + (item.savedBytes ?? 0), 0);
   const hasOutput = done.some((item) => item.outputPath);
   const shouldShow =
@@ -2117,6 +2119,7 @@ function resetBatchCompletedItems(): void {
   renderBatchResultPanel();
   setSubmissionInputsDisabled(false);
   setStatus(`${resetCount}개 파일을 다시 최적화할 수 있습니다.`);
+  interaction.focusFirst(runDockButton, batchSelectAll, batchClearButton);
 }
 
 function planDeltaLabel(deltaBytes: number): string {
@@ -2396,6 +2399,12 @@ function enterBatchMode(paths: string[], options: { preservePolicy?: boolean } =
 }
 
 function renderBatchList(): void {
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const focusedRow = active?.closest<HTMLTableRowElement>("tr[data-input-path]");
+  const rowIndex = focusedRow ? Array.from(batchList.children).indexOf(focusedRow) : -1;
+  const focusSelector = active?.matches(".batch-select") ? ".batch-select" :
+    active?.matches(".batch-quality-input, [data-batch-quality-edit]") ? ".batch-quality-input, [data-batch-quality-edit]" :
+    active?.dataset.action ? `button[data-action="${CSS.escape(active.dataset.action)}"]` : undefined;
   const busy = state.batchRunning || state.batchAnalyzing;
   batchSummary.textContent = summarizeBatchItems(state.batchItems, { running: busy }).text;
   batchList.innerHTML = state.batchItems
@@ -2410,6 +2419,12 @@ function renderBatchList(): void {
   renderSelectionClearButton();
   batchRunButton.textContent = state.batchAnalyzing ? "분석 중..." : state.batchRunning ? "처리 중..." : "일괄 최적화";
   renderBatchSummary();
+  if (!busy && focusedRow && focusSelector && !active?.isConnected && document.activeElement === document.body) {
+    const rows = Array.from(batchList.querySelectorAll<HTMLTableRowElement>("tr[data-input-path]"));
+    const row = rows.find(candidate => candidate.dataset.inputPath === focusedRow.dataset.inputPath) ??
+      rows[Math.min(Math.max(0, rowIndex), rows.length - 1)];
+    interaction.focusFirst(row?.querySelector<HTMLElement>(focusSelector), row?.querySelector<HTMLElement>(".batch-select"), runDockButton, emptyChooseButton);
+  }
 }
 
 function renderSelectionClearButton(): void {
@@ -2496,6 +2511,7 @@ function promoteRemainingBatchItemToSingle(item: BatchItem): void {
     refreshSubmissionPlan();
     renderRunDock(state.currentPlan);
     setStatus("남은 1개 파일을 단일 모드로 전환했습니다.");
+    interaction.focusFirst(runDockButton);
     return;
   }
 
@@ -2549,7 +2565,9 @@ async function analyzeBatchItems(): Promise<void> {
     }
     if (pendingItems.length > 0 && !state.batchCancelled) {
       renderProgress(100, "일괄 분석 완료");
-      setStatus("일괄 분석이 완료되었습니다. 제출 기준에 맞게 최적화할 수 있습니다.");
+      const failed = state.batchItems.filter(item => item.status === "failed").length;
+      setStatus(failed > 0 ? `분석하지 못한 파일이 ${failed}개 있습니다. 목록의 오류를 확인하세요. 나머지 파일은 최적화할 수 있습니다.` :
+        "일괄 분석이 완료되었습니다. 제출 기준에 맞게 최적화할 수 있습니다.", failed > 0 ? "warning" : "info");
       refreshBatchPlanItems();
     }
   } finally {
@@ -2593,13 +2611,9 @@ function handleBatchRowAction(button: HTMLButtonElement): void {
     if (state.batchRunning || state.batchAnalyzing) return;
     if (!workflow.removeBatchItem(index)) return;
     if (state.batchItems.length === 0) {
-      batchPanel.hidden = true;
-      dropZone.hidden = false;
-      workflow.clearSelection();
-      document.body.dataset.view = state.view;
-      singleWorkspace.hidden = false;
-      renderEmptySummary();
-      setStatus("배치 목록을 비웠습니다.");
+      clearSelectedFiles("배치 목록을 비웠습니다.");
+      emptyChooseButton.focus();
+      return;
     } else if (state.batchItems.length === 1) {
       promoteRemainingBatchItemToSingle(state.batchItems[0]);
       return;

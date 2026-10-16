@@ -84,7 +84,7 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
       : item.originalSizeLabel && sizeLabel
       ? `${escapeHtml(item.originalSizeLabel)} → <strong>${escapeHtml(sizeLabel)} (${sizeBasis})</strong>`
       : escapeHtml(item.originalSizeLabel ?? sizeLabel ?? "-");
-  return `<tr${attentionClass}><td><input type="checkbox" class="batch-select" data-batch-index="${index}"${selectedAttr}${disabledAttr} aria-label="${escapeHtml(
+  return `<tr${attentionClass} data-input-path="${escapeHtml(item.path)}"><td><input type="checkbox" class="batch-select" data-batch-index="${index}"${selectedAttr}${disabledAttr} aria-label="${escapeHtml(
     item.fileName
   )} 선택" /></td><td class="name"><strong>${escapeHtml(item.fileName)}</strong>${
     targetSub ? `<span class="sub">${escapeHtml(targetSub)}</span>` : ""

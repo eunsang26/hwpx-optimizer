@@ -1732,6 +1732,12 @@ body[data-view="batch"][data-batch-result="visible"] .primary-run-panel {
   gap: 10px;
   align-items: flex-start;
 }
+.batch-result[data-tone="warning"] {
+  border-color: #f4d6a7;
+  background: var(--amber-soft);
+}
+.batch-result[data-tone="warning"] :is(h2, p) { color: var(--amber); }
+.batch-result[data-tone="warning"] .success-dot { background: var(--amber); }
 .batch-result-head .success-dot {
   margin-top: 5px;
   flex: 0 0 auto;

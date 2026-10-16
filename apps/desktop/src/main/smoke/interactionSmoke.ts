@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BrowserWindow } from "electron";
 import { DesktopDocumentController } from "../documentController.js";
+import { DocumentOperations } from "../documentOperations.js";
 import type { DocumentWorkerClient } from "../documentWorkerClient.js";
 import type { SmokeSelection } from "./desktopSmoke.js";
 
@@ -19,6 +20,7 @@ export async function runInteractionSmoke(window: BrowserWindow, context: Contex
   const sourceHash = digest(bytes);
   const originalPrepare = context.worker.prepare;
   const originalReport = DesktopDocumentController.prototype.saveBatchReport;
+  const originalCancel = DocumentOperations.prototype.cancel;
   const wasVisible = window.isVisible();
   let release: (() => void) | undefined;
   let cases = 0;
@@ -38,16 +40,18 @@ export async function runInteractionSmoke(window: BrowserWindow, context: Contex
   const key = async (keyCode: string, shift = false): Promise<void> => {
     window.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers: shift ? ["shift"] : [] });
     if (keyCode === "Enter") window.webContents.sendInputEvent({ type: "char", keyCode: "\r" });
+    if (keyCode === "Space") window.webContents.sendInputEvent({ type: "char", keyCode: " " });
     window.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers: shift ? ["shift"] : [] });
     await new Promise(resolve => setTimeout(resolve, 15));
   };
-  const enter = async (id: string): Promise<void> => {
+  const focus = async (selector: string): Promise<void> => {
     for (let i = 0; i < 100; i++) {
-      if (await evaluate(`document.activeElement.id === ${JSON.stringify(id)}`)) { await key("Enter"); return; }
+      if (await evaluate(`document.activeElement === document.querySelector(${JSON.stringify(selector)})`)) return;
       await key("Tab");
     }
-    throw new Error(`Keyboard cannot reach ${id}`);
+    throw new Error(`Keyboard cannot reach ${selector}`);
   };
+  const enter = async (id: string): Promise<void> => { await focus(`#${id}`); await key("Enter"); };
   const choose = async (paths: string[]): Promise<void> => {
     context.selection.paths = paths; context.selection.delivery = { consumed: false };
     await enter("empty-choose-button");
@@ -112,6 +116,81 @@ export async function runInteractionSmoke(window: BrowserWindow, context: Contex
       await key("Tab"); assert.equal(await evaluate(`document.activeElement.id`), "compare-close");
       await key("Escape"); assert.equal(await evaluate(`document.activeElement.id`), "compare-button");
     });
+    await checked("native cancellation restores focus and its late acknowledgment cannot replace the next task", async () => {
+      await reset(); await choose([inputs[0]]);
+      let prepared = false, cancelled = false, acknowledge: (() => void) | undefined;
+      context.worker.prepare = async function(input, signal, progress) {
+        const result = await originalPrepare.call(this, input, signal, progress);
+        prepared = true;
+        await new Promise<void>(resolve => { release = resolve; signal.addEventListener("abort", () => resolve(), { once: true }); });
+        signal.throwIfAborted(); return result;
+      };
+      DocumentOperations.prototype.cancel = async function(kind) {
+        const result = await originalCancel.call(this, kind);
+        cancelled = result.cancelled;
+        await new Promise<void>(resolve => { acknowledge = resolve; });
+        return result;
+      };
+      await enter("run-dock-button"); await waitFor(() => prepared);
+      await enter("cancel-button"); await waitFor(() => cancelled);
+      await waitDom(`!document.body.dataset.busy`);
+      assert.equal(await evaluate(`document.activeElement.id`), "run-dock-button");
+      assert.match(await evaluate<string>(`document.getElementById("interaction-announcement").textContent`), /취소/);
+      context.worker.prepare = originalPrepare;
+      await reset(); await choose([inputs[2]]);
+      const status = await evaluate(`document.getElementById("status-text").textContent`);
+      DocumentOperations.prototype.cancel = originalCancel;
+      acknowledge!(); release = undefined;
+      await new Promise(resolve => setTimeout(resolve, 50));
+      assert.equal(await evaluate(`document.getElementById("status-text").textContent`), status);
+    });
+    await checked("keyboard selection, quality edits and row removal retain the intended focus", async () => {
+      await reset(); await choose(inputs);
+      const selector = '.batch-select[data-batch-index="1"]';
+      await focus(selector); await key("Space");
+      assert.equal(await evaluate(`document.activeElement === document.querySelector('${selector}')`), true);
+      assert.equal(await evaluate(`document.activeElement.checked`), false);
+      await key("Space");
+      assert.equal(await evaluate(`document.activeElement.checked`), true);
+      await focus('[data-batch-quality-edit="1"]'); await key("Enter");
+      assert.equal(await evaluate(`document.activeElement.matches('.batch-quality-input[data-batch-quality-index="1"]')`), true);
+      await key("ArrowDown"); await key("Tab");
+      await focus('[data-action="remove"][data-index="1"]'); await key("Enter");
+      assert.equal(await evaluate(`document.activeElement.matches('[data-action="remove"][data-index="1"]')`), true);
+      assert.equal(await evaluate(`document.activeElement.closest("tr").dataset.inputPath`), inputs[2]);
+      await key("Enter");
+      assert.equal(await evaluate(`document.body.dataset.view`), "single");
+      assert.equal(await evaluate(`document.activeElement.id`), "run-dock-button");
+    });
+    await checked("partial document failure remains visible and keyboard retry can remove the failed input", async () => {
+      await reset();
+      const work = join(directory, "partial"); await mkdir(work, { recursive: true });
+      const good = join(work, "정상.hwpx"), broken = join(work, "손상.hwpx");
+      const invalid = Buffer.from("synthetic invalid ZIP");
+      await writeFile(good, bytes); await writeFile(broken, invalid);
+      await choose([good, broken]);
+      assert.equal(await evaluate(`document.getElementById("status-banner").dataset.tone`), "warning");
+      assert.match(await evaluate<string>(`document.getElementById("summary-status").textContent`), /미완료/);
+      await enter("run-dock-button");
+      await waitDom(`document.getElementById("batch-result-panel").dataset.reportState === "saved"`);
+      assert.equal(await evaluate(`document.getElementById("batch-result-panel").dataset.tone`), "warning");
+      assert.equal(await evaluate(`document.getElementById("run-dock").dataset.action`), "review-results");
+      assert.equal(await evaluate(`document.activeElement.id`), "run-dock-button");
+      assert.match(await evaluate<string>(`document.getElementById("interaction-announcement").textContent`), /완료 1, 실패 1/);
+      const report = JSON.parse(await readFile(join(work, "output", "batch-report.json"), "utf8"));
+      assert.equal(report.totals.done, 1); assert.equal(report.totals.failed, 1);
+      const output = (await readdir(join(work, "output"))).find(name => name.endsWith(".hwpx"))!;
+      const outputHash = digest(await readFile(join(work, "output", output)));
+      await enter("batch-retry-button");
+      assert.equal(await evaluate(`document.activeElement.id`), "run-dock-button");
+      assert.match(await evaluate<string>(`document.getElementById("summary-status").textContent`), /미완료/);
+      await focus('[data-action="remove"][data-index="1"]'); await key("Enter");
+      assert.equal(await evaluate(`document.body.dataset.view`), "single");
+      assert.equal(await evaluate(`document.activeElement.id`), "run-dock-button");
+      assert.equal(digest(await readFile(good)), sourceHash);
+      assert.equal(digest(await readFile(broken)), digest(invalid));
+      assert.equal(digest(await readFile(join(work, "output", output))), outputHash);
+    });
     await checked("failed summary can be retried without recompressing outputs", async () => {
       await reset(); const report = join(directory, "output", "batch-report.json"); await mkdir(report, { recursive: true });
       await choose([inputs[0], inputs[1]]); await enter("run-dock-button");
@@ -151,6 +230,7 @@ export async function runInteractionSmoke(window: BrowserWindow, context: Contex
     console.log(JSON.stringify({ check: "desktop-interaction-complete", cases }));
   } finally {
     release?.(); context.worker.prepare = originalPrepare; DesktopDocumentController.prototype.saveBatchReport = originalReport;
+    DocumentOperations.prototype.cancel = originalCancel;
     if (!wasVisible) window.hide();
   }
 }
