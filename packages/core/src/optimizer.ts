@@ -1,6 +1,10 @@
+import { SHARP_INPUT_OPTIONS } from "./resourceLimits.js";
 import sharp from "sharp";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { getDecodedImage } from "./decodedImage.js";
+import { assertImageCanBeTransformed } from "./imageMetadata.js";
+import { canRemoveUnusedResource } from "./resourcePolicy.js";
+import { removeManifestResources } from "./manifest.js";
 import type { AppliedAction, HwpxPackage, OptimizationPlan } from "./types.js";
 import { minifyXmlBuffer } from "./xmlMinify.js";
 
@@ -44,8 +48,12 @@ export async function applySafeOptimizationPlan(input: {
   const entries = [];
   for (const entry of input.pkg.entries) {
     if (removeTargets.has(entry.path)) {
-      applied.push({ type: "remove-unused", target: entry.path, beforeSize: entry.size, afterSize: 0 });
-      continue;
+      if (canRemoveUnusedResource(entry)) {
+        applied.push({ type: "remove-unused", target: entry.path, beforeSize: entry.size, afterSize: 0 });
+        continue;
+      }
+      skipped.push({ type: "remove-unused", target: entry.path, beforeSize: entry.size });
+      warnings.push(`remove-unused skipped for protected resource ${entry.path}`);
     }
 
     if (stripMetadataTargets.has(entry.path)) {
@@ -107,7 +115,14 @@ export async function applySafeOptimizationPlan(input: {
     entries.push(entry);
   }
 
-  return { pkg: { entries }, applied, skipped, warnings };
+  const removedPaths = new Set(applied.filter((action) => action.type === "remove-unused").map((action) => action.target));
+  const availablePaths = new Set(input.pkg.entries.map((entry) => entry.path));
+  const consistentEntries = entries.map((entry) => {
+    if (entry.path !== "Contents/content.hpf") return entry;
+    const data = removeManifestResources(entry.data, removedPaths, availablePaths);
+    return data === entry.data ? entry : { ...entry, data, size: data.byteLength };
+  });
+  return { pkg: { entries: consistentEntries }, applied, skipped, warnings };
 }
 
 function describeError(error: unknown): string {
@@ -122,10 +137,11 @@ function stripImageMetadataLossless(path: string, data: Buffer): Buffer {
 }
 
 async function optimizePngLosslessly(data: Buffer): Promise<Buffer> {
+  await assertImageCanBeTransformed(data);
   const decoded = await getDecodedImage(data, { rotate: false });
   const png = { compressionLevel: 9, adaptiveFiltering: true, palette: false };
-  if (!decoded) return sharp(data).png(png).toBuffer();
-  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+  if (!decoded) return sharp(data, SHARP_INPUT_OPTIONS).png(png).toBuffer();
+  return sharp(decoded.data, { ...SHARP_INPUT_OPTIONS, raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
     .png(png)
     .toBuffer();
 }

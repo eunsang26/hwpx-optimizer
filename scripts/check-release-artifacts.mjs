@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, join, normalize } from "node:path";
+import { createHash } from "node:crypto";
 import asar from "@electron/asar";
 import JSZip from "jszip";
 
@@ -99,6 +100,64 @@ if (duplicateCoreRuntimeViolations.length > 0) {
   for (const violation of duplicateCoreRuntimeViolations) {
     console.error(`- ${violation}`);
   }
+  process.exit(1);
+}
+
+const missingWorkspaceRuntimes = asarArtifacts.flatMap(({ label, entries }) =>
+  ["core", "io"].flatMap((name) => {
+    const root = `node_modules/@hwpx-optimizer/${name}`;
+    return ["package.json", "dist/index.js"]
+      .filter((file) => !entries.includes(`${root}/${file}`))
+      .map((file) => `${label}: missing ${root}/${file}`);
+  })
+);
+
+if (missingWorkspaceRuntimes.length > 0) {
+  console.error("Release artifact check failed. Required desktop workspace runtimes are missing:");
+  for (const violation of missingWorkspaceRuntimes) console.error(`- ${violation}`);
+  process.exit(1);
+}
+
+const desktopBootFiles = ["index.html", "styles.css", "renderer.js", "preload.cjs", "main.cjs", "main.js"];
+const bootViolations = [];
+for (const artifact of asarArtifacts) {
+  for (const file of desktopBootFiles) {
+    const entry = `apps/desktop/dist/${file}`;
+    if (!artifact.entries.includes(entry) || !asar.extractFile(artifact.label, normalize(entry)).length) {
+      bootViolations.push(`${artifact.label}: missing or empty ${entry}`);
+    }
+  }
+}
+if (bootViolations.length) {
+  console.error("Release artifact check failed. Required desktop boot assets are missing or empty:");
+  for (const violation of bootViolations) console.error(`- ${violation}`);
+  process.exit(1);
+}
+console.log(`Verified desktop boot assets in ${asarArtifacts.length} ASAR archive(s).`);
+
+// Inspect actual archive contents, not only electron-builder source patterns.
+const desktopFontPaths = ["PretendardVariable.woff2", "OFL.txt"];
+const fontViolations = [];
+for (const artifact of asarArtifacts) {
+  for (const file of desktopFontPaths) {
+    const packagedPath = `apps/desktop/dist/fonts/${file}`;
+    if (!artifact.entries.includes(packagedPath)) {
+      fontViolations.push(`${artifact.label}: missing ${packagedPath}`);
+      continue;
+    }
+    const reference = await readFile(new URL(`../apps/desktop/src/fonts/${file}`, import.meta.url));
+    // ASAR listing uses normalized separators above; extraction requires the host path separator.
+    const packaged = asar.extractFile(artifact.label, normalize(packagedPath));
+    if (!packaged.length || !packaged.equals(reference)) {
+      fontViolations.push(`${artifact.label}: changed or empty ${packagedPath}`);
+      continue;
+    }
+    console.log(`Verified bundled desktop asset ${packagedPath}: ${packaged.length} bytes, SHA256 ${createHash("sha256").update(packaged).digest("hex")}`);
+  }
+}
+if (fontViolations.length > 0) {
+  console.error("Release artifact check failed. Required desktop font assets are missing or changed:");
+  for (const violation of fontViolations) console.error(`- ${violation}`);
   process.exit(1);
 }
 

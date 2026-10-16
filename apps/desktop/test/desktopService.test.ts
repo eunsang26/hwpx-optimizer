@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import sharp from "sharp";
 import { createHwpxFixture } from "../../../packages/core/test/fixtures.js";
 import {
   analyzeDesktopFile,
@@ -66,7 +67,7 @@ describe("desktop service", () => {
     await expect(verifyDesktopFile(result.outputPath)).resolves.toEqual({ ok: true });
   });
 
-  it("uses deep analysis by default so near-dup review groups can populate", async () => {
+  it("provides near-duplicate review groups when detailed analysis is requested", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
     const sharp = (await import("sharp")).default;
@@ -95,7 +96,7 @@ describe("desktop service", () => {
       })
     );
 
-    const analysis = await analyzeDesktopFile(inputPath);
+    const analysis = await analyzeDesktopFile(inputPath, { analysisMode: "deep" });
 
     expect(analysis.report.performance?.stages.map((stage) => stage.name)).toContain("analyze");
     expect(analysis.report.nearDuplicateImages).toEqual([
@@ -106,7 +107,7 @@ describe("desktop service", () => {
     ]);
   });
 
-  it("still allows quick analysis when callers opt out of deep diagnostics", async () => {
+  it("uses quick analysis by default without visual duplicate diagnostics", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-desktop-"));
     const inputPath = join(dir, "input.hwpx");
     const png = await import("sharp").then(({ default: sharp }) =>
@@ -132,8 +133,10 @@ describe("desktop service", () => {
       })
     );
 
-    const analysis = await analyzeDesktopFile(inputPath, { analysisMode: "quick" });
+    const analysis = await analyzeDesktopFile(inputPath);
 
+    expect(analysis.report.analysis?.mode).toBe("quick");
+    expect(analysis.report.duplicateImages).toHaveLength(1);
     expect(analysis.report.sameVisualDuplicateImages).toEqual([]);
     expect(analysis.report.nearDuplicateImages).toEqual([]);
   });
@@ -499,6 +502,21 @@ describe("desktop service", () => {
     await expect(previewImageDiffs(originalPath, optimizedPath, { maxInputBytes: 10 })).rejects.toThrow(
       "too large for image preview"
     );
+  });
+  it("passes explicit TIFF resource mappings through the desktop preview boundary", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "hwpx-preview-mapping-"));
+    const tiff = await sharp({ create: { width: 32, height: 24, channels: 3, background: "#123456" } })
+      .tiff({ compression: "none" }).toBuffer();
+    const png = await sharp(tiff).png().toBuffer();
+    const originalPath = join(directory, "original.hwpx");
+    const optimizedPath = join(directory, "output.hwpx");
+    await writeFile(originalPath, await createHwpxFixture({ entries: { "BinData/image.tiff": tiff } }));
+    await writeFile(optimizedPath, await createHwpxFixture({ entries: { "BinData/image.png": png } }));
+    const pairs = await previewImageDiffs(originalPath, optimizedPath, { resourceMappings: [
+      { originalPath: "BinData/image.tiff", outputPath: "BinData/image.png" }
+    ] });
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]).toMatchObject({ originalPath: "BinData/image.tiff", outputPath: "BinData/image.png" });
   });
 
   it("rejects optimization inputs over the configured local processing limit", async () => {

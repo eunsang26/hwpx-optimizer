@@ -1,18 +1,8 @@
+import { persistentDesktopSettingsPatch, normalizeDesktopSettings, invalidSettingsFields, type DesktopSettings } from "./shared/desktopSettings.js";
+import type { AnalysisReport, CompletedOptimizationReport } from "@hwpx-optimizer/core";
 import type { HwpxOptimizerApi } from "./preload.js";
 
-type DesktopSettings = {
-  defaultMode: "safe" | "balanced" | "aggressive";
-  saveNextToOriginal: boolean;
-  saveReport: boolean;
-  preventOverwrite: boolean;
-  showAggressiveWarning: boolean;
-  submissionLimit: {
-    id: "none" | "mb5" | "mb10" | "mb20" | "mb30" | "mb40" | "mb41" | "mb50" | "mb100" | "custom";
-    customBytes?: number;
-  };
-  preservationPreference: "preserve" | "recommended" | "size";
-  batchTargetMode: "aggregate" | "per-file";
-};
+
 
 const originalSize = 89.72 * 1024 * 1024;
 const optimizedSize = 4.72 * 1024 * 1024;
@@ -32,7 +22,8 @@ let settings: DesktopSettings = {
   batchTargetMode: "per-file"
 };
 
-const sampleReport = {
+const sampleReport: CompletedOptimizationReport = {
+  kind: "optimization",
   originalSize,
   optimizedSize,
   savedBytes,
@@ -155,10 +146,20 @@ const api: HwpxOptimizerApi = {
     ),
   loadSettings: async () => settings,
   saveSettings: async (patch) => {
-    settings = { ...settings, ...patch };
+    if (invalidSettingsFields(patch).length) throw new Error("지원하지 않는 설정값입니다.");
+    settings = normalizeDesktopSettings({ ...settings, ...persistentDesktopSettingsPatch(patch) });
     return settings;
   },
-  analyze: async (filePath) => delay({ filePath, report: sampleReport }, 350),
+  analyze: async (filePath, options) => {
+    const mode = options?.analysisMode ?? "quick";
+    const { optimizedSize: _size, savedBytes: _saved, savedPercent: _percent, targetStatus: _status, targetMissReason: _reason, ...common } = sampleReport;
+    const analysisReport: AnalysisReport = { ...common, kind: "analysis",
+      estimatedSize: optimizedSize, estimatedSavingBytes: savedBytes, estimatedSavingPercent: savedBytes / originalSize * 100,
+      analysis: { mode,
+      imageSizes: mode === "deep" ? "encoded" as const : "estimated" as const,
+      visualDuplicatesChecked: mode === "deep" } };
+    return delay({ filePath, report: analysisReport }, 350);
+  },
   optimize: async (input) => {
     const steps = [
       [10, "Reading HWPX package", 120],
@@ -181,8 +182,8 @@ const api: HwpxOptimizerApi = {
       report: sampleReport
     };
   },
-  cancelAnalyze: async () => undefined,
-  cancelOptimize: async () => undefined,
+  cancelAnalyze: async () => ({ cancelled: false }),
+  cancelOptimize: async () => ({ cancelled: false }),
   onOptimizeProgress: (callback) => {
     progressListeners.add(callback);
     return () => progressListeners.delete(callback);

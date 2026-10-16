@@ -4,6 +4,19 @@ import { WorkerPool } from "../src/workerPool.js";
 const workerUrl = new URL("./fixtures/echoWorker.mjs", import.meta.url);
 
 describe("WorkerPool", () => {
+  it("caps concurrent workers even when a caller requests more than the supported limit", async () => {
+    const counts = new SharedArrayBuffer(8);
+    const pool = new WorkerPool({ size: 12, workerUrl: new URL("./fixtures/concurrencyWorker.mjs", import.meta.url) });
+    try {
+      const results = await pool.run(Array.from({ length: 8 }, () => ({ counts })));
+      expect(results.every(result => result.status === "ok")).toBe(true);
+      expect(new Int32Array(counts)[1]).toBeLessThanOrEqual(4);
+      expect(new Int32Array(counts)[0]).toBe(0);
+    } finally { await pool.terminate(); }
+  }, 10_000);
+  it.each([Infinity, NaN, 0, -1, 1.5])("rejects invalid worker count %s", size => {
+    expect(() => new WorkerPool({ size, workerUrl })).toThrow(/Invalid worker pool size/);
+  });
   it("runs all jobs and returns results in order", async () => {
     const pool = new WorkerPool({ size: 2, workerUrl });
     const out = await pool.run([{ n: 1 }, { n: 2 }, { n: 3 }, { n: 4 }]);

@@ -1,19 +1,10 @@
 import { parentPort } from "node:worker_threads";
-import { analyzeDesktopFile, optimizeDesktopFile, warmDesktopCore } from "./desktopService.js";
-import type { DesktopAnalysisResult, DesktopOptimizeInput, DesktopOptimizeResult } from "./desktopService.js";
+import { analyzeDesktopFile, prepareDesktopOptimization, warmDesktopCore } from "./desktopService.js";
+import type { DocumentWorkerMessage, DocumentWorkerRequest } from "./documentProtocol.js";
 
-type WorkerRequest =
-  | { id: number; type: "warm" }
-  | { id: number; type: "analyze"; filePath: string }
-  | { id: number; type: "optimize"; input: DesktopOptimizeInput };
+type WorkerRequest = DocumentWorkerRequest & { id: number };
 
-type WorkerResponse =
-  | { id: number; type: "warm-complete" }
-  | { id: number; type: "progress"; percent: number; item: string }
-  | { id: number; type: "complete"; result: DesktopAnalysisResult | DesktopOptimizeResult }
-  | { id: number; type: "error"; message: string };
-
-function post(message: WorkerResponse): void {
+function post(message: DocumentWorkerMessage): void {
   parentPort?.postMessage(message);
 }
 
@@ -34,14 +25,19 @@ async function handleRequest(message: WorkerRequest): Promise<void> {
       return;
     }
     if (message.type === "analyze") {
-      const result = await analyzeDesktopFile(message.filePath);
+      const result = await analyzeDesktopFile(message.filePath, { analysisMode: message.analysisMode });
       post({ id: message.id, type: "complete", result });
       return;
     }
-    const result = await optimizeDesktopFile(message.input, (progress) =>
+    const result = await prepareDesktopOptimization(message.input, (progress) =>
       post({ id: message.id, type: "progress", ...progress })
     );
-    post({ id: message.id, type: "complete", result });
+    // Transfer large owned buffers without copying. Small/pool-backed views get
+    // their own allocation, avoiding Buffer slab transfer and detached caches.
+    const output = result.output.byteOffset === 0 && result.output.byteLength === result.output.buffer.byteLength &&
+      result.output.buffer instanceof ArrayBuffer && result.output.byteLength > Buffer.poolSize
+      ? result.output : Uint8Array.from(result.output);
+    parentPort?.postMessage({ id: message.id, type: "complete", result: { ...result, output } }, [output.buffer as ArrayBuffer]);
   } catch (error) {
     post({ id: message.id, type: "error", message: error instanceof Error ? error.message : String(error) });
   }

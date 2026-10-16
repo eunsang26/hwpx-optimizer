@@ -1,8 +1,11 @@
+import { mapLimit } from "./concurrency.js";
+import { MAX_PREVIEW_EDGE, MAX_PREVIEW_ITEMS, SHARP_INPUT_OPTIONS } from "./resourceLimits.js";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { decodeBmp } from "./bmp.js";
 import { readHwpxPackage } from "./reader.js";
-import type { HwpxEntry } from "./types.js";
+import { inferResourceMappings } from "./resourceMappings.js";
+import type { HwpxEntry, ResourceMapping } from "./types.js";
 
 export type ImagePreviewPair = {
   originalPath: string;
@@ -22,6 +25,7 @@ export type ImagePreviewOptions = {
   thumbnailMaxEdge?: number;
   thumbnailQuality?: number;
   psnrSampleSize?: number;
+  resourceMappings?: ResourceMapping[];
 };
 
 export type VisualMetrics = {
@@ -38,10 +42,10 @@ export async function extractImageDiffPreviews(
   optimizedBuffer: Buffer,
   options: ImagePreviewOptions = {}
 ): Promise<ImagePreviewPair[]> {
-  const maxItems = options.maxItems ?? 12;
-  const thumbnailMaxEdge = options.thumbnailMaxEdge ?? 200;
-  const thumbnailQuality = options.thumbnailQuality ?? 72;
-  const psnrSampleSize = options.psnrSampleSize ?? PSNR_DEFAULT_SAMPLE_SIZE;
+  const maxItems = boundedPreviewInteger(options.maxItems ?? 12, 0, MAX_PREVIEW_ITEMS, "maxItems");
+  const thumbnailMaxEdge = boundedPreviewInteger(options.thumbnailMaxEdge ?? 200, 1, MAX_PREVIEW_EDGE, "thumbnailMaxEdge");
+  const thumbnailQuality = boundedPreviewInteger(options.thumbnailQuality ?? 72, 1, 100, "thumbnailQuality");
+  const psnrSampleSize = boundedPreviewInteger(options.psnrSampleSize ?? PSNR_DEFAULT_SAMPLE_SIZE, 1, MAX_PREVIEW_EDGE, "psnrSampleSize");
 
   const [originalPkg, outputPkg] = await Promise.all([
     readHwpxPackage(originalBuffer),
@@ -60,9 +64,14 @@ export async function extractImageDiffPreviews(
   type Candidate = { original: HwpxEntry; output: HwpxEntry; savedBytes: number };
   const candidates: Candidate[] = [];
 
-  for (const [path, output] of outputImages) {
-    const original = matchOriginalImage(originalImages, path);
-    if (!original) continue;
+  const mappings = options.resourceMappings ?? inferResourceMappings(originalPkg, outputPkg);
+  const seen = new Set<string>();
+  for (const mapping of mappings) {
+    const original = originalImages.get(mapping.originalPath);
+    const output = outputImages.get(mapping.outputPath);
+    const key = JSON.stringify([mapping.originalPath, mapping.outputPath]);
+    if (!original || !output || seen.has(key)) continue;
+    seen.add(key);
     if (original.size === output.size && hashesEqual(original.data, output.data)) continue;
     candidates.push({ original, output, savedBytes: original.size - output.size });
   }
@@ -70,27 +79,31 @@ export async function extractImageDiffPreviews(
   candidates.sort((left, right) => right.savedBytes - left.savedBytes);
   const top = candidates.slice(0, maxItems);
 
-  return Promise.all(
-    top.map(async ({ original, output, savedBytes }) => {
-      const [originalThumbnailDataUrl, outputThumbnailDataUrl, psnrDb] = await Promise.all([
-        renderThumbnailDataUrl(original.data, thumbnailMaxEdge, thumbnailQuality),
-        renderThumbnailDataUrl(output.data, thumbnailMaxEdge, thumbnailQuality),
-        computeVisualMetrics(original.data, output.data, psnrSampleSize).then((metrics) => metrics.psnr)
-      ]);
-      return {
-        originalPath: original.path,
-        outputPath: output.path,
-        originalSize: original.size,
-        outputSize: output.size,
-        savedBytes,
-        originalFormat: imageFormatFromPath(original.path),
-        outputFormat: imageFormatFromPath(output.path),
-        originalThumbnailDataUrl,
-        outputThumbnailDataUrl,
-        psnrDb
-      };
-    })
-  );
+  // One pair at a time: each pair can run two thumbnails and two samples.
+  return mapLimit(top, 1, async ({ original, output, savedBytes }) => {
+    const [originalThumbnailDataUrl, outputThumbnailDataUrl, psnrDb] = await Promise.all([
+      renderThumbnailDataUrl(original.data, thumbnailMaxEdge, thumbnailQuality),
+      renderThumbnailDataUrl(output.data, thumbnailMaxEdge, thumbnailQuality),
+      computeVisualMetrics(original.data, output.data, psnrSampleSize).then((metrics) => metrics.psnr)
+    ]);
+    return {
+      originalPath: original.path,
+      outputPath: output.path,
+      originalSize: original.size,
+      outputSize: output.size,
+      savedBytes,
+      originalFormat: imageFormatFromPath(original.path),
+      outputFormat: imageFormatFromPath(output.path),
+      originalThumbnailDataUrl,
+      outputThumbnailDataUrl,
+      psnrDb
+    };
+  });
+}
+
+function boundedPreviewInteger(value: number, minimum: number, maximum: number, name: string): number {
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) throw new Error(`Image preview ${name} must be an integer from ${minimum} to ${maximum}.`);
+  return value;
 }
 
 export async function computePsnr(original: Buffer, optimized: Buffer, sampleSize = PSNR_DEFAULT_SAMPLE_SIZE): Promise<number | null> {
@@ -107,6 +120,7 @@ export async function computeVisualMetrics(
   sampleSize = PSNR_DEFAULT_SAMPLE_SIZE
 ): Promise<VisualMetrics> {
   try {
+    boundedPreviewInteger(sampleSize, 1, MAX_PREVIEW_EDGE, "sampleSize");
     const [originalRaw, optimizedRaw] = await Promise.all([
       decodeForMetrics(original, sampleSize),
       decodeForMetrics(optimized, sampleSize)
@@ -115,17 +129,40 @@ export async function computeVisualMetrics(
       return { psnr: null, ssim: null };
     }
 
-    let sumSquaredError = 0;
-    for (let index = 0; index < originalRaw.length; index += 1) {
-      const diff = originalRaw[index]! - optimizedRaw[index]!;
-      sumSquaredError += diff * diff;
-    }
-    const mse = sumSquaredError / originalRaw.length;
-    const psnr = mse === 0 ? PSNR_MAX_DB : Math.min(10 * Math.log10((255 * 255) / mse), PSNR_MAX_DB);
-    return { psnr, ssim: computeSsimFromRgbSamples(originalRaw, optimizedRaw) };
+    // Evaluate on both dark and light backgrounds. Dropping alpha must not be
+    // invisible to the quality gate just because the RGB channels are equal.
+    const samples = [0, 255].map((background) => {
+      const left = compositeRgbaSample(originalRaw, background);
+      const right = compositeRgbaSample(optimizedRaw, background);
+      let sumSquaredError = 0;
+      for (let index = 0; index < left.length; index += 1) {
+        const diff = left[index]! - right[index]!;
+        sumSquaredError += diff * diff;
+      }
+      const mse = sumSquaredError / left.length;
+      return {
+        psnr: mse === 0 ? PSNR_MAX_DB : Math.min(10 * Math.log10((255 * 255) / mse), PSNR_MAX_DB),
+        ssim: computeSsimFromRgbSamples(left, right)
+      };
+    });
+    return {
+      psnr: Math.min(...samples.map((sample) => sample.psnr)),
+      ssim: samples.some((sample) => sample.ssim === null) ? null : Math.min(...samples.map((sample) => sample.ssim!))
+    };
   } catch {
     return { psnr: null, ssim: null };
   }
+}
+
+function compositeRgbaSample(data: Buffer, background: number): Buffer {
+  const rgb = Buffer.alloc((data.length / 4) * 3);
+  for (let source = 0, target = 0; source < data.length; source += 4) {
+    const alpha = data[source + 3]! / 255;
+    for (let channel = 0; channel < 3; channel += 1) {
+      rgb[target++] = Math.round(data[source + channel]! * alpha + background * (1 - alpha));
+    }
+  }
+  return rgb;
 }
 
 function computeSsimFromRgbSamples(originalRaw: Buffer, optimizedRaw: Buffer): number | null {
@@ -175,16 +212,17 @@ async function decodeForMetrics(data: Buffer, sampleSize: number): Promise<Buffe
   try {
     const bmp = decodeBmp(data);
     const pipeline = bmp
-      ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } })
-      : sharp(data);
-    // contain + letterbox keeps aspect ratio while producing equal-sized RGB
+      ? sharp(bmp.data, { ...SHARP_INPUT_OPTIONS, raw: { width: bmp.width, height: bmp.height, channels: 3 } })
+      : sharp(data, SHARP_INPUT_OPTIONS);
+    // contain + letterbox keeps aspect ratio while producing equal-sized RGBA
     // samples so PSNR/SSIM length checks stay valid across differing shapes.
     return await pipeline
       .rotate()
-      .removeAlpha()
+      .toColourspace("srgb")
+      .ensureAlpha()
       .resize(sampleSize, sampleSize, {
         fit: "contain",
-        background: { r: 0, g: 0, b: 0 },
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
         kernel: "lanczos3"
       })
       .raw()
@@ -192,19 +230,6 @@ async function decodeForMetrics(data: Buffer, sampleSize: number): Promise<Buffe
   } catch {
     return null;
   }
-}
-
-function matchOriginalImage(originalImages: Map<string, HwpxEntry>, outputPath: string): HwpxEntry | undefined {
-  const direct = originalImages.get(outputPath);
-  if (direct) return direct;
-  const candidates = ["bmp", "png", "jpg", "jpeg"];
-  for (const ext of candidates) {
-    const candidate = outputPath.replace(/\.[^.\/]+$/, `.${ext}`);
-    if (candidate === outputPath) continue;
-    const match = originalImages.get(candidate);
-    if (match) return match;
-  }
-  return undefined;
 }
 
 async function renderThumbnailDataUrl(data: Buffer, maxEdge: number, quality: number): Promise<string> {
@@ -215,8 +240,8 @@ async function renderThumbnailDataUrl(data: Buffer, maxEdge: number, quality: nu
 async function renderThumbnail(data: Buffer, maxEdge: number, quality: number): Promise<Buffer> {
   const bmp = decodeBmp(data);
   const pipeline = bmp
-    ? sharp(bmp.data, { raw: { width: bmp.width, height: bmp.height, channels: 3 } })
-    : sharp(data);
+    ? sharp(bmp.data, { ...SHARP_INPUT_OPTIONS, raw: { width: bmp.width, height: bmp.height, channels: 3 } })
+    : sharp(data, SHARP_INPUT_OPTIONS);
   return pipeline
     .rotate()
     .resize({ width: maxEdge, height: maxEdge, fit: "inside", withoutEnlargement: true, kernel: "lanczos3" })

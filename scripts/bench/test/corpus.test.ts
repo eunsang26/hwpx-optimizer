@@ -83,4 +83,18 @@ describe("corpus manifest", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("does not make an empty matching manifest eligible for GO", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-bench-empty-"));
+    try {
+      const manifestPath = join(dir, "manifest.json");
+      await writeManifestFile(manifestPath, dir);
+      const loaded = await loadCorpus({ benchDir: dir,
+        fixturesDir: join(import.meta.dirname, "../fixtures"), manifestPath });
+      expect(loaded).toMatchObject({ goEligible: false, invalidReason: "empty-corpus" });
+      expect(loaded.docs.every((doc) => doc.source === "fixture")).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

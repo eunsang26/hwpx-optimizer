@@ -135,6 +135,10 @@ export async function verifyCliPortableStage(stageRoot) {
   await assertHasJsFile(coreDist, "app/core/dist");
   await assertNoPackagingArtifacts(coreDist, "app/core/dist");
 
+  const ioDist = join(appRoot, "io", "dist");
+  await assertExists(join(ioDist, "index.js"), "app/io/dist/index.js");
+  await assertNoPackagingArtifacts(ioDist, "app/io/dist");
+
   const nodeModulesRoot = join(appRoot, "node_modules");
   await assertNoPackagingArtifacts(nodeModulesRoot, "app/node_modules");
 
@@ -146,6 +150,12 @@ export async function verifyCliPortableStage(stageRoot) {
     join(appRoot, "node_modules", "@hwpx-optimizer", "cli", "package.json"),
     "@hwpx-optimizer/cli package.json"
   );
+  await assertModulePackageJson(
+    join(appRoot, "node_modules", "@hwpx-optimizer", "io", "package.json"),
+    "@hwpx-optimizer/io package.json"
+  );
+  await assertExists(join(appRoot, "node_modules", "@hwpx-optimizer", "io", "dist", "index.js"),
+    "@hwpx-optimizer/io runtime");
 
   await assertSharpNativeFiles(stageRoot);
   await assertNoForbiddenSharpDirs(stageRoot);

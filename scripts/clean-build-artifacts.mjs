@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 const buildArtifacts = [
   "packages/core/dist",
   "packages/core/tsconfig.tsbuildinfo",
+  "packages/io/dist",
+  "packages/io/tsconfig.tsbuildinfo",
   "packages/cli/dist",
   "packages/cli/tsconfig.tsbuildinfo",
   "apps/desktop/dist",

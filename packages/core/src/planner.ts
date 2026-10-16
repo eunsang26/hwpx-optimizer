@@ -1,4 +1,5 @@
 import type { HwpxPackage, OptimizationPlan, PackageAnalysis, ReferenceGraph } from "./types.js";
+import { canRemoveUnusedResource } from "./resourcePolicy.js";
 
 const PNG_OPTIMIZE_MIN_BYTES = 4096;
 
@@ -16,6 +17,7 @@ export function createSafeOptimizationPlan(input: {
   }
 
   for (const image of input.analysis.images) {
+    if (image.preservationReason) continue;
     if (image.hasMetadata && canStripMetadataLosslessly(image.path)) {
       actions.push({ type: "strip-metadata", target: image.path, risk: "safe" });
     }
@@ -24,8 +26,10 @@ export function createSafeOptimizationPlan(input: {
     }
   }
 
+  const entriesByPath = new Map(input.pkg.entries.map((entry) => [entry.path, entry]));
   for (const resource of input.graph.resources.values()) {
-    if (!resource.referenced && resource.path.startsWith("BinData/")) {
+    const entry = entriesByPath.get(resource.path);
+    if (!resource.referenced && entry && canRemoveUnusedResource(entry)) {
       actions.push({ type: "remove-unused", target: resource.path, risk: "safe" });
     }
   }

@@ -1,38 +1,16 @@
 import { constants } from "node:fs";
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
-import type { ImagePreviewPair, OptimizationReport } from "@hwpx-optimizer/core";
+import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join, resolve } from "node:path";
+import type { ImagePreviewPair, OptimizationReport, AnalysisReport, CompletedOptimizationReport } from "@hwpx-optimizer/core";
+import { PathClaimRegistry, removeOwnedArtifact, writeArtifactSet, writeStagedFile } from "@hwpx-optimizer/io";
+import type { OwnedArtifact, SaveOptions } from "@hwpx-optimizer/io";
 import { resolveSubmissionLimitBytes } from "../shared/submissionPlan.js";
-import type { PreservationPreference, SubmissionLimit } from "../shared/submissionPlan.js";
+import type { DesktopImagePreviewInput } from "../shared/imagePreview.js";
 
-export type OptimizationMode = "safe" | "balanced" | "aggressive";
-export type BatchTargetMode = "aggregate" | "per-file";
-
-export type DesktopSettings = {
-  settingsVersion?: number;
-  defaultMode: OptimizationMode;
-  saveNextToOriginal: boolean;
-  saveReport: boolean;
-  preventOverwrite: boolean;
-  showAggressiveWarning: boolean;
-  submissionLimit: SubmissionLimit;
-  preservationPreference: PreservationPreference;
-  batchTargetMode: BatchTargetMode;
-};
-
-export type DesktopSettingsPatch = Partial<DesktopSettings> & Record<string, unknown>;
-
-export const defaultDesktopSettings: DesktopSettings = {
-  settingsVersion: 3,
-  defaultMode: "balanced",
-  saveNextToOriginal: true,
-  saveReport: false,
-  preventOverwrite: true,
-  showAggressiveWarning: true,
-  submissionLimit: { id: "mb40" },
-  preservationPreference: "recommended",
-  batchTargetMode: "per-file"
-};
+export { defaultDesktopSettings, persistentDesktopSettingsPatch, normalizeDesktopSettings } from "../shared/desktopSettings.js";
+export type { OptimizationMode, BatchTargetMode, DesktopSettings, DesktopSettingsPatch } from "../shared/desktopSettings.js";
+import { isOptimizationMode } from "../shared/desktopSettings.js";
+import type { OptimizationMode, DesktopSettings } from "../shared/desktopSettings.js";
 
 const DEFAULT_MAX_HWPX_INPUT_BYTES = 512 * 1024 * 1024;
 const DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES = 200 * 1024 * 1024;
@@ -42,7 +20,7 @@ const MAX_CACHED_INPUT_BYTES = 256 * 1024 * 1024;
 
 export type DesktopAnalysisResult = {
   filePath: string;
-  report: OptimizationReport;
+  report: AnalysisReport;
 };
 
 export type DesktopOptimizeInput = {
@@ -55,13 +33,19 @@ export type DesktopOptimizeInput = {
   targetBytes?: number;
   jpegQuality?: number;
   maxInputBytes?: number;
+  /** Trusted main-process selections, retained across document worker restarts. */
+  protectedInputs?: DesktopProtectedInput[];
 };
+
+export type DesktopProtectedInput = { filePath: string; dev: string; ino: string; birthtimeNs: string; ctimeNs: string };
 
 export type DesktopOptimizeResult = {
   outputPath: string;
   reportPath?: string;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 };
+
+export type DesktopPreparedOptimization = { output: Uint8Array; report: CompletedOptimizationReport };
 
 export type DesktopBatchReportItem = {
   input: string;
@@ -94,10 +78,22 @@ type CachedInput = {
   size: number;
   mtimeMs: number;
   data: Buffer;
+  identity: string;
 };
 
 let coreModulePromise: Promise<CoreModule> | undefined;
 const cachedInputs = new Map<string, CachedInput>();
+const protectedInputs = new Map<string, DesktopProtectedInput>();
+
+export async function registerDesktopInput(filePath: string): Promise<DesktopProtectedInput> {
+  const canonicalPath = await realpath(filePath);
+  const info = await stat(canonicalPath, { bigint: true });
+  if (!info.isFile()) throw new Error("Selected HWPX input must be a regular file.");
+  const identity = { filePath: canonicalPath, dev: String(info.dev), ino: String(info.ino),
+    birthtimeNs: String(info.birthtimeNs), ctimeNs: String(info.ctimeNs) };
+  protectedInputs.set(canonicalPath, identity);
+  return identity;
+}
 
 async function loadCoreModule(): Promise<CoreModule> {
   coreModulePromise ??= import("@hwpx-optimizer/core").catch((error: unknown) => {
@@ -118,9 +114,8 @@ export async function analyzeDesktopFile(
 ): Promise<DesktopAnalysisResult> {
   const input = await readSupportedInput(filePath, options);
   const { analyzeHwpxBuffer } = await loadCoreModule();
-  // Deep analysis enables near-duplicate review groups for Desktop chips/warnings.
-  // Auto-merge remains unavailable; optimize paths never consolidate by aHash.
-  const report = await analyzeHwpxBuffer(input.data, { analysisMode: options.analysisMode ?? "deep" });
+  // Initial import stays cheap; detailed pixel diagnostics and encodes are opt-in.
+  const report = await analyzeHwpxBuffer(input.data, { analysisMode: options.analysisMode ?? "quick" });
   return { filePath, report };
 }
 
@@ -128,6 +123,14 @@ export async function optimizeDesktopFile(
   input: DesktopOptimizeInput,
   onProgress?: (progress: DesktopProgress) => void
 ): Promise<DesktopOptimizeResult> {
+  const prepared = await prepareDesktopOptimization(input, onProgress);
+  return saveDesktopOptimization(input, prepared, onProgress);
+}
+
+/** Worker-side computation only: no artifact reservation or output writes. */
+export async function prepareDesktopOptimization(
+  input: DesktopOptimizeInput, onProgress?: (progress: DesktopProgress) => void
+): Promise<DesktopPreparedOptimization> {
   onProgress?.({ percent: 10, item: "Reading HWPX package" });
   let source: Buffer | undefined = (await readSupportedInput(input.filePath, { maxInputBytes: input.maxInputBytes })).data;
 
@@ -141,8 +144,22 @@ export async function optimizeDesktopFile(
   );
   source = undefined;
 
+  // A no-savings result can reuse the input buffer. Do not retain a cache view
+  // into an ArrayBuffer whose ownership is about to transfer to main.
+  for (const [path, cached] of cachedInputs) if (cached.data.buffer === result.output.buffer) cachedInputs.delete(path);
+  return result;
+}
+
+/** Main-side publication survives a terminated computation worker. */
+export async function saveDesktopOptimization(
+  input: DesktopOptimizeInput, result: DesktopPreparedOptimization,
+  onProgress?: (progress: DesktopProgress) => void,
+  saveOptions: Pick<SaveOptions, "signal" | "commitState" | "operations"> = {}
+): Promise<DesktopOptimizeResult> {
+  saveOptions.signal?.throwIfAborted();
+
   onProgress?.({ percent: 88, item: "Preparing output file" });
-  const outputPath = await nextOutputPath(
+  let outputPath = await nextOutputPath(
     input.filePath,
     input.outputDirectory,
     input.settings,
@@ -150,47 +167,64 @@ export async function optimizeDesktopFile(
   );
   await mkdir(dirname(outputPath), { recursive: true });
 
+  const claims = input.settings.preventOverwrite ? new PathClaimRegistry() : undefined;
   let reportPath: string | undefined;
-  let reportContent: string | undefined;
-  if (input.settings.saveReport) {
-    onProgress?.({ percent: 92, item: "Preparing JSON report" });
-    reportPath = `${outputPath}.report.json`;
-    reportContent = JSON.stringify(result.report, null, 2);
-  }
-  onProgress?.({ percent: 95, item: "Writing optimized document" });
-  await writeOptimizationArtifacts(outputPath, result.output, reportPath, reportContent);
+  try {
+    if (claims) outputPath = await claims.claim(outputPath, "dash");
+    let reportContent: string | undefined;
+    if (input.settings.saveReport) {
+      onProgress?.({ percent: 92, item: "Preparing JSON report" });
+      reportPath = `${outputPath}.report.json`;
+      await assertArtifactTargetIsWritable(reportPath);
+      if (claims) reportPath = await claims.claim(reportPath, "dash");
+      reportContent = JSON.stringify(result.report, null, 2);
+    }
+    await assertArtifactsDoNotTargetInputs(
+      [outputPath, ...(reportPath ? [reportPath] : [])],
+      [...protectedInputs.values(), ...(input.protectedInputs ?? [])]
+    );
+    onProgress?.({ percent: 95, item: "Writing optimized document" });
+    const output = Buffer.from(result.output.buffer, result.output.byteOffset, result.output.byteLength);
+    const saveWarnings = await writeOptimizationArtifacts(outputPath, output, reportPath, reportContent, claims, saveOptions);
+    result.report.warnings.push(...saveWarnings);
 
-  onProgress?.({ percent: 99, item: "Finalizing optimized document" });
-  return { outputPath, reportPath, report: result.report };
+    onProgress?.({ percent: 99, item: "Finalizing optimized document" });
+    return { outputPath, reportPath, report: result.report };
+  } finally { await claims?.releaseAll(); }
 }
 
 export async function writeDesktopBatchReport(input: DesktopBatchReportInput): Promise<{ reportPath: string }> {
   assertValidBatchReportInput(input);
   await mkdir(input.reportDirectory, { recursive: true });
   const requestedReportPath = join(input.reportDirectory, "batch-report.json");
-  const reportPath = input.settings.preventOverwrite ? await nextAvailableReportPath(requestedReportPath) : requestedReportPath;
-  const totalOriginalSize = input.items.reduce((sum, item) => sum + (item.originalSize ?? 0), 0);
-  const totalOptimizedSize = input.items.reduce(
-    (sum, item) => sum + (item.status === "done" ? item.optimizedSize ?? 0 : item.originalSize ?? 0),
-    0
-  );
-  const incompleteCount = input.items.filter((item) => item.status === "failed" || item.status === "cancelled").length;
-  const report = {
-    mode: input.mode,
-    generatedAt: new Date().toISOString(),
-    totals: {
-      done: input.items.filter((item) => item.status === "done").length,
-      failed: input.items.filter((item) => item.status === "failed").length,
-      cancelled: input.items.filter((item) => item.status === "cancelled").length,
-      savedBytes: input.items.reduce((sum, item) => sum + (item.savedBytes ?? 0), 0),
-      totalOriginalSize,
-      totalOptimizedSize,
-      ...createBatchTargetFields(totalOriginalSize, totalOptimizedSize, input.batchTargetBytes, incompleteCount)
-    },
-    items: input.items
-  };
-  await writeJsonArtifact(reportPath, JSON.stringify(report, null, 2));
-  return { reportPath };
+  const preferredReportPath = input.settings.preventOverwrite ? await nextAvailableReportPath(requestedReportPath) : requestedReportPath;
+  const claims = input.settings.preventOverwrite ? new PathClaimRegistry() : undefined;
+  try {
+    const reportPath = claims ? await claims.claim(preferredReportPath, "dash") : preferredReportPath;
+    await assertArtifactsDoNotTargetInputs([reportPath], [...protectedInputs.values()]);
+    const totalOriginalSize = input.items.reduce((sum, item) => sum + (item.originalSize ?? 0), 0);
+    const totalOptimizedSize = input.items.reduce(
+      (sum, item) => sum + (item.status === "done" ? item.optimizedSize ?? 0 : item.originalSize ?? 0),
+      0
+    );
+    const incompleteCount = input.items.filter((item) => item.status === "failed" || item.status === "cancelled").length;
+    const report = {
+      mode: input.mode,
+      generatedAt: new Date().toISOString(),
+      totals: {
+        done: input.items.filter((item) => item.status === "done").length,
+        failed: input.items.filter((item) => item.status === "failed").length,
+        cancelled: input.items.filter((item) => item.status === "cancelled").length,
+        savedBytes: input.items.reduce((sum, item) => sum + (item.savedBytes ?? 0), 0),
+        totalOriginalSize,
+        totalOptimizedSize,
+        ...createBatchTargetFields(totalOriginalSize, totalOptimizedSize, input.batchTargetBytes, incompleteCount)
+      },
+      items: input.items
+    };
+    await writeJsonArtifact(reportPath, JSON.stringify(report, null, 2), claims);
+    return { reportPath };
+  } finally { await claims?.releaseAll(); }
 }
 
 function assertValidBatchReportInput(input: DesktopBatchReportInput): void {
@@ -264,7 +298,7 @@ export async function verifyDesktopFile(
 export async function previewImageDiffs(
   originalPath: string,
   optimizedPath: string,
-  options: { maxItems?: number; maxInputBytes?: number } = {}
+  options: Omit<DesktopImagePreviewInput, "originalPath" | "optimizedPath"> = {}
 ): Promise<ImagePreviewPair[]> {
   const [originalStat, optimizedStat] = await Promise.all([stat(originalPath), stat(optimizedPath)]);
   const maxInputBytes = options.maxInputBytes ?? DEFAULT_MAX_IMAGE_PREVIEW_INPUT_BYTES;
@@ -285,7 +319,7 @@ export async function optimizeByMode(
   targetBytes?: number,
   onProgress?: (progress: DesktopProgress) => void,
   jpegQuality?: number
-): Promise<{ output: Buffer; report: OptimizationReport }> {
+): Promise<{ output: Buffer; report: CompletedOptimizationReport }> {
   const { optimizeHwpxBufferAggressive, optimizeHwpxBufferBalanced, optimizeHwpxBufferSafe } = await loadCoreModule();
   if (mode === "safe") return optimizeHwpxBufferSafe(input, { targetBytes, onProgress });
   const advanced = {
@@ -322,40 +356,6 @@ export async function nextOutputPath(
   throw new Error("Could not create a non-overwriting output path.");
 }
 
-export function persistentDesktopSettingsPatch(patch: DesktopSettingsPatch): Partial<DesktopSettings> {
-  const sanitized: Partial<DesktopSettings> = {};
-  if (isOptimizationMode(patch.defaultMode)) sanitized.defaultMode = patch.defaultMode;
-  if (patch.saveNextToOriginal === true) sanitized.saveNextToOriginal = true;
-  if (typeof patch.saveReport === "boolean") sanitized.saveReport = patch.saveReport;
-  if (typeof patch.preventOverwrite === "boolean") sanitized.preventOverwrite = patch.preventOverwrite;
-  if (typeof patch.showAggressiveWarning === "boolean") sanitized.showAggressiveWarning = patch.showAggressiveWarning;
-  if (isSubmissionLimit(patch.submissionLimit)) sanitized.submissionLimit = patch.submissionLimit;
-  if (isPreservationPreference(patch.preservationPreference)) sanitized.preservationPreference = patch.preservationPreference;
-  if (isBatchTargetMode(patch.batchTargetMode)) sanitized.batchTargetMode = patch.batchTargetMode;
-  return sanitized;
-}
-
-export function normalizeDesktopSettings(raw: Partial<DesktopSettings> | undefined): DesktopSettings {
-  const parsed = raw ?? {};
-  const migratedMode =
-    parsed.settingsVersion === undefined &&
-    parsed.defaultMode === "safe" &&
-    (parsed.preservationPreference ?? defaultDesktopSettings.preservationPreference) === "recommended"
-      ? "balanced"
-      : parsed.defaultMode;
-  const submissionLimit =
-    parsed.submissionLimit?.id === "mb41"
-      ? { id: "mb40" as const, customBytes: parsed.submissionLimit.customBytes }
-      : parsed.submissionLimit;
-  return {
-    ...defaultDesktopSettings,
-    ...parsed,
-    ...(submissionLimit ? { submissionLimit } : {}),
-    defaultMode: migratedMode ?? defaultDesktopSettings.defaultMode,
-    settingsVersion: defaultDesktopSettings.settingsVersion
-  };
-}
-
 export async function assertSupportedLocalInput(
   filePath: string,
   options: { maxInputBytes?: number } = {}
@@ -365,17 +365,36 @@ export async function assertSupportedLocalInput(
 
 async function readSupportedInput(filePath: string, options: { maxInputBytes?: number } = {}): Promise<CachedInput> {
   const snapshot = await statSupportedLocalInput(filePath, options);
+  const protectedInput = await registerDesktopInput(filePath);
+  const identity = `${protectedInput.dev}:${protectedInput.ino}:${protectedInput.birthtimeNs}:${protectedInput.ctimeNs}`;
   const cached = cachedInputs.get(filePath);
-  if (cached && cached.size === snapshot.size && cached.mtimeMs === snapshot.mtimeMs) {
+  if (cached && cached.size === snapshot.size && cached.mtimeMs === snapshot.mtimeMs && cached.identity === identity) {
     cachedInputs.delete(filePath);
     cachedInputs.set(filePath, cached);
     return cached;
   }
   const data = await readFile(filePath);
-  const input = { filePath, size: snapshot.size, mtimeMs: snapshot.mtimeMs, data };
+  const input = { filePath, size: snapshot.size, mtimeMs: snapshot.mtimeMs, data, identity };
   cachedInputs.set(filePath, input);
   pruneCachedInputs();
   return input;
+}
+
+async function assertArtifactsDoNotTargetInputs(paths: string[], inputs: DesktopProtectedInput[]): Promise<void> {
+  const inputPaths = new Set(inputs.map(input => resolve(input.filePath)));
+  const identities = new Set(inputs.map(input => `${input.dev}:${input.ino}:${input.birthtimeNs}`));
+  for (const path of paths) {
+    const canonicalName = join(await realpath(dirname(path)), basename(path));
+    let conflicts = inputPaths.has(canonicalName);
+    try {
+      const canonicalTarget = await realpath(path);
+      const info = await stat(canonicalTarget, { bigint: true });
+      conflicts ||= inputPaths.has(canonicalTarget) || identities.has(`${info.dev}:${info.ino}:${info.birthtimeNs}`);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    if (conflicts) throw new Error(`Refusing to overwrite an original selected input file: ${path}`);
+  }
 }
 
 function pruneCachedInputs(): void {
@@ -404,44 +423,25 @@ async function statSupportedLocalInput(
 }
 
 async function writeOptimizationArtifacts(
-  outputPath: string,
-  output: Buffer,
-  reportPath: string | undefined,
-  reportContent: string | undefined
-): Promise<void> {
-  const outputTmpPath = temporaryPath(outputPath);
-  const reportTmpPath = reportPath && reportContent ? temporaryPath(reportPath) : undefined;
-  let reportPromoted = false;
-  try {
-    await assertArtifactTargetIsWritable(outputPath);
-    if (reportPath) await assertArtifactTargetIsWritable(reportPath);
-    await writeFile(outputTmpPath, output);
-    if (reportPath && reportContent && reportTmpPath) {
-      await writeFile(reportTmpPath, reportContent);
-      await rename(reportTmpPath, reportPath);
-      reportPromoted = true;
-    }
-    await rename(outputTmpPath, outputPath);
-  } catch (error) {
-    await Promise.all([
-      rm(outputTmpPath, { force: true }),
-      reportTmpPath ? rm(reportTmpPath, { force: true }) : Promise.resolve(),
-      reportPromoted && reportPath ? rm(reportPath, { force: true }) : Promise.resolve()
-    ]);
-    throw error;
-  }
+  outputPath: string, output: Buffer, reportPath: string | undefined, reportContent: string | undefined,
+  claims?: PathClaimRegistry,
+  options: Pick<SaveOptions, "signal" | "commitState" | "operations"> = {}
+): Promise<string[]> {
+  return writeArtifactSet([
+    { target: outputPath, data: output },
+    ...(reportPath && reportContent ? [{ target: reportPath, data: reportContent }] : [])
+  ], { ...options, ...(claims ? { claims } : { overwrite: true }) });
 }
 
-async function writeJsonArtifact(path: string, content: string): Promise<void> {
+async function writeJsonArtifact(path: string, content: string, claims?: PathClaimRegistry): Promise<void> {
   const tmpPath = temporaryPath(path);
+  let stage: OwnedArtifact | undefined;
   try {
-    await assertArtifactTargetIsWritable(path);
-    await writeFile(tmpPath, content);
-    await rename(tmpPath, path);
-  } catch (error) {
-    await rm(tmpPath, { force: true });
-    throw error;
-  }
+    if (!claims) await assertArtifactTargetIsWritable(path);
+    stage = await writeStagedFile(tmpPath, content);
+    if (claims) await claims.publish(tmpPath, path);
+    else await rename(tmpPath, path);
+  } finally { if (stage) await removeOwnedArtifact(stage); }
 }
 
 async function nextAvailableReportPath(path: string): Promise<string> {
@@ -479,36 +479,4 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function isOptimizationMode(value: unknown): value is OptimizationMode {
-  return value === "safe" || value === "balanced" || value === "aggressive";
-}
-
-function isSubmissionLimit(value: unknown): value is SubmissionLimit {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as { id?: unknown; customBytes?: unknown };
-  if (
-    candidate.id !== "none" &&
-    candidate.id !== "mb5" &&
-    candidate.id !== "mb10" &&
-    candidate.id !== "mb20" &&
-    candidate.id !== "mb30" &&
-    candidate.id !== "mb40" &&
-    candidate.id !== "mb41" &&
-    candidate.id !== "mb50" &&
-    candidate.id !== "mb100" &&
-    candidate.id !== "custom"
-  ) {
-    return false;
-  }
-  return candidate.customBytes === undefined || typeof candidate.customBytes === "number";
-}
-
-function isPreservationPreference(value: unknown): value is PreservationPreference {
-  return value === "preserve" || value === "recommended" || value === "size";
-}
-
-function isBatchTargetMode(value: unknown): value is BatchTargetMode {
-  return value === "aggregate" || value === "per-file";
 }

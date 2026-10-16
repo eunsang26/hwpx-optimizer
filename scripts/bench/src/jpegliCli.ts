@@ -6,6 +6,13 @@ import { spawn } from "node:child_process";
 import type { RawImage } from "./types.js";
 import { JPEGLI_ENV } from "./types.js";
 
+export class JpegliToolMissingError extends Error {
+  constructor(message = "cjpegli CLI not found") {
+    super(message);
+    this.name = "JpegliToolMissingError";
+  }
+}
+
 /** cjpegli argv: INPUT OUTPUT -q QUALITY (--quiet). See libjpegli-tools man page. */
 export function resolveJpegliBin(): string | null {
   const fromEnv = process.env[JPEGLI_ENV]?.trim();
@@ -41,7 +48,10 @@ export async function encodeRawWithJpegli(
       child.stderr?.on("data", (chunk: Buffer) => {
         stderr += chunk.toString();
       });
-      child.on("error", reject);
+      child.on("error", (error: NodeJS.ErrnoException) => {
+        reject(error.code === "ENOENT" || error.code === "EACCES"
+          ? new JpegliToolMissingError(error.message) : error);
+      });
       child.on("close", (code) => {
         if (code === 0) resolve();
         else reject(new Error(`cjpegli exited ${code}: ${stderr.trim()}`));

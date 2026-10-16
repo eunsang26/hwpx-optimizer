@@ -1,88 +1,55 @@
-import type { HwpxEntry, HwpxPackage, OptimizationOpportunity } from "./types.js";
+import { deflateRawSync } from "node:zlib";
+import type { HwpxEntry, HwpxPackage, OptimizationOpportunity, PackageSizeEstimate } from "./types.js";
+import { evaluatePackageSizeEstimate } from "./planning.js";
+import { minifyXmlBuffer } from "./xmlMinify.js";
+import { stripJpegMetadataSegments } from "./optimizer.js";
+import { cleanShapeComments } from "./opportunities.js";
 
-export type PackageSizeProjectionOptions = {
-  /** Aggressive palette PNGs deflate better inside ZIP than photographic PNGs. */
-  palettePng?: boolean;
-};
+export type PackageSizeProjectionOptions = { palettePng?: boolean };
 
-/**
- * Project final ZIP package bytes from measured/estimated per-entry after sizes.
- *
- * Opportunity savings are entry (uncompressed) deltas. Subtracting them from the
- * original package size is wrong when BMP→PNG changes compressibility. This
- * rebuilds an uncompressed layout then applies format-aware DEFLATE factors.
+/** Preserve the measured source ZIP baseline and change only known candidate payloads.
+ * Deep encoded candidates still do not measure final ZIP headers, combined XML
+ * rewrites, quality rollback, target search, or final no-growth fallback.
  */
-export function projectPackageSizeFromOpportunities(
-  pkg: HwpxPackage,
-  opportunities: readonly OptimizationOpportunity[],
-  options: PackageSizeProjectionOptions = {}
-): number {
-  const byTarget = pickBestOpportunityPerTarget(opportunities);
-  const palettePng = Boolean(options.palettePng);
-  let packed = 0;
-
-  for (const entry of pkg.entries) {
-    const opportunity = byTarget.get(entry.path);
-    if (opportunity) {
-      packed += packEntryBytes(opportunity.afterSize, projectedKind(entry, opportunity), palettePng);
-      continue;
-    }
-    packed += packEntryBytes(entry.size, entryKindForPack(entry), palettePng);
-  }
-
-  // ZIP central directory / local headers — small but keeps tiny packages honest.
-  const overhead = 64 + pkg.entries.length * 80;
-  return Math.max(0, Math.round(packed + overhead));
-}
-
-function pickBestOpportunityPerTarget(
-  opportunities: readonly OptimizationOpportunity[]
-): Map<string, OptimizationOpportunity> {
-  const byTarget = new Map<string, OptimizationOpportunity>();
+export function createPackageSizeEstimate(pkg: HwpxPackage, opportunities: readonly OptimizationOpportunity[]): PackageSizeEstimate {
+  const sourceZip = pkg.sourceSize !== undefined;
+  const beforeSizes = new Map(pkg.entries.map(entry => [entry.path,
+    entry.compressedSize ?? (sourceZip ? 0 : deflateRawSync(entry.data, { level: 9 }).length)]));
+  const overhead = sourceZip
+    ? Math.max(0, pkg.sourceSize! - [...beforeSizes.values()].reduce((sum, size) => sum + size, 0))
+    : 22 + pkg.entries.reduce((sum, entry) => sum + 76 + 2 * Buffer.byteLength(entry.path), 0);
+  const originalSize = pkg.sourceSize ?? overhead + [...beforeSizes.values()].reduce((sum, size) => sum + size, 0);
+  const entries = new Map(pkg.entries.map(entry => [entry.path, entry]));
+  const adjustments: PackageSizeEstimate["adjustments"] = [];
   for (const opportunity of opportunities) {
-    const previous = byTarget.get(opportunity.target);
-    if (!previous || opportunity.estimatedSavingBytes > previous.estimatedSavingBytes) {
-      byTarget.set(opportunity.target, opportunity);
-    }
+    const entry = entries.get(opportunity.target);
+    // Unicode extra-field names may not match the raw directory. Remain
+    // conservative instead of attributing an unrelated compressed record.
+    if (!entry || (sourceZip && entry.compressedSize === undefined)) continue;
+    const before = beforeSizes.get(entry.path)!;
+    const after = candidateCompressedBytes(entry, opportunity);
+    adjustments.push({ target: entry.path, action: opportunity.action,
+      savingBytes: before - after,
+      jpegBytes: opportunity.action === "resize-jpeg" ? after : 0 });
   }
-  return byTarget;
+  return { basis: sourceZip ? "source-zip" : "entry-model", originalSize,
+    minimumSize: Math.min(originalSize, Math.max(22, overhead)), adjustments };
 }
 
-function projectedKind(
-  entry: HwpxEntry,
-  opportunity: OptimizationOpportunity
-): "xml" | "jpeg" | "png" | "raw" | "other" {
-  if (
-    opportunity.action === "convert-bmp-to-png" ||
-    opportunity.action === "convert-tiff-to-png" ||
-    opportunity.action === "resize-png" ||
-    opportunity.action === "optimize-png"
-  ) {
-    return "png";
-  }
-  if (opportunity.action === "resize-jpeg" || opportunity.action === "strip-metadata") {
-    return "jpeg";
-  }
-  return entryKindForPack(entry);
+export function projectPackageSizeFromOpportunities(pkg: HwpxPackage, opportunities: readonly OptimizationOpportunity[], _options: PackageSizeProjectionOptions = {}): number {
+  return evaluatePackageSizeEstimate(createPackageSizeEstimate(pkg, opportunities)).size;
 }
 
-function entryKindForPack(entry: HwpxEntry): "xml" | "jpeg" | "png" | "raw" | "other" {
-  if (entry.kind === "xml" || /\.xml$/i.test(entry.path)) return "xml";
-  if (/\.jpe?g$/i.test(entry.path)) return "jpeg";
-  if (/\.png$/i.test(entry.path)) return "png";
-  if (/\.bmp$/i.test(entry.path) || /\.tif{1,2}$/i.test(entry.path)) return "raw";
-  return "other";
-}
-
-function packEntryBytes(
-  size: number,
-  kind: "xml" | "jpeg" | "png" | "raw" | "other",
-  palettePng: boolean
-): number {
-  if (size <= 0) return 0;
-  if (kind === "xml") return size * 0.34;
-  if (kind === "jpeg") return size * 0.985;
-  if (kind === "png") return size * (palettePng ? 0.72 : 0.97);
-  if (kind === "raw") return size * 0.55;
-  return size * 0.9;
+function candidateCompressedBytes(entry: HwpxEntry, opportunity: OptimizationOpportunity): number {
+  if (opportunity.afterSize === 0) return 0; // Header/manifest savings are intentionally not promised.
+  if (opportunity.compressedAfterSize !== undefined) return opportunity.compressedAfterSize;
+  let candidate: Buffer | undefined;
+  if (opportunity.action === "minify-xml") candidate = minifyXmlBuffer(entry.data);
+  if (opportunity.action === "strip-metadata") candidate = stripJpegMetadataSegments(entry.data);
+  if (opportunity.action === "clean-shape-comment") candidate = Buffer.from(cleanShapeComments(entry.data.toString("utf8")));
+  if (candidate) return deflateRawSync(candidate, { level: 9 }).length;
+  // Header-only analysis cannot measure image compressibility. Encoded JPEG/PNG
+  // usually change little in ZIP; a conservative near-STORE estimate also avoids
+  // counting large raw BMP savings against an already highly compressed source.
+  return Math.max(1, Math.round(opportunity.afterSize * 0.995));
 }

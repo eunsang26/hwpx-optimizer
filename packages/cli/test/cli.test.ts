@@ -248,7 +248,8 @@ describe("runCli", () => {
     const text = renderHumanReport("/x/input.hwpx", {
       ...minimalReport,
       originalSize: 20 * 1024 * 1024,
-      optimizedSize: 4 * 1024 * 1024,
+      kind: "analysis",
+      estimatedSize: 4 * 1024 * 1024,
       opportunityGroups: [
         {
           action: "convert-bmp-to-png",
@@ -573,6 +574,10 @@ describe("runCli", () => {
     const text = await readFile(reportPath, "utf8");
     expect(text).toContain("결과 해석:");
     expect(text).toContain("가장 큰 절감 후보: clean-shape-comment");
+    expect(text).toContain("Analysis: quick");
+    expect(text).toContain("Image candidate sizes: estimated");
+    expect(text).toContain("Same-visual duplicate image groups: not checked");
+    expect(text).toContain("Near-duplicate image candidates: not checked");
   });
 
   it("accepts --report as an alias for human-readable report output", async () => {
@@ -722,6 +727,24 @@ describe("runCli", () => {
     );
   });
 
+  it("reports the supported worker cap while preserving the requested count", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-worker-cap-")), inputDir = join(dir, "docs"), outDir = join(dir, "out");
+    await mkdir(inputDir);
+    const source = await createHwpxFixture({ entries: {} });
+    for (let index = 0; index < 5; index += 1) await writeFile(join(inputDir, `${index}.hwpx`), source);
+    expect(await runCli(["batch", inputDir, "--out", outDir, "--jobs", "12"])).toBe(0);
+    const report = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8"));
+    expect(report).toMatchObject({ jobs: 4, jobsEffective: 4, jobsRequested: 12 });
+    expect(report.totals.failed).toBe(0); expect(report.results).toHaveLength(5);
+  }, 15_000); // Four native-image workers compete with the full suite during startup.
+  it("reports zero effective workers when there are no input documents", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hwpx-worker-empty-"));
+    const outDir = join(dir, "out");
+    expect(await runCli(["batch", dir, "--out", outDir, "--jobs", "12"])).toBe(0);
+    const report = JSON.parse(await readFile(join(outDir, "batch-report.json"), "utf8"));
+    expect(report).toMatchObject({ jobs: 0, jobsEffective: 0, jobsRequested: 12 });
+    expect(report.results).toEqual([]);
+  });
   it("records the configured batch worker limit", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const inputDir = join(dir, "docs");
@@ -968,12 +991,7 @@ describe("runCli", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("startup sweep reaps stale 0-byte claim placeholders as well as leftover temp files, but leaves unrelated files alone", async () => {
-    // Finding 2a: an interrupted claim loop can leave a real 0-byte final-named
-    // file (created via `wx`), not just `*.tmp`; the sweep must remove both.
-    // Fix B: the sweep must not delete every 0-byte file in the out dir -- only
-    // files matching this tool's own output naming (or `*.tmp`) are eligible, so
-    // an unrelated 0-byte file left in a shared/input --out directory survives.
+  it("preserves unowned temp files and zero-byte files even when their names look like tool outputs", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const outDir = join(dir, "out");
     await mkdir(outDir, { recursive: true });
@@ -983,19 +1001,13 @@ describe("runCli", () => {
 
     await runBatch(dir, { mode: "safe", out: outDir });
 
-    await expect(readFile(join(outDir, "stale.optimized.hwpx"))).rejects.toThrow();
-    await expect(readFile(join(outDir, "leftover.tmp"))).rejects.toThrow();
+    await expect(readFile(join(outDir, "stale.optimized.hwpx"))).resolves.toEqual(Buffer.alloc(0));
+    await expect(readFile(join(outDir, "leftover.tmp"), "utf8")).resolves.toBe("leftover");
     await expect(readFile(join(outDir, "keep-me.txt"))).resolves.toBeDefined();
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("keeps a promoted output in --overwrite mode when only the final report rename fails, cleaning just the temp report", async () => {
-    // Fix A: previously commitBatchJob unconditionally rolled the promoted output
-    // back to its temp path on report-rename failure, and cleanupFailedJob then
-    // deleted that temp -- in --overwrite mode the first rename already atomically
-    // replaced whatever was at the final path, so this sequence destroyed the
-    // freshly-written output. Per spec (SDD §7) --overwrite has a weaker
-    // guarantee: keep the new output, only the report may end up stale/missing.
+  it("does not publish a new output when the paired report destination is a directory", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const outDir = join(dir, "out");
     await mkdir(outDir, { recursive: true });
@@ -1006,9 +1018,7 @@ describe("runCli", () => {
 
     expect(summary.failed).toBe(1);
     expect(summary.optimized).toBe(0);
-    const outputBuf = await readFile(join(outDir, "foo.optimized.hwpx"));
-    expect(outputBuf.length).toBeGreaterThan(0);
-    await expect(JSZip.loadAsync(outputBuf)).resolves.toBeDefined();
+    await expect(readFile(join(outDir, "foo.optimized.hwpx"))).rejects.toMatchObject({ code: "ENOENT" });
     const reportStats = await stat(join(outDir, "foo.optimized.hwpx.report.json"));
     expect(reportStats.isDirectory()).toBe(true);
     const entries = await readdir(outDir);
@@ -1016,10 +1026,7 @@ describe("runCli", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("does not delete a pre-existing --overwrite output when only the report rename fails afterward", async () => {
-    // Fix A (data loss): seed a real pre-existing output, then force the report
-    // rename to fail after the output rename has already succeeded (atomically
-    // replacing the pre-existing file). The user must not be left with nothing.
+  it("preserves the previous output when the paired report cannot be saved", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hwpx-opt-"));
     const outDir = join(dir, "out");
     await mkdir(outDir, { recursive: true });
@@ -1032,12 +1039,8 @@ describe("runCli", () => {
 
     expect(summary.failed).toBe(1);
     expect(summary.optimized).toBe(0);
-    const outputBuf = await readFile(join(outDir, "foo.optimized.hwpx"));
-    expect(outputBuf.length).toBeGreaterThan(0);
-    await expect(JSZip.loadAsync(outputBuf)).resolves.toBeDefined();
-    // It should be the freshly optimized output (the first rename already
-    // replaced the stale pre-existing file), not just "some bytes".
-    expect(outputBuf.equals(preExisting)).toBe(false);
+    expect(await readFile(join(outDir, "foo.optimized.hwpx"))).toEqual(preExisting);
+    expect((await readdir(outDir)).some((name) => name.startsWith(".hwpx-save-"))).toBe(false);
     await rm(dir, { recursive: true, force: true });
   });
 });

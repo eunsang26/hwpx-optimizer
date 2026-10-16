@@ -23,3 +23,10 @@ for (const relativePath of requiredFiles) {
 }
 
 console.log("Verified unpacked Windows sharp runtime files.");
+
+for (const name of ["ko.pak", "en-US.pak"]) {
+  const file = join(process.cwd(), "release", "win-unpacked", "locales", name);
+  const info = await stat(file);
+  if (!info.isFile() || info.size <= 0) throw new Error(`Missing or empty Windows startup locale: ${name}`);
+}
+console.log("Verified Windows startup locales: ko.pak and en-US.pak.");

@@ -9,6 +9,11 @@
       "types": "./dist/index.d.ts",
       "development": "./src/index.ts",
       "import": "./dist/index.js"
+    },
+    "./planning": {
+      "types": "./dist/planning.d.ts",
+      "development": "./src/planning.ts",
+      "import": "./dist/planning.js"
     }
   }
 }

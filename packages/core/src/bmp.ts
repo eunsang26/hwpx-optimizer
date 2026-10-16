@@ -1,3 +1,5 @@
+import { imagePixelLimitReason } from "./resourceLimits.js";
+
 export type DecodedBmp = {
   width: number;
   height: number;
@@ -46,13 +48,14 @@ export function readBmpInfo(data: Buffer): BmpInfo | null {
     height: header.height,
     bitsPerPixel: header.bitsPerPixel,
     compression: header.compression,
-    supported: isSupportedBmpVariant(header)
+    supported: isSupportedBmpVariant(header) && !hasUnsupportedAlpha(data, header)
   };
 }
 
 export function decodeBmp(data: Buffer): DecodedBmp | null {
   const header = parseBmpHeader(data);
-  if (!header) return null;
+  if (!header || imagePixelLimitReason(header.width, header.height)) return null;
+  if (hasUnsupportedAlpha(data, header)) return null;
 
   if (header.compression === BI_RGB) {
     if (INDEXED_BITS_PER_PIXEL.has(header.bitsPerPixel)) {
@@ -100,7 +103,7 @@ function parseBmpHeader(data: Buffer): BmpHeader | null {
 
   const pixelOffset = data.readUInt32LE(10);
   const dibHeaderSize = data.readUInt32LE(14);
-  if (dibHeaderSize < 40) return null;
+  if (dibHeaderSize < 40 || 14 + dibHeaderSize > data.length) return null;
 
   const width = data.readInt32LE(18);
   const rawHeight = data.readInt32LE(22);
@@ -122,15 +125,22 @@ function parseBmpHeader(data: Buffer): BmpHeader | null {
   };
 }
 
+function hasUnsupportedAlpha(data: Buffer, header: BmpHeader): boolean {
+  // Legacy 32-bit BI_RGB has ambiguous alpha semantics. Preserve its bytes
+  // instead of guessing whether the fourth byte is padding or transparency.
+  if (header.bitsPerPixel === 32 && header.compression === BI_RGB) return true;
+  if (header.dibHeaderSize >= 56 && data.readUInt32LE(14 + 52) !== 0) return true;
+  return header.dibHeaderSize === 40 && header.compression === BI_BITFIELDS &&
+    header.pixelOffset >= 70 && data.length >= 70 && data.readUInt32LE(66) !== 0;
+}
+
 function decodeTrueColorBmp(data: Buffer, header: BmpHeader): DecodedBmp | null {
   const { width, height, topDown, bitsPerPixel, pixelOffset } = header;
   const sourceChannels = bitsPerPixel / 8;
   const rowSize = Math.ceil((width * sourceChannels) / 4) * 4;
   if (pixelOffset + rowSize * height > data.length) return null;
 
-  // 32-bit BMPs carry a BGRA byte order; we intentionally drop the alpha byte
-  // and emit a 24-bit RGB raw buffer so downstream PNG encoding goes through
-  // a single shared path. HWP/HWPX BMPs in our corpus do not rely on alpha.
+  // Alpha-bearing/ambiguous variants are excluded before this RGB decoder.
   const output = Buffer.alloc(width * height * 3);
   for (let y = 0; y < height; y += 1) {
     const sourceY = topDown ? y : height - 1 - y;

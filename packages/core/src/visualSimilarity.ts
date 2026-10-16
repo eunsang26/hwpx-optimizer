@@ -1,5 +1,7 @@
+import { SHARP_INPUT_OPTIONS } from "./resourceLimits.js";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
+import { readImageMetadata } from "./imageMetadata.js";
 import { getDecodedImage } from "./decodedImage.js";
 
 const HASH_SIZE = 8;
@@ -37,7 +39,8 @@ export type DecodedPixelHash = {
  */
 export async function computeAverageHash(data: Buffer): Promise<AverageHash | null> {
   try {
-    const raw = await sharp(data)
+    if ((await readImageMetadata("", data)).preservationReason) return null;
+    const raw = await sharp(data, SHARP_INPUT_OPTIONS)
       .removeAlpha()
       .grayscale()
       .resize(HASH_SIZE, HASH_SIZE, { fit: "fill", kernel: "lanczos3" })
@@ -83,12 +86,31 @@ export async function computeDecodedPixelHash(data: Buffer): Promise<DecodedPixe
 }
 
 function hashDecodedPixels(input: { data: Buffer; width: number; height: number; channels: number }): DecodedPixelHash {
-  const descriptor = `${input.width}x${input.height}x${input.channels}`;
-  const hash = createHash("sha256").update(descriptor).update("\0").update(input.data).digest("hex");
+  // Fully opaque RGBA and RGB render identically. Canonicalize just the hash,
+  // retaining RGBA in the decode cache used by image transformations.
+  let opaque = input.channels === 4;
+  for (let offset = 3; opaque && offset < input.data.length; offset += 4) {
+    if (input.data[offset] !== 255) opaque = false;
+  }
+  const channels = opaque ? 3 : input.channels;
+  const descriptor = `${input.width}x${input.height}x${channels}`;
+  const digest = createHash("sha256").update(descriptor).update("\0");
+  if (opaque) {
+    const chunk = Buffer.alloc(12_288);
+    let used = 0;
+    for (let offset = 0; offset < input.data.length; offset += 4) {
+      chunk[used++] = input.data[offset]!;
+      chunk[used++] = input.data[offset + 1]!;
+      chunk[used++] = input.data[offset + 2]!;
+      if (used === chunk.length) { digest.update(chunk); used = 0; }
+    }
+    if (used) digest.update(chunk.subarray(0, used));
+  } else digest.update(input.data);
+  const hash = digest.digest("hex");
   return {
     width: input.width,
     height: input.height,
-    channels: input.channels,
+    channels,
     hash
   };
 }

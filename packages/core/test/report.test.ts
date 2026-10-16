@@ -38,11 +38,16 @@ describe("optimization reports", () => {
           afterSize: 1_000
         })
       ],
-      { targetBytes: 8_500 }
+      { targetBytes: 8_500, projectedOptimizedSize: 8_000 }
     );
 
     expect(report.targetBytes).toBe(8_500);
-    expect(report.targetStatus).toBe("met");
+    expect(report.estimatedTargetStatus).toBe("met");
+    expect(report.kind).toBe("analysis");
+    expect(report.estimatedSize).toBe(8_000);
+    expect(report.optimizedSize).toBeUndefined();
+    expect(report.savedBytes).toBeUndefined();
+    expect(report.targetStatus).toBeUndefined();
     expect(report.targetMissReason).toBeUndefined();
     expect(report.nearDuplicateImages).toHaveLength(1);
     expect(report.resourceDiagnostics).toHaveLength(1);

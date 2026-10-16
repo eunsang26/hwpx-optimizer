@@ -1,3 +1,4 @@
+import { withDecodedImageCache } from "./decodedImage.js";
 import { analyzeHwpxPackage } from "./analyzer.js";
 import { applyBalancedOptimizationPlan } from "./balancedOptimizer.js";
 import { applySafeOptimizationPlan } from "./optimizer.js";
@@ -12,14 +13,15 @@ import {
 import type { ImageOptimizationProfile } from "./opportunities.js";
 import { nowMs, PerformanceTimer } from "./performance.js";
 import { createSafeOptimizationPlan } from "./planner.js";
-import { projectPackageSizeFromOpportunities } from "./projectPackageSize.js";
+import { createPackageSizeEstimate } from "./projectPackageSize.js";
+import { evaluatePackageSizeEstimate } from "./planning.js";
 import { createAnalysisReport, createOptimizationReport } from "./report.js";
 import { buildReferenceGraph } from "./referenceGraph.js";
 import { readHwpxPackage } from "./reader.js";
 import { detectStructuralOptimizationOpportunities } from "./structuralOpportunities.js";
 import { verifyHwpxOutput } from "./verifier.js";
 import { writeHwpxPackage } from "./writer.js";
-import type { AppliedAction, HwpxPackage, OptimizationOpportunity, OptimizationReport, PackageAnalysis } from "./types.js";
+import type { AppliedAction, HwpxPackage, OptimizationOpportunity, OptimizationReport, AnalysisReport, CompletedOptimizationReport, PackageAnalysis, AnalysisMode } from "./types.js";
 
 export type OptimizeProgress = { percent: number; item: string };
 
@@ -42,7 +44,6 @@ type SafeOptimizeOptions = {
   analysisMode?: AnalysisMode;
   imageConcurrency?: number;
 };
-type AnalysisMode = "quick" | "deep";
 
 /** Aggressive auto runs at the JPEG quality floor — project sizes with that encode. */
 const aggressiveProjectionProfile: ImageOptimizationProfile = {
@@ -56,43 +57,74 @@ const aggressiveProjectionProfile: ImageOptimizationProfile = {
 export async function analyzeHwpxBuffer(
   input: Buffer,
   options: { targetBytes?: number; analysisMode?: AnalysisMode; imageConcurrency?: number } = {}
-): Promise<OptimizationReport> {
+): Promise<AnalysisReport> {
+  return withDecodedImageCache(() => analyzeHwpxBufferInCache(input, options));
+}
+
+async function analyzeHwpxBufferInCache(
+  input: Buffer,
+  options: { targetBytes?: number; analysisMode?: AnalysisMode; imageConcurrency?: number } = {}
+): Promise<AnalysisReport> {
   const timer = new PerformanceTimer();
   const targetBytes = normalizeTargetBytes(options.targetBytes);
+  const analysisMode = options.analysisMode ?? "quick";
   const pkg = await timer.measure("read", () => readHwpxPackage(input));
   const analysis = await timer.measure("analyze", () =>
-    analyzeHwpxPackage(pkg, { ...analysisOptions(options.analysisMode ?? "quick"), imageConcurrency: options.imageConcurrency })
+    analyzeHwpxPackage(pkg, { ...analysisOptions(analysisMode), imageConcurrency: options.imageConcurrency })
   );
-  const duplicateMode = options.analysisMode === "quick" ? "byte" : "visual";
+  const duplicateMode: "byte" | "visual" = analysisMode === "quick" ? "byte" : "visual";
   const opportunityOptions = {
-    duplicateMode: duplicateMode as "byte" | "visual",
+    duplicateMode,
     imageConcurrency: options.imageConcurrency
   };
-  // Measure real encode sizes (exact) so UI projections match optimize output.
+  const detectImageOpportunities = analysisMode === "deep"
+    ? detectOptimizationOpportunities : detectEstimatedOptimizationOpportunities;
+  // Quick inspects headers and byte hashes; deep measures candidate encodes.
   const structuralOpportunities = await timer.measure("opportunities-structure", () =>
     detectStructuralOptimizationOpportunities(pkg, analysis, {
-      imageConcurrency: options.imageConcurrency
+      duplicateMode, imageConcurrency: options.imageConcurrency
     })
   );
   const opportunities = [
     ...structuralOpportunities,
     ...await timer.measure("opportunities", () =>
-      detectOptimizationOpportunities(pkg, balancedImageProfile, opportunityOptions)
+      detectImageOpportunities(pkg, balancedImageProfile, opportunityOptions)
     )
   ];
   const aggressiveOpportunities = [
     ...structuralOpportunities,
     ...await timer.measure("opportunities-aggressive", () =>
-      detectOptimizationOpportunities(pkg, aggressiveProjectionProfile, opportunityOptions)
+      detectImageOpportunities(pkg, aggressiveProjectionProfile, opportunityOptions)
     )
   ];
-  const projectedOptimizedSize = projectPackageSizeFromOpportunities(pkg, opportunities);
-  const aggressiveProjectedOptimizedSize = projectPackageSizeFromOpportunities(pkg, aggressiveOpportunities, {
-    palettePng: true
-  });
+  // Safe only executes lossless structural changes; do not borrow aggressive
+  // palette/resize savings for a different preservation policy.
+  const safeOpportunities = structuralOpportunities.filter(o => o.defaultEnabledIn.includes("safe"));
+  safeOpportunities.push(...await timer.measure("opportunities-safe", () =>
+    detectImageOpportunities(pkg, { ...balancedImageProfile, maxEdge: Number.MAX_SAFE_INTEGER, displayScale: Number.MAX_SAFE_INTEGER },
+      { ...opportunityOptions, safeOnly: true })
+  ));
+  const estimates = {
+    safe: createPackageSizeEstimate(pkg, safeOpportunities),
+    balanced: createPackageSizeEstimate(pkg, [...opportunities, ...safeOpportunities]),
+    aggressive: createPackageSizeEstimate(pkg, aggressiveOpportunities)
+  };
+  const projectedOptimizedSize = evaluatePackageSizeEstimate(estimates.balanced).size;
+  const aggressiveProjectedOptimizedSize = evaluatePackageSizeEstimate(estimates.aggressive).size;
+  const reportOpportunityMap = new Map(opportunities.map(opportunity => [opportunity.id, opportunity]));
+  for (const opportunity of safeOpportunities) {
+    const previous = reportOpportunityMap.get(opportunity.id);
+    reportOpportunityMap.set(opportunity.id, previous ? {
+      ...previous, defaultEnabledIn: [...new Set([...previous.defaultEnabledIn, ...opportunity.defaultEnabledIn])]
+    } : opportunity);
+  }
+  const reportOpportunities = [...reportOpportunityMap.values()];
   return createReportWithPerformance(timer, () =>
-    createAnalysisReport(analysis, input.byteLength, opportunities, {
+    createAnalysisReport(analysis, input.byteLength, reportOpportunities, {
+      analysis: { mode: analysisMode, imageSizes: analysisMode === "deep" ? "encoded" : "estimated",
+        visualDuplicatesChecked: analysisMode === "deep" },
       targetBytes,
+      estimates,
       projectedOptimizedSize,
       aggressiveProjectedOptimizedSize
     })
@@ -101,7 +133,14 @@ export async function analyzeHwpxBuffer(
 
 export async function optimizeHwpxBufferSafe(input: Buffer, options: SafeOptimizeOptions = {}): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
+}> {
+  return withDecodedImageCache(() => optimizeHwpxBufferSafeInCache(input, options));
+}
+
+async function optimizeHwpxBufferSafeInCache(input: Buffer, options: SafeOptimizeOptions = {}): Promise<{
+  output: Buffer;
+  report: CompletedOptimizationReport;
 }> {
   const targetBytes = normalizeTargetBytes(options.targetBytes);
   const timer = new PerformanceTimer();
@@ -178,14 +217,14 @@ export async function optimizeHwpxBufferBalanced(
   options: OptimizeOptions = {}
 ): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
-  return optimizeHwpxBufferAdvanced(input, {
+  return withDecodedImageCache(() => optimizeHwpxBufferAdvanced(input, {
     options,
     mode: "balanced",
     profile: balancedImageProfile,
     rollbackWarning: "Balanced mode did not produce a smaller file; original package bytes returned."
-  });
+  }));
 }
 
 async function optimizeHwpxBufferAdvanced(
@@ -199,7 +238,7 @@ async function optimizeHwpxBufferAdvanced(
   }
 ): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
   const options = {
     ...settings.options,
@@ -271,7 +310,7 @@ async function optimizeHwpxBufferAdvanced(
   // balanced default (88). Try the balanced default first to short-circuit common cases.
   const baseQuality = clampJpegQuality(settings.profile.jpegQuality);
   const baseCandidate = await runProfile(profileForJpegQuality(settings.profile, baseQuality, "balanced"));
-  let best: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined;
+  let best: { output: Buffer; report: CompletedOptimizationReport; targetMet: boolean } | undefined;
   if (baseCandidate) {
     best = chooseBestCandidate(undefined, baseCandidate, options.targetBytes);
   }
@@ -317,7 +356,7 @@ async function optimizeHwpxBufferAdvanced(
 
 function normalizeTargetBytes(value: number | undefined): number | undefined {
   if (value === undefined) return undefined;
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!Number.isSafeInteger(Math.floor(value)) || Math.floor(value) <= 0) {
     throw new Error("targetBytes must be a positive number.");
   }
   return Math.floor(value);
@@ -351,7 +390,7 @@ async function optimizeHwpxBufferWithProfile(
   }
 ): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
   const pkg = settings.pkg;
   const analysis = settings.analysis;
@@ -425,7 +464,8 @@ async function optimizeHwpxBufferWithProfile(
       mode: settings.mode,
       originalPackage: pkg,
       originalAnalysis: analysis,
-      imageConcurrency: settings.options.imageConcurrency
+      imageConcurrency: settings.options.imageConcurrency,
+      resourceMappings: optimized.resourceMappings
     })
   );
 
@@ -464,6 +504,7 @@ async function optimizeHwpxBufferWithProfile(
     opportunities: exactOpportunities.length > 0 ? exactOpportunities : opportunities,
     targetBytes: settings.options.targetBytes,
     plannedJpegQuality: settings.profile.jpegQuality,
+    resourceMappings: optimized.resourceMappings,
     warnings: combinedWarnings.length > 0 ? combinedWarnings : undefined
   }));
   return { output, report };
@@ -499,10 +540,10 @@ function writeCompressionLevel(targetBytes: number | undefined): number {
 }
 
 function chooseBestCandidate(
-  previous: { output: Buffer; report: OptimizationReport; targetMet: boolean } | undefined,
-  candidate: { output: Buffer; report: OptimizationReport },
+  previous: { output: Buffer; report: CompletedOptimizationReport; targetMet: boolean } | undefined,
+  candidate: { output: Buffer; report: CompletedOptimizationReport },
   targetBytes: number | undefined
-): { output: Buffer; report: OptimizationReport; targetMet: boolean } {
+): { output: Buffer; report: CompletedOptimizationReport; targetMet: boolean } {
   const targetMet = candidateMeetsTarget(candidate.output.byteLength, targetBytes);
   const current = { ...candidate, targetMet };
   if (!previous) return current;
@@ -716,13 +757,13 @@ export async function optimizeHwpxBufferAggressive(
   options: OptimizeOptions = {}
 ): Promise<{
   output: Buffer;
-  report: OptimizationReport;
+  report: CompletedOptimizationReport;
 }> {
-  return optimizeHwpxBufferAdvanced(input, {
+  return withDecodedImageCache(() => optimizeHwpxBufferAdvanced(input, {
     options,
     mode: "aggressive",
     profile: aggressiveImageProfile,
     rollbackWarning: "Aggressive mode did not produce a smaller file; original package bytes returned.",
     warnings: ["Aggressive mode prioritizes file size and may introduce visible image quality differences."]
-  });
+  }));
 }

@@ -1,20 +1,26 @@
 #!/usr/bin/env node
 
-import { constants, realpathSync } from "node:fs";
+import { constants, realpathSync, statSync } from "node:fs";
 import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  MAX_BATCH_WORKERS,
+  allocateTargetShareBytes,
+  targetStatusForBytes,
   analyzeHwpxBuffer,
   estimateNonOverlappingSavingBytes,
   verifyHwpxOutput,
   version as coreVersion
 } from "@hwpx-optimizer/core";
 import type { AppliedAction, OptimizationReport } from "@hwpx-optimizer/core";
-import { ACTION_CATALOG, optimizeByMode, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
+import { ACTION_CATALOG, optimizeByMode, parseActionList, parsePositiveNumber, parseTargetBytes } from "./optimizeByMode.js";
 import type { OptimizationMode } from "./optimizeByMode.js";
 import { PathClaimRegistry } from "./pathClaims.js";
+import { ArtifactSaveError, publishArtifactSet, removeOwnedArtifact, writeArtifactSet, writeStagedFile } from "@hwpx-optimizer/io";
+import type { OwnedArtifact } from "@hwpx-optimizer/io";
+import { BatchWorkspace } from "./batchWorkspace.js";
 import { WorkerPool } from "./workerPool.js";
 import type { OptimizeJob, OptimizeJobResult } from "./optimizeWorker.js";
 
@@ -49,7 +55,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const reportPath =
         options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       assertDoesNotTargetInput(reportPath, inputPath, "report");
-      await writeFile(reportPath, JSON.stringify(report, null, 2));
+      await writeStandaloneArtifact(reportPath, JSON.stringify(report, null, 2), options.overwrite === "true");
       console.log(`Analyzed ${inputPath}`);
       printAnalysisSummary(inputPath, report);
       console.log(`Report: ${reportPath}`);
@@ -66,7 +72,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const reportPath =
         options.overwrite === "true" ? requestedReportPath : await nextAvailablePath(requestedReportPath);
       assertDoesNotTargetInput(reportPath, inputPath, "report");
-      await writeFile(reportPath, text);
+      await writeStandaloneArtifact(reportPath, text, options.overwrite === "true");
       console.log(text);
       console.log(`Report: ${reportPath}`);
       return 0;
@@ -199,7 +205,9 @@ function parseMaxInputBytes(value: string | undefined): number {
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error("--max-input-bytes must be a positive number.");
   }
-  return Math.floor(parsed);
+  const bytes = Math.floor(parsed);
+  if (bytes <= 0) throw new Error("--max-input-bytes must be at least one byte.");
+  return bytes;
 }
 
 function parseBatchTargetBytes(options: Record<string, string>): number | undefined {
@@ -239,10 +247,39 @@ function assertDoesNotTargetInput(targetPath: string, inputPath: string, kind: "
 function pathsReferToSameFile(left: string, right: string): boolean {
   if (resolve(left) === resolve(right)) return true;
   try {
-    return realpathSync(left) === realpathSync(right);
-  } catch {
+    if (realpathSync(left) === realpathSync(right)) return true;
+    const leftIdentity = statSync(left, { bigint: true });
+    const rightIdentity = statSync(right, { bigint: true });
+    return leftIdentity.dev === rightIdentity.dev && leftIdentity.ino === rightIdentity.ino;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
     return false;
   }
+}
+
+async function writeStandaloneArtifact(path: string, content: string, overwrite: boolean): Promise<void> {
+  if (!overwrite) {
+    const claims = new PathClaimRegistry();
+    let stage: OwnedArtifact | undefined;
+    try {
+      await claims.claimExact(path);
+      stage = await writeStagedFile(temporaryPath(path), content);
+      await claims.publish(stage.path, path);
+    } finally {
+      if (stage) await removeOwnedArtifact(stage);
+      await claims.releaseAll();
+    }
+    return;
+  }
+  // Replace a directory entry, never truncate its target inode. If a link
+  // appears after the input-identity check, the original still stays intact.
+  const temporary = temporaryPath(path);
+  try {
+    await assertArtifactTargetIsWritable(path);
+    await writeFile(temporary, content, { flag: "wx" });
+    await rename(temporary, path);
+  } finally { await rm(temporary, { force: true }); }
 }
 
 function printUsage(): void {
@@ -310,29 +347,46 @@ export async function runBatch(
   }
   const outputDir = options.out ?? join(inputDir, "optimized");
   const overwrite = options.overwrite === "true";
-  await mkdir(outputDir, { recursive: true });
-  await sweepStaleTempFiles(outputDir);
   const batchTargetBytes = parseBatchTargetBytes(options);
+  const jobsRequested = parseBatchJobs(options.jobs);
+  parseTargetBytes(options);
+  parseMaxInputBytes(options["max-input-bytes"]);
+  parseActionList(options.actions);
 
   const files = (await readdir(inputDir, { withFileTypes: true }))
     .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name))
     .map((entry) => entry.name)
     .sort();
-  const inputPaths = files.map((file) => join(inputDir, file));
   if (batchTargetBytes !== undefined && files.length > batchTargetBytes) {
     throw new Error("--batch-target-bytes must allow at least one byte per HWPX file.");
   }
+  await mkdir(outputDir, { recursive: true });
+  const workspace = await BatchWorkspace.open(outputDir);
+  try {
+    return await runBatchInWorkspace(inputDir, outputDir, mode, overwrite, options, batchTargetBytes, jobsRequested, workspace);
+  } finally { await workspace.close(); }
+}
+
+async function runBatchInWorkspace(
+  inputDir: string, outputDir: string, mode: OptimizationMode, overwrite: boolean,
+  options: Record<string, string>, batchTargetBytes: number | undefined,
+  jobsRequested: number, workspace: BatchWorkspace
+): Promise<{ optimized: number; failed: number; reportPath: string }> {
+  // Enumerate after owned recovery, which can remove an interrupted claim
+  // placeholder when the output and input directories are the same.
+  const files = (await readdir(inputDir, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && /\.hwpx$/i.test(entry.name)).map(entry => entry.name).sort();
+  const inputPaths = files.map(file => join(inputDir, file));
   const originalSizeByFile = await readBatchOriginalSizes(inputDir, files);
   const targetByFile = batchTargetBytes
     ? allocateBatchTargetBytes(files, originalSizeByFile, batchTargetBytes)
     : new Map<string, number>();
-  const jobsRequested = parseBatchJobs(options.jobs);
   const startedAt = Date.now();
 
   // Sequential claim pass: reserves each file's final output/report path
   // (atomically, via PathClaimRegistry) before any worker touches disk.
   // A claim/overlap failure here is per-file and does not abort the batch.
-  const claims = new PathClaimRegistry();
+  const claims = new PathClaimRegistry(claim => workspace.recordClaim(claim));
   const uncommittedClaimedPaths = new Set<string>();
   const results = new Array<BatchFileResult>(files.length);
   const jobDescriptors: OptimizeJob[] = [];
@@ -342,7 +396,9 @@ export async function runBatch(
   // an interrupt during claiming is handled too; cleanupOnSignal releases
   // whatever has been claimed so far via uncommittedClaimedPaths/jobMeta.
   let pool: WorkerPool<OptimizeJob, OptimizeJobResult> | undefined;
+  let interrupted = false;
   const cleanupOnSignal = async (code: number): Promise<void> => {
+    interrupted = true;
     try {
       if (pool) await pool.terminate();
     } catch {
@@ -355,6 +411,7 @@ export async function runBatch(
         rm(meta.tempReportPath, { force: true }).catch(() => {})
       ])
     );
+    await workspace.close().catch(() => {});
     process.exit(code);
   };
   const sigintHandler = (): void => {
@@ -368,14 +425,15 @@ export async function runBatch(
 
   try {
     for (let index = 0; index < files.length; index += 1) {
+      if (interrupted) return await new Promise<never>(() => {});
       const file = files[index];
       const sourcePath = inputPaths[index];
       const progressPrefix = `[${index + 1}/${files.length}] ${file}`;
       const claimedThisIteration: string[] = [];
       try {
         const requestedOutputPath = join(outputDir, `${basename(file, ".hwpx")}.optimized.hwpx`);
-        // Assert before claiming (before the wx open) so a doomed job never
-        // creates a stray placeholder file for a path we're about to reject.
+        // Assert before reserving a name so a rejected input alias never
+        // leaves an unnecessary reservation.
         assertDoesNotTargetAnyInput(requestedOutputPath, inputPaths, "output");
         let outputPath: string;
         if (overwrite) {
@@ -395,8 +453,8 @@ export async function runBatch(
         }
 
         for (const claimedPath of claimedThisIteration) uncommittedClaimedPaths.add(claimedPath);
-        const tempOutputPath = `${outputPath}.tmp`;
-        const tempReportPath = `${reportPath}.tmp`;
+        const tempOutputPath = workspace.stagePath(`job-${index}.hwpx.tmp`);
+        const tempReportPath = workspace.stagePath(`job-${index}.report.json.tmp`);
         jobDescriptors.push({
           sourcePath,
           tempOutputPath,
@@ -418,7 +476,7 @@ export async function runBatch(
       }
     }
 
-    const jobsEffective = Math.max(1, Math.min(jobsRequested, jobMeta.length));
+    const jobsEffective = Math.min(jobsRequested, jobMeta.length, MAX_BATCH_WORKERS);
 
     if (jobMeta.length > 0) {
       pool = new WorkerPool<OptimizeJob, OptimizeJobResult>({
@@ -427,6 +485,7 @@ export async function runBatch(
         execArgv: process.execArgv
       });
       const poolResults = await pool.run(jobDescriptors);
+      if (interrupted) return await new Promise<never>(() => {});
 
       for (let i = 0; i < jobMeta.length; i += 1) {
         const meta = jobMeta[i];
@@ -454,13 +513,14 @@ export async function runBatch(
           continue;
         }
 
-        const commit = await commitBatchJob(meta);
+        const commit = await commitBatchJob(meta, claims);
         if (!commit.ok) {
           await cleanupFailedJob(meta, claims, uncommittedClaimedPaths);
-          results[meta.index] = { input: meta.file, status: "failed", stage: "write-output", error: commit.error };
-          console.error(`${progressPrefix} failed at write-output: ${commit.error}`);
+          results[meta.index] = { input: meta.file, status: "failed", stage: commit.stage, error: commit.error };
+          console.error(`${progressPrefix} failed at ${commit.stage}: ${commit.error}`);
           continue;
         }
+        for (const warning of commit.warnings) console.error(`${progressPrefix} Warning: ${warning}`);
         uncommittedClaimedPaths.delete(meta.outputPath);
         uncommittedClaimedPaths.delete(meta.reportPath);
 
@@ -474,7 +534,8 @@ export async function runBatch(
           originalSize: jobResult.originalSize,
           optimizedSize: jobResult.optimizedSize,
           savedBytes,
-          savedPercent
+          savedPercent,
+          ...(commit.warnings.length ? { saveWarnings: commit.warnings } : {})
         };
         console.log(`${progressPrefix} optimized -${formatBytes(savedBytes)} (${savedPercent.toFixed(2)}%)`);
       }
@@ -483,7 +544,8 @@ export async function runBatch(
     const completedResults = results.filter((result): result is BatchFileResult => Boolean(result));
 
     const requestedBatchReportPath = join(outputDir, "batch-report.json");
-    const batchReportPath = overwrite ? requestedBatchReportPath : await nextAvailablePath(requestedBatchReportPath);
+    assertDoesNotTargetAnyInput(requestedBatchReportPath, inputPaths, "report");
+    const batchReportPath = overwrite ? requestedBatchReportPath : await claims.claim(await nextAvailablePath(requestedBatchReportPath));
     const optimizedCount = completedResults.filter((result) => result.status === "optimized").length;
     const failedCount = completedResults.filter((result) => result.status === "failed").length;
     const totalSavedBytes = completedResults.reduce(
@@ -497,7 +559,7 @@ export async function runBatch(
         (result.status === "optimized" ? result.optimizedSize : originalSizeByFile.get(result.input) ?? 0),
       0
     );
-    const batchReportTmpPath = `${batchReportPath}.tmp`;
+    const batchReportTmpPath = workspace.stagePath("batch-report.json.tmp");
     await writeFile(
       batchReportTmpPath,
       JSON.stringify(
@@ -523,7 +585,8 @@ export async function runBatch(
         2
       )
     );
-    await rename(batchReportTmpPath, batchReportPath);
+    if (overwrite) await rename(batchReportTmpPath, batchReportPath);
+    else await claims.publish(batchReportTmpPath, batchReportPath);
     return {
       optimized: optimizedCount,
       failed: failedCount,
@@ -532,6 +595,7 @@ export async function runBatch(
   } finally {
     process.removeListener("SIGINT", sigintHandler);
     process.removeListener("SIGTERM", sigtermHandler);
+    await pool?.terminate();
   }
 }
 
@@ -547,44 +611,6 @@ function resolveOptimizeWorkerUrl(): URL {
   return new URL(workerFile, import.meta.url);
 }
 
-async function sweepStaleTempFiles(outputDir: string): Promise<void> {
-  let entries: string[];
-  try {
-    entries = await readdir(outputDir);
-  } catch {
-    return;
-  }
-  await Promise.all(
-    entries.map(async (name) => {
-      const fullPath = join(outputDir, name);
-      if (name.endsWith(".tmp")) {
-        await rm(fullPath, { force: true }).catch(() => {});
-        return;
-      }
-      // A claim creates a real final-named 0-byte file via `wx` (see pathClaims.ts).
-      // An interrupt during the claim loop can leave one of these behind; the next
-      // run's sweep must reap it too, or nextAvailablePath permanently shifts past
-      // it. A real optimized HWPX/zip or report JSON produced by this tool is never
-      // 0 bytes, so removing a 0-byte file here is safe -- but only if it also
-      // matches this tool's own output naming. `--out` may point at a shared or
-      // the input directory (the sweep runs before input enumeration when
-      // out==inputDir), so an unrelated 0-byte file -- or a degenerate 0-byte
-      // *.hwpx input -- must never be swept.
-      if (!name.endsWith(".optimized.hwpx") && !name.endsWith(".optimized.hwpx.report.json")) {
-        return;
-      }
-      try {
-        const stats = await stat(fullPath);
-        if (stats.isFile() && stats.size === 0) {
-          await rm(fullPath, { force: true }).catch(() => {});
-        }
-      } catch {
-        // ignore races / non-files
-      }
-    })
-  );
-}
-
 type BatchJobMeta = {
   index: number;
   file: string;
@@ -598,31 +624,19 @@ type BatchJobMeta = {
   claimed: boolean;
 };
 
-async function commitBatchJob(meta: BatchJobMeta): Promise<{ ok: true } | { ok: false; error: string }> {
+async function commitBatchJob(meta: BatchJobMeta, claims: PathClaimRegistry): Promise<
+  { ok: true; warnings: string[] } | { ok: false; stage: BatchFailureStage; error: string }
+> {
   try {
-    await rename(meta.tempOutputPath, meta.outputPath);
+    const warnings = await publishArtifactSet([
+      { stage: meta.tempOutputPath, target: meta.outputPath },
+      { stage: meta.tempReportPath, target: meta.reportPath }
+    ], meta.claimed ? { claims } : { overwrite: true });
+    return { ok: true, warnings };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, stage: error instanceof ArtifactSaveError && error.failedTarget === meta.reportPath
+      ? "write-report" : "write-output", error: error instanceof Error ? error.message : String(error) };
   }
-  try {
-    await rename(meta.tempReportPath, meta.reportPath);
-  } catch (error) {
-    if (meta.claimed) {
-      // Non-overwrite mode: the final path was only a 0-byte PathClaimRegistry
-      // placeholder before the rename above, so rolling the output back to temp
-      // (for cleanupFailedJob to release/unlink) loses nothing real.
-      await rename(meta.outputPath, meta.tempOutputPath).catch(() => {});
-    }
-    // --overwrite mode: outputPath now holds the freshly written, valid,
-    // non-empty optimized file -- the rename above already atomically replaced
-    // whatever was there before. Per spec (§7), --overwrite has a weaker
-    // guarantee: a failure between the output and report rename may leave the
-    // new output with a stale/missing report, but the output itself must never
-    // be rolled back or deleted here. Only the temp report gets cleaned up
-    // (by cleanupFailedJob, which never touches final paths when !claimed).
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
-  }
-  return { ok: true };
 }
 
 async function cleanupFailedJob(
@@ -669,18 +683,9 @@ function allocateBatchTargetBytes(
 ): Map<string, number> {
   const totalOriginalSize = files.reduce((sum, file) => sum + (originalSizeByFile.get(file) ?? 0), 0);
   if (totalOriginalSize <= 0) return new Map(files.map((file) => [file, 1]));
-  const raw = files.map((file) => {
-    const size = originalSizeByFile.get(file) ?? 0;
-    const exact = (batchTargetBytes * size) / totalOriginalSize;
-    return { file, bytes: Math.floor(exact), fraction: exact - Math.floor(exact) };
-  });
-  let allocated = raw.reduce((sum, item) => sum + item.bytes, 0);
-  for (const item of [...raw].sort((left, right) => right.fraction - left.fraction)) {
-    if (allocated >= batchTargetBytes) break;
-    item.bytes += 1;
-    allocated += 1;
-  }
-  return new Map(raw.map((item) => [item.file, Math.max(1, item.bytes)]));
+  return new Map(files.map(file => [file, allocateTargetShareBytes({
+    targetBytes: batchTargetBytes, itemBytes: originalSizeByFile.get(file) ?? 0, totalBytes: totalOriginalSize
+  }) ?? 1]));
 }
 
 function createBatchTargetFields(
@@ -702,7 +707,7 @@ function createBatchTargetFields(
     };
   }
   // Match core "미만" semantics: strict < on the aggregate output.
-  if (totalOptimizedSize < batchTargetBytes) {
+  if (targetStatusForBytes(totalOriginalSize, totalOptimizedSize, batchTargetBytes) !== "missed") {
     return {
       batchTargetBytes,
       batchTargetStatus: totalOriginalSize < batchTargetBytes ? "already-under-target" : "met"
@@ -716,10 +721,10 @@ function createBatchTargetFields(
 }
 
 export function parseBatchJobs(value: string | undefined): number {
-  if (value === undefined) return Math.max(1, Math.min(availableParallelism() - 1, 4));
+  if (value === undefined) return Math.max(1, Math.min(availableParallelism() - 1, MAX_BATCH_WORKERS));
   if (value === "max") return Math.max(1, availableParallelism());
   const jobs = Number(value);
-  if (!Number.isInteger(jobs) || jobs <= 0) {
+  if (!Number.isSafeInteger(jobs) || jobs <= 0) {
     throw new Error('--jobs must be a positive integer or "max".');
   }
   return jobs;
@@ -729,16 +734,18 @@ export function renderHumanReport(inputPath: string, report: OptimizationReport)
   const lines = [
     "HWPX Optimization Report",
     `File: ${inputPath}`,
+    `Analysis: ${report.analysis?.mode ?? "coverage not recorded"}`,
+    ...(report.analysis ? [`Image candidate sizes: ${report.analysis.imageSizes}; final ZIP size is confirmed after saving.`] : []),
     `Original: ${formatBytes(report.originalSize)}`,
-    ...(report.targetBytes ? [`Target: ${formatBytes(report.targetBytes)} (${report.targetStatus ?? "unknown"})`] : []),
+    ...(report.targetBytes ? [`${report.kind === "analysis" ? "Estimated target" : "Target"}: ${formatBytes(report.targetBytes)} (${report.kind === "analysis" ? report.estimatedTargetStatus ?? "unknown" : report.targetStatus ?? "unknown"})`] : []),
     `Images: ${report.images.length}`,
     `BMP candidates: ${report.images.filter((image) => image.isBmpCandidate).length}`,
     `Images with metadata: ${report.images.filter((image) => image.hasMetadata).length}`,
     `Duplicate image groups: ${report.duplicateImages.length}`,
-    `Same-visual duplicate image groups: ${report.sameVisualDuplicateImages.length}`,
+    `Same-visual duplicate image groups: ${report.analysis?.mode === "quick" ? "not checked (use --analysis-mode deep)" : report.sameVisualDuplicateImages.length}`,
     `Unused BinData candidates: ${report.unusedBinData.length}`,
     `Risky resources: ${report.riskyResources.length}`,
-    `Near-duplicate image candidates: ${report.nearDuplicateImages?.length ?? 0}`,
+    `Near-duplicate image candidates: ${report.analysis?.mode === "quick" ? "not checked (use --analysis-mode deep)" : report.nearDuplicateImages?.length ?? 0}`,
     `Resource diagnostics: ${report.resourceDiagnostics?.length ?? 0}`,
     `Projected package saving: ${formatBytes(projectedPackageSavingBytes(report))}`
   ];
@@ -806,9 +813,8 @@ function createHumanReportInsights(report: OptimizationReport): string[] {
 }
 
 function projectedPackageSavingBytes(report: OptimizationReport): number {
-  if (report.optimizedSize !== undefined && Number.isFinite(report.optimizedSize)) {
-    return Math.max(0, Math.min(report.originalSize, report.originalSize - report.optimizedSize));
-  }
+  if (report.estimatedSize !== undefined) return Math.max(0, report.originalSize - report.estimatedSize);
+  if (report.kind === "optimization" && report.optimizedSize !== undefined) return Math.max(0, report.originalSize - report.optimizedSize);
   return Math.max(
     0,
     Math.min(report.originalSize, estimateNonOverlappingSavingBytes(report.opportunityGroups))
@@ -817,7 +823,7 @@ function projectedPackageSavingBytes(report: OptimizationReport): number {
 
 function printTargetSummary(report: OptimizationReport): void {
   if (!report.targetBytes) return;
-  console.log(`Target: ${formatBytes(report.targetBytes)} (${report.targetStatus ?? "unknown"})`);
+  console.log(`${report.kind === "analysis" ? "Estimated target" : "Target"}: ${formatBytes(report.targetBytes)} (${report.kind === "analysis" ? report.estimatedTargetStatus ?? "unknown" : report.targetStatus ?? "unknown"})`);
   if (report.targetMissReason) console.log(`Target note: ${report.targetMissReason}`);
 }
 
@@ -853,58 +859,20 @@ function formatBytes(bytes: number): string {
 }
 
 async function writeOptimizationArtifacts(
-  outputPath: string,
-  output: Buffer,
-  reportPath: string,
-  reportContent: string,
+  outputPath: string, output: Buffer, reportPath: string, reportContent: string,
   options: { exclusive?: boolean } = {}
 ): Promise<void> {
-  if (options.exclusive) {
-    // Non-overwriting mode: the target names were chosen because they did not
-    // exist, but a file could appear in the gap before we write. Create them with
-    // O_EXCL ("wx") so we fail loudly instead of clobbering that file via rename.
-    await assertArtifactTargetIsWritable(outputPath);
-    await assertArtifactTargetIsWritable(reportPath);
-    await writeFile(outputPath, output, { flag: "wx" });
-    try {
-      await writeFile(reportPath, reportContent, { flag: "wx" });
-    } catch (error) {
-      await rm(outputPath, { force: true });
-      throw error;
-    }
-    return;
-  }
-
-  const outputTmpPath = temporaryPath(outputPath);
-  const reportTmpPath = temporaryPath(reportPath);
-  let reportPromoted = false;
-  try {
-    await assertArtifactTargetIsWritable(outputPath);
-    await assertArtifactTargetIsWritable(reportPath);
-    await writeFile(outputTmpPath, output);
-    await writeFile(reportTmpPath, reportContent);
-    await rename(reportTmpPath, reportPath);
-    reportPromoted = true;
-    await rename(outputTmpPath, outputPath);
-  } catch (error) {
-    await Promise.all([
-      rm(outputTmpPath, { force: true }),
-      rm(reportTmpPath, { force: true }),
-      reportPromoted ? rm(reportPath, { force: true }) : Promise.resolve()
-    ]);
-    throw error;
-  }
+  const warnings = await writeArtifactSet([
+    { target: outputPath, data: output }, { target: reportPath, data: reportContent }
+  ], { overwrite: !options.exclusive });
+  for (const warning of warnings) console.error(`Warning: ${warning}`);
 }
 
 async function assertArtifactTargetIsWritable(path: string): Promise<void> {
   try {
-    const target = await stat(path);
-    if (target.isDirectory()) {
-      throw new Error(`Refusing to write artifact over directory: ${path}`);
-    }
+    if ((await stat(path)).isDirectory()) throw new Error(`Refusing to write artifact over directory: ${path}`);
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
-    throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 }
 
@@ -925,6 +893,7 @@ type BatchFileResult =
       optimizedSize: number;
       savedBytes: number;
       savedPercent: number;
+      saveWarnings?: string[];
     }
   | { input: string; status: "failed"; stage: BatchFailureStage; error: string };
 

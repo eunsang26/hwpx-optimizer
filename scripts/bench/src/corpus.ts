@@ -5,6 +5,13 @@ import { CORPUS_DIR_ENV } from "./types.js";
 
 export type CorpusFile = { relativePath: string; size: number; sha256: string };
 export type CorpusManifest = { version: 1; files: CorpusFile[] };
+export type CorpusDocument = { absPath: string; relativePath: string; source: "real" | "fixture" };
+export type BenchCorpus = {
+  docs: CorpusDocument[];
+  goEligible: boolean;
+  invalidReason?: string;
+  manifestId: string;
+};
 
 export async function listHwpxFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -75,12 +82,7 @@ export async function loadCorpus(options: {
   benchDir: string | undefined;
   fixturesDir: string;
   manifestPath: string;
-}): Promise<{
-  docs: Array<{ absPath: string; relativePath: string; source: "real" | "fixture" }>;
-  goEligible: boolean;
-  invalidReason?: string;
-  manifestId: string;
-}> {
+}): Promise<BenchCorpus> {
   const manifestRaw = await readFile(options.manifestPath, "utf8");
   const manifest = JSON.parse(manifestRaw) as CorpusManifest;
   const id = manifestId(manifest);
@@ -121,7 +123,8 @@ export async function loadCorpus(options: {
 
   return {
     docs: [...realDocs, ...fixtureDocs],
-    goEligible: true,
+    goEligible: realDocs.length > 0,
+    ...(realDocs.length === 0 ? { invalidReason: "empty-corpus" } : {}),
     manifestId: id
   };
 }

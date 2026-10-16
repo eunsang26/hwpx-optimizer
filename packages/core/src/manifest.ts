@@ -1,5 +1,8 @@
 import { XMLParser } from "fast-xml-parser";
 import type { HwpxPackage } from "./types.js";
+import { buildDocumentXml, parseDocumentXml } from "./xmlDocument.js";
+import { getXmlAttributes, isXmlNode } from "./xmlNode.js";
+import type { XmlNode } from "./xmlNode.js";
 
 const ATTRIBUTE_PATTERN = /([\w:-]+)=["']([^"']*)["']/g;
 
@@ -7,7 +10,11 @@ const ITEM_PARSER = new XMLParser({
   ignoreAttributes: false,
   preserveOrder: true,
   attributeNamePrefix: "",
-  removeNSPrefix: true
+  removeNSPrefix: true,
+  trimValues: false,
+  htmlEntities: true,
+  parseTagValue: false,
+  parseAttributeValue: false
 });
 
 export type ManifestItem = {
@@ -52,13 +59,58 @@ function collectItems(node: unknown, items: ManifestItem[]): void {
 export function buildManifestPathById(pkg: HwpxPackage, transform: (href: string) => string | null): Map<string, string> {
   const map = new Map<string, string>();
   for (const entry of pkg.entries) {
-    if (entry.kind !== "xml") continue;
+    if (entry.path !== "Contents/content.hpf") continue;
     for (const item of extractManifestItems(entry.data.toString("utf8"))) {
       const normalized = transform(item.href);
       if (normalized) map.set(item.id, normalized);
     }
   }
   return map;
+}
+
+/** Resolve local OPF hrefs without touching the host filesystem. */
+export function resolveManifestHref(href: string, availablePaths: Set<string>): string | null {
+  let value = href.split("#")[0]!;
+  try { value = decodeURIComponent(value); } catch { /* Retain literal malformed percent sequences. */ }
+  value = value.replace(/\\/g, "/");
+  if (/^[a-z][a-z\d+.-]*:/i.test(value) || value.startsWith("/")) return null;
+  if (availablePaths.has(value)) return value;
+  // Hancom packages commonly use root-relative BinData paths in content.hpf.
+  const rootRelative = /^(BinData|Contents|Fonts|Object|Preview|META-INF)\//.test(value);
+  const segments = rootRelative ? [] : ["Contents"];
+  for (const segment of value.split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      if (segments.length === 0) return null;
+      segments.pop();
+    } else segments.push(segment);
+  }
+  return segments.join("/");
+}
+
+export function removeManifestResources(data: Buffer, removedPaths: Set<string>, availablePaths: Set<string>): Buffer {
+  if (removedPaths.size === 0) return data;
+  const nodes = parseDocumentXml(data.toString("utf8"));
+  let changed = false;
+  function visit(children: XmlNode[]): void {
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const node = children[index]!;
+      if (!isXmlNode(node)) continue;
+      const item = Object.keys(node).some((name) => name.split(":").at(-1) === "item");
+      const href = getXmlAttributes(node)?.href;
+      if (item && typeof href === "string") {
+        const path = resolveManifestHref(href, availablePaths);
+        if (path && removedPaths.has(path)) {
+          children.splice(index, 1);
+          changed = true;
+          continue;
+        }
+      }
+      for (const value of Object.values(node)) if (Array.isArray(value)) visit(value as XmlNode[]);
+    }
+  }
+  visit(nodes);
+  return changed ? Buffer.from(buildDocumentXml(nodes)) : data;
 }
 
 export function parseTagAttributes(input: string): Record<string, string> {
