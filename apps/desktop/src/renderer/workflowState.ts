@@ -41,6 +41,8 @@ export type AppState = {
   report?: OptimizationReport;
   result?: { outputPath: string; reportPath?: string; report: OptimizationReport };
   batchReportPath?: string;
+  batchReportStatus: "off" | "saving" | "saved" | "failed";
+  batchReportError?: string;
   mode: "safe" | "balanced" | "aggressive";
   outputDirectory?: string;
   settings?: DesktopSettings;
@@ -76,15 +78,18 @@ export function createRendererState(): AppState {
     batchCancelled: false,
     batchRunCompleted: false,
     analysisRunning: false,
-    optimizeRunning: false
+    optimizeRunning: false,
+    batchReportStatus: "off"
   };
 }
 
 type AnalysisToken = { sequence: number; path: string };
+export type BatchToken = { sequence: number; items: BatchItem[] };
 
 /** Document transitions only: no DOM, IPC, timers or filesystem dependencies. */
 export class RendererWorkflow {
   private analysisSequence = 0;
+  private batchSequence = 0;
   constructor(readonly state = createRendererState()) {}
 
   get busy(): boolean {
@@ -93,6 +98,7 @@ export class RendererWorkflow {
 
   selectSingle(path: string): boolean {
     if (this.busy) return false;
+    this.invalidateBatchReport();
     this.analysisSequence += 1;
     Object.assign(this.state, { view: "single", filePath: path, report: undefined, result: undefined,
       batchItems: [], batchRunCompleted: false, batchReportPath: undefined, currentPlan: undefined, analysisRunning: true });
@@ -102,6 +108,7 @@ export class RendererWorkflow {
 
   appendBatch(paths: string[], preservePolicy = false): boolean {
     if (this.busy) return false;
+    this.invalidateBatchReport();
     Object.assign(this.state, { view: "batch", filePath: undefined, report: undefined, result: undefined,
       batchReportPath: undefined, batchRunCompleted: false, currentPlan: undefined });
     if (!preservePolicy) this.state.actionSelections.clear();
@@ -115,6 +122,7 @@ export class RendererWorkflow {
   }
 
   clearSelection(): void {
+    this.invalidateBatchReport();
     this.analysisSequence += 1;
     Object.assign(this.state, { view: "empty", filePath: undefined, report: undefined, result: undefined,
       currentPlan: undefined, batchItems: [], batchReportPath: undefined, batchRunCompleted: false, batchCancelled: false });
@@ -122,6 +130,7 @@ export class RendererWorkflow {
   }
 
   promote(item: BatchItem): void {
+    this.invalidateBatchReport();
     this.analysisSequence += 1;
     Object.assign(this.state, { view: "single", filePath: item.path, report: item.report, result: undefined,
       currentPlan: undefined, batchItems: [], batchReportPath: undefined, batchRunCompleted: false, batchCancelled: false });
@@ -130,20 +139,25 @@ export class RendererWorkflow {
 
   removeBatchItem(index: number): boolean {
     if (this.busy || !this.state.batchItems[index]) return false;
+    this.invalidateBatchReport();
     this.state.batchItems.splice(index, 1);
     return true;
   }
 
   selectBatchItem(index: number, selected: boolean): void {
-    if (!this.busy && this.state.batchItems[index]) this.state.batchItems[index].selected = selected;
+    if (!this.busy && this.state.batchItems[index]) {
+      this.invalidateBatchReport(); this.state.batchItems[index].selected = selected;
+    }
   }
 
   selectAllPending(selected: boolean): void {
     if (this.busy) return;
+    this.invalidateBatchReport();
     for (const item of this.state.batchItems) if (item.status === "pending") item.selected = selected;
   }
 
   beginAnalysis(path: string): AnalysisToken {
+    this.invalidateBatchReport();
     this.state.analysisRunning = true;
     return { sequence: ++this.analysisSequence, path };
   }
@@ -173,6 +187,7 @@ export class RendererWorkflow {
 
   beginOptimization(): string | undefined {
     if (!this.state.filePath || !this.state.report || this.state.optimizeRunning) return undefined;
+    this.invalidateBatchReport();
     this.state.optimizeRunning = true;
     return this.state.filePath;
   }
@@ -194,14 +209,41 @@ export class RendererWorkflow {
 
   beginBatchAnalysis(): void { this.state.batchAnalyzing = true; this.state.batchCancelled = false; }
   finishBatchAnalysis(): void { this.state.batchAnalyzing = false; }
-  beginBatch(): void {
+  beginBatch(): BatchToken {
+    this.invalidateBatchReport();
     this.state.batchRunning = true;
     this.state.batchRunCompleted = false;
     this.state.batchCancelled = false;
+    return this.batchToken();
   }
   cancelBatch(): void { this.state.batchCancelled = true; }
   finishBatch(): void { this.state.batchRunning = false; this.state.batchRunCompleted = true; }
-  setBatchReport(path: string | undefined): void { this.state.batchReportPath = path; }
+  batchToken(): BatchToken { return { sequence: this.batchSequence, items: this.state.batchItems }; }
+  isCurrentContext(token: BatchToken): boolean {
+    return token.sequence === this.batchSequence && token.items === this.state.batchItems;
+  }
+  isCurrentBatch(token: BatchToken): boolean {
+    return this.isCurrentContext(token) && this.state.view === "batch";
+  }
+  beginBatchReport(token: BatchToken, enabled: boolean): boolean {
+    if (!this.isCurrentBatch(token)) return false;
+    this.state.batchReportStatus = enabled ? "saving" : "off";
+    this.state.batchReportError = undefined;
+    return true;
+  }
+  acceptBatchReport(token: BatchToken, outcome: { reportPath?: string; error?: string }): boolean {
+    if (!this.isCurrentBatch(token)) return false;
+    this.state.batchReportPath = outcome.reportPath;
+    this.state.batchReportError = outcome.error;
+    this.state.batchReportStatus = outcome.error ? "failed" : outcome.reportPath ? "saved" : "off";
+    return true;
+  }
+  private invalidateBatchReport(): void {
+    this.batchSequence += 1;
+    this.state.batchReportPath = undefined;
+    this.state.batchReportError = undefined;
+    this.state.batchReportStatus = "off";
+  }
   recordBatchAnalysis(item: BatchItem, report: OptimizationReport): void {
     item.report = report;
     item.analysisReport = report;
@@ -219,6 +261,7 @@ export class RendererWorkflow {
 
   retryBatch(): number {
     if (this.state.batchRunning || this.state.batchAnalyzing) return 0;
+    this.invalidateBatchReport();
     let count = 0;
     for (const item of this.state.batchItems) {
       if (item.status !== "done" && item.status !== "failed" && item.status !== "cancelled") continue;

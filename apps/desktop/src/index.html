@@ -44,13 +44,13 @@
         </div>
       </header>
 
-      <section id="progress-panel" class="panel progress-panel" hidden aria-labelledby="progress-title">
+      <section id="progress-panel" class="panel progress-panel" hidden tabindex="-1" role="region" aria-labelledby="progress-title">
         <div class="panel-header">
           <h2 id="progress-title">진행 상황</h2>
           <button id="cancel-button" class="ghost">취소</button>
         </div>
-        <div class="progress-track"><div id="progress-bar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
-        <p id="progress-item" aria-live="polite">대기 중입니다.</p>
+        <div class="progress-track"><div id="progress-bar" class="progress-bar" role="progressbar" aria-labelledby="progress-title" aria-describedby="progress-item" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
+        <p id="progress-item">대기 중입니다.</p>
       </section>
 
       <section id="settings-notice" class="status-banner" hidden role="status" aria-live="polite" data-tone="warning">
@@ -58,7 +58,7 @@
         <button id="settings-notice-dismiss" type="button" class="ghost" aria-label="설정 안내 닫기">닫기</button>
       </section>
 
-      <section id="status-banner" class="status-banner" hidden aria-live="polite">
+      <section id="status-banner" class="status-banner" hidden aria-label="작업 상태">
         <span class="info-icon" aria-hidden="true"></span>
         <p id="status-banner-text">대기 중입니다.</p>
       </section>
@@ -325,9 +325,11 @@
             </div>
             <div id="batch-result-stats" class="batch-result-stats"></div>
             <p id="batch-result-details" class="batch-result-details"></p>
+            <p id="batch-report-status" class="batch-result-details"></p>
             <div class="batch-result-actions">
               <button id="batch-open-folder-button" type="button">폴더 보기</button>
               <button id="batch-open-report-button" type="button" class="ghost" disabled>결과 리포트 (JSON)</button>
+              <button id="batch-retry-report-button" type="button" class="ghost" hidden>리포트 저장 재시도</button>
               <button id="batch-retry-button" type="button" class="ghost">다시 최적화</button>
               <button id="batch-start-over-button" type="button" class="ghost">처음으로</button>
             </div>
@@ -426,7 +428,7 @@
           <div class="modal-header">
             <div>
               <h2 id="compare-title">이미지 비교</h2>
-              <p id="compare-summary">변경된 이미지를 원본과 결과 썸네일로 비교합니다.</p>
+              <p id="compare-summary" role="status" aria-live="polite" aria-atomic="true">변경된 이미지를 원본과 결과 썸네일로 비교합니다.</p>
             </div>
             <button id="compare-close" class="ghost" type="button">닫기</button>
           </div>
@@ -539,6 +541,7 @@
         <p>설정에는 최근 파일, 출력 폴더, 처리 이력, 내부 로그를 저장하지 않습니다.</p>
       </aside>
     </main>
+    <div id="interaction-announcement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
     <script type="module" src="./renderer.js"></script>
   </body>
 </html>

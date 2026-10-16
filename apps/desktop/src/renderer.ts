@@ -1,6 +1,7 @@
+import { InteractionScope } from "./renderer/interactionScope.js";
 import { CUSTOM_LIMIT_MESSAGE, customLimitBytesFromMb, MIB } from "./shared/submissionLimits.js";
 import { BatchPlanner } from "./renderer/batchPlanning.js";
-import { RendererWorkflow, type BatchItem, type DesktopSettings, type AppState, type BatchTargetMode } from "./renderer/workflowState.js";
+import { RendererWorkflow, type BatchItem, type DesktopSettings, type AppState, type BatchTargetMode, type BatchToken } from "./renderer/workflowState.js";
 import {
   appendUniquePaths,
   batchResultTitleForCounts,
@@ -76,8 +77,8 @@ const batchPlanner = new BatchPlanner(state);
 
 let settingsSaveSequence = 0;
 const invalidLimitInputs = new Set<HTMLInputElement>();
-let progressAnimationTimer: number | undefined;
-let displayedProgressPercent = 0;
+let progressReturnFocus: HTMLElement | null = null;
+let announcedProgressStage = "";
 let targetProgressPercent = 0;
 let dragDepth = 0;
 
@@ -227,6 +228,23 @@ const runDock = requireElement("run-dock");
 const runDockStatus = requireElement("run-dock-status");
 const runDockSummary = requireElement("run-dock-summary");
 const runDockButton = requireButton("run-dock-button");
+const interaction = new InteractionScope(document.querySelector<HTMLElement>("main")!, () =>
+  [settingsPanel, helpPanel].filter(panel => !panel.classList.contains("is-open")));
+
+function syncInteractionScope(): void {
+  singleWorkspace.setAttribute("aria-busy", String(workflow.busy));
+  const surface = !compareModal.hidden ? compareModal :
+    settingsPanel.classList.contains("is-open") ? settingsPanel :
+    helpPanel.classList.contains("is-open") ? helpPanel : !progressPanel.hidden ? progressPanel : null;
+  interaction.sync(surface);
+}
+
+function focusAfterWork(): void {
+  if (openOverlayElement()) return;
+  interaction.focusFirst(state.result || state.batchRunCompleted ? runDockButton : progressReturnFocus,
+    runDockButton, emptyChooseButton, chooseButton);
+  progressReturnFocus = null;
+}
 
 void init();
 
@@ -337,16 +355,19 @@ async function init(): Promise<void> {
     } else optimizeButton.click();
   });
   cancelButton.addEventListener("click", async () => {
+    const context = workflow.batchToken();
     if (state.analysisRunning || state.batchAnalyzing) {
       const cancellingBatchAnalysis = state.batchAnalyzing;
       // Invalidate the in-flight analyze so a late resolve can't overwrite the
       // cancelled status with a normal result (best-effort backend cancel).
       workflow.cancelAnalysis();
       cancelButton.disabled = true;
+      progressPanel.focus();
       try {
         const outcome = await window.hwpxOptimizer.cancelAnalyze();
+        if (!workflow.isCurrentContext(context)) return;
         setStatus(outcome.error ? errorMessage(outcome.error) : outcome.cancelled ? "분석을 취소했습니다." : "분석 작업이 이미 종료되었습니다.");
-      } catch (error) { setStatus(errorMessage(error)); }
+      } catch (error) { if (!workflow.isCurrentContext(context)) return; setStatus(errorMessage(error), "warning"); }
       if (!cancellingBatchAnalysis) {
         workflow.finishCancelledAnalysis();
         setIdle();
@@ -361,16 +382,18 @@ async function init(): Promise<void> {
       workflow.cancelBatch();
     }
     cancelButton.disabled = true;
+    progressPanel.focus();
     setStatus("취소를 요청했습니다. 저장 중인 파일을 정리하고 있습니다...");
     try {
       const outcome = await window.hwpxOptimizer.cancelOptimize();
+      if (!workflow.isCurrentContext(context)) return;
       if (cancellingBatch && !state.batchRunning) return;
       if (outcome.cancelled) setStatus("최적화를 취소했습니다.");
       else if (outcome.error) setStatus(errorMessage(outcome.error));
       else if (outcome.completed) setStatus(cancellingBatch
         ? "현재 파일의 저장은 완료되었습니다. 남은 대기 파일의 처리를 중단합니다."
         : "저장이 이미 완료되었습니다. 결과 파일을 확인하세요.");
-    } catch (error) { setStatus(errorMessage(error)); }
+    } catch (error) { if (workflow.isCurrentContext(context)) setStatus(errorMessage(error), "warning"); }
   });
   deepAnalysisButton.addEventListener("click", () => {
     if (!state.filePath || state.analysisRunning || state.optimizeRunning || state.batchRunning || state.batchAnalyzing) return;
@@ -397,6 +420,15 @@ async function init(): Promise<void> {
       if (overlay) trapFocus(event, overlay);
     }
   });
+  document.addEventListener("focusin", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    requestAnimationFrame(() => {
+      if (document.activeElement !== target || openOverlayElement() || runDock.hidden || runDock.contains(target)) return;
+      const box = target.getBoundingClientRect();
+      if (box.bottom > runDock.getBoundingClientRect().top - 8) target.scrollIntoView({ block: "center" });
+    });
+  });
   openFileButton.addEventListener("click", () => state.result && window.hwpxOptimizer.openPath(state.result.outputPath));
   openReportButton.addEventListener(
     "click",
@@ -411,6 +443,16 @@ async function init(): Promise<void> {
     if (state.batchReportPath) void window.hwpxOptimizer.openPath(state.batchReportPath);
   });
   batchRetryButton.addEventListener("click", resetBatchCompletedItems);
+  requireButton("batch-retry-report-button").addEventListener("click", async () => {
+    if (!workflow.busy && state.batchRunCompleted && state.batchReportStatus === "failed") {
+      const token = workflow.batchToken();
+      await publishBatchReport(token);
+      if (workflow.isCurrentBatch(token) && (document.activeElement === document.body ||
+          document.activeElement === requireButton("batch-retry-report-button"))) {
+        interaction.focusFirst(state.batchReportStatus === "failed" ? requireButton("batch-retry-report-button") : batchOpenReportButton, runDockButton);
+      }
+    }
+  });
   requireButton("result-retry-button").addEventListener("click", () => {
     if (!workflow.retrySingle()) return;
     resultPanel.hidden = true;
@@ -818,6 +860,7 @@ function renderSettings(settings: DesktopSettings): void {
 let panelReturnFocus: HTMLElement | null = null;
 
 function setSettingsOpen(open: boolean): void {
+  if (open && workflow.busy) return;
   if (open) setHelpOpen(false);
   const wasOpen = settingsPanel.classList.contains("is-open");
   settingsPanel.classList.toggle("is-open", open);
@@ -828,6 +871,7 @@ function setSettingsOpen(open: boolean): void {
 }
 
 function setHelpOpen(open: boolean): void {
+  if (open && workflow.busy) return;
   if (open) setSettingsOpen(false);
   const wasOpen = helpPanel.classList.contains("is-open");
   helpPanel.classList.toggle("is-open", open);
@@ -842,11 +886,13 @@ function setHelpOpen(open: boolean): void {
 function syncPanelFocus(open: boolean, wasOpen: boolean, focusTarget: HTMLElement): void {
   if (open && !wasOpen) {
     panelReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    syncInteractionScope();
     focusTarget.focus();
   } else if (!open && wasOpen) {
-    panelReturnFocus?.focus();
+    syncInteractionScope();
+    interaction.focusFirst(panelReturnFocus, runDockButton, emptyChooseButton);
     panelReturnFocus = null;
-  }
+  } else syncInteractionScope();
 }
 
 function applySessionOutputDirectory(outputDirectory: string): void {
@@ -1853,7 +1899,13 @@ function renderProgress(percent: number, item: string): void {
   targetProgressPercent = Math.max(targetProgressPercent, Math.max(0, Math.min(100, percent)));
   progressItem.textContent = `${progressLabel(item)} · ${Math.round(targetProgressPercent)}%`;
   progressBar.setAttribute("aria-valuenow", String(Math.round(targetProgressPercent)));
-  startProgressAnimation();
+  progressBar.style.width = `${targetProgressPercent}%`;
+  progressBar.setAttribute("aria-valuetext", progressItem.textContent);
+  const stage = progressLabel(item).replace(/\(\d+\/\d+\)/, "");
+  if (stage !== announcedProgressStage) {
+    announcedProgressStage = stage;
+    requireElement("interaction-announcement").textContent = progressLabel(item);
+  }
 }
 
 function hideProgressPanel(): void {
@@ -1861,47 +1913,20 @@ function hideProgressPanel(): void {
   progressTitle.textContent = "진행 상황";
   progressPanel.classList.remove("is-loading");
   progressPanel.hidden = true;
-  stopProgressAnimation();
+  syncInteractionScope();
+  renderRunDock(state.currentPlan);
+  focusAfterWork();
   if (!state.analysisRunning && !state.batchAnalyzing && !state.batchRunning) {
     setSubmissionInputsDisabled(false);
   }
 }
 
 function resetProgressAnimation(): void {
-  stopProgressAnimation();
-  displayedProgressPercent = 0;
   targetProgressPercent = 0;
+  announcedProgressStage = "";
   progressBar.style.width = "0%";
   progressBar.setAttribute("aria-valuenow", "0");
-}
-
-function prefersReducedMotion(): boolean {
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-}
-
-function startProgressAnimation(): void {
-  if (prefersReducedMotion()) {
-    displayedProgressPercent = targetProgressPercent;
-    progressBar.style.width = `${Math.max(0, Math.min(100, displayedProgressPercent))}%`;
-    return;
-  }
-  progressAnimationTimer ??= window.setInterval(() => {
-    const delta = targetProgressPercent - displayedProgressPercent;
-    if (delta <= 0.3) {
-      displayedProgressPercent = targetProgressPercent;
-    } else {
-      displayedProgressPercent += Math.max(0.4, delta * 0.18);
-    }
-    progressBar.style.width = `${Math.max(0, Math.min(100, displayedProgressPercent))}%`;
-    if (displayedProgressPercent >= 100) stopProgressAnimation();
-  }, 60);
-}
-
-function stopProgressAnimation(): void {
-  if (progressAnimationTimer !== undefined) {
-    window.clearInterval(progressAnimationTimer);
-    progressAnimationTimer = undefined;
-  }
+  progressBar.setAttribute("aria-valuetext", "진행을 준비하는 중입니다 · 0%");
 }
 
 function renderAnalysis(report: OptimizationReport): void {
@@ -2023,6 +2048,7 @@ function renderResult(report: OptimizationReport, outputPath: string, reportPath
 }
 
 function renderBatchResultPanel(): void {
+  batchResultPanel.dataset.reportState = state.batchReportStatus;
   const finished = state.batchItems.filter(
     (item) => item.status === "done" || item.status === "failed" || item.status === "cancelled"
   );
@@ -2050,11 +2076,16 @@ function renderBatchResultPanel(): void {
     metricHtml("완료 파일 실제 합계", formatBytes(done.reduce((sum, item) => sum + (item.report?.optimizedSize ?? 0), 0))),
     metricHtml("총 절감", formatBytes(totalSavedBytes)),
     metricHtml("실패", `${failed.length}개`),
-    metricHtml("리포트", state.batchReportPath ? "저장됨" : "꺼짐")
+    metricHtml("리포트", state.batchReportStatus === "saving" ? "저장 중" : state.batchReportStatus === "failed" ? "저장 실패" : state.batchReportPath ? "저장됨" : "생성 안 함")
   ].join("");
   batchResultDetails.textContent = batchResultDetailsText({ done, failed, cancelled });
   batchOpenFolderButton.disabled = !hasOutput;
   batchOpenReportButton.disabled = !state.batchReportPath;
+  requireButton("batch-retry-report-button").hidden = state.batchReportStatus !== "failed";
+  requireElement("batch-report-status").textContent = state.batchReportStatus === "saving"
+    ? "요약 리포트 저장 중입니다. 파일 결과는 이미 저장됐으며 새 작업을 시작해도 유지됩니다."
+    : state.batchReportStatus === "failed" ? "요약 리포트를 저장하지 못했습니다. 파일을 다시 압축하지 않고 리포트 저장만 재시도할 수 있습니다."
+    : state.batchReportStatus === "saved" ? "요약 리포트를 저장했습니다." : "요약 리포트를 생성하지 않았습니다.";
   setSubmissionInputsDisabled(false);
 }
 
@@ -2144,6 +2175,7 @@ function openOverlayElement(): HTMLElement | null {
   }
   if (settingsPanel.classList.contains("is-open")) return settingsPanel;
   if (helpPanel.classList.contains("is-open")) return helpPanel;
+  if (!progressPanel.hidden) return progressPanel;
   return null;
 }
 
@@ -2152,27 +2184,30 @@ function trapFocus(event: KeyboardEvent, container: HTMLElement): void {
     container.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     )
-  ).filter((element) => element.offsetParent !== null || element === document.activeElement);
-  if (focusables.length === 0) return;
+  ).filter((element) => !element.closest("[inert]") && element.checkVisibility({ visibilityProperty: true }));
+  if (focusables.length === 0) { event.preventDefault(); container.focus(); return; }
   const first = focusables[0];
   const last = focusables[focusables.length - 1];
   const active = document.activeElement;
-  if (event.shiftKey && active === first) {
+  if (event.shiftKey && (active === first || !container.contains(active))) {
     event.preventDefault();
     last.focus();
-  } else if (!event.shiftKey && active === last) {
+  } else if (!event.shiftKey && (active === last || !container.contains(active))) {
     event.preventDefault();
     first.focus();
   }
 }
 
 let compareReturnFocus: HTMLElement | null = null;
+let compareRequestSequence = 0;
 
 async function openImageCompareModal(): Promise<void> {
-  if (!state.filePath || !state.result) return;
+  if (!state.filePath || !state.result || workflow.busy) return;
+  const sequence = ++compareRequestSequence;
   const requestResult = state.result;
   compareReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   compareModal.hidden = false;
+  syncInteractionScope();
   compareCloseButton.focus();
   compareSummary.textContent = "이미지 변경 사항을 불러오는 중입니다...";
   compareList.innerHTML = "<p class=\"empty\">잠시만 기다려주세요...</p>";
@@ -2182,7 +2217,7 @@ async function openImageCompareModal(): Promise<void> {
       optimizedPath: state.result.outputPath,
       resourceMappings: state.result.report.resourceMappings
     });
-    if (state.result !== requestResult || compareModal.hidden) return;
+    if (state.result !== requestResult || compareModal.hidden || sequence !== compareRequestSequence) return;
     if (pairs.length === 0) {
       compareSummary.textContent = "변경된 이미지가 없습니다.";
       compareList.innerHTML = "<p class=\"empty\">표시할 이미지 변경 사항이 없습니다.</p>";
@@ -2191,18 +2226,20 @@ async function openImageCompareModal(): Promise<void> {
     compareSummary.textContent = `상위 ${pairs.length}개 이미지 변경 사항을 표시합니다.`;
     compareList.innerHTML = pairs.map(imageComparePairHtml).join("");
   } catch (error) {
-    if (state.result !== requestResult || compareModal.hidden) return;
+    if (state.result !== requestResult || compareModal.hidden || sequence !== compareRequestSequence) return;
     compareSummary.textContent = "이미지 비교를 불러오지 못했습니다.";
     compareList.innerHTML = `<p class="empty">${escapeHtml(errorMessage(error))}</p>`;
   }
 }
 
 function closeImageCompareModal(): void {
+  compareRequestSequence += 1;
   const wasOpen = !compareModal.hidden;
   compareModal.hidden = true;
   compareList.innerHTML = "";
+  syncInteractionScope();
   if (wasOpen) {
-    compareReturnFocus?.focus();
+    interaction.focusFirst(compareReturnFocus, runDockButton, emptyChooseButton);
     compareReturnFocus = null;
   }
 }
@@ -2241,6 +2278,7 @@ function renderModeWarning(): void {
 }
 
 function setBusy(message: string, options: { cancelable: boolean; kind?: "analysis" | "optimization" }): void {
+  if (progressPanel.hidden) progressReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   setStatus(message);
   const busyKind = options.kind ?? (options.cancelable ? "optimization" : "analysis");
   document.body.dataset.busy = busyKind;
@@ -2253,6 +2291,8 @@ function setBusy(message: string, options: { cancelable: boolean; kind?: "analys
   setSubmissionInputsDisabled(true);
   renderRunDock(state.currentPlan);
   cancelButton.disabled = !options.cancelable;
+  syncInteractionScope();
+  interaction.focusFirst(options.cancelable ? cancelButton : progressPanel);
 }
 
 function setIdle(): void {
@@ -2280,6 +2320,7 @@ function setSubmissionInputsDisabled(disabled: boolean): void {
 }
 
 function setStatus(message: string, tone?: "info" | "success" | "warning"): void {
+  requireElement("interaction-announcement").textContent = message;
   statusText.textContent = message;
   statusBannerText.textContent = message;
   statusBanner.hidden = message.trim().length === 0;
@@ -2575,7 +2616,7 @@ async function runBatch(): Promise<void> {
     setStatus("처리할 파일을 하나 이상 선택하세요.");
     return;
   }
-  workflow.beginBatch();
+  const batchToken = workflow.beginBatch();
   setBusy(`${selectedPending}개 파일을 처리합니다.`, {
     cancelable: true
   });
@@ -2625,21 +2666,27 @@ async function runBatch(): Promise<void> {
   workflow.finishBatch();
   cancelButton.disabled = true;
   hideProgressPanel();
-  const { reportPath: batchReportPath, error: reportError } = await saveBatchSummaryReport();
-  workflow.setBatchReport(batchReportPath);
   renderBatchList();
   renderBatchResultPanel();
-  const completed = state.batchItems.filter((item) => item.status === "done").length;
-  const failed = state.batchItems.filter((item) => item.status === "failed").length;
-  const cancelled = state.batchItems.filter((item) => item.status === "cancelled").length;
-  setStatus(
-    reportError
-      ? `일괄 처리는 끝났지만 리포트를 저장하지 못했습니다. ${reportError}`
-      : batchReportPath
-      ? `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}. 리포트: ${fileNameFromPath(batchReportPath)}`
-      : `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}, 취소 ${cancelled}.`,
-    reportError || failed > 0 || cancelled > 0 ? "warning" : "success"
-  );
+  focusAfterWork();
+  await publishBatchReport(batchToken);
+}
+
+async function publishBatchReport(token: BatchToken): Promise<void> {
+  if (!workflow.beginBatchReport(token, Boolean(state.settings?.saveReport))) return;
+  renderBatchResultPanel();
+  if (state.batchReportStatus === "saving") setStatus("파일 처리는 끝났습니다. 요약 리포트를 저장하는 중입니다. 처음으로 돌아가도 저장 결과는 유지됩니다.", "info");
+  const outcome = await saveBatchSummaryReport();
+  if (!workflow.acceptBatchReport(token, outcome)) return;
+  renderBatchList();
+  renderBatchResultPanel();
+  const completed = state.batchItems.filter(item => item.status === "done").length;
+  const failed = state.batchItems.filter(item => item.status === "failed").length;
+  const cancelled = state.batchItems.filter(item => item.status === "cancelled").length;
+  setStatus(outcome.error
+    ? `파일 처리는 끝났지만 리포트를 저장하지 못했습니다. ${outcome.error} 리포트 저장 재시도로 다시 저장할 수 있습니다.`
+    : `일괄 처리가 끝났습니다. 완료 ${completed}, 실패 ${failed}, 취소 ${cancelled}.${outcome.reportPath ? " 요약 리포트를 저장했습니다." : ""}`,
+    outcome.error || failed > 0 || cancelled > 0 ? "warning" : "success");
 }
 
 async function saveBatchSummaryReport(): Promise<{ reportPath?: string; error?: string }> {

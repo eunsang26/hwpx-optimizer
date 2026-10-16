@@ -4,6 +4,8 @@
 
 P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 누락으로 먼저 수정한다. P2는 기능 신뢰성·검증·배포 개선, P3는 유지보수와 문서 개선이다. 크기 S/M/L은 상대 범위이며 일정 약속이 아니다. 담당과 PR은 작업 시작 시 정한다.
 
+2026-10-16 체크포인트: 사용자 요청으로 기존 HCI 변경까지 커밋·푸시하고 나머지 개선은 보류한다. 완료는 26개 중 23개이며, OPT-024는 부분 구현이다. 아래 보류 상태는 완료를 뜻하지 않는다.
+
 ## 추적표
 
 | ID | 우선순위 | 작업 | 영역 | 크기 | 선행 | 상태 | 담당 및 PR |
@@ -28,11 +30,11 @@ P1은 문서 내용·원본·다른 사용자 파일 손실 또는 그 검증 �
 | OPT-018 | P2 | 저장과 취소 동작 기반 통합 테스트 | desktop, tests | M | OPT-010, OPT-012 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-019 | P3 | main과 renderer 책임 분리 | desktop | L | OPT-018 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-020 | P3 | 설정 원자적 저장과 값 검증 | desktop | S | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 진행 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-021 | P3 | 보존 계약과 릴리즈 증거 문서 정합성 | docs, release | M | OPT-001~008 | 보류 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-022 | P3 | 벤치마크 실패 문서 추적과 판정 | bench | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 | OPT-023 | P2 | 실제 화면과 흐름 기반 UX 개선 | desktop, UX | M | 화면 캡처 감사 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
-| OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 대기 | Codex |
-| OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 대기 | Codex |
+| OPT-024 | P2 | 키보드와 상태 전달 및 오류 복구 HCI 개선 | desktop, HCI | M | OPT-023 감사 | 부분 구현·보류 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
+| OPT-025 | P3 | 화면 계층과 작은 창 및 확대 가독성 개선 | desktop, UI | M | OPT-023 감사 | 보류 | Codex |
 | OPT-026 | P1 | sharp·Electron 런타임 보안 패치와 배포 검증 | core, packaging | M | 없음 | 완료 | Codex · [PR #9](https://github.com/eunsang26/hwpx-optimizer/pull/9) |
 
 ## 작업별 완료 기준
@@ -312,6 +314,14 @@ Windows 최종 검증: 커밋 `4fc94c6`, Node 24.21.0. [CLI ZIP/native 실행](h
 - [ ] 분석·저장·취소·완료·실패를 시각과 보조기술에 일관되게 전달한다.
 - [x] 잘못된 용량 입력에 해당 컨트롤과 연결된 설명 및 복구 방법을 제공한다. OPT-020에서 두 입력의 aria-describedby·aria-invalid·오류 설명, 실행 차단 및 정상 값 재입력/프리셋 변경을 구현하고 실제 Electron/Playwright로 검증했다.
 - [ ] 진행 표시·감소된 모션·반복 실행과 부분 실패의 HCI 동작을 검증한다. 요약 보고서 저장 대기 중 초기화·다음 파일 선택에 대한 늦은 응답 격리도 포함한다.
+
+부분 구현 체크포인트(2026-10-16): 설정·도움말·이미지 비교·진행 영역의 배경을 inert로 제한하고 Tab/Shift+Tab 유지, 닫기 후 포커스 복귀, 눈에 보이는 포커스 테두리를 추가했다. 진행 수치·화면 막대·한국어 단계 설명을 함께 갱신하고, 비활성 배경 밖의 live status로 상태를 전달한다. 요약 리포트의 저장 중/성공/실패를 구분하고 문서 재압축 없이 리포트만 다시 저장할 수 있다. 초기화·새 파일 선택·재실행 뒤 이전 리포트 및 취소 응답이 현재 화면을 바꾸지 않도록 실행 문맥을 검사한다. 완료 후 `처음으로`와 단일 파일 `다시 최적화` 복귀 동작은 유지한다.
+
+회귀 범위: DOM 없는 실행 문맥·늦은 응답 테스트 7개와 한국어 단계 테스트 7개를 추가했다. 실제 Electron 키보드/IPC/worker/파일 저장 검사 6개는 모달 진입·유지·복귀, 진행/완료 포커스, 이미지 비교 닫기, 리포트만 재저장, 초기화 후 이전 리포트 성공·실패 응답 격리를 다룬다. 합성 입력의 해시와 재저장 전후 결과 파일 해시를 검사하며 실제 문서·캡처를 업로드하지 않는다. 실제 스크린리더의 발화 품질이나 한컴에서의 문서 표시를 검증했다는 의미는 아니다.
+
+보류 항목: 배치 체크박스 선택 후 목록 재생성으로 포커스가 body로 이동하는 현상을 로컬 키보드 검사에서 확인했다. 이 포커스 유지 수정과 부분 문서 실패의 HCI 검증을 포함해 미완료 기준은 그대로 남긴다. 작은 창·확대·대비·긴 파일명 및 하단 실행 영역 간격은 OPT-025, 현재 한컴·대표 실문서·기관 PC 검증은 OPT-021에 남아 있다.
+
+체크포인트 검증(2026-10-16 Linux/Node 24.13.0): 대상 2개 파일 33개 테스트, 전체 93개 파일 766개 테스트 통과·1개 skip. 타입 검사·빌드·release hygiene 및 합성 문서를 사용한 실제 Electron 문서 11개+설정 4개+HCI 6개 흐름 검사가 통과했다. 이번 체크포인트에서 Windows 패키지를 새로 검증하지 않았으며 이전 커밋의 Windows 결과를 현재 변경의 증거로 취급하지 않는다.
 
 ### OPT 025 화면 계층과 가독성
 

@@ -280,7 +280,7 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
       await mkdir(batchReport, { recursive: true });
       await select([inputs[0], inputs[1]], true, 2);
       await click("#optimize-button");
-      await waitFor(`document.body.dataset.busy === "" && document.body.dataset.batchResult === "visible" && document.getElementById("batch-result-panel").hidden === false`);
+      await waitFor(`document.body.dataset.busy === "" && document.body.dataset.batchResult === "visible" && document.getElementById("batch-result-panel").dataset.reportState !== "saving" && document.getElementById("batch-result-panel").hidden === false`);
       assert.match(await text("status-text"), /리포트를 저장하지 못했습니다/);
       assert.equal(await evaluate(`document.getElementById("status-banner").dataset.tone`), "warning");
       assert.equal(await evaluate(`document.getElementById("batch-open-report-button").disabled`), true);
@@ -304,7 +304,7 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
       await click("#optimize-button");
       await until(() => gate.reached);
       await click("#cancel-button");
-      await waitFor(`!document.body.dataset.busy && document.body.dataset.batchResult === "visible"`);
+      await waitFor(`!document.body.dataset.busy && document.body.dataset.batchResult === "visible" && document.getElementById("batch-result-panel").dataset.reportState !== "saving"`);
       context.worker.prepare = originalPrepare;
       assert.match(await text("batch-result-panel"), /확인 필요/);
       await assertDock("review-results");
@@ -330,7 +330,7 @@ export async function runWorkflowRegressionSmoke(window: BrowserWindow, context:
       assert.match(await text("summary-status"), /예상/);
       await assertDock("optimize");
       await click("#run-dock-button");
-      await waitFor(`document.body.dataset.busy === "" && document.body.dataset.batchResult === "visible" && !document.getElementById("batch-open-report-button").disabled`);
+      await waitFor(`document.body.dataset.busy === "" && document.body.dataset.batchResult === "visible" && document.getElementById("batch-result-panel").dataset.reportState !== "saving" && !document.getElementById("batch-open-report-button").disabled`);
       const report = JSON.parse(await readFile(batchReport, "utf8"));
       assert.equal(report.totals.done, 1);
       assert.equal(report.items.length, 1);

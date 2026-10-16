@@ -889,6 +889,8 @@ export async function runDesktopSmoke(window: BrowserWindow, context: SmokeConte
   });
   const { runSettingsSmoke } = await import("./settingsSmoke.js");
   await runSettingsSmoke(window, app.getPath("userData"), smokeSecondInputPath, selection);
+  const { runInteractionSmoke } = await import("./interactionSmoke.js");
+  await runInteractionSmoke(window, { directory: smokeDir, fixture: createSmokeHwpxFixture, worker: documentWorkerClient, selection });
 }
 
 function parseSmokeMode(value: string | undefined): OptimizationMode {

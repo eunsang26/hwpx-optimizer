@@ -15,6 +15,13 @@ import {
 } from "../src/shared/labels.js";
 
 describe("resource limit messages", () => {
+  it.each(["Applying safe document cleanup", "Applying balanced changes", "Applying aggressive changes",
+    "Packing optimized document", "Preparing output file", "Preparing JSON report", "Finalizing optimized document"])(
+    "localizes the emitted processing stage %s", (stage) => {
+      expect(progressLabel(stage)).not.toBe(stage);
+      expect(progressLabel(stage)).toMatch(/[가-힣]/);
+    }
+  );
   it("explains bounded decoding failures and preserved oversized images", () => {
     expect(errorLabel("Error invoking remote method 'hwpx:analyze': Error: Invalid HWPX package: entry exceeds declared size BinData/a.bin")).toContain("원본은 유지");
     expect(errorLabel("Invalid HWPX package: missing ZIP64 size/offset field")).toContain("ZIP 구성 정보");

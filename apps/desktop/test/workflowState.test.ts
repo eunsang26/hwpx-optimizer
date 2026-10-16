@@ -62,10 +62,10 @@ describe("renderer document transitions without a DOM", () => {
     flow.appendBatch(["/a.hwpx", "/b.hwpx"]);
     const [first, second] = flow.state.batchItems;
     flow.recordBatchAnalysis(first, analysis); flow.recordBatchAnalysis(second, analysis);
-    flow.beginBatch(); flow.beginBatchItem(first);
+    const batchToken = flow.beginBatch(); flow.beginBatchItem(first);
     flow.completeBatchItem(first, { report: completed, outputPath: "/out/a.hwpx", reportPath: "/out/a.json" });
     flow.failBatchItem(second, "report save failed");
-    flow.finishBatch(); flow.setBatchReport("/out/batch.json");
+    flow.finishBatch(); flow.acceptBatchReport(batchToken, { reportPath: "/out/batch.json" });
     expect(first.actualSizeBytes).toBe(800);
     expect(flow.retryBatch()).toBe(2);
     expect(flow.state.batchReportPath).toBeUndefined();
@@ -106,6 +106,45 @@ describe("renderer document transitions without a DOM", () => {
     expect(flow.acceptOptimization(path, { outputPath: "/out/a.hwpx", report: completed })).toBe(false);
     expect(flow.state.result).toBeUndefined();
     expect(flow.state.filePath).toBe("/b.hwpx");
+  });
+});
+
+describe("late report and cancellation contexts", () => {
+  it.each(["reset", "single", "append", "retry", "next-batch"] as const)(
+    "does not attach an old report success or error after %s", (transition) => {
+      const flow = new RendererWorkflow();
+      flow.appendBatch(["/old.hwpx"]);
+      const token = flow.beginBatch(); flow.finishBatch();
+      expect(flow.beginBatchReport(token, true)).toBe(true);
+      expect(flow.state.batchReportStatus).toBe("saving");
+      if (transition === "reset") flow.clearSelection();
+      else if (transition === "single") flow.selectSingle("/new.hwpx");
+      else if (transition === "append") flow.appendBatch(["/new.hwpx"]);
+      else if (transition === "retry") flow.retryBatch();
+      else flow.beginBatch();
+      const before = { path: flow.state.batchReportPath, status: flow.state.batchReportStatus };
+      expect(flow.acceptBatchReport(token, { reportPath: "/old/report.json" })).toBe(false);
+      expect(flow.acceptBatchReport(token, { error: "late error" })).toBe(false);
+      expect({ path: flow.state.batchReportPath, status: flow.state.batchReportStatus }).toEqual(before);
+      expect(flow.state.batchReportError).toBeUndefined();
+    }
+  );
+  it("distinguishes disabled, saving, failed and saved summary reports and permits retry", () => {
+    const flow = new RendererWorkflow();flow.appendBatch(["/a.hwpx"]);
+    const token = flow.beginBatch();flow.finishBatch();
+    flow.beginBatchReport(token, false);expect(flow.state.batchReportStatus).toBe("off");
+    flow.beginBatchReport(token, true);expect(flow.state.batchReportStatus).toBe("saving");
+    flow.acceptBatchReport(token, { error: "write failed" });expect(flow.state.batchReportStatus).toBe("failed");
+    flow.beginBatchReport(token, true);expect(flow.state.batchReportError).toBeUndefined();
+    flow.acceptBatchReport(token, { reportPath: "/report.json" });
+    expect(flow.state.batchReportStatus).toBe("saved");expect(flow.state.batchReportPath).toBe("/report.json");
+  });
+  it("invalidates a cancelled operation's response when retrying the same input", () => {
+    const flow = new RendererWorkflow();flow.selectSingle("/a.hwpx");
+    const analysisToken = flow.beginAnalysis("/a.hwpx");flow.acceptAnalysis(analysisToken, analysis, "quick");flow.finishAnalysis(analysisToken);
+    const path = flow.beginOptimization()!;const old = flow.batchToken();flow.finishOptimization(path);
+    flow.beginOptimization();expect(flow.isCurrentContext(old)).toBe(false);
+    expect(flow.isCurrentContext(flow.batchToken())).toBe(true);
   });
 });
 
