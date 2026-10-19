@@ -8,6 +8,9 @@ export type BatchItemLike = {
   selected?: boolean;
   status: BatchItemStatus;
   report?: OptimizationReport;
+  analysisReport?: OptimizationReport;
+  actualSizeBytes?: number;
+  actualSizeLabel?: string;
   outputPath?: string;
   reportPath?: string;
   originalSizeBytes?: number;
@@ -126,13 +129,14 @@ export function applyOptimizationResultToBatchItem(
     status: "done",
     outputPath: response.outputPath,
     reportPath: response.reportPath,
+    analysisReport: item.analysisReport ?? item.report,
     report,
     savedBytes: report.savedBytes,
     savedPercent: report.savedPercent,
     ...(optimizedSize !== undefined
       ? {
-          expectedSizeBytes: optimizedSize,
-          expectedSizeLabel: formatBytes(optimizedSize)
+          actualSizeBytes: optimizedSize,
+          actualSizeLabel: formatBytes(optimizedSize)
         }
       : {}),
     ...(targetStatusLabel ? { targetStatusLabel } : {}),

@@ -1,3 +1,4 @@
+import { MAX_BATCH_WORKERS } from "@hwpx-optimizer/core";
 import { Worker } from "node:worker_threads";
 
 export type PoolResult<TResult> =
@@ -13,7 +14,8 @@ export class WorkerPool<TJob, TResult> {
   private readonly liveWorkers = new Set<Worker>();
   private terminated = false;
   constructor(options: PoolOptions) {
-    this.size = Math.max(1, options.size);
+    if (!Number.isSafeInteger(options.size) || options.size < 1) throw new Error("Invalid worker pool size.");
+    this.size = Math.min(MAX_BATCH_WORKERS, options.size);
     this.workerUrl = options.workerUrl;
     this.execArgv = options.execArgv;
   }

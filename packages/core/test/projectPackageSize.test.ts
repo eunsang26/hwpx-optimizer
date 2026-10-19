@@ -1,74 +1,53 @@
+import { deflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { projectPackageSizeFromOpportunities } from "../src/projectPackageSize.js";
-import type { HwpxPackage, OptimizationOpportunity } from "../src/types.js";
+import { createPackageSizeEstimate, projectPackageSizeFromOpportunities } from "../src/projectPackageSize.js";
+import { evaluatePackageSizeEstimate } from "../src/planning.js";
+import { readHwpxPackage } from "../src/reader.js";
+import { createHwpxFixture } from "./fixtures.js";
+import type { OptimizationOpportunity } from "../src/types.js";
 
-describe("projectPackageSizeFromOpportunities", () => {
-  it("projects ZIP bytes from entry after-sizes instead of subtracting savings from the package", () => {
-    const pkg: HwpxPackage = {
-      entries: [
-        { path: "Contents/section0.xml", data: Buffer.alloc(1_000_000), size: 1_000_000, kind: "xml" },
-        { path: "BinData/a.bmp", data: Buffer.alloc(10_000_000), size: 10_000_000, kind: "image" },
-        { path: "BinData/b.jpg", data: Buffer.alloc(5_000_000), size: 5_000_000, kind: "image" }
-      ]
-    };
-    const opportunities: OptimizationOpportunity[] = [
-      {
-        id: "convert-bmp-to-png:BinData/a.bmp",
-        label: "Convert BMP to PNG",
-        action: "convert-bmp-to-png",
-        target: "BinData/a.bmp",
-        beforeSize: 10_000_000,
-        afterSize: 1_000_000,
-        estimatedSavingBytes: 9_000_000,
-        confidence: "exact",
-        risk: "medium",
-        visualImpact: "low",
-        defaultEnabledIn: ["balanced", "aggressive"]
-      },
-      {
-        id: "resize-jpeg:BinData/b.jpg",
-        label: "Resize JPEG",
-        action: "resize-jpeg",
-        target: "BinData/b.jpg",
-        beforeSize: 5_000_000,
-        afterSize: 400_000,
-        estimatedSavingBytes: 4_600_000,
-        confidence: "exact",
-        risk: "medium",
-        visualImpact: "medium",
-        defaultEnabledIn: ["balanced", "aggressive"]
-      }
-    ];
+function opportunity(action: OptimizationOpportunity["action"], target: string, before: number, after: number): OptimizationOpportunity {
+  return { id: `${action}:${target}`, label: action, action, target, beforeSize: before, afterSize: after,
+    estimatedSavingBytes: before - after, confidence: "estimated", risk: "medium", visualImpact: "low", defaultEnabledIn: ["balanced"] };
+}
 
-    const projected = projectPackageSizeFromOpportunities(pkg, opportunities);
-    // Naive package-minus-entry-savings under-shoots once compressibility changes.
-    const naivePackageMinusSavings = 12_000_000 - 13_600_000;
-    expect(naivePackageMinusSavings).toBeLessThan(projected);
-    expect(projected).toBeGreaterThan(1_000_000);
-    expect(projected).toBeLessThan(3_000_000);
+describe("ZIP size projections", () => {
+  it("preserves exact source length when no changes are predicted, including ZIP metadata", async () => {
+    const input = await createHwpxFixture({ entries: { "BinData/a.bin": Buffer.alloc(100_000, 42) } });
+    const pkg = await readHwpxPackage(input);
+    expect(pkg.sourceSize).toBe(input.length);
+    expect(pkg.entries.every(entry => entry.compressedSize !== undefined)).toBe(true);
+    expect(projectPackageSizeFromOpportunities(pkg, [])).toBe(input.length);
   });
 
-  it("uses a lower PNG pack factor for palette output", () => {
-    const pkg: HwpxPackage = {
-      entries: [{ path: "BinData/a.png", data: Buffer.alloc(2_000_000), size: 2_000_000, kind: "image" }]
-    };
-    const opportunities: OptimizationOpportunity[] = [
-      {
-        id: "resize-png:BinData/a.png",
-        label: "Resize PNG",
-        action: "resize-png",
-        target: "BinData/a.png",
-        beforeSize: 2_000_000,
-        afterSize: 1_000_000,
-        estimatedSavingBytes: 1_000_000,
-        confidence: "exact",
-        risk: "medium",
-        visualImpact: "low",
-        defaultEnabledIn: ["aggressive"]
-      }
-    ];
-    const balanced = projectPackageSizeFromOpportunities(pkg, opportunities);
-    const aggressive = projectPackageSizeFromOpportunities(pkg, opportunities, { palettePng: true });
-    expect(aggressive).toBeLessThan(balanced);
+  it("does not subtract raw BMP savings from a highly compressed ZIP", async () => {
+    const data = Buffer.alloc(1_000_000);
+    const input = await createHwpxFixture({ entries: { "BinData/a.bmp": data } });
+    const pkg = await readHwpxPackage(input);
+    const opp = opportunity("convert-bmp-to-png", "BinData/a.bmp", data.length, 100_000);
+    const projected = projectPackageSizeFromOpportunities(pkg, [opp]);
+    expect(input.length).toBeLessThan(2000);
+    expect(projected).toBe(input.length); // Candidate grows ZIP; no-growth fallback.
+  });
+
+  it("uses measured candidate DEFLATE bytes, keeps headers, and selects one alternative per resource", async () => {
+    const data = Buffer.alloc(100_000, 42);
+    const input = await createHwpxFixture({ entries: { "BinData/a.png": data } });
+    const pkg = await readHwpxPackage(input);
+    const candidate = Buffer.alloc(1000, 42);
+    const opp = { ...opportunity("optimize-png", "BinData/a.png", data.length, candidate.length),
+      compressedAfterSize: deflateRawSync(candidate, { level: 9 }).length };
+    const original = pkg.entries.find(e => e.path === opp.target)!;
+    const expected = input.length - original.compressedSize! + opp.compressedAfterSize;
+    const estimate = createPackageSizeEstimate(pkg, [opp, { ...opp, action: "resize-png", compressedAfterSize: opp.compressedAfterSize + 4 }]);
+    expect(evaluatePackageSizeEstimate(estimate).size).toBe(expected);
+    expect(evaluatePackageSizeEstimate(estimate, []).size).toBe(input.length);
+    expect(evaluatePackageSizeEstimate(estimate, ["resize-png"]).size).toBe(expected + 4);
+  });
+
+  it("does not invent a universal palette ZIP factor for unchanged PNGs", async () => {
+    const input = await createHwpxFixture({ entries: { "BinData/a.png": Buffer.alloc(1000) } });
+    const pkg = await readHwpxPackage(input);
+    expect(projectPackageSizeFromOpportunities(pkg, [], { palettePng: true })).toBe(input.length);
   });
 });

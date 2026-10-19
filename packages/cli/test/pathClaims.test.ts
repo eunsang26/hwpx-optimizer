@@ -13,7 +13,7 @@ describe("PathClaimRegistry", () => {
     const reg = new PathClaimRegistry();
     const p = await reg.claim(join(dir, "a.hwpx"));
     expect(p).toBe(join(dir, "a.hwpx"));
-    expect((await stat(p)).size).toBe(0);
+    expect((await stat(p)).isDirectory()).toBe(true);
   });
   it("suffixes when the preferred path is taken", async () => {
     await writeFile(join(dir, "a.hwpx"), "x");
@@ -27,7 +27,7 @@ describe("PathClaimRegistry", () => {
     const p2 = await reg.claim(join(dir, "a.hwpx"));
     expect(p1).not.toBe(p2);
   });
-  it("releaseAll removes 0-byte placeholders", async () => {
+  it("releaseAll removes owned empty-directory reservations", async () => {
     const reg = new PathClaimRegistry();
     await reg.claim(join(dir, "a.hwpx"));
     await reg.releaseAll();

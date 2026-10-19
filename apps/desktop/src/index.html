@@ -29,11 +29,14 @@
             <span id="status-text" class="sr-only">대기 중입니다.</span>
           </div>
           <div class="top-actions">
-            <button id="help-button" type="button" class="chrome-button" title="도움말" aria-label="도움말">
+            <button id="start-over-button" type="button" class="chrome-button start-over-button" hidden>
+              처음으로
+            </button>
+            <button id="help-button" aria-label="도움말" title="도움말" type="button" class="chrome-button" title="도움말" aria-label="도움말">
               <span class="help-icon" aria-hidden="true"></span>
               도움말
             </button>
-            <button id="settings-button" type="button" class="chrome-button" title="설정" aria-label="설정">
+            <button id="settings-button" aria-label="설정" title="설정" type="button" class="chrome-button" title="설정" aria-label="설정">
               <span class="settings-icon" aria-hidden="true"></span>
               설정
             </button>
@@ -41,24 +44,28 @@
         </div>
       </header>
 
-      <section id="progress-panel" class="panel progress-panel" hidden aria-labelledby="progress-title">
+      <section id="progress-panel" class="panel progress-panel" hidden tabindex="-1" role="region" aria-labelledby="progress-title">
         <div class="panel-header">
           <h2 id="progress-title">진행 상황</h2>
           <button id="cancel-button" class="ghost">취소</button>
         </div>
-        <div class="progress-track"><div id="progress-bar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
-        <p id="progress-item" aria-live="polite">대기 중입니다.</p>
-      </section>
-
-      <section id="status-banner" class="status-banner" hidden aria-live="polite">
-        <span class="info-icon" aria-hidden="true"></span>
-        <p id="status-banner-text">대기 중입니다.</p>
+        <div class="progress-track"><div id="progress-bar" class="progress-bar" role="progressbar" aria-labelledby="progress-title" aria-describedby="progress-item" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
+        <p id="progress-item">대기 중입니다.</p>
       </section>
 
       <section id="single-workspace" class="workspace-grid">
-        <div id="policy-toolbar" class="policy-toolbar" aria-label="결재·압축 기준">
+        <section id="settings-notice" class="status-banner" hidden role="status" aria-live="polite" data-tone="warning">
+          <p id="settings-notice-text"></p>
+          <button id="settings-notice-dismiss" type="button" class="ghost" aria-label="설정 안내 닫기">닫기</button>
+        </section>
+
+        <section id="status-banner" class="status-banner" hidden aria-label="작업 상태">
+          <span class="info-icon" aria-hidden="true"></span>
+          <p id="status-banner-text">대기 중입니다.</p>
+        </section>
+        <div id="policy-toolbar" class="policy-toolbar" aria-label="제출·압축 기준">
           <label>
-            <strong>결재</strong>
+            <strong>제출 한도</strong>
             <select id="submission-limit-select">
               <option value="none">제한 없음</option>
               <option value="mb5">5MB 미만</option>
@@ -72,8 +79,9 @@
             </select>
           </label>
           <label id="custom-limit-field" hidden>
-            <strong>직접</strong>
-            <input id="custom-limit-input" type="number" min="1" step="1" inputmode="decimal" />
+            <strong>직접(MB)</strong>
+            <input id="custom-limit-input" type="number" min="0.00000095367431640625" max="1048576" step="any" inputmode="decimal" aria-describedby="custom-limit-error" />
+            <small id="custom-limit-error" class="field-error" role="alert" hidden></small>
           </label>
           <label>
             <strong>압축</strong>
@@ -151,7 +159,7 @@
                 <strong id="single-original-size">-</strong>
               </div>
               <div>
-                <span>예상</span>
+                <span id="single-size-basis">예상</span>
                 <strong id="single-expected-size">-</strong>
               </div>
               <div class="saving-ring" aria-label="예상 절감률">
@@ -163,17 +171,18 @@
 
           <section id="batch-panel" class="batch-table-panel" hidden>
             <div class="batch-table-wrap">
-              <table class="batch-table">
-                <thead>
-                  <tr>
-                    <th><input id="batch-select-all" type="checkbox" checked aria-label="전체 선택" /></th>
-                    <th>파일</th>
-                    <th>원본 → 예상</th>
-                    <th>예정 품질</th>
-                    <th>판정</th>
+              <table class="batch-table" role="table">
+                <caption class="sr-only">선택 파일의 예상·실제 용량과 처리 결과</caption>
+                <thead role="rowgroup">
+                  <tr role="row">
+                    <th scope="col" role="columnheader"><input id="batch-select-all" type="checkbox" checked aria-label="전체 선택" /></th>
+                    <th scope="col" role="columnheader">파일</th>
+                    <th scope="col" role="columnheader">원본 → 예상 / 실제</th>
+                    <th scope="col" role="columnheader">예정 품질</th>
+                    <th scope="col" role="columnheader">판정</th>
                   </tr>
                 </thead>
-                <tbody id="batch-list"></tbody>
+                <tbody id="batch-list" role="rowgroup"></tbody>
               </table>
             </div>
             <p id="batch-summary" class="batch-summary">파일을 추가하면 진행 상태가 여기에 표시됩니다.</p>
@@ -181,10 +190,10 @@
           </section>
         </section>
 
-        <section id="empty-policy-review" class="empty-policy-review" aria-label="기본 최적화 정책">
+        <section id="empty-policy-review" class="empty-policy-review" aria-label="현재 최적화 정책">
           <div>
-            <strong>결재 기본값 40MB 미만</strong>
-            <p>파일별 판정 · 균형은 목표에 맞춰 필요한 만큼만 줄입니다.</p>
+            <strong id="empty-policy-title">제출 기준 40MB 미만</strong>
+            <p id="empty-policy-description">파일별 판정 · 균형 · 목표 맞춤</p>
           </div>
         </section>
 
@@ -217,6 +226,7 @@
               <span id="gauge-end-label">원본</span>
             </div>
             <p id="summary-verdict-detail" class="gauge-detail">제출 기준 대비 예상 용량을 보여줍니다.</p>
+            <p id="summary-analysis-basis" class="analysis-basis" hidden></p>
           </div>
           <div id="summary-grid" class="summary-grid summary-grid--secondary" hidden>
             <div class="summary-card">
@@ -251,7 +261,7 @@
               </div>
             </div>
             <div id="quality-manual" class="quality-manual" hidden>
-              <input id="jpeg-quality-slider" type="range" min="60" max="95" value="88" />
+              <input id="jpeg-quality-slider" type="range" min="60" max="95" value="88" aria-labelledby="quality-head-label" aria-describedby="quality-hint" />
               <input id="jpeg-quality-input" type="number" min="60" max="95" value="88" inputmode="numeric" aria-label="JPEG 품질" />
               <span class="quality-unit">%</span>
             </div>
@@ -268,18 +278,18 @@
               <strong>세부 옵션</strong>
               <span>체크된 항목만 실행 · 품질은 위 자동/수동</span>
             </div>
-            <div class="cleanup-settings" aria-label="개인정보·숨은 정보 정리">
+            <div class="cleanup-settings" aria-label="그림 부가 정보 정리">
               <div>
-                <strong>개인정보·숨은 정보 정리</strong>
-                <span>문서 흔적과 이미지 메타데이터를 별도로 선택합니다.</span>
+                <strong>그림 부가 정보 정리</strong>
+                <span>그림의 생성 정보와 이미지 메타데이터를 선택합니다. 문서 익명화 기능은 아닙니다.</span>
               </div>
               <label>
                 <input id="cleanup-document-toggle" type="checkbox" checked />
-                <span>문서 작성자·편집 흔적 정리</span>
+                <span>자동 생성된 그림 이름·크기 정리 · 작성한 설명 보존</span>
               </label>
               <label>
                 <input id="cleanup-image-toggle" type="checkbox" checked />
-                <span>이미지 EXIF/메타데이터 제거</span>
+                <span>EXIF 제외 이미지 메타데이터 정리</span>
               </label>
               <label class="opt-row-disabled" title="분석 시 유사 이미지 그룹을 검토용으로만 표시합니다. 자동 병합은 하지 않습니다.">
                 <input type="checkbox" disabled />
@@ -309,16 +319,19 @@
             <div class="batch-result-head">
               <span class="success-dot" aria-hidden="true"></span>
               <div>
-                <h2 id="batch-result-title">일괄 최적화 완료</h2>
+                <h2 id="batch-result-title" tabindex="-1">일괄 최적화 완료</h2>
                 <p id="batch-result-line">완료된 파일과 절감량을 확인하세요.</p>
               </div>
             </div>
             <div id="batch-result-stats" class="batch-result-stats"></div>
             <p id="batch-result-details" class="batch-result-details"></p>
+            <p id="batch-report-status" class="batch-result-details"></p>
             <div class="batch-result-actions">
-              <button id="batch-open-folder-button" type="button">폴더 보기</button>
+              <button id="batch-open-folder-button" type="button" class="ghost">폴더 보기</button>
               <button id="batch-open-report-button" type="button" class="ghost" disabled>결과 리포트 (JSON)</button>
+              <button id="batch-retry-report-button" type="button" class="ghost" hidden>리포트 저장 재시도</button>
               <button id="batch-retry-button" type="button" class="ghost">다시 최적화</button>
+              <button id="batch-start-over-button" type="button" class="ghost">처음으로</button>
             </div>
           </section>
 
@@ -334,6 +347,8 @@
                 <button id="compare-button" class="ghost" disabled>결과 비교</button>
                 <button id="reverify-button" class="ghost" disabled>다시 검증</button>
                 <button id="open-report-button" class="ghost" disabled>현재 리포트</button>
+                <button id="result-retry-button" type="button" class="ghost">다시 최적화</button>
+                <button id="result-start-over-button" type="button" class="ghost">처음으로</button>
               </div>
             </div>
             <div id="result-summary" class="metric-grid"></div>
@@ -352,7 +367,7 @@
         </div>
 
         <p id="option-plan-summary" class="option-plan-summary option-plan-summary--quiet">
-          결재·압축은 위 툴바에서, 세부 작업은 「세부 옵션」에서 조정합니다.
+          제출 한도·압축은 위 툴바에서, 세부 작업은 「세부 옵션」에서 조정합니다.
         </p>
 
         <section class="bottom-accordions">
@@ -362,6 +377,10 @@
               <strong>세부 분석 보기</strong>
               <span>파일을 선택하면 세부 분석 결과를 확인할 수 있습니다.</span>
             </summary>
+            <div class="analysis-method">
+              <p id="analysis-method" class="detail-placeholder"></p>
+              <button id="deep-analysis-button" class="ghost" type="button" disabled aria-describedby="analysis-method">상세 분석</button>
+            </div>
             <div id="analysis-grid" class="metric-grid"></div>
             <div class="two-column compact">
               <div>
@@ -388,12 +407,15 @@
         <button id="action-reset" class="ghost" type="button">기본값으로</button>
       </div>
       <p id="mode-warning" hidden></p>
-      <section id="run-dock" class="run-dock" hidden>
+      <section id="run-dock" class="run-dock" hidden aria-label="다음 작업">
         <div>
           <strong id="run-dock-status">분석 결과 대기 중</strong>
           <span id="run-dock-summary">파일을 선택하면 실행 요약이 표시됩니다.</span>
         </div>
-        <button id="run-dock-button" type="button" disabled>파일을 선택해 시작하세요</button>
+        <div class="run-dock-actions">
+          <button id="run-dock-button" type="button" disabled>파일을 선택해 시작하세요</button>
+          <button id="run-dock-start-over" type="button" class="ghost" hidden>처음으로</button>
+        </div>
       </section>
       <div hidden>
         <label><input type="radio" name="mode" value="safe" checked /> 안전</label>
@@ -406,7 +428,7 @@
           <div class="modal-header">
             <div>
               <h2 id="compare-title">이미지 비교</h2>
-              <p id="compare-summary">변경된 이미지를 원본과 결과 썸네일로 비교합니다.</p>
+              <p id="compare-summary" role="status" aria-live="polite" aria-atomic="true">변경된 이미지를 원본과 결과 썸네일로 비교합니다.</p>
             </div>
             <button id="compare-close" class="ghost" type="button">닫기</button>
           </div>
@@ -424,6 +446,7 @@
           </div>
           <button id="help-close-button" class="ghost settings-close" type="button" aria-label="도움말 닫기"><span aria-hidden="true">×</span></button>
         </div>
+        <p>화면 크기: Ctrl + + 확대 · Ctrl + − 축소 · Ctrl + 0 기본 크기 (75–225%).</p>
         <ol class="manual-steps">
           <li>
             <strong>1. 파일 선택</strong>
@@ -439,7 +462,7 @@
           </li>
           <li>
             <strong>4. 자동 최적화 계획 확인</strong>
-            <p>오른쪽 계획 목록에서 적용할 작업을 확인합니다. 체크된 항목만 실행되며, 분석 후 예상 절감량이 항목별로 표시됩니다.</p>
+            <p>세부 옵션의 계획 목록에서 적용할 작업을 확인합니다. 체크된 항목만 실행되며, 분석 후 예상 절감량이 항목별로 표시됩니다.</p>
           </li>
           <li>
             <strong>5. 실행과 저장</strong>
@@ -483,7 +506,7 @@
           </select>
         </label>
         <label class="settings-field">
-          기본 결재 기준
+          기본 제출 한도
           <select id="setting-submission-limit">
             <option value="none">제한 없음</option>
             <option value="mb5">5MB 미만</option>
@@ -498,7 +521,8 @@
         </label>
         <label id="setting-custom-limit-field" class="settings-field" hidden>
           직접 입력 (MB)
-          <input id="setting-custom-limit-input" type="number" min="1" step="1" inputmode="decimal" />
+          <input id="setting-custom-limit-input" type="number" min="0.00000095367431640625" max="1048576" step="any" inputmode="decimal" aria-describedby="setting-custom-limit-error" />
+          <small id="setting-custom-limit-error" class="field-error" role="alert" hidden></small>
         </label>
         <label class="settings-check"><input id="setting-save-next" type="checkbox" /><span>원본 파일 옆에 저장</span></label>
         <label class="settings-check"><input id="setting-save-report" type="checkbox" /><span>JSON 리포트 저장(선택)</span></label>
@@ -518,6 +542,7 @@
         <p>설정에는 최근 파일, 출력 폴더, 처리 이력, 내부 로그를 저장하지 않습니다.</p>
       </aside>
     </main>
+    <div id="interaction-announcement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
     <script type="module" src="./renderer.js"></script>
   </body>
 </html>

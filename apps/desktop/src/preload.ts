@@ -1,4 +1,9 @@
+import type { DesktopSettingsSnapshot } from "./shared/desktopSettings.js";
+import type { DesktopOptimizeRequest, DesktopBatchReportRequest } from "./main/documentController.js";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type { DesktopAnalysisResult, DesktopOptimizeResult } from "./main/desktopService.js";
+import type { DesktopImagePreviewInput } from "./shared/imagePreview.js";
+import type { CancellationResult } from "./shared/cancellation.js";
 
 const api = {
   selectHwpx: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-hwpx"),
@@ -12,44 +17,20 @@ const api = {
       .filter((path) => path.length > 0);
     return ipcRenderer.invoke("hwpx:register-dropped-paths", paths);
   },
-  loadSettings: () => ipcRenderer.invoke("settings:load"),
-  saveSettings: (patch: Record<string, unknown>) => ipcRenderer.invoke("settings:save", patch),
-  analyze: (filePath: string) => ipcRenderer.invoke("hwpx:analyze", filePath),
-  optimize: (input: {
-    filePath: string;
-    mode: "safe" | "balanced" | "aggressive";
-    outputDirectory?: string;
-    outputMode?: "single" | "batch";
-    actions?: string[];
-    targetBytes?: number;
-    jpegQuality?: number;
-  }) => ipcRenderer.invoke("hwpx:optimize", input),
-  cancelAnalyze: () => ipcRenderer.invoke("hwpx:cancel-analyze"),
-  cancelOptimize: () => ipcRenderer.invoke("hwpx:cancel-optimize"),
+  loadSettings: (): Promise<DesktopSettingsSnapshot> => ipcRenderer.invoke("settings:load"),
+  saveSettings: (patch: Record<string, unknown>): Promise<DesktopSettingsSnapshot> => ipcRenderer.invoke("settings:save", patch),
+  analyze: (filePath: string, options?: { analysisMode?: "quick" | "deep" }): Promise<DesktopAnalysisResult> => ipcRenderer.invoke("hwpx:analyze", filePath, options),
+  optimize: (input: DesktopOptimizeRequest): Promise<DesktopOptimizeResult> => ipcRenderer.invoke("hwpx:optimize", input),
+  cancelAnalyze: (): Promise<CancellationResult> => ipcRenderer.invoke("hwpx:cancel-analyze"),
+  cancelOptimize: (): Promise<CancellationResult> => ipcRenderer.invoke("hwpx:cancel-optimize"),
   onOptimizeProgress: (callback: (progress: { percent: number; item: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: { percent: number; item: string }) => callback(progress);
     ipcRenderer.on("hwpx:optimize-progress", listener);
     return () => ipcRenderer.off("hwpx:optimize-progress", listener);
   },
   verify: (filePath: string) => ipcRenderer.invoke("hwpx:verify", filePath),
-  saveBatchReport: (input: {
-    firstInputPath: string;
-    outputDirectory?: string;
-    mode: "safe" | "balanced" | "aggressive";
-    batchTargetBytes?: number;
-    items: Array<{
-      input: string;
-      status: "done" | "failed" | "cancelled";
-      output?: string;
-      report?: string;
-      error?: string;
-      originalSize?: number;
-      optimizedSize?: number;
-      savedBytes?: number;
-      savedPercent?: number;
-    }>;
-  }): Promise<{ reportPath: string }> => ipcRenderer.invoke("hwpx:save-batch-report", input),
-  previewImageDiffs: (input: { originalPath: string; optimizedPath: string; maxItems?: number; maxInputBytes?: number }) =>
+  saveBatchReport: (input: DesktopBatchReportRequest): Promise<{ reportPath: string }> => ipcRenderer.invoke("hwpx:save-batch-report", input),
+  previewImageDiffs: (input: DesktopImagePreviewInput) =>
     ipcRenderer.invoke("hwpx:image-preview", input),
   showItem: (filePath: string) => ipcRenderer.invoke("shell:show-item", filePath),
   openPath: (filePath: string) => ipcRenderer.invoke("shell:open-path", filePath)

@@ -1,0 +1,10 @@
+{
+  "name": "@hwpx-optimizer/io",
+  "version": "0.1.9",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "development": "./src/index.ts", "import": "./dist/index.js" }
+  }
+}

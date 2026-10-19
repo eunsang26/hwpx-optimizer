@@ -1,9 +1,12 @@
+import { deflateRawSync } from "node:zlib";
+import { SHARP_INPUT_OPTIONS } from "./resourceLimits.js";
 import sharp from "sharp";
 import { readBmpInfo } from "./bmp.js";
 import { getDecodedImage } from "./decodedImage.js";
 import { findByteIdenticalImageGroups, findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
-import { readImageMetadata } from "./imageMetadata.js";
+import { assertImageCanBeTransformed, readImageMetadata } from "./imageMetadata.js";
+import type { ImageMetadata } from "./imageMetadata.js";
 import { stripJpegMetadataSegments } from "./optimizer.js";
 import type { HwpxPackage, OptimizationOpportunity } from "./types.js";
 
@@ -68,7 +71,7 @@ export type TransformImageAction =
 export async function detectOptimizationOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile = balancedImageProfile,
-  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number } = {}
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number; safeOnly?: boolean } = {}
 ): Promise<OptimizationOpportunity[]> {
   return collectOpportunities(pkg, profile, "exact", options);
 }
@@ -76,7 +79,7 @@ export async function detectOptimizationOpportunities(
 export async function detectEstimatedOptimizationOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile = balancedImageProfile,
-  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number } = {}
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number; safeOnly?: boolean } = {}
 ): Promise<OptimizationOpportunity[]> {
   return collectOpportunities(pkg, profile, "estimated", options);
 }
@@ -85,23 +88,26 @@ async function collectOpportunities(
   pkg: HwpxPackage,
   profile: ImageOptimizationProfile,
   confidence: OpportunityConfidence,
-  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number }
+  options: { duplicateMode?: "byte" | "visual"; imageConcurrency?: number; safeOnly?: boolean }
 ): Promise<OptimizationOpportunity[]> {
   const opportunities: OptimizationOpportunity[] = [];
+  const compressedCandidates = new Map<string, number>();
   const resizeBudgets = getRecommendedImagePixelBudgets(pkg, profile.displayScale);
-  await addDuplicateImageOpportunities(pkg, opportunities, options.duplicateMode ?? "visual", options.imageConcurrency);
+  if (!options.safeOnly) await addDuplicateImageOpportunities(pkg, opportunities, options.duplicateMode ?? "visual", options.imageConcurrency);
 
   for (const entry of pkg.entries) {
     if (entry.kind !== "image") continue;
 
     const metadata = await readMetadata(entry.data);
+    if (metadata.preservationReason) continue;
     const resizeBudget = normalizeResizeBudget(resizeBudgets.get(entry.path), profile);
     // Hangul packages sometimes store JPEG payloads under a .png href. Drive the
     // JPEG pipeline from decoded format so we never re-encode those as PNG.
     const jpegPayload = isJpeg(entry.path) || isJpegFormat(metadata.format);
-    if (jpegPayload && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
+    if (!options.safeOnly && jpegPayload && shouldResizeOrRecompress(metadata.width, metadata.height, resizeBudget, profile)) {
       const afterSize = await measureOrEstimateImageSize({
         confidence,
+        measured: bytes => compressedCandidates.set(entry.path, bytes),
         size: entry.size,
         transform: () => resizeJpeg(entry.data, resizeBudget, profile),
         estimate: () => estimateJpegResizeSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
@@ -130,9 +136,10 @@ async function collectOpportunities(
       continue;
     }
 
-    if (isBmp(entry.path)) {
+    if (!options.safeOnly && isBmp(entry.path)) {
       const afterSize = await measureOrEstimateImageSize({
         confidence,
+        measured: bytes => compressedCandidates.set(entry.path, bytes),
         size: entry.size,
         transform: () => convertBmpToPng(entry.data, metadata.width, metadata.height, resizeBudget, profile),
         estimate: () => estimateBmpPngSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
@@ -156,13 +163,14 @@ async function collectOpportunities(
       continue;
     }
 
-    if (isTiff(entry.path)) {
-      const afterSize = await measureTiffPngSize({
-        data: entry.data,
-        width: metadata.width,
-        height: metadata.height,
-        resizeBudget,
-        profile
+    if (!options.safeOnly && isTiff(entry.path)) {
+      const afterSize = await measureOrEstimateImageSize({
+        confidence,
+        measured: bytes => compressedCandidates.set(entry.path, bytes),
+        size: entry.size,
+        transform: () => convertTiffToPng(entry.data, metadata.width, metadata.height, resizeBudget, profile),
+        // TIFF compression varies; this is a header-based heuristic, not a measured encode.
+        estimate: () => estimatePngResizeSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
       });
       if (afterSize === null) continue;
       addOpportunityIfSmaller(opportunities, {
@@ -184,9 +192,10 @@ async function collectOpportunities(
     }
 
     if (isPng(entry.path)) {
-      if (shouldResize(metadata.width, metadata.height, resizeBudget, profile)) {
+      if (!options.safeOnly && shouldResize(metadata.width, metadata.height, resizeBudget, profile)) {
         const afterSize = await measureOrEstimateImageSize({
           confidence,
+          measured: bytes => compressedCandidates.set(entry.path, bytes),
           size: entry.size,
           transform: () => resizePng(entry.data, resizeBudget, profile),
           estimate: () => estimatePngResizeSize(entry.size, metadata.width, metadata.height, resizeBudget, profile)
@@ -213,6 +222,7 @@ async function collectOpportunities(
       if (entry.size >= PNG_OPTIMIZE_MIN_BYTES) {
         const afterSize = await measureOrEstimateImageSize({
           confidence,
+          measured: bytes => compressedCandidates.set(entry.path, bytes),
           size: entry.size,
           transform: () => optimizePng(entry.data, profile),
           estimate: () => Math.round(entry.size * (profile.pngPalette ? 0.8 : 0.95))
@@ -234,7 +244,12 @@ async function collectOpportunities(
     }
   }
 
-  addShapeCommentOpportunities(pkg, opportunities);
+  for (const opportunity of opportunities) {
+    const compressed = compressedCandidates.get(opportunity.target);
+    if (compressed !== undefined && opportunity.action !== "consolidate-duplicate-images" && opportunity.action !== "strip-metadata") opportunity.compressedAfterSize = compressed;
+  }
+  if (options.safeOnly) for (const opportunity of opportunities) opportunity.defaultEnabledIn = ["safe"];
+  if (!options.safeOnly) addShapeCommentOpportunities(pkg, opportunities);
   return opportunities.sort((left, right) => right.estimatedSavingBytes - left.estimatedSavingBytes);
 }
 
@@ -243,9 +258,11 @@ async function measureOrEstimateImageSize(input: {
   size: number;
   transform: () => Promise<Buffer>;
   estimate: () => number;
+  measured: (bytes: number) => void;
 }): Promise<number | null> {
   if (input.confidence === "estimated") return input.estimate();
   const candidate = await tryTransform(input.transform);
+  if (candidate) input.measured(deflateRawSync(candidate, { level: 9 }).length);
   return candidate ? candidate.byteLength : null;
 }
 
@@ -306,21 +323,8 @@ function addJpegMetadataOpportunity(
     confidence,
     risk: "safe",
     visualImpact: "none",
-    defaultEnabledIn: ["balanced", "aggressive"]
+    defaultEnabledIn: ["safe", "balanced", "aggressive"]
   });
-}
-
-async function measureTiffPngSize(input: {
-  data: Buffer;
-  width?: number;
-  height?: number;
-  resizeBudget?: { width: number; height: number };
-  profile: ImageOptimizationProfile;
-}): Promise<number | null> {
-  const candidate = await tryTransform(() =>
-    convertTiffToPng(input.data, input.width, input.height, input.resizeBudget, input.profile)
-  );
-  return candidate ? candidate.byteLength : null;
 }
 
 function addShapeCommentOpportunities(pkg: HwpxPackage, opportunities: OptimizationOpportunity[]): void {
@@ -362,6 +366,7 @@ export async function transformImageBalancedWithBudget(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<{ outputPath: string; data: Buffer }> {
+  await assertImageCanBeTransformed(data);
   const metadata = await readMetadata(data);
   const resizeBudget = normalizeResizeBudget(budget, profile);
   if (isBmp(path)) {
@@ -413,6 +418,7 @@ export async function transformImageActionWithBudget(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<{ outputPath: string; data: Buffer }> {
+  await assertImageCanBeTransformed(data);
   const metadata = await readMetadata(data);
   const resizeBudget = normalizeResizeBudget(budget, profile);
   if (action === "convert-bmp-to-png") {
@@ -443,7 +449,13 @@ export async function transformImageActionWithBudget(
 }
 
 export function cleanShapeComments(xml: string): string {
-  return xml.replace(/<hp:shapeComment>[\s\S]*?<\/hp:shapeComment>/g, "<hp:shapeComment>그림입니다.</hp:shapeComment>");
+  return xml.replace(/(<hp:shapeComment>)([^<]*)(<\/hp:shapeComment>)/g,
+    (_match, open: string, text: string, close: string) => {
+      const lines = text.split(/\r?\n/);
+      const retained = lines.filter((line) => !/^\s*원본 그림의 (이름|크기):/.test(line));
+      return retained.length === lines.length ? `${open}${text}${close}` :
+        `${open}${retained.join(text.includes("\r\n") ? "\r\n" : "\n")}${close}`;
+    });
 }
 
 export function outputMediaType(path: string): string {
@@ -462,8 +474,8 @@ async function convertBmpToPng(
 ): Promise<Buffer> {
   const decoded = await getDecodedImage(data);
   const image = decoded
-    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
-    : sharp(data);
+    ? sharp(decoded.data, { ...SHARP_INPUT_OPTIONS, raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
+    : sharp(data, SHARP_INPUT_OPTIONS);
   const sourceWidth = decoded?.width ?? width;
   const sourceHeight = decoded?.height ?? height;
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
@@ -510,8 +522,8 @@ async function convertTiffToPng(
   // swapped dimensions fail the verifier's aspect-ratio/enlargement checks).
   const decoded = await getDecodedImage(data, { rotate: true });
   const image = decoded
-    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
-    : sharp(data).rotate();
+    ? sharp(decoded.data, { ...SHARP_INPUT_OPTIONS, raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
+    : sharp(data, SHARP_INPUT_OPTIONS).rotate();
   const sourceWidth = decoded?.width ?? width;
   const sourceHeight = decoded?.height ?? height;
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
@@ -533,11 +545,8 @@ async function resizeJpeg(
   budget?: { width: number; height: number },
   profile: ImageOptimizationProfile = balancedImageProfile
 ): Promise<Buffer> {
-  // Warm the shared decode cache for same-visual hashing on this Buffer, but keep
-  // mozjpeg encoding on the original container — raw→JPEG often grows bytes.
-  void getDecodedImage(data, { rotate: true });
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
-  return sharp(data, { failOn: "none" })
+  return sharp(data, { ...SHARP_INPUT_OPTIONS, failOn: "none" })
     .resize({
       width: target.width,
       height: target.height,
@@ -558,8 +567,8 @@ async function resizePng(
   const decoded = await getDecodedImage(data, { rotate: true });
   const target = budget ?? { width: profile.maxEdge, height: profile.maxEdge };
   const image = decoded
-    ? sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
-    : sharp(data).rotate();
+    ? sharp(decoded.data, { ...SHARP_INPUT_OPTIONS, raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
+    : sharp(data, SHARP_INPUT_OPTIONS).rotate();
   return image
     .resize({
       width: target.width,
@@ -574,8 +583,8 @@ async function resizePng(
 
 async function optimizePng(data: Buffer, profile: ImageOptimizationProfile = balancedImageProfile): Promise<Buffer> {
   const decoded = await getDecodedImage(data, { rotate: false });
-  if (!decoded) return sharp(data).png(pngOptions(profile)).toBuffer();
-  return sharp(decoded.data, { raw: { width: decoded.width, height: decoded.height, channels: 3 } })
+  if (!decoded) return sharp(data, SHARP_INPUT_OPTIONS).png(pngOptions(profile)).toBuffer();
+  return sharp(decoded.data, { ...SHARP_INPUT_OPTIONS, raw: { width: decoded.width, height: decoded.height, channels: decoded.channels } })
     .png(pngOptions(profile))
     .toBuffer();
 }
@@ -588,9 +597,8 @@ function pngOptions(profile: ImageOptimizationProfile) {
   };
 }
 
-async function readMetadata(data: Buffer): Promise<{ width?: number; height?: number; format?: string }> {
-  const metadata = await readImageMetadata("", data);
-  return { width: metadata.width, height: metadata.height, format: metadata.format };
+async function readMetadata(data: Buffer): Promise<ImageMetadata> {
+  return readImageMetadata("", data);
 }
 
 function addOpportunityIfSmaller(

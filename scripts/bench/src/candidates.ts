@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import type { ImageOptimizationProfile } from "@hwpx-optimizer/core";
 import type { EncodeResult, RawImage } from "./types.js";
-import { encodeRawWithJpegli, resolveJpegliBin } from "./jpegliCli.js";
+import { encodeRawWithJpegli, JpegliToolMissingError, resolveJpegliBin } from "./jpegliCli.js";
 
 export { resolveJpegliBin } from "./jpegliCli.js";
 
@@ -21,7 +21,7 @@ export async function encodeMozjpeg(raw: RawImage, quality: number): Promise<Enc
 export async function encodeJpegli(raw: RawImage, quality: number): Promise<EncodeResult> {
   const bin = resolveJpegliBin();
   if (!bin) {
-    throw new Error("jpegli CLI not found (set HWPX_BENCH_JPEGLI or install cjpegli on PATH)");
+    throw new JpegliToolMissingError("jpegli CLI not found (set HWPX_BENCH_JPEGLI or install cjpegli on PATH)");
   }
   const { bytes, encodeMs } = await encodeRawWithJpegli(raw, quality, bin);
   return { bytes, encodeMs, quality, candidate: "jpegli" };

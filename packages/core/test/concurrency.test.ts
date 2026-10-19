@@ -81,6 +81,9 @@ describe("resolveImageConcurrency", () => {
     expect(resolveImageConcurrency(1)).toBe(1);
     expect(resolveImageConcurrency(3)).toBe(3);
   });
+  it("caps an explicit image concurrency at four", () => {
+    expect(resolveImageConcurrency(1000)).toBe(4); expect(defaultImageConcurrency()).toBeLessThanOrEqual(2);
+  });
   it("floors to at least 1 for invalid input", () => {
     expect(resolveImageConcurrency(0)).toBe(1);
     expect(resolveImageConcurrency(-4)).toBe(1);

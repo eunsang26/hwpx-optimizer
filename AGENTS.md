@@ -6,13 +6,13 @@ This is a TypeScript npm workspaces monorepo for a local-only HWPX optimizer.
 
 - `packages/core/`: shared HWPX analysis, planning, optimization, verification, and report logic. Keep this package free of filesystem, terminal, and Electron concerns.
 - `packages/cli/`: thin CLI wrapper around core APIs. Commands include `analyze`, `report`, `verify`, `optimize`, and `batch`.
-- `apps/desktop/`: Electron desktop app. `src/main.ts` owns Electron/IPC, `src/main/desktopService.ts` owns testable file operations, and `src/shared/` contains renderer view-model helpers.
+- `apps/desktop/`: Electron desktop app. `src/main.ts` wires Electron/IPC; `src/main/documentController.ts` owns document operations, `pathPermissions.ts` owns session grants, and `desktopService.ts` owns file operations. `src/renderer/` holds DOM-free document state/planning; `src/shared/` holds view-model helpers and common UI policy. Smoke-only modules live under `src/main/smoke/`.
 - `docs/`: architecture, testing, release, QA, and limitation notes.
 - `scripts/`: release, packaging, icon, and Windows runtime verification helpers.
 
 ## Build, Test, and Development Commands
 
-- `npm install`: install workspace dependencies. Use Node.js 20+.
+- `npm install`: install workspace dependencies. Use Node.js 22.12.0+ (24.21.0 recommended).
 - `npm test`: run all Vitest tests.
 - `npm test -- packages/core/test/optimizer.test.ts`: run one targeted test file first while developing.
 - `npm run typecheck`: run `tsc -b` across core, CLI, and desktop projects.

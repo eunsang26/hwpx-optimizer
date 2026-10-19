@@ -17,11 +17,11 @@
 | 항목 | 현재 처리 |
 | --- | --- |
 | 원본 보존 | 원본 파일을 직접 덮어쓰지 않는다. CLI와 Desktop 모두 기본적으로 새 결과 경로를 만든다. |
-| 덮어쓰기 방지 | 기존 출력 파일이 있으면 suffix를 붙인다. 입력 파일을 출력 또는 리포트 경로로 지정하면 거절한다. |
+| 덮어쓰기 방지 | 기본 non-overwrite는 출력 이름을 배타적으로 확보하고 충돌 시 suffix를 붙인다. 명시적 overwrite도 입력 파일 또는 같은 inode의 링크를 출력·리포트 대상으로 허용하지 않는다. Desktop은 현재 세션에서 선택한 모든 입력을 worker 재시작 후에도 보호한다. |
 | 샘플/리포트 관리 | root-level `sample*.hwpx`, `sample*.hwp`, `sample*.json`, `sample*.txt`, `결과/`는 커밋 금지 대상이다. |
-| 개인정보 흔적 정리 | `clean-shape-comment`는 작성자/편집 흔적성 shape comment를 정리하는 선택 작업이다. 원문 본문 수집 용도가 아니다. |
+| shape comment 정리 범위 | `clean-shape-comment`는 지원하는 comment에서 자동 생성된 `원본 그림의 이름:`·`원본 그림의 크기:` 행만 지운다. 작성한 설명은 보존한다. 개인정보 익명화나 편집 이력 전체 제거 기능은 아니다. |
 | 보안 문서 | 암호화, DRM, 전자서명, 권한 제한 문서는 최적화하지 않는다. |
-| Desktop 기록 저장 | 최근 파일, 입력 경로, 출력 폴더 경로, 처리 이력, 내부 로그를 저장하지 않는다. JSON 리포트는 기본 off이며 사용자가 켠 경우에만 별도 산출물로 생성한다. |
+| Desktop 기록 저장 | 앱 설정 whitelist는 중첩 속성까지 제한하며 최근 파일, 입력 경로, 출력 폴더 경로, 처리 이력, 내부 로그를 저장하지 않는다. JSON 리포트는 기본 off이며 켠 경우 별도 산출물로 생성한다. 이는 앱 소유 설정 정책이며 OS·뷰어의 최근 문서 기록까지 통제하지 않는다. [설정·복구 계약](DESKTOP_SETTINGS_2026-10-15.md). |
 | IPC 경로 제한 | Desktop main process는 선택·분석된 HWPX와 이번 실행에서 생성된 결과 파일만 분석, 최적화, 검증, 열기 대상으로 허용한다. |
 
 ## 3. 보안성 검토 자료
@@ -32,6 +32,7 @@
 npm test
 npm run typecheck
 npm run build
+npm run release:audit
 npm audit
 npm run release:hygiene
 npm run release:verify-artifacts
@@ -39,13 +40,15 @@ npm run desktop:smoke
 npm run release:check:win-portable:self-signed
 ```
 
-릴리즈 산출물은 `release/release-manifest.json`과 `release/SHA256SUMS.txt`로 해시를 검증한다. 의존성 취약점은 `npm audit` 결과를 기준으로 배포 전 검토한다.
+릴리즈 산출물은 `release/release-manifest.json`과 `release/SHA256SUMS.txt`로 해시를 검증한다. 배포 차단 판정은 `npm run release:audit`를 사용한다. 이 명령은 production audit와 full audit 응답을 모두 검증하고, production 의존성 및 devDependencies에 선언돼도 실제 배포되는 Electron의 **moderate 이상** 취약점이 있으면 실패한다. 응답 오류·불완전 JSON도 재시도 후 실패한다. 나머지 개발·빌드 도구 advisories는 full audit에서 별도로 검토하며 전체 취약점 0으로 표현하지 않는다.
+
+`22546ee`의 2026-10-15 Windows 검증은 위 runtime moderate 이상 0, 전체 20개(high 8·moderate 11·low 1)였다. 최신 판정은 릴리즈마다 재실행해야 한다. [현재 증거 목록](RELEASE_EVIDENCE_2026-10-15.md)은 합성 CI·실제 패키지 실행·과거 실제 문서 확인·한컴/기관 PC 미실시를 구분한다. 자동 통과를 수동 보안성 검토나 최종 배포 승인으로 해석하지 않는다.
 
 ## 4. 배포 통제
 
 - 배포 파일은 승인된 사내 공유 위치 또는 소프트웨어 배포 시스템으로만 배포한다.
 - 배포 공지에는 버전, 배포일, 담당자, 변경 내역, SHA256 값, 자체서명 상태, 제작자/사용 조건, 보증 부인 및 사용자 책임 문구를 포함한다.
-- `release:manifest`는 `release/RELEASE_NOTICE_0.1.0.txt`를 생성하며, `release:verify-manifest`는 공지문에 artifact 파일명과 SHA256이 포함되었는지 검증한다.
+- `release:manifest`는 `release/RELEASE_NOTICE_<version>.txt`를 생성하며, `release:verify-manifest`는 공지문에 artifact 파일명과 SHA256이 포함되었는지 검증한다.
 - 배포 패키지에는 사용자에게 보이는 `TERMS.txt`를 포함한다.
 - 임의 재배포와 외부 반출을 금지한다.
 - 사전 승인 없는 수정, 변형, 파생물 제작, 영리 목적 이용, 제작자 또는 출처 표시 제거를 금지한다.
@@ -63,7 +66,7 @@ npm run release:check:win-portable:self-signed
 - [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md)
 - [Known Limitations](KNOWN_LIMITATIONS.md)
 - `TERMS.txt`
-- `release/RELEASE_NOTICE_0.1.0.txt`
+- `release/RELEASE_NOTICE_<version>.txt`
 - 릴리즈별 SHA256 checksum과 manifest
 - 테스트 및 QA 결과 요약
 

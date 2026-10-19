@@ -13,7 +13,7 @@ describe("classifyTargetVerdict", () => {
       targetBytes: 40 * 1024 * 1024
     });
     expect(result.verdict).toBe("pass");
-    expect(result.label).toBe("제출 가능");
+    expect(result.label).toBe("제출 가능 예상");
   });
 
   it("returns need-more when floor would pass but current does not", () => {
@@ -24,7 +24,7 @@ describe("classifyTargetVerdict", () => {
       atFloor: false
     });
     expect(result.verdict).toBe("need-more");
-    expect(result.label).toBe("더 압축 필요");
+    expect(result.label).toBe("추가 압축 필요 예상");
     expect(result.detail).toContain("하한 품질");
   });
 
@@ -36,7 +36,7 @@ describe("classifyTargetVerdict", () => {
       atFloor: true
     });
     expect(result.verdict).toBe("hard-miss");
-    expect(result.label).toBe("기준 미달");
+    expect(result.label).toBe("기준 초과 예상");
     expect(result.detail).toContain("하한 품질");
   });
 

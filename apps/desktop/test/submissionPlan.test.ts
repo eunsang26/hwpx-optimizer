@@ -139,7 +139,7 @@ describe("submission optimization plan", () => {
     ]);
     expect(plan.plannedJpegQuality).toBeDefined();
     expect(plan.expectedSizeBytes).toBeLessThanOrEqual(28 * MIB);
-    expect(["제출 가능", "더 압축 필요", "기준 미달"]).toContain(plan.targetStatusLabel);
+    expect(["제출 가능 예상", "추가 압축 필요 예상", "기준 초과 예상"]).toContain(plan.targetStatusLabel);
   });
 
   it("surfaces safe structural actions in balanced plans", () => {
@@ -213,7 +213,7 @@ describe("submission optimization plan", () => {
     });
 
     expect(plan.targetStatus).toBe("already-under-target");
-    expect(plan.targetStatusLabel).toBe("제출 가능");
+    expect(plan.targetStatusLabel).toBe("제출 가능 예상");
     expect(plan.verdict).toBe("pass");
   });
 
@@ -248,7 +248,7 @@ describe("submission optimization plan", () => {
     expect(plan.plannedJpegQuality).toBe(60);
     expect(plan.verdict).toBe("hard-miss");
     expect(plan.targetStatus).toBe("target-missed");
-    expect(plan.targetStatusLabel).toBe("기준 미달");
+    expect(plan.targetStatusLabel).toBe("기준 초과 예상");
   });
 
   it("renders individual priority rows instead of hiding work inside broad buckets", () => {
@@ -420,7 +420,7 @@ describe("submission optimization plan", () => {
     expect(plan.actionRows.map((row) => row.label)).toEqual([
       "중복 이미지 참조 정리",
       "EXIF 제외 이미지 정보 제거",
-      "작성자·편집 흔적 정리",
+      "생성된 그림 이름·크기 정리",
       "큰 JPEG 리사이즈"
     ]);
     expect(plan.actionRows.map((row) => row.savingLabel)).toEqual(["3.00 MiB", "500.0 KiB", "500.0 KiB", "8.00 MiB"]);
@@ -608,3 +608,30 @@ const reportFixture: OptimizationReport = {
   ],
   warnings: []
 };
+
+describe("explicit ZIP estimate contracts", () => {
+  const model = { basis: "source-zip" as const, originalSize: 3000, minimumSize: 800,
+    adjustments: [{ target: "BinData/a.bmp", action: "resize-jpeg" as const, savingBytes: 200, jpegBytes: 0 }] };
+  const report: OptimizationReport = { ...reportFixture, kind: "analysis", originalSize: 3000,
+    // Deliberately incompatible raw-entry savings must not override ZIP estimates.
+    estimates: { safe: { ...model, adjustments: [] }, balanced: model,
+      aggressive: { ...model, adjustments: [{ ...model.adjustments[0], savingBytes: 400 }] } },
+    estimatedSize: 2800, optimizedSize: undefined };
+  it("keeps the ZIP baseline and isolates preservation profiles", () => {
+    const input = { submissionLimit: { id: "none" as const }, actionOverrides: new Map() };
+    expect(createSubmissionPlan(report, { ...input, preservationPreference: "preserve" }).expectedSizeBytes).toBe(3000);
+    const balanced = createSubmissionPlan(report, { ...input, preservationPreference: "recommended" });
+    expect(balanced.expectedSizeBytes).toBe(2800);
+    expect(balanced.floorExpectedBytes).toBe(2800); // No JPEG-sensitive bytes; aggressive PNG is not a floor.
+    expect(createSubmissionPlan(report, { ...input, preservationPreference: "size" }).expectedSizeBytes).toBe(2600);
+  });
+  it("keeps equality as an estimated miss and applies custom action selection", () => {
+    const plan = createSubmissionPlan(report, { submissionLimit: { id: "custom", customBytes: 2800 },
+      preservationPreference: "recommended", actionOverrides: new Map() });
+    expect(plan.targetStatus).toBe("target-missed");
+    expect(plan.verdictLabel).toContain("예상");
+    const unselected = createSubmissionPlan(report, { submissionLimit: { id: "none" },
+      preservationPreference: "recommended", actionOverrides: new Map([["resize-jpeg", false]]) });
+    expect(unselected.expectedSizeBytes).toBe(3000);
+  });
+});

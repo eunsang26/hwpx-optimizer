@@ -14,6 +14,21 @@ import {
   warningLabel
 } from "../src/shared/labels.js";
 
+describe("resource limit messages", () => {
+  it.each(["Applying safe document cleanup", "Applying balanced changes", "Applying aggressive changes",
+    "Packing optimized document", "Preparing output file", "Preparing JSON report", "Finalizing optimized document"])(
+    "localizes the emitted processing stage %s", (stage) => {
+      expect(progressLabel(stage)).not.toBe(stage);
+      expect(progressLabel(stage)).toMatch(/[가-힣]/);
+    }
+  );
+  it("explains bounded decoding failures and preserved oversized images", () => {
+    expect(errorLabel("Error invoking remote method 'hwpx:analyze': Error: Invalid HWPX package: entry exceeds declared size BinData/a.bin")).toContain("원본은 유지");
+    expect(errorLabel("Invalid HWPX package: missing ZIP64 size/offset field")).toContain("ZIP 구성 정보");
+    expect(warningLabel("BinData/a.png: Image exceeds supported pixel limit (24000000 pixels); original bytes are preserved.")).toContain("24MP");
+  });
+});
+
 describe("shared labels", () => {
   it("translates progress strings, including dynamic mode-specific phrasing", () => {
     expect(progressLabel("Reading HWPX package")).toBe("HWPX 문서 구조를 읽는 중입니다");
@@ -32,6 +47,8 @@ describe("shared labels", () => {
   it("translates known runtime errors to user-facing Korean messages", () => {
     expect(errorLabel("Analysis cancelled.")).toBe("분석이 취소되었습니다.");
     expect(errorLabel("Optimization cancelled.")).toBe("최적화가 취소되었습니다.");
+    expect(errorLabel("Could not save. Rollback incomplete; preserved recovery files: C:/output/.hwpx-save-123. EPERM: restore denied"))
+      .toContain("C:/output/.hwpx-save-123");
     expect(errorLabel("Unsupported HWP binary file: save or export the document as .hwpx before optimizing")).toBe(
       "HWP 파일은 직접 최적화할 수 없습니다. 한글에서 HWPX로 저장/내보낸 뒤 다시 선택하세요."
     );
@@ -109,7 +126,7 @@ describe("shared labels", () => {
   it("provides Korean labels for every supported action and mode", () => {
     expect(actionLabel("strip-metadata")).toBe("EXIF 제외 이미지 메타데이터 제거");
     expect(actionLabel("convert-bmp-to-png")).toBe("BMP를 PNG로 변환");
-    expect(actionLabel("clean-shape-comment")).toBe("이미지 설명 메타데이터 정리");
+    expect(actionLabel("clean-shape-comment")).toBe("생성된 그림 이름·크기 정리");
     expect(actionLabel("custom-action")).toBe("custom-action");
     expect(modeLabel("safe")).toBe("안전");
     expect(modeLabel("balanced")).toBe("균형");

@@ -146,7 +146,7 @@ HWPX_OPT_SMOKE_INPUT=sample2.hwpx npm run release:verify-cli-portable-smoke
 
 Root-level `sample*.hwpx` files stay local-only and are not uploaded to CI.
 
-The gate uses `npm run release:audit` (`scripts/release-audit.mjs`), matching `release:preflight`. That check requires a clean **production** dependency tree (`npm audit --omit=dev --audit-level=moderate`). Packaging/dev advisories under `electron-builder` / `@electron/asar` / `esbuild` may still appear in a full `npm audit` and are documented in [Known Limitations](KNOWN_LIMITATIONS.md); they do not block the gate because they are not shipped in the optimized HWPX runtime.
+The gate uses `npm run release:audit` (`scripts/release-audit.mjs`), matching `release:preflight`. It blocks **moderate-or-higher** advisories in production dependencies and the shipped Electron runtime, even though Electron is declared in `devDependencies`. Both production and full audit responses must be complete; unavailable or invalid responses fail the gate. Other development/build advisories remain visible in the full audit and are reviewed separately; a passing runtime gate is not zero total vulnerabilities. Dated counts and manual release gaps are in [the evidence ledger](RELEASE_EVIDENCE_2026-10-15.md).
 
 GitHub Actions runs the complete build, release gate, and smoke on `windows-latest` via `.github/workflows/cli-portable-release.yml`. Tag builds and manual runs with `upload_artifact: true` upload the ZIP, zip-only checksum file, shared `release-manifest.json`, `SHA256SUMS.txt`, and `RELEASE_NOTICE_<version>.txt`.
 
@@ -195,8 +195,8 @@ npm run release:verify-win-native
 
 This check requires the following files to exist under `release/win-unpacked/resources/app.asar.unpacked`:
 
-- `node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64-0.35.3.node`
-- `node_modules/@img/sharp-win32-x64/lib/libvips-cpp-8.18.3.dll`
+- `node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64-0.35.5.node`
+- `node_modules/@img/sharp-win32-x64/lib/libvips-cpp-8.18.7.dll`
 - `node_modules/@img/sharp-win32-x64/lib/libvips-42.dll`
 
 On a Windows machine, smoke-test the portable artifact:
@@ -210,6 +210,8 @@ powershell -ExecutionPolicy Bypass -File scripts/windows-portable-smoke.ps1 -Sam
 For the ZIP artifact, extract `HWPX Optimizer-<version>-x64.zip`, open PowerShell in the extracted folder, and run the same script. The script defaults to `.\HWPX Optimizer.exe` when it is present.
 
 Use [Windows QA Checklist](WINDOWS_QA_CHECKLIST.md) for the full clean-machine manual and CLI verification pass before treating a Windows artifact as product-ready.
+
+Record the exact commit, app/runtime versions, OS build, artifact hash, fixture class and elapsed time in [the evidence ledger](RELEASE_EVIDENCE_2026-10-15.md). Current Windows Server CI executes a real packaged app with synthetic documents; it does not establish Windows 10/11 institutional-PC, Hancom rendering or long-duration manual acceptance. Older real-document QA cannot sign off a newer commit.
 
 For internal release approval, also confirm that protected HWPX files are rejected without decryption or bypass and that the app start screen states the local-only/original-preserving/security-document policy.
 
@@ -233,7 +235,7 @@ Verify an existing manifest, checksum file, and release notice against the artif
 npm run release:verify-manifest
 ```
 
-The repository includes two Windows-only workflows. `.github/workflows/windows-release.yml` runs the Electron packaging gate, and `.github/workflows/cli-portable-release.yml` builds and exercises the CLI ZIP with a synthetic HWPX; both run on `windows-latest` for `workflow_dispatch` and `v*` tags. CI never uses private real HWPX samples because root-level `sample*.hwpx` files are not committed. Run the sample-backed `npm run release:check:win` or self-signed `npm run release:check:win-portable` in a local QA environment before product-ready Electron approval; for CLI portable, optionally re-run `HWPX_OPT_SMOKE_INPUT=sample*.hwpx npm run release:verify-cli-portable-smoke` locally before internal distribution. Manual `workflow_dispatch` runs skip artifact upload by default to avoid Actions storage quota failures; set `upload_artifact` to `true` when an uploaded artifact is needed. Tag builds upload the generated artifacts.
+.github/workflows/pr-checks.yml runs Linux tests/typecheck/build/synthetic corpus/Electron smoke on Node 22.12.0 and 24.21.0 for PRs, pushes to main, and merge groups. It also calls the Windows CLI workflow with uploads disabled to verify the native/portable runtime before merge. See [CI validation and permissions](TESTING.md#pull-request-and-windows-ci). The repository also includes two Windows release workflows. `.github/workflows/windows-release.yml` runs the Electron packaging gate, and `.github/workflows/cli-portable-release.yml` builds and exercises the CLI ZIP with a synthetic HWPX; both run on `windows-latest` for `workflow_dispatch` and `v*` tags. CI never uses private real HWPX samples because root-level `sample*.hwpx` files are not committed. Run the sample-backed `npm run release:check:win` or self-signed `npm run release:check:win-portable` in a local QA environment before product-ready Electron approval; for CLI portable, optionally re-run `HWPX_OPT_SMOKE_INPUT=sample*.hwpx npm run release:verify-cli-portable-smoke` locally before internal distribution. Manual `workflow_dispatch` runs skip artifact upload by default to avoid Actions storage quota failures; set `upload_artifact` to `true` when an uploaded artifact is needed. Tag builds upload the generated artifacts.
 
 Then verify at least one HWPX end-to-end:
 

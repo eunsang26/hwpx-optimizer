@@ -50,7 +50,7 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
   const meta = excluded ? "" : batchItemMetaText(item);
   const actions = batchItemRowActionsHtml(item, index, options);
   const attentionClass =
-    !excluded && (item.targetStatusLabel === "더 압축 필요" || item.targetStatusLabel === "기준 미달")
+    !excluded && (item.targetStatusLabel === "추가 압축 필요 예상" || item.targetStatusLabel === "기준 초과 예상")
       ? " class=\"needs-attention\""
       : "";
   const statusLabel = excluded ? "제외" : batchTableStatusLabel(item);
@@ -76,17 +76,19 @@ export function batchItemRowHtml(item: BatchItemLike, index: number, options: { 
     ? "선택 제외"
     : item.allocatedTargetLabel ??
       (item.targetLabel ? `기준 ${item.targetLabel.replace(/\s*미만$/, "")}` : "");
+  const sizeLabel = item.status === "done" ? item.actualSizeLabel ?? (item.report?.optimizedSize !== undefined ? formatBytes(item.report.optimizedSize) : "측정값 없음") : item.expectedSizeLabel;
+  const sizeBasis = item.status === "done" ? "실제" : "예상";
   const sizeCell =
     excluded && item.originalSizeLabel
       ? `${escapeHtml(item.originalSizeLabel)} → <strong>—</strong>`
-      : item.originalSizeLabel && item.expectedSizeLabel
-      ? `${escapeHtml(item.originalSizeLabel)} → <strong>${escapeHtml(item.expectedSizeLabel)}</strong>`
-      : escapeHtml(item.originalSizeLabel ?? item.expectedSizeLabel ?? "-");
-  return `<tr${attentionClass}><td><input type="checkbox" class="batch-select" data-batch-index="${index}"${selectedAttr}${disabledAttr} aria-label="${escapeHtml(
+      : item.originalSizeLabel && sizeLabel
+      ? `${escapeHtml(item.originalSizeLabel)} → <strong>${escapeHtml(sizeLabel)} (${sizeBasis})</strong>`
+      : escapeHtml(item.originalSizeLabel ?? sizeLabel ?? "-");
+  return `<tr${attentionClass} role="row" data-input-path="${escapeHtml(item.path)}"><td role="cell"><input type="checkbox" class="batch-select" data-batch-index="${index}"${selectedAttr}${disabledAttr} aria-label="${escapeHtml(
     item.fileName
-  )} 선택" /></td><td class="name"><strong>${escapeHtml(item.fileName)}</strong>${
+  )} 선택" /></td><td class="name" role="rowheader"><strong>${escapeHtml(item.fileName)}</strong>${
     targetSub ? `<span class="sub">${escapeHtml(targetSub)}</span>` : ""
-  }</td><td class="batch-size-cell">${sizeCell}</td><td class="batch-quality-cell">${qualityCell}</td><td class="batch-status-cell"><span class="status-line"><span class="status ${statusClass}">${escapeHtml(
+  }</td><td class="batch-size-cell" role="cell"><span class="batch-cell-label" aria-hidden="true">원본 → 결과</span>${sizeCell}</td><td class="batch-quality-cell" role="cell"><span class="batch-cell-label" aria-hidden="true">품질</span>${qualityCell}</td><td class="batch-status-cell" role="cell"><span class="batch-cell-label" aria-hidden="true">판정·작업</span><span class="status-line"><span class="status ${statusClass}">${escapeHtml(
     statusLabel
   )}</span><span class="row-meta">${escapeHtml(meta)}</span></span><span class="row-actions">${actions}</span></td></tr>`;
 }
@@ -100,8 +102,8 @@ function batchTableStatusLabel(item: BatchItemLike): string {
 
 function batchTableStatusClass(item: BatchItemLike): string {
   if (item.status === "pending" && item.targetStatusLabel) {
-    if (item.targetStatusLabel === "기준 미달") return "failed";
-    if (item.targetStatusLabel === "더 압축 필요") return "warning";
+    if (item.targetStatusLabel === "기준 초과 예상") return "failed";
+    if (item.targetStatusLabel === "추가 압축 필요 예상") return "warning";
     return "pass";
   }
   return item.status;
@@ -119,7 +121,7 @@ export function batchItemRowActionsHtml(
     if (item.reportPath) actions.push(rowButton("open-report", index, "리포트"));
   }
   if (!options.running && isRemovable(item.status)) {
-    actions.push(rowButton("remove", index, "제거"));
+    actions.push(rowButton("remove", index, "목록에서 제거"));
   }
   return actions.join("");
 }
@@ -129,7 +131,7 @@ function rowButton(action: string, index: number, label: string): string {
 }
 
 function isRemovable(status: BatchItemStatus): boolean {
-  return status === "failed" || status === "cancelled";
+  return status === "pending" || status === "failed" || status === "cancelled";
 }
 
 export function imageComparePairHtml(pair: ImagePreviewPair): string {

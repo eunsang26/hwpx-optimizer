@@ -1,4 +1,5 @@
 import type { OptimizationOpportunityGroup } from "@hwpx-optimizer/core";
+import { documentErrorText } from "./cancellation.js";
 import { APPLIED_ACTION_LABELS } from "./actionLabels.js";
 import type { OptimizationMode } from "./viewModel.js";
 
@@ -13,6 +14,13 @@ const PROGRESS_LABELS: Record<string, string> = {
   "Planning safe changes": "안전 변경 계획을 만드는 중입니다",
   "Planning balanced changes": "균형 모드 변경 계획을 만드는 중입니다",
   "Planning aggressive changes": "최대 압축 모드 변경 계획을 만드는 중입니다",
+  "Applying safe document cleanup": "문서의 안전한 정리를 적용하는 중입니다",
+  "Applying balanced changes": "균형 모드 변경을 적용하는 중입니다",
+  "Applying aggressive changes": "최대 압축 모드 변경을 적용하는 중입니다",
+  "Packing optimized document": "결과 문서를 묶는 중입니다",
+  "Preparing output file": "결과 파일 저장을 준비하는 중입니다",
+  "Preparing JSON report": "JSON 리포트 저장을 준비하는 중입니다",
+  "Finalizing optimized document": "결과 파일과 리포트 저장을 마무리하는 중입니다",
   "Writing optimized document": "최적화된 문서를 저장하는 중입니다",
   "Writing JSON report": "JSON 리포트를 저장하는 중입니다",
   "Verifying optimized document": "결과 문서를 검증하는 중입니다",
@@ -58,6 +66,18 @@ const ERROR_PATTERNS: Array<{ regex: RegExp; label: (match: RegExpMatchArray) =>
     regex: /^Invalid HWPX package: expanded contents exceed supported size \((\d+ bytes); limit (\d+ bytes)\)$/i,
     label: (match) =>
       `HWPX 압축 해제 후 크기가 로컬 처리 한도를 초과했습니다. 문서를 나누거나 큰 리소스를 정리하세요. (${match[1]} / 한도 ${match[2]})`
+  },
+  {
+    regex: /^Invalid HWPX package: entry exceeds declared size/i,
+    label: () => "문서에 기록된 크기보다 압축 해제 데이터가 커 처리를 중단했습니다. 원본은 유지됩니다."
+  },
+  {
+    regex: /^Invalid HWPX package: expanded contents exceed supported size while decoding/i,
+    label: () => "HWPX 압축 해제 후 크기가 처리 한도를 초과했습니다. 문서를 나누거나 큰 리소스를 정리하세요."
+  },
+  {
+    regex: /^Invalid HWPX package:.*(?:ZIP64|central directory|local ZIP header|decoded ZIP entry|ZIP extra)/i,
+    label: () => "문서의 ZIP 구성 정보가 올바르지 않거나 지원 범위를 넘었습니다. 원본은 변경하지 않았습니다."
   },
   {
     regex: /\b(EACCES|EPERM)\b|permission denied/i,
@@ -116,6 +136,9 @@ export function progressLabel(item: string): string {
 }
 
 export function errorLabel(message: string): string {
+  message = documentErrorText(message);
+  const recovery = message.match(/Rollback incomplete; preserved recovery files: (.+)$/s);
+  if (recovery) return `기존 파일을 모두 복원하지 못했습니다. 새로 생긴 파일은 보존했습니다. 복구 폴더와 상세 오류: ${recovery[1]}`;
   const exact = ERROR_LABELS[message];
   if (exact) return exact;
   for (const pattern of ERROR_PATTERNS) {
@@ -137,6 +160,7 @@ type WarningCategory =
   | "balanced-no-shrink"
   | "aggressive-no-shrink"
   | "aggressive-quality"
+  | "image-limit"
   | "other";
 
 type WarningPattern = {
@@ -146,6 +170,11 @@ type WarningPattern = {
 };
 
 const WARNING_PATTERNS: WarningPattern[] = [
+  {
+    regex: /^(.+?): Image exceeds supported pixel limit \((\d+) pixels\)/i,
+    category: "image-limit",
+    label: match => `이미지 처리 한도(${Number(match[2]) / 1_000_000}MP)를 넘는 리소스는 원본을 보존합니다.`
+  },
   {
     regex: /OLE objects can be user-visible/i,
     category: "ole-visible",

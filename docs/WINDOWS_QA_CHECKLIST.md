@@ -2,6 +2,14 @@
 
 This checklist verifies the release candidate on a clean Windows machine. It is required before calling the desktop utility product-ready.
 
+## Current evidence — 2026-10-16
+
+[The current release evidence ledger](RELEASE_EVIDENCE_2026-10-15.md) records app 0.1.9 / runtime `209053f`, Electron 42.11.13 and sharp 0.35.5. Linux Node 22.12.0/24.21.0 and Windows Node 24.21.0 CI passed 792 tests (1 skipped), typecheck/build, and source/actual packaged Electron workflows (11 document + 4 settings + 9 HCI + 3 readability cases, including 40 size/zoom conditions). ASAR/native/locale/offline-font checks, NSIS and synthetic measurements passed. Windows CLI ZIP execution passed independently. CI used synthetic documents only; artifacts were not uploaded.
+
+[The current Hancom case](HANCOM_QA_2026-10-16.md) records a separately hashed unpacked package on a **personal Windows 11 Pro PC**, Hancom 13.0.0.711, and one user-authorized 94,078,344-byte real document. All three modes saved/verified/reset successfully and opened as 17 pages with identical extracted Unicode text; safe rendered identical pixels on every page. Balanced/aggressive image differences and all three missed 40MiB targets are recorded, not silently counted as passing submission size. The user reviewed the local balanced/aggressive comparison and reported no text/table/picture quality issue. Cancellation followed by retry and three same-folder saves also passed, with no partial files, unique document/report pairs, unchanged prior outputs and a fresh-process empty-state/settings check. This case has no embedded-font or OLE declarations and does not represent every real-document category.
+
+**Institutional Windows 10/11 long-duration/restart acceptance and institutional sign-off remain incomplete.** The historical July records retain their original versions. The current personal-PC short restart and settings/history checks are not institutional soak evidence. Record the target environment, artifact SHA256, actual elapsed time/repetitions and results before closing acceptance.
+
 ## Scope
 
 Verify that the Windows build runs locally, does not upload files, preserves the original HWPX file, rejects protected documents without bypass, stores no recent-file/history/log paths in the app, and can analyze, optimize, save, and verify optimized HWPX outputs.
@@ -9,12 +17,12 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 ## Prerequisites
 
 - Clean Windows 10 or Windows 11 machine.
-- Node.js 20 or newer, if running source-based checks.
+- Node.js 22.12.0 or newer (24.21.0 recommended), if running source-based checks. Windows release CI uses Node 24.21.0.
 - A local HWPX sample file. Do not commit sample files.
 - A protected or signed HWPX-like test package, if available, for rejection-path confirmation. Do not use real confidential documents as test fixtures.
 - A release artifact from `release/`, either:
-  - `HWPX Optimizer-0.1.5-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
-  - `HWPX Optimizer-0.1.5-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
+  - `HWPX Optimizer-0.1.9-x64.zip` ZIP build, recommended for faster startup after one-time extraction,
+  - `HWPX Optimizer-0.1.9-x64.exe` portable build, convenient but slower to start because it self-extracts at launch, or
   - the NSIS installer produced by `npm run release:check:win`.
 
 ## Artifact Integrity
@@ -22,8 +30,8 @@ Verify that the Windows build runs locally, does not upload files, preserves the
 From a PowerShell prompt in the project root:
 
 ```powershell
-Get-FileHash ".\release\HWPX Optimizer-0.1.5-x64.exe" -Algorithm SHA256
-Get-FileHash ".\release\HWPX Optimizer-0.1.5-x64.zip" -Algorithm SHA256
+Get-FileHash ".\release\HWPX Optimizer-0.1.9-x64.exe" -Algorithm SHA256
+Get-FileHash ".\release\HWPX Optimizer-0.1.9-x64.zip" -Algorithm SHA256
 ```
 
 Compare the hash with `release/SHA256SUMS.txt`.
@@ -71,6 +79,20 @@ Expected result:
 - The smoke script exits with code 0.
 - The optimized output passes verifier.
 
+## Bundled Font Check
+
+The unpacked runtime must also retain nonempty `locales/ko.pak` and `locales/en-US.pak`; the default fallback is required for the verified clean Windows runner to initialize the renderer. Locale pruning rejects missing or empty required resources.
+
+The desktop ASAR must contain `apps/desktop/dist/fonts/PretendardVariable.woff2` and `OFL.txt` unchanged from the checkout. `npm run release:verify-artifacts` extracts and checks both. After building an unpacked app on a clean Windows host without system Pretendard, run:
+
+```powershell
+npm run desktop:smoke:packaged:win
+```
+
+This read-only font preflight does not install or remove fonts. The runner copies the app outside the checkout, uses fresh settings/cache, verifies external request cancellation before navigation, verifies actual Korean/Latin custom glyphs at regular/bold weights, and requires full synthetic document workflow completion. An installed Pretendard preflight failure means that host cannot provide the absent-system-font evidence; use a clean Windows VM. It is not a reason to delete the user's fonts. Ordinary `desktop:smoke` also verifies the custom web font.
+
+On the target institutional PC, disconnect external networking, open the packaged app and check Korean labels, digits and bold headings. Check that both the font and license are present in the inspected release. Automated Windows evidence and remaining manual environment coverage are recorded separately in `BUNDLED_FONTS_2026-10-15.md`.
+
 ## Manual Desktop Workflow
 
 1. Launch the portable executable or installed app.
@@ -113,7 +135,7 @@ Expected result:
 - Repeated optimizations do not overwrite prior outputs by default.
 - Very large packages complete or fail with a clear non-crashing error.
 - Representative real-world documents do not expose missing-reference verifier failures.
-- Safe mode preserves image formats and dimensions.
+- Safe mode preserves image formats, dimensions, decoded pixels/alpha and EXIF orientation; XML body whitespace/numeric strings and authored descriptions remain intact. Check the displayed result as well as standalone verification.
 - Balanced and aggressive modes report visible-risk actions clearly.
 - Failed individual actions appear as skipped or failed without crashing the app.
 
@@ -132,6 +154,7 @@ Expected result:
 - Output files are written to the selected folder during the current app session.
 - The selected output folder is not restored after restart and is not written to `settings.json`.
 - No recent files, processing history, result paths, report paths, or internal logs are restored after restart.
+- Damaged/legacy settings display recovery guidance. Invalid custom limits block execution with a connected field error; explicit valid saves persist. A failed save remains visible and retry works. See [settings evidence](DESKTOP_SETTINGS_2026-10-15.md) for automated scope.
 - Overwrite prevention creates a suffixed output path instead of replacing an existing file.
 
 ## CLI Checks On Windows
@@ -186,6 +209,7 @@ Windows QA passes only when:
 - Original file preservation is confirmed.
 - Generated output opens in an HWPX-compatible viewer.
 - Any blocker is documented in `docs/KNOWN_LIMITATIONS.md`.
+- The current-commit evidence ledger records artifact hash, OS/Hancom versions, representative large-document results and measured long-duration restart results separately from synthetic automation.
 - Internal distribution evidence references `docs/INTERNAL_DISTRIBUTION.md` and `docs/SECURITY_REVIEW.md`.
 
 Do not mark the product release complete if any item above is unverified.

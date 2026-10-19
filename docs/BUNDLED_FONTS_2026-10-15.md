@@ -1,0 +1,63 @@
+# Windows 로컬 폰트와 라이선스 검증
+
+OPT-016의 패키징 변경과 검증 기록이다. 앱의 글꼴은 `Pretendard Variable`이며 외부 URL이나 시스템 설치를 요구하지 않는다. 글꼴 파일과 포함 라이선스의 내용은 수정하지 않았다.
+
+## 포함 계약
+
+`copy-assets.mjs`가 `PretendardVariable.woff2`와 `OFL.txt` 두 필수 파일을 명시적으로 복사한다. 원본 파일이 없으면 빌드를 실패시킨다. electron-builder `files`에도 다음 경로를 각각 포함한다.
+
+- `apps/desktop/dist/fonts/PretendardVariable.woff2`
+- `apps/desktop/dist/fonts/OFL.txt`
+
+이전에는 dist 복사는 있었지만 Windows 파일 목록이 woff2·OFL.txt를 포함하지 않았다. `check-release-artifacts.mjs`는 실제 `app.asar`에서 두 파일을 꺼내 체크아웃의 원본과 바이트 단위로 비교한다. 없거나 비었거나 바뀐 파일이면 실패하며, 성공 시 바이트 수와 SHA256을 기록한다. CLI 전용 ZIP에는 데스크톱 폰트를 요구하지 않는다.
+
+## 로딩 검증
+
+일반 Electron 스모크와 패키지 스모크는 첫 페이지를 열기 전에 HTTP/HTTPS/WS/WSS 요청 차단을 적용한다. 예약된 `.invalid` 주소로 고정 검증 요청을 시도하고, 차단 hook의 호출과 요청 실패를 함께 확인한다. DNS/소켓에 도달하기 전에 요청이 취소되었는지 검증하며 문서나 사용자 데이터를 넣지 않는다. 소스와 패키지 실행 모두 외부 요청 차단 검증 뒤 세션 오프라인 모의를 적용한다. 파일 URL은 `pathToFileURL`로 정규화한다. 패키지 진입 HTML·CSS·renderer·preload·main 파일의 존재와 비어 있지 않은 내용도 실제 ASAR에서 검사한다. `document.fonts.load`로 두께 400과 700의 글꼴이 로드되었는지 확인한 뒤, 한글·영문·숫자 문자열 `한글 문서 압축 ABC0123`을 렌더한다. Chromium의 `CSS.getPlatformFontsForNode`로 실제 사용 글꼴을 읽어 Pretendard·`isCustomFont: true`·양수 glyph 수를 요구한다. CSS에 이름만 지정했거나 시스템 fallback으로 그려지는 상태는 통과하지 않는다.
+
+`desktop:smoke:packaged:win`은 Windows용 실제 배포 디렉터리를 다음 조건으로 검사한다.
+
+1. 시스템/사용자 폰트 등록과 폰트 폴더에 Pretendard가 없는지 읽기 전용 PowerShell로 검사한다. 설치된 환경이면 깨끗한 환경 증거를 만들 수 없으므로 실패한다. 글꼴을 설치하거나 삭제하지 않는다.
+2. Windows 8.3 TEMP 별칭을 realpath로 정규화하고, 빌드한 앱 디렉터리 전체를 체크아웃 밖의 새 임시 폴더로 복사해 ASAR 바이트/해시 동일성을 확인한다. 저장소의 `node_modules`로 누락된 의존성을 보완할 수 없다. `NODE_PATH`·`NODE_OPTIONS` 주입과 외부 문서 입력도 사용하지 않는다.
+3. 새 cwd와 userData/cache로 복사된 EXE를 실행한다. `app.isPackaged`와 실제 `resources/app.asar/.../PretendardVariable.woff2` URL을 요구한다.
+4. 외부 요청 차단과 custom-font 검증 뒤 합성 문서의 분석·압축·검증·저장·일괄·초기화 전체 스모크를 실행한다. 정상 종료 코드뿐 아니라 요청 차단·폰트 증거와 전체 워크플로 완료 마커를 요구한다. 180초를 넘기거나 증거가 없으면 실패한다.
+
+Windows release workflow는 기존 릴리즈 게이트 뒤 이 패키지 스모크를 실행한다. 로컬/CI 실행 명령은 `npm run desktop:smoke:packaged:win`이며, 인자로 다른 unpacked 앱의 EXE 경로를 지정할 수 있다. Linux에서 Windows 패키지 검증을 건너뛰어 성공으로 처리하지 않는다.
+
+## Linux 검증
+
+2026-10-15 Node 24.13.0/Electron 42.11.13. 실제 ASAR를 만드는 대상 테스트 8개와 locale 정리의 파일 보존/누락/빈 파일/디렉터리/플랫폼 테스트 7개, 관련 repo 구성 검사를 먼저 실행했다(총 28개). 전체 `npm test -- --maxWorkers=2`는 87개 파일·684개 테스트 통과·1개 건너뛰기였다. 타입 검사·빌드·실제 Electron 스모크·기존 합성 corpus 2/2도 통과했다. 공유 호스트 부하로 기본 병렬 실행이 시간 제한에 걸린 경우가 있어 병렬 수를 제한했으며, 테스트 항목이나 제한 시간은 변경하지 않았다.
+
+- 실제 ASAR에 두 파일이 있는 경우를 수락하고 font/license 누락과 변경 네 가지 경우를 거부했다.
+- 네트워크 오프라인 상태에서 두께 400·700 모두 Pretendard custom font로 16 glyph를 렌더했다.
+- 빌드 폴더의 폰트만 잠시 잘못된 합성 바이트로 바꾸는 음성 검증에서 스모크가 종료 코드 1로 실패했고 폰트/완료 성공 마커를 출력하지 않았다. finally에서 빌드 파일을 복원했고 소스 폰트 SHA256은 같았다. 복원 후 전체 스모크는 정상 완료했다. 소스 폰트나 입력 문서는 변경하지 않았다.
+
+Linux 빌드의 원본/복사본 기준:
+
+| 파일 | 바이트 | SHA256 |
+| --- | ---: | --- |
+| PretendardVariable.woff2 | 2057688 | `9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4` |
+| OFL.txt | 4418 | `d31ddd9f2bed32fd7e302a205cf2380ba0de6529152d239ef99cfb6f261bfc04` |
+
+## Windows 시작 리소스
+
+실제 Windows 패키지의 첫 페이지 로딩 실패를 추적하면서 한국어 `.pak`만 남기던 기존 패키징 문제를 확인했다. `1111219`의 원본 패키지는 locale resource 미로딩 경고와 함께 종료 코드 1이었다. 같은 격리 복사본에 배포 런타임의 `en-US.pak`만 추가하고 새 프로필로 실행하자 custom font 400/700·16 glyph와 전체 합성 워크플로가 정상 완료했다. 진단 성공으로 원본 릴리즈를 통과 처리하지 않았고 그 실행은 실패 상태로 유지했다.
+
+이제 builder와 locale 정리 hook 모두 `ko.pak`과 `en-US.pak`을 유지한다. 두 파일의 존재와 양수 크기를 확인한 뒤에만 다른 locale 파일을 정리하며, 실제 unpacked 배포 디렉터리도 같은 조건으로 검사한다. UI 언어·사용자 시스템 설정은 바꾸지 않는다. 원본 배포물의 실행 실패를 진단용 복사본 변경으로 대신 통과시키는 분기는 최종 검사에서 제거했다.
+
+## Windows 검증
+
+커밋 `80ef282`, Windows/Node 24.21.0의 [데스크톱 릴리즈 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38684373755)과 [CLI ZIP 실행](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38684376108)이 모두 성공했다. 두 실행 모두 기본 병렬 설정의 87개 파일·684개 테스트 통과·1개 건너뛰기, 타입 검사·빌드·배포 audit가 통과했다. 데스크톱은 NSIS 빌드·실제 ASAR UI 진입 파일/폰트/라이선스·native/locale 파일 검사·원래 배포물의 독립 실행·처리/저장/분석/메모리/용량 경계 측정을 통과했다. CLI도 실제 ZIP의 optimize/verify/batch/launcher 검사가 통과했다. 모든 산출물 업로드 단계는 건너뛰었다.
+
+실제 배포물의 폰트 검증 원시 기록:
+
+- 시스템/사용자 Pretendard 등록 0개·폰트 파일 0개.
+- 체크아웃 밖 새 디렉터리에서 실행. 복사 ASAR 5,840,140B, SHA256 `4b79faf7878cf4b17de0ba3829f5a50565098857e01de002b54ac3a8876bd1f5`, 빌드 원본과 바이트 동일.
+- `packaged: true`, 외부 검증 요청 취소 확인, 네트워크 오프라인 모의 활성화.
+- 실제 `resources/app.asar/apps/desktop/dist/fonts/PretendardVariable.woff2` URL 사용. font는 위 Linux와 같은 2,057,688B/SHA256이었다.
+- 두께 400·700 모두 `Pretendard Variable`, 16 glyph, `isCustomFont: true`. 시스템 fallback 글꼴은 사용하지 않았다.
+- `desktop-smoke-complete`의 `packaged: true`를 확인했다. 합성 문서의 분석·최적화·실제 파일 검증·일괄 처리·초기화가 모두 끝난 뒤 종료 코드 0이었다. 진단용 파일 추가나 재시도로 통과시키지 않았다.
+
+Windows OFL은 체크아웃의 CRLF 형식 4,511B이며 SHA256은 `8a2aba6114145294edbbce5998eab74320e7e07ce39999cc9f95ae2967d2eb9e`다. 위 Linux LF 원본을 CRLF로 변환한 해시와 같으며, Windows에서도 소스와 ASAR의 바이트 동일성을 검사했다. 폰트나 라이선스 내용을 편집하지 않았다.
+
+Production+shipped Electron의 moderate+ advisory는 0개였고 개발/빌드 도구 advisory 20개(high 8·moderate 11·low 1)는 남아 있다. 깨끗한 CI 환경에서의 자동화와 기관 PC의 수동 QA는 구분한다. 이 작업이 Windows 10/11의 모든 정책·디스플레이·접근성 환경이나 한글 앱의 문서 외형을 검증하는 것은 아니다.

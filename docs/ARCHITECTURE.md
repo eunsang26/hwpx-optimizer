@@ -12,6 +12,9 @@ The original document is read-only input. Every optimization path writes a separ
 packages/core
   HWPX ZIP reading, analysis, planning, optimization, writing, verification, reports
 
+packages/io
+  Shared filesystem reservations, exclusive publication, and owned-file cleanup
+
 packages/cli
   hwpx-opt command line wrapper around packages/core
 
@@ -57,9 +60,9 @@ input.hwpx
 - Builds image inventory.
 - Extracts image format, dimensions, metadata flags, and BMP candidates.
 - Detects byte-identical duplicate images by SHA-256.
-- Detects same-visual duplicate images by exact decoded pixel hash across lossless encodings.
-- Detects unreferenced BinData candidates.
-- Reports font and OLE resources as risky resources.
+- In deep analysis, detects same-visual duplicate images by exact decoded pixel/alpha hash across lossless encodings. Default quick analysis defers pixel decoding and similarity checks and labels candidate sizes as estimates.
+- Detects unreferenced BinData candidates. Validates content.hpf local declarations and explicit binaryItemIDRef resolution; deleting unused BinData removes its manifest declaration as part of the same operation.
+- Reports font and OLE resources as risky resources. A shared removal policy preserves these resources in every mode, including caller-supplied plans.
 
 ### Image Display Analysis
 
@@ -92,11 +95,11 @@ input.hwpx
 
 `packages/core/src/optimizer.ts`
 
-- Minifies XML by parsing and serializing it.
-- Strips JPEG metadata segments while preserving format and dimensions.
-- Optimizes PNG where beneficial.
-- Removes unreferenced BinData only after graph analysis.
-- Skips an item if a specific optimization fails.
+- Removes inter-element formatting only in known element-only XML containers. Text, numeric strings, mixed/unknown content, authored shape comments and `xml:space="preserve"` remain significant; this is not blanket whitespace trimming.
+- Strips supported JPEG metadata while preserving format, dimensions and EXIF orientation; changed referenced images must also retain decoded pixels and alpha.
+- Optimizes supported PNG losslessly only where beneficial. Images with protected representations retain their bytes as described below.
+- Removes unreferenced BinData only after graph analysis and updates its manifest declaration. Embedded fonts and OLE objects remain in every mode, including caller-supplied plans.
+- Records skipped actions and warnings when an individual transform fails. Parsing, protection, reference or final verification failures reject the operation. A non-smaller final safe package returns the original input bytes.
 
 ### Balanced and Aggressive Optimizers
 
@@ -106,7 +109,7 @@ input.hwpx
 - Convert BMP to PNG.
 - Resize oversized JPEGs according to mode profile and display budgets.
 - Optimize PNG resources.
-- Clean shape-comment metadata.
+- Remove generated `원본 그림의 이름:` / `원본 그림의 크기:` lines from supported shape comments while preserving authored descriptions. This is not general document anonymization.
 - Consolidate byte-identical or exact same-visual duplicate image resources by redirecting XML image IDs to a canonical resource.
 - Record applied and skipped actions.
 - Update manifest `href` and `media-type` attributes through a parsed XML tree.
@@ -129,21 +132,30 @@ Balanced uses a less aggressive pixel and JPEG profile. Aggressive uses a strong
 - Confirms the minimum HWPX package structure is present.
 - Confirms XML entries parse.
 - Confirms referenced internal resources exist.
-- Compares original and output packages when a mode policy is provided.
+- Compares original and output packages when a mode policy is provided. Document XML parts retain text, element order, and layout/style attributes; each resource use is compared in its original position. Attribute order and known structural formatting may differ. Allowed changes are unused-resource manifest deletion, exact duplicate aliasing, supported image conversion, and generated shape-comment filename/dimension lines. Authored alternative text remains intact.
+- Preserves opaque package parts, fonts, and embedded objects byte-for-byte. Accepted legacy inputs may gain the canonical mimetype marker.
+- Unknown ID reference forms prevent duplicate consolidation; style/paragraph IDs are never reassigned as binary IDs.
 - Rejects safe-mode outputs that change referenced image dimensions or format.
-- Rejects balanced/aggressive outputs that remove referenced images without an allowed replacement.
-- Rejects balanced/aggressive image conversions outside the current policy: BMP may become PNG, JPEG must remain JPEG, and PNG must remain PNG.
+- Rejects changed safe-mode referenced image bytes unless decoded pixel and alpha hashes remain equal and EXIF orientation is unchanged. Protected image representations must remain byte-identical, including when exact duplicates are aliased.
+- Rejects balanced/aggressive outputs that remove referenced images without an allowed replacement. The optimizer records actual original/output paths and manifest IDs, composes duplicate aliases with later conversions, and passes the resulting mappings to verification and the optimization report. Serialized XML uses must agree with those mappings.
+- Rejects balanced/aggressive image conversions outside the current policy: supported BMP/TIFF may become PNG, JPEG must remain JPEG, and PNG must remain PNG.
 - Rejects balanced/aggressive outputs that enlarge referenced image dimensions.
 - Rejects balanced/aggressive outputs whose referenced image PSNR and SSIM scores fall below the per-mode quality thresholds.
 
+Decoded image reuse retains RGB or RGBA channels. Same-visual hashes include alpha, canonicalizing fully opaque RGBA to RGB only for hashing. Advanced quality samples retain alpha and compare composites over both dark and light backgrounds, using the lower score. Images with ICC profiles, high sample precision, multiple frames/pages, unsupported BMP alpha or oriented PNG metadata retain their original bytes and report a reason.
+
+XML handling supports UTF-8 only and rejects invalid UTF-8 or other declared encodings before optimization. Literal line endings/attribute whitespace and numeric character references follow [XML 1.0 normalization](https://www.w3.org/TR/xml/#AVNormalize); serializers preserve referenced control characters.
+
 Current limitation: advanced mode verification uses PSNR and SSIM on 512×512 aspect-preserving (`fit: contain`) samples plus structural invariants; it does not prove every visual detail is perceptually identical. BMP/TIFF→PNG is allowed in advanced modes; JPEG stays JPEG and PNG stays PNG.
+
+`verifyHwpxOutput(output)` without an original performs standalone package/XML/reference validation. The CLI `verify` command and Desktop result verification use this form; they cannot establish preservation relative to an unavailable input. The optimizer itself calls the stronger original-plus-mode verification before returning bytes. Neither form renders a document in Hancom. See [current evidence and manual gaps](RELEASE_EVIDENCE_2026-10-15.md).
 
 ### Report
 
 `packages/core/src/report.ts`
 
 - Builds JSON report objects.
-- Includes sizes, image inventory, duplicate groups, unused BinData, risky resources, opportunities, warnings, and applied/skipped actions.
+- Includes sizes, image inventory, duplicate groups, unused BinData, risky resources, opportunities, warnings, and applied/skipped actions. Advanced successful outputs include `resourceMappings`; image actions carry the actual `outputPath`. A rollback to the original does not retain mappings for discarded changes. Image previews receive report mappings; older reports recover identities from stable manifest IDs and XML use positions rather than extension guesses.
 
 ## CLI Boundary
 
@@ -159,6 +171,20 @@ Commands:
 - `optimize`
 - `batch`
 
+Batch writes use a private `.hwpx-optimizer-batch.lock` workspace in the output folder. It contains staging files and a process ownership record; a second active batch targeting the same canonical folder is rejected. Recovery only removes recorded, unchanged reservations belonging to an exited process, along with that private workspace. New reservations are empty directories; recovery also supports legacy zero-byte file reservations. Generic `.tmp` files and unrecorded files are never swept. Unrecognized lock directories are preserved and reported for inspection.
+
+## Filesystem Publication Boundary
+
+`packages/io` is shared by CLI and desktop; core remains buffer-oriented and does not import it. `publication.ts` owns reservations and single-file publication; `artifactTransaction.ts` owns document/report saves. Non-overwrite saves reserve names with exclusive directory creation. A document/report pair obtains both names before staging either artifact. Desktop saves and batch jobs select suffixes on conflicts; standalone CLI saves may report an explicit collision.
+
+Stages use exclusive file creation. Publication removes only the unchanged, empty reservation and hardlinks the complete stage into the final name. Link creation fails if another file appears in the gap. On filesystems without hardlinks, publication streams into a file opened with `O_EXCL`, retaining the exclusive-name guarantee while bytes are copied. This fallback does not publish all bytes atomically. Cleanup checks filesystem identity, modification time, and size before deleting owned files; reservations never use recursive deletion.
+
+Before saving a pair, the transaction rejects equal destinations, canonical paths through symbolic links, and existing hardlink aliases. It validates every stage and destination before moving existing results. In overwrite mode, existing entries move into private sibling `.hwpx-save-*` directories until both new artifacts have been published. A handled write/publication failure rolls the entire pair back, including restoring a symbolic link itself without changing its referent. CLI single saves, CLI batch commits and desktop saves share this policy; batch failures identify the document or report stage and do not count as optimized results.
+
+Rollback removes only unchanged artifacts created by the transaction and restores old entries exclusively. If a new user file blocks restoration, it is preserved and the error identifies the retained backup directory for recovery. Cleanup trouble after a successful commit returns a warning rather than changing a complete save into a failure; CLI prints these warnings, batch summaries retain them, and desktop includes them in the returned warnings. Stored optimization reports describe optimization; subsequent filesystem-cleanup warnings belong to the save operation.
+
+These rules do not provide a multi-file crash transaction or isolate intermediate names from concurrent readers. Desktop computation workers never publish files, so terminating a worker cannot interrupt the main-owned save. Cooperative cancellation, inactivity timeouts and normal application shutdown await rollback before releasing the operation lock. Abrupt termination of the main process or power loss can still interrupt backup/publish/restore; there is no durable restart journal, and remaining `.hwpx-save-*` directories may require manual recovery.
+
 ## Desktop Boundary
 
 `apps/desktop/src/main/desktopService.ts`
@@ -171,11 +197,47 @@ The desktop file service is the testable boundary for:
 - Writing optimized HWPX files and reports.
 - Preventing overwrite when configured.
 
+Selected inputs are protected even when output overwrite is enabled. The main process keeps canonical input paths and filesystem identities in memory and forwards them with each optimization request, retaining protection after document worker restarts. The service checks document and report destinations before writing and keeps previously analyzed input identities separate from its bounded input-buffer cache. Generated results can be overwritten only when they have not subsequently been selected as inputs.
+
 `apps/desktop/src/main.ts` owns Electron window and IPC wiring. `apps/desktop/src/preload.ts` exposes a narrow bridge to the renderer. `apps/desktop/src/renderer.ts` owns DOM updates and user interaction.
+
+The desktop responsibilities are split into the following modules:
+
+| Module | Responsibility |
+| --- | --- |
+| `main/documentController.ts` | Authorizes analysis/optimization/report/preview requests, runs document operations, and closes the queue before disposing its worker. It receives settings and dependencies without importing Electron. Its request types are also used by the typed preload bridge. |
+| `main/settingsStore.ts`, `shared/desktopSettings.ts` | Serialize reads/patches, validate a private-data-free schema and custom byte bounds, publish synced same-directory snapshots, disclose recovery/migration, and drain accepted saves on shutdown. See [settings contracts](DESKTOP_SETTINGS_2026-10-15.md). |
+| `main/pathPermissions.ts` | Owns session-scoped canonical input/output/generated-path grants and original filesystem identities. A worker restart cannot reset these grants or identities. |
+| `main/documentOperations.ts`, `main/documentWorkerClient.ts` | Own operation cancellation/cleanup and worker request/generation lifetimes, respectively. IPC handlers delegate rather than reimplementing these lifetimes. |
+| `main/smoke/runtime.ts`, `main/smoke/desktopSmoke.ts` | Test-only diagnostics, offline probe, dialog adapter and desktop assertions; loaded dynamically only in smoke mode. The separate `main/workflowSmoke.ts` runs the 11 behavior regressions. |
+| `renderer/workflowState.ts` | Owns single/batch document selection, analysis tokens, cancellation, completion and retry transitions, without DOM/IPC/filesystem dependencies. Document view state lives in the model; renderer code projects it into DOM attributes. |
+| `renderer/batchPlanning.ts` | Shares row plans and target/quality decoration between initial analysis, policy refresh, summaries and execution. It uses the common strict integer allocator through `shared/batchTargetAlloc.ts`. Completed rows retain measured outcomes. |
+| `shared/actionCatalog.ts`, `shared/qualityPolicy.ts`, `shared/windowConfig.ts` | Supply one desktop action catalog, JPEG bounds/default/clamping and window dimensions. Context-specific labels retain their established wording. The typed catalog requires every known action's bucket and priority. |
+
+The renderer remains the event/DOM adapter and owns display-only formatting and editable policy controls. Its document lifecycle mutations go through `RendererWorkflow`; no state module reads DOM attributes. Packaged files explicitly include `dist/renderer/**/*.js` as well as main/shared modules. The existing real Electron workflow smoke exercises the modules together; independent tests check cancelled analysis finalizers, mixed-result retry, remaining aggregate budget, permission denial, original protection after worker recreation and shutdown ordering.
+
+The split was verified at `2d4a6c3` on 2026-10-15: [PR checks](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38690684978) passed Linux/Node 22.12.0 and 24.21.0 plus Windows CLI/Node 24.21.0 (691 tests, 1 skipped, typecheck/build). The [Windows desktop gate](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38690680075) also ran all 11 synthetic workflow cases in both source and an isolated copy of the actual packaged app, proving the new renderer/main module files are available without checkout dependencies. Local real-pointer and graceful-close-during-save checks retained source/output hashes and reported zero page errors. Both CI runs have zero artifacts; upload steps were skipped. These remain synthetic automated checks, distinct from Hancom/institutional-PC manual QA.
+
 
 The runtime preload script is copied from `apps/desktop/src/preload.cjs` so Electron loads a CommonJS preload file reliably under the app's ESM package settings. `apps/desktop/src/preload.ts` remains the TypeScript API shape used by renderer code.
 
-Analysis and optimization run through `apps/desktop/src/main/documentWorker.ts`, a persistent Node worker thread that keeps large HWPX processing off the Electron main process. The main process relays coarse progress messages to the renderer and can terminate the active document operation when the user cancels.
+Analysis and optimization computation run through `apps/desktop/src/main/documentWorker.ts`, a persistent Node worker thread. It returns verified bytes and the optimization report without reserving or writing output names. Dedicated ArrayBuffers transfer ownership to main; small or pooled buffers are copied. Input-cache views sharing the transferred buffer are evicted before transfer so later analysis cannot reuse detached bytes.
+
+`documentWorkerClient.ts` owns request IDs and worker generations. Cancellation waits for worker termination, ignores late replies from the stopping generation, and isolates its pending requests from a replacement worker. Unexpected exits retain a distinct error with the exit code. `documentOperations.ts` serializes authorization, computation, main-owned asynchronous publication and recovery. Its five-minute inactivity timer resets on real progress rather than imposing a total-duration limit; a timeout identifies the last stage and remains distinct from user cancellation.
+
+The main process passes an AbortSignal through staging and exclusive publication. Aborting before the synchronous commit decision rolls back the pair; after that decision, cancellation cannot turn a completed save into a cancelled result. Cancel acknowledgement and the busy lock wait for cleanup. Recovery errors preserve user replacements and identify retained backups. Normal application shutdown closes the operation queue, waits for recovery or committed cleanup, and then disposes the worker. Image computation remains off the main thread. See `DESKTOP_CANCELLATION_2026-10-15.md` for phase tests, native UI checks, synthetic timing and crash-recovery limits.
+
+Core analysis normalizes the omitted mode to `quick` across inventory, structural opportunities and image opportunities. Quick performs header/byte analysis and estimates image candidates; it does not decode pixels, compute visual duplicate hashes or encode images. Deep enables those diagnostics and candidate encode measurements. Desktop initial single and batch imports use quick; the single-file detail panel can request deep through the validated preload/IPC/worker path. Reports disclose the work performed in optional `analysis` coverage metadata, and the renderer labels deferred checks and estimated sizes. Older reports without metadata retain unknown coverage. Candidate encode measurements remain distinct from actual final ZIP bytes. See `QUICK_ANALYSIS_2026-10-15.md` for measurements.
+
+## Processing Resource Limits
+
+ZIP metadata preflight covers normal and ZIP64 end records, locators, entry counts and 64-bit sizes/offsets before JSZip loads metadata. The 20,000-record default includes directories. Default limits remain 512MiB per expanded entry and 2GiB total expanded data. Unicode-decoded names are checked again after loading. Actual entry streams are checked before accumulating each chunk and concatenating the accepted entry; false declared sizes cannot bypass the entry/aggregate limits. Declared-empty entries receive a separate pre-loader check because JSZip otherwise skips their compressed bytes; DEFLATE validation uses a one-byte output ceiling and rejects any nonempty output. This avoids allocating a complete untrusted expanded entry before validation, although decompressor chunks and its current input block still have transient cost.
+
+`resourceLimits.ts` defines a 24-million-pixel image ceiling. Larger images are retained with a warning, including BMP before RGB allocation; native decode/encode pipelines also set Sharp's input pixel limit. Preview outputs have at most 12 pairs and 1024-pixel edges/samples; one pair runs at a time. Core image mappers default to two concurrent items and cap explicit requests at four. CLI uses at most four workers, each requesting image concurrency one; requested and effective worker counts are recorded in its batch report.
+
+Buffer analysis, optimization and verification use an AsyncLocalStorage-owned decoded-image cache. Ready entries are bounded by 64MiB including encoded-source and decoded-pixel backing buffers, and by 64 slots. Old entries are evicted and oversized entries are returned without caching. Concurrent requests for one buffer share the pending decode. Success and failure dispose the scope; late callbacks cannot repopulate it. Nested operations share their active owner. Standalone image helpers use a bounded cache and expose an explicit clear operation. JPEG encoding no longer launches a separate unawaited raw decode to warm this cache.
+
+These limits do not bound total RSS: ZIP buffers, active decodes, native intermediates, thumbnails, externally retained returned buffers and allocator/native caches also consume memory. The largest permitted archive/pixel/worker limits have not been proven safe in every combination on low-memory PCs. See `RESOURCE_LIMITS_2026-10-15.md` for synthetic RSS measurements and their scope.
 
 ## Safety Rules
 
@@ -184,3 +246,15 @@ Analysis and optimization run through `apps/desktop/src/main/documentWorker.ts`,
 - Do not create an output if verification fails.
 - Keep safe mode free of resizing, lossy JPEG changes, BMP conversion, font changes, OLE changes, style rewrites, and layout recalculation.
 - If behavior is uncertain, skip the action and report a warning.
+
+
+### Estimated and measured byte contracts
+
+Analysis APIs return `AnalysisReport` (`kind: "analysis"`) with `estimatedSize`, estimated savings and `estimatedTargetStatus`; measured size/savings/target status are forbidden there. Optimization APIs and desktop preload/services return `CompletedOptimizationReport` (`kind: "optimization"`) with actual output bytes. The broad `OptimizationReport` remains available for legacy report readers. Consumers of new analysis JSON must move from `optimizedSize` to `estimatedSize`.
+
+Analysis retains the source ZIP length and validated per-entry compressed sizes. Separate safe/balanced/aggressive models adjust only changed payloads, choosing alternatives per resource. Deep measures encoded candidate DEFLATE sizes, still distinct from final ZIP, quality rollback and target search. Quick never encodes images. `core/planning` supplies pure strict-limit classification, integer proportional allocation and model evaluation. Desktop source imports its browser-safe subpath; asset copying places that exact compiled module at a local renderer ESM path. CLI and desktop share floor rounding, including tiny/exhausted ceilings. Desktop redistributes remaining budget sequentially, consuming measured completed outputs and retaining failed/cancelled originals. Finished rows keep forecasts and actuals in separate fields and retain analysis for retry. See `SIZE_ESTIMATES_2026-10-15.md` for corpus errors, exact-limit boundaries and native UI evidence.
+
+
+### Offline desktop fonts
+
+Desktop assets and electron-builder explicitly include the bundled Pretendard WOFF2 and its unmodified OFL license. The artifact gate extracts both from the actual ASAR and compares bytes against source. Electron smoke verifies external request cancellation before navigation and checks loaded font faces plus actual custom-font glyphs through Chromium, not just computed CSS names. Both source and packaged smoke enable offline emulation after verifying request blocking. Renderer navigation uses a canonical file URL; artifact inspection also checks renderer boot files and the isolated copy must preserve the ASAR bytes. Windows CI additionally checks that Pretendard is absent from system/user registrations, copies the built app outside the checkout, and executes the packaged ASAR with fresh settings/cache and no repository dependency fallback. Windows packages retain both Korean and en-US startup locale data; missing/empty required locale files fail before pruning. See `BUNDLED_FONTS_2026-10-15.md` for evidence and limits.

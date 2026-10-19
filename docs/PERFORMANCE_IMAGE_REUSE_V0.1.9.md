@@ -1,5 +1,7 @@
 # Analysis-to-optimize image reuse gate — v0.1.9
 
+2026-10-15 note: this is a historical measurement of the original deep-first flow. Initial analysis now uses [quick analysis](QUICK_ANALYSIS_2026-10-15.md), and the existing raw decode cache is bounded and released per operation as described in [resource limits](RESOURCE_LIMITS_2026-10-15.md). No session cache of encoded analysis results was added; the NO-GO decision below still applies to that proposal.
+
 Date: 2026-07-27 KST  
 Baseline: `v0.1.9` / `76c8714b9b81ab81c927561d606490d662e8fa8c`  
 Decision: **NO-GO — measurement only; do not add the session LRU cache**

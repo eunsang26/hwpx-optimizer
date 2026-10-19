@@ -78,7 +78,7 @@
 ### B. 소스에서 직접 빌드 (개발자·고급 사용자)
 
 ```bash
-# 사전 요구사항: Node.js 20 이상, npm
+# 사전 요구사항: Node.js 22.12 이상 (권장 24.21 LTS), npm
 git clone <repository-url>
 cd hwpx-optimizer
 npm install
@@ -138,6 +138,7 @@ npm run cli -- optimize sample.hwpx --mode balanced
    - **이미지 비교** 모달: 변경된 이미지의 변환 전/후를 PSNR(품질 등급)과 함께 좌우 비교
    - **다시 검증** 버튼으로 결과의 무결성을 즉시 재확인
    - JSON 리포트 다운로드(설정에서 끌 수 있음)
+6. **새 작업 시작**: 상단 또는 완료 결과의 **처음으로**를 누르면 파일 선택 화면으로 돌아갑니다. 현재 파일·일괄 목록과 결과 표시를 비우며, 저장된 결과 파일과 사용자 설정은 유지합니다.
 
 ### 5.3 일괄(다중) 처리
 
@@ -218,7 +219,8 @@ npm run cli -- batch ./docs --mode balanced --out ./optimized --jobs 2
 
 - 한 파일이 실패해도 전체가 중단되지 않습니다.
 - 출력 폴더에 `batch-report.json`이 생성됩니다. 실패 항목에는 `stage`(read-input / optimize / resolve-output-path / write-output / write-report)가 기록됩니다.
-- `--jobs`는 최대 4까지 지정 가능합니다.
+- `--jobs`의 실제 병렬 실행은 최대 4개입니다. 더 큰 수나 `max`를 요청해도 이 한도를 적용하며 요청 수와 실제 수를 batch 보고서에 남깁니다.
+- 24MP를 넘는 이미지는 경고와 함께 원본을 보존합니다. 메모리가 부족한 환경은 `--jobs 1`을 사용하세요. [처리 한도와 측정 근거](docs/RESOURCE_LIMITS_2026-10-15.md)를 참고하세요.
 
 ---
 
@@ -257,12 +259,14 @@ npm run cli -- batch ./docs --mode balanced --out ./optimized --jobs 2
 | `--target-bytes` / `--target-mb`  | 대부분의 명령        | 파일별 목표 용량 (도달 못 하면 리포트에 `missed`로 기록)            |
 | `--batch-target-bytes` / `--batch-target-mb` | `batch`   | 폴더 전체의 합산 목표 용량 (원본 크기 비율로 자동 분배)             |
 | `--allow-larger`                  | `optimize`, `batch` | 결과가 원본보다 커도 허용 (기본은 거부)                            |
-| `--overwrite`                     | `optimize`, `batch` | 같은 이름이 있을 때 덮어쓰기 (기본은 `-2`, `-3` 자동 부여)         |
+| `--overwrite`                     | `optimize`, `batch` | 같은 이름이 있을 때 덮어쓰기 (기본은 새 이름 자동 부여)            |
 | `--max-input-bytes`               | 모든 명령           | 처리할 입력 최대 크기(byte). 기본 512 MiB                          |
-| `--analysis-mode quick\|deep`     | `analyze`, `report` | 빠른 분석 vs 더 깊은 검사                                          |
+| `--analysis-mode quick\|deep`     | `analyze`, `report` | 기본 quick: 헤더·바이트 검사와 크기 추정. deep: 픽셀·유사 이미지 검사와 후보 인코딩 측정                                          |
 | `--jobs N`                        | `batch`             | 동시 처리 개수 (1~4)                                              |
 
 원본 파일 경로와 동일한 위치를 결과·리포트 경로로 지정하면 안전을 위해 작업이 거부됩니다.
+
+기본 저장은 문서와 리포트 이름을 함께 예약합니다. 동시 실행으로 이름을 먼저 확보한 파일이 있으면 새 이름을 사용하거나 충돌 오류를 반환하며 기존 파일을 덮어쓰지 않습니다. hardlink를 지원하지 않는 파일시스템에서는 배타적으로 새 파일을 열어 복사하므로 복사 중인 파일의 내용이 일부만 보일 수 있습니다.
 
 ---
 
@@ -274,6 +278,7 @@ hwpx-optimizer/
 │   └── desktop/         # Windows Electron 앱 (main / preload / renderer)
 ├── packages/
 │   ├── core/            # 모든 HWPX 로직 — reader/analyzer/optimizer/writer/verifier/report
+│   ├── io/              # CLI·desktop 공통 경로 예약·배타적 저장·소유 파일 정리
 │   └── cli/             # hwpx-opt 커맨드라인 래퍼 (얇은 fs/stdout 어댑터)
 ├── scripts/             # 빌드·릴리즈·검증·아이콘 생성 스크립트
 ├── docs/                # 아키텍처·테스트·릴리즈·QA·한계 문서
@@ -317,7 +322,7 @@ npm test -- packages/core/test/optimizer.test.ts
 # 타입 검사
 npm run typecheck
 
-# 전체 빌드 (core + cli + desktop)
+# 전체 빌드 (core + io + cli + desktop)
 npm run build
 ```
 

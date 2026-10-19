@@ -1,4 +1,6 @@
-import { XMLBuilder, XMLParser } from "fast-xml-parser";
+import { buildDocumentXml, parseDocumentXml } from "./xmlDocument.js";
+import { isBinaryResourceReference } from "./binaryReferences.js";
+import { describeResourceMappings } from "./resourceMappings.js";
 import { mapLimit, resolveImageConcurrency } from "./concurrency.js";
 import { findImageConsolidationGroups } from "./imageDuplicates.js";
 import { getRecommendedImagePixelBudgets } from "./imageDisplay.js";
@@ -7,7 +9,7 @@ import { applySafeOptimizationPlan } from "./optimizer.js";
 import { balancedImageProfile, cleanShapeComments, outputMediaType, transformImageActionWithBudget } from "./opportunities.js";
 import type { ImageOptimizationProfile, TransformImageAction } from "./opportunities.js";
 import { normalizePackagePath } from "./packagePath.js";
-import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan } from "./types.js";
+import type { AppliedAction, HwpxEntry, HwpxPackage, OptimizationPlan, ResourceMapping } from "./types.js";
 import { getStringAttribute, getXmlAttributes, isXmlNode, setAttribute } from "./xmlNode.js";
 import type { XmlNode } from "./xmlNode.js";
 
@@ -19,7 +21,7 @@ export async function applyBalancedOptimizationPlan(input: {
   profile?: ImageOptimizationProfile;
   onTransformProgress?: (progress: { completed: number; total: number; target: string; action: TransformImageAction }) => void;
   imageConcurrency?: number;
-}): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[] }> {
+}): Promise<{ pkg: HwpxPackage; applied: AppliedAction[]; skipped: AppliedAction[]; warnings: string[]; resourceMappings: ResourceMapping[] }> {
   const profile = input.profile ?? balancedImageProfile;
   const structuralPlan: OptimizationPlan = {
     mode: input.plan.mode,
@@ -145,9 +147,11 @@ export async function applyBalancedOptimizationPlan(input: {
     if (outputPath !== outcome.entry.path) {
       occupiedPaths.delete(outcome.entry.path);
       occupiedPaths.add(outputPath);
+      pathUpdates.set(outcome.entry.path, outputPath);
+      mediaTypeUpdates.set(outputPath, outputMediaType(outputPath));
     }
-    pathUpdates.set(outcome.entry.path, outputPath);
-    mediaTypeUpdates.set(outputPath, outputMediaType(outputPath));
+    // Re-encoding the same path/format keeps the original href and MIME spelling.
+    // Only conversions/renames need manifest and direct-path reference rewrites.
     transformedEntries[outcome.index] = {
       ...outcome.entry,
       path: outputPath,
@@ -159,7 +163,8 @@ export async function applyBalancedOptimizationPlan(input: {
       type: outcome.action,
       target: outcome.entry.path,
       beforeSize: outcome.entry.size,
-      afterSize: outcome.data.byteLength
+      afterSize: outcome.data.byteLength,
+      outputPath
     });
   }
 
@@ -182,7 +187,14 @@ export async function applyBalancedOptimizationPlan(input: {
     return { ...entry, data, size: data.byteLength };
   });
 
-  return { pkg: { entries }, applied, skipped, warnings };
+  const consolidationPaths = new Map(consolidated.applied.flatMap((action) =>
+    action.outputPath ? [[action.target, action.outputPath] as const] : []));
+  const pairs = input.pkg.entries.filter((entry) => entry.kind === "image").map((entry) => {
+    const canonical = consolidationPaths.get(entry.path) ?? entry.path;
+    return [entry.path, pathUpdates.get(canonical) ?? canonical] as const;
+  });
+  const pkg = { entries };
+  return { pkg, applied, skipped, warnings, resourceMappings: describeResourceMappings(input.pkg, pkg, pairs) };
 }
 
 function isTransformImageAction(action: string): action is TransformImageAction {
@@ -276,12 +288,13 @@ async function consolidateDuplicateImages(
   const removePaths = new Set<string>();
   const applied: AppliedAction[] = [];
   const skipped: AppliedAction[] = [];
+  const ambiguousIds = collectAmbiguousIdReferences(pkg);
 
   for (const target of targets) {
     const canonicalPath = canonicalByDuplicatePath.get(target);
     const duplicateId = manifest.idByPath.get(target);
     const canonicalId = canonicalPath ? manifest.idByPath.get(canonicalPath) : undefined;
-    if (!canonicalPath || !duplicateId || !canonicalId) {
+    if (!canonicalPath || !duplicateId || !canonicalId || ambiguousIds.has(duplicateId)) {
       skipped.push({ type: "consolidate-duplicate-images", target, beforeSize: duplicateSizes.get(target) });
       continue;
     }
@@ -293,7 +306,8 @@ async function consolidateDuplicateImages(
       type: "consolidate-duplicate-images",
       target,
       beforeSize: duplicateSizes.get(target),
-      afterSize: 0
+      afterSize: 0,
+      outputPath: canonicalPath
     });
   }
 
@@ -303,7 +317,8 @@ async function consolidateDuplicateImages(
     .filter((entry) => !removePaths.has(entry.path))
     .map((entry) => {
       if (entry.kind !== "xml") return entry;
-      const updated = updateDuplicateImageXml(entry.data.toString("utf8"), idUpdates, duplicatePathUpdates, removeIds, removePaths);
+      const updated = updateDuplicateImageXml(entry.data.toString("utf8"), idUpdates, duplicatePathUpdates,
+        removeIds, removePaths, entry.path === "Contents/content.hpf");
       if (updated === entry.data.toString("utf8")) return entry;
       const data = Buffer.from(updated);
       return { ...entry, data, size: data.byteLength };
@@ -315,7 +330,7 @@ async function consolidateDuplicateImages(
 function extractManifestItems(pkg: HwpxPackage): { idByPath: Map<string, string> } {
   const idByPath = new Map<string, string>();
   for (const entry of pkg.entries) {
-    if (entry.kind !== "xml") continue;
+    if (entry.path !== "Contents/content.hpf") continue;
     try {
       const document = parseXml(entry.data.toString("utf8"));
       collectManifestItems(document, idByPath);
@@ -344,18 +359,11 @@ function updateManifestReferences(
 }
 
 function parseXml(xml: string): XmlNode[] {
-  const parser = new XMLParser({ ignoreAttributes: false, preserveOrder: true, attributeNamePrefix: "" });
-  return parser.parse(xml) as XmlNode[];
+  return parseDocumentXml(xml);
 }
 
 function buildXml(document: XmlNode[]): string {
-  const builder = new XMLBuilder({
-    ignoreAttributes: false,
-    preserveOrder: true,
-    attributeNamePrefix: "",
-    suppressEmptyNode: true
-  });
-  return builder.build(document);
+  return buildDocumentXml(document, true);
 }
 
 function updateHrefAttributes(
@@ -402,11 +410,12 @@ function updateDuplicateImageXml(
   idUpdates: Map<string, string>,
   duplicatePathUpdates: Map<string, string>,
   removeIds: Set<string>,
-  removePaths: Set<string>
+  removePaths: Set<string>,
+  isManifest: boolean
 ): string {
   try {
     const document = parseXml(xml);
-    const changed = updateDuplicateImageNodes(document, idUpdates, duplicatePathUpdates, removeIds, removePaths);
+    const changed = updateDuplicateImageNodes(document, idUpdates, duplicatePathUpdates, removeIds, removePaths, isManifest);
     return changed ? buildXml(document) : xml;
   } catch {
     return xml;
@@ -418,7 +427,8 @@ function updateDuplicateImageNodes(
   idUpdates: Map<string, string>,
   duplicatePathUpdates: Map<string, string>,
   removeIds: Set<string>,
-  removePaths: Set<string>
+  removePaths: Set<string>,
+  isManifest: boolean
 ): boolean {
   if (!Array.isArray(nodes)) return false;
 
@@ -427,11 +437,13 @@ function updateDuplicateImageNodes(
     const node = nodes[index];
     if (!isXmlNode(node)) continue;
     const attrs = getXmlAttributes(node);
+    const element = Object.keys(node).find((name) => name !== ":@") ?? "";
     if (attrs) {
       const hrefKey = findHrefAttributeKey(attrs);
       const href = hrefKey ? getStringAttribute(attrs, hrefKey) : undefined;
       const id = getStringAttribute(attrs, "id");
-      if (id && removeIds.has(id) && href && isRemovedPackagePath(href, removePaths)) {
+      if (isManifest && element.split(":").at(-1) === "item" && id && removeIds.has(id) &&
+          href && isRemovedPackagePath(href, removePaths)) {
         nodes.splice(index, 1);
         changed = true;
         continue;
@@ -446,7 +458,7 @@ function updateDuplicateImageNodes(
         }
       }
       for (const key of Object.keys(attrs)) {
-        if (!isIdReferenceAttribute(key)) continue;
+        if (!isBinaryResourceReference(key, element)) continue;
         const value = attrs[key];
         if (typeof value !== "string") continue;
         const updatedId = idUpdates.get(value);
@@ -458,13 +470,32 @@ function updateDuplicateImageNodes(
     }
 
     for (const value of Object.values(node)) {
-      if (Array.isArray(value) && updateDuplicateImageNodes(value, idUpdates, duplicatePathUpdates, removeIds, removePaths)) {
+      if (Array.isArray(value) && updateDuplicateImageNodes(value, idUpdates, duplicatePathUpdates, removeIds, removePaths, isManifest)) {
         changed = true;
       }
     }
   }
 
   return changed;
+}
+
+function collectAmbiguousIdReferences(pkg: HwpxPackage): Set<string> {
+  const ids = new Set<string>();
+  function visit(nodes: XmlNode[]): void {
+    for (const node of nodes) {
+      const element = Object.keys(node).find((name) => name !== ":@") ?? "";
+      for (const [name, value] of Object.entries(getXmlAttributes(node) ?? {})) {
+        if (typeof value === "string" && /ref$/i.test(name) && !isBinaryResourceReference(name, element)) ids.add(value);
+      }
+      for (const children of Object.values(node)) {
+        if (Array.isArray(children)) visit(children as XmlNode[]);
+      }
+    }
+  }
+  for (const entry of pkg.entries) {
+    if (entry.kind === "xml" && entry.path !== "Contents/content.hpf") visit(parseDocumentXml(entry.data.toString("utf8")));
+  }
+  return ids;
 }
 
 function collectManifestItems(nodes: unknown, idByPath: Map<string, string>): void {
@@ -475,18 +506,13 @@ function collectManifestItems(nodes: unknown, idByPath: Map<string, string>): vo
     if (attrs) {
       const id = getStringAttribute(attrs, "id");
       const href = getStringAttribute(attrs, "href");
-      const normalizedHref = href ? normalizePackagePath(href) : null;
+      const normalizedHref = href ? normalizePackagePath(href, { xmlDecoded: true }) : null;
       if (id && normalizedHref) idByPath.set(normalizedHref, id);
     }
     for (const value of Object.values(node)) {
       if (Array.isArray(value)) collectManifestItems(value, idByPath);
     }
   }
-}
-
-function isIdReferenceAttribute(name: string): boolean {
-  const normalized = name.toLowerCase();
-  return normalized === "binaryitemidref" || normalized.endsWith("ref") || normalized.endsWith("idref");
 }
 
 function findHrefAttributeKey(attrs: Record<string, unknown>): string | null {
@@ -503,15 +529,15 @@ function findMediaTypeAttributeKey(attrs: Record<string, unknown>): string | nul
 }
 
 function findPackagePathAttributeKeys(attrs: Record<string, unknown>): string[] {
-  return Object.keys(attrs).filter((key) => typeof attrs[key] === "string" && normalizePackagePath(attrs[key]) !== null);
+  return Object.keys(attrs).filter((key) => typeof attrs[key] === "string" && normalizePackagePath(attrs[key], { xmlDecoded: true }) !== null);
 }
 
 function isRemovedPackagePath(value: string, removePaths: Set<string>): boolean {
-  const normalized = normalizePackagePath(value);
+  const normalized = normalizePackagePath(value, { xmlDecoded: true });
   return Boolean(normalized && removePaths.has(normalized));
 }
 
 function findUpdatedPackagePath(value: string, pathUpdates: Map<string, string>): string | null {
-  const normalized = normalizePackagePath(value);
+  const normalized = normalizePackagePath(value, { xmlDecoded: true });
   return normalized ? pathUpdates.get(normalized) ?? null : null;
 }

@@ -96,3 +96,16 @@ describe("allocateAggregateTargetBytes", () => {
     expect(visited).toBe(items.length);
   });
 });
+
+describe("aggregate actual-size accounting", () => {
+  it("never consumes a forecast as an actual result and retains failed/cancelled originals", () => {
+    const summary = summarizeAggregateTargetAllocation([
+      { selected: true, status: "done", originalSizeBytes: 100, expectedSizeBytes: 1, report: {} },
+      { selected: true, status: "failed", originalSizeBytes: 80, expectedSizeBytes: 1 },
+      { selected: true, status: "cancelled", originalSizeBytes: 70 },
+      { selected: true, status: "pending", originalSizeBytes: 50 }
+    ]);
+    expect(summary).toEqual({ completedOutputBytes: 250, pendingOriginalTotal: 50 });
+    expect(allocateRemainingAggregateTargetBytes({ batchTargetBytes: 100, ...summary, itemOriginalBytes: 50 })).toBe(1);
+  });
+});

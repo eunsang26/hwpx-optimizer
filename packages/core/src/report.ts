@@ -1,45 +1,50 @@
 import type {
+  AnalysisCoverage,
+  AnalysisReport,
+  CompletedOptimizationReport,
+  PackageSizeEstimate,
   AppliedAction,
   OptimizationAction,
   OptimizationOpportunity,
   OptimizationOpportunityGroup,
   OptimizationReport,
   PackageAnalysis,
-  PerformanceSummary
+  PerformanceSummary,
+  ResourceMapping
 } from "./types.js";
-import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
+import { targetStatusForBytes } from "./planning.js";
 
 export function createAnalysisReport(
   analysis: PackageAnalysis,
   originalSize = analysis.totalSize,
   opportunities: OptimizationOpportunity[] = [],
   options: {
+    analysis?: AnalysisCoverage;
+    estimates?: Record<"safe" | "balanced" | "aggressive", PackageSizeEstimate>;
     targetBytes?: number;
     performance?: PerformanceSummary;
     /** Prefer ZIP-aware projection from `projectPackageSizeFromOpportunities`. */
     projectedOptimizedSize?: number;
     aggressiveProjectedOptimizedSize?: number;
   } = {}
-): OptimizationReport {
-  const fallbackProjected = Math.max(
-    0,
-    originalSize - estimateNonOverlappingSavingBytes(groupOpportunities(opportunities))
-  );
+): AnalysisReport {
+  const fallbackProjected = originalSize;
   const projectedOptimizedSize =
     options.projectedOptimizedSize !== undefined
       ? Math.max(0, Math.min(originalSize, Math.round(options.projectedOptimizedSize)))
       : fallbackProjected;
   return {
+    kind: "analysis",
+    ...(options.estimates ? { estimates: options.estimates } : {}),
+    ...(options.analysis ? { analysis: options.analysis } : {}),
     originalSize,
-    optimizedSize: projectedOptimizedSize,
-    savedBytes: Math.max(0, originalSize - projectedOptimizedSize),
-    savedPercent: originalSize === 0 ? 0 : ((originalSize - projectedOptimizedSize) / originalSize) * 100,
-    ...createTargetFields({
-      originalSize,
-      optimizedSize: projectedOptimizedSize,
+    estimatedSize: projectedOptimizedSize,
+    estimatedSavingBytes: Math.max(0, originalSize - projectedOptimizedSize),
+    estimatedSavingPercent: originalSize === 0 ? 0 : ((originalSize - projectedOptimizedSize) / originalSize) * 100,
+    ...(options.targetBytes ? {
       targetBytes: options.targetBytes,
-      missReason: "No quality-preserving optimization candidate is projected to reach the target."
-    }),
+      estimatedTargetStatus: targetStatusForBytes(originalSize, projectedOptimizedSize, options.targetBytes)
+    } : {}),
     categorySizes: analysis.categorySizes,
     images: analysis.images,
     duplicateImages: analysis.duplicateImages,
@@ -77,10 +82,13 @@ export function createOptimizationReport(input: {
   targetMissReason?: string;
   plannedJpegQuality?: number;
   performance?: PerformanceSummary;
-}): OptimizationReport {
+  resourceMappings?: ResourceMapping[];
+}): CompletedOptimizationReport {
   const savedBytes = input.originalSize - input.optimizedSize;
   return {
+    kind: "optimization",
     originalSize: input.originalSize,
+    ...(input.resourceMappings ? { resourceMappings: input.resourceMappings } : {}),
     optimizedSize: input.optimizedSize,
     savedBytes,
     savedPercent: input.originalSize === 0 ? 0 : (savedBytes / input.originalSize) * 100,
@@ -121,7 +129,7 @@ function createTargetFields(input: {
   // Submission "미만" is always judged on the candidate output size.
   // already-under-target only when the original was already under AND the output stayed under —
   // never label a grown/over-target output as already-under.
-  if (input.optimizedSize < input.targetBytes) {
+  if (targetStatusForBytes(input.originalSize, input.optimizedSize, input.targetBytes) !== "missed") {
     return {
       targetBytes: input.targetBytes,
       targetStatus: input.originalSize < input.targetBytes ? "already-under-target" : "met"
@@ -171,9 +179,10 @@ export function groupOpportunities(opportunities: OptimizationOpportunity[]): Op
 }
 
 function createWarnings(analysis: PackageAnalysis): string[] {
-  return analysis.images
-    .filter((image) => image.isBmpCandidate)
-    .map((image) => `BMP candidate detected; convert-bmp-to-png may reduce size: ${image.path}`);
+  return [...(analysis.referenceGraph?.missingReferences ?? []).map((reference) =>
+    `Unresolved package reference: ${reference}`), ...analysis.images.flatMap((image) => image.preservationReason
+    ? [`Image bytes preserved for ${image.path}: ${image.preservationReason}`]
+    : image.isBmpCandidate ? [`BMP candidate detected; convert-bmp-to-png may reduce size: ${image.path}`] : [])];
 }
 
 const riskOrder = { safe: 0, medium: 1, high: 2 } as const;

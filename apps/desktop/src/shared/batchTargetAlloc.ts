@@ -1,32 +1,17 @@
-/** Proportional target share for one file under aggregate batch mode. */
+import { allocateTargetShareBytes } from "./corePlanning.js";
+
 export function allocateAggregateTargetBytes(input: {
-  batchTargetBytes: number;
-  itemOriginalBytes: number;
-  selectedOriginalTotal: number;
+  batchTargetBytes: number; itemOriginalBytes: number; selectedOriginalTotal: number;
 }): number | undefined {
-  if (input.batchTargetBytes <= 0 || input.itemOriginalBytes <= 0 || input.selectedOriginalTotal <= 0) {
-    return undefined;
-  }
-  return Math.max(1, Math.floor((input.batchTargetBytes * input.itemOriginalBytes) / input.selectedOriginalTotal));
+  return allocateTargetShareBytes({ targetBytes: input.batchTargetBytes,
+    itemBytes: input.itemOriginalBytes, totalBytes: input.selectedOriginalTotal });
 }
 
-/** Proportional target share after outputs from an earlier batch pass have consumed part of the aggregate budget. */
 export function allocateRemainingAggregateTargetBytes(input: {
-  batchTargetBytes: number;
-  completedOutputBytes: number;
-  itemOriginalBytes: number;
-  pendingOriginalTotal: number;
+  batchTargetBytes: number; completedOutputBytes: number; itemOriginalBytes: number; pendingOriginalTotal: number;
 }): number | undefined {
-  if (input.batchTargetBytes <= 0) return undefined;
-  const remainingTargetBytes = Math.max(
-    1,
-    Math.floor(input.batchTargetBytes - Math.max(0, input.completedOutputBytes))
-  );
-  return allocateAggregateTargetBytes({
-    batchTargetBytes: remainingTargetBytes,
-    itemOriginalBytes: input.itemOriginalBytes,
-    selectedOriginalTotal: input.pendingOriginalTotal
-  });
+  return allocateTargetShareBytes({ targetBytes: input.batchTargetBytes,
+    itemBytes: input.itemOriginalBytes, totalBytes: input.pendingOriginalTotal, consumedBytes: input.completedOutputBytes });
 }
 
 export type AggregateTargetAllocationItem = {
@@ -51,7 +36,11 @@ export function summarizeAggregateTargetAllocation(
   for (const item of items) {
     if (!item.selected) continue;
     if (item.status === "done") {
-      completedOutputBytes += item.report?.optimizedSize ?? item.expectedSizeBytes ?? 0;
+      completedOutputBytes += item.report?.optimizedSize ?? item.originalSizeBytes ?? 0;
+      continue;
+    }
+    if (item.status === "failed" || item.status === "cancelled") {
+      completedOutputBytes += item.originalSizeBytes ?? 0;
       continue;
     }
     if (

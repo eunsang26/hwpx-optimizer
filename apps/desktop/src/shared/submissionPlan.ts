@@ -1,4 +1,8 @@
+import { validCustomLimitBytes } from "./submissionLimits.js";
+import { ACTION_CATALOG, type SubmissionActionBucket } from "./actionCatalog.js";
+import { JPEG_QUALITY_FLOOR, JPEG_QUALITY_CEILING, DEFAULT_JPEG_QUALITY as BASELINE_JPEG_QUALITY_BALANCED } from "./qualityPolicy.js";
 import type { OptimizationOpportunityGroup, OptimizationReport } from "@hwpx-optimizer/core";
+import { evaluatePackageSizeEstimate, targetStatusForBytes } from "./corePlanning.js";
 import { estimateNonOverlappingSavingBytes } from "./estimateSavings.js";
 import {
   classifyTargetVerdict,
@@ -23,12 +27,9 @@ export type SubmissionLimitId =
 export type PreservationPreference = "preserve" | "recommended" | "size";
 export type PlanStatus = "target-met" | "target-missed" | "already-under-target" | "no-target";
 export type PlanKind = "automatic" | "custom";
-export type SubmissionActionBucket = "image" | "metadata" | "author";
+export type { SubmissionActionBucket } from "./actionCatalog.js";
 export type SubmissionActionId = OptimizationOpportunityGroup["action"];
 
-const JPEG_QUALITY_FLOOR = 60;
-const JPEG_QUALITY_CEILING = 95;
-const BASELINE_JPEG_QUALITY_BALANCED = 88;
 
 export type SubmissionLimit = {
   id: SubmissionLimitId;
@@ -118,45 +119,6 @@ export const PRESERVATION_LABELS: Record<PreservationPreference, string> = {
   size: "용량 우선"
 };
 
-const ACTION_DISPLAY_LABELS: Partial<Record<OptimizationOpportunityGroup["action"], string>> = {
-  "minify-xml": "문서 XML 정리",
-  "remove-unused": "사용하지 않는 파일 제거",
-  "resize-jpeg": "큰 JPEG 리사이즈",
-  "resize-png": "큰 PNG 리사이즈",
-  "convert-bmp-to-png": "BMP를 PNG로 변환",
-  "convert-tiff-to-png": "TIFF를 PNG로 변환",
-  "consolidate-duplicate-images": "중복 이미지 참조 정리",
-  "strip-metadata": "EXIF 제외 이미지 정보 제거",
-  "optimize-png": "PNG 무손실 최적화",
-  "clean-shape-comment": "작성자·편집 흔적 정리"
-};
-
-const ACTION_BUCKETS: Partial<Record<OptimizationOpportunityGroup["action"], SubmissionActionBucket>> = {
-  "minify-xml": "metadata",
-  "remove-unused": "metadata",
-  "resize-jpeg": "image",
-  "resize-png": "image",
-  "convert-bmp-to-png": "image",
-  "convert-tiff-to-png": "image",
-  "consolidate-duplicate-images": "image",
-  "strip-metadata": "metadata",
-  "optimize-png": "metadata",
-  "clean-shape-comment": "author"
-};
-
-const ACTION_PRIORITY_ORDER: Partial<Record<SubmissionActionId, number>> = {
-  "consolidate-duplicate-images": 10,
-  "remove-unused": 20,
-  "minify-xml": 30,
-  "strip-metadata": 40,
-  "optimize-png": 50,
-  "clean-shape-comment": 60,
-  "convert-bmp-to-png": 70,
-  "convert-tiff-to-png": 80,
-  "resize-jpeg": 90,
-  "resize-png": 100
-};
-
 const ESTIMATED_SAVING_DISPLAY_RATIO = 0.95;
 
 export function modeForPreservation(preference: PreservationPreference): OptimizationMode {
@@ -181,7 +143,7 @@ export function resolveSubmissionLimitBytes(limit: SubmissionLimit): number | un
   if (limit.id === "mb41") return 41 * 1024 * 1024;
   if (limit.id === "mb50") return 50 * 1024 * 1024;
   if (limit.id === "mb100") return 100 * 1024 * 1024;
-  if (limit.id === "custom" && limit.customBytes && limit.customBytes > 0) return limit.customBytes;
+  if (limit.id === "custom" && validCustomLimitBytes(limit.customBytes)) return limit.customBytes;
   return undefined;
 }
 
@@ -208,7 +170,7 @@ export function createSubmissionPlan(
       actions: [toggle.action],
       selectedActions: checked ? [toggle.action] : [],
       bucket,
-      label: ACTION_DISPLAY_LABELS[toggle.action] ?? toggle.label,
+      label: ACTION_CATALOG[toggle.action]?.planLabel ?? toggle.label,
       count: toggle.count,
       checked,
       partiallyChecked: false,
@@ -233,7 +195,7 @@ export function createSubmissionPlan(
       ? Math.max(0, Math.floor(report.originalSize * ESTIMATED_SAVING_DISPLAY_RATIO))
       : rawExpectedSavingBytes;
   const expectedSavingBytes = Math.min(rawExpectedSavingBytes, savingCapBytes);
-  const wasCapped = rawExpectedSavingBytes > expectedSavingBytes;
+  const wasCapped = !report.estimates && rawExpectedSavingBytes > expectedSavingBytes;
   const rawJpegBaselineBytes = jpegBaselineBytesFromGroups(selectedGroups);
   const fullSavingBytes = estimateNonOverlappingSavingBytes(allGroups);
   const selectedSavingBytes = estimateNonOverlappingSavingBytes(selectedGroups);
@@ -241,27 +203,31 @@ export function createSubmissionPlan(
   // Prefer ZIP-aware analysis projection when it belongs to these opportunity groups.
   // Fixtures/overrides that keep a stale optimizedSize fall back to entry savings.
   const entryBaselineSizeBytes = Math.max(0, report.originalSize - expectedSavingBytes);
-  const baselineSummarySizeBytes =
-    resolveProjectedBaselineBytes({
+  const model = report.estimates?.[mode];
+  const modelResult = model ? evaluatePackageSizeEstimate(model, mode === "safe" || !changed ? undefined : selectedActions) : undefined;
+  const baselineSummarySizeBytes = modelResult?.size ?? (report.kind === "analysis"
+    ? Math.round(report.originalSize - Math.max(0, report.originalSize - (report.estimatedSize ?? report.originalSize)) * selectionRatio)
+    :
+    (resolveProjectedBaselineBytes({
       originalSize: report.originalSize,
       projectedSize: report.optimizedSize,
       fullSavingBytes,
       selectedSavingBytes,
       fallbackSizeBytes: entryBaselineSizeBytes
-    }) ?? entryBaselineSizeBytes;
-  const jpegBaselineBytes = Math.round(rawJpegBaselineBytes * Math.max(0.25, selectionRatio || 1));
+    }) ?? entryBaselineSizeBytes));
+  const jpegBaselineBytes = modelResult?.jpegBytes ?? (report.kind === "analysis" ? 0 : Math.round(rawJpegBaselineBytes * Math.max(0.25, selectionRatio || 1)));
   const targetBytes = resolveSubmissionLimitBytes(input.submissionLimit);
   const sizeEstimate = (quality: number): number =>
     estimateSizeAtJpegQuality({
       originalBytes: report.originalSize,
       baselineExpectedBytes: baselineSummarySizeBytes,
-      baselineQuality: BASELINE_JPEG_QUALITY_BALANCED,
+      baselineQuality: mode === "aggressive" ? JPEG_QUALITY_FLOOR : BASELINE_JPEG_QUALITY_BALANCED,
       quality,
       floor: JPEG_QUALITY_FLOOR,
       ceiling: JPEG_QUALITY_CEILING,
       jpegBaselineBytes
     });
-  const projectedAggressive = resolveProjectedBaselineBytes({
+  const projectedAggressive = report.kind === "analysis" ? undefined : resolveProjectedBaselineBytes({
     originalSize: report.originalSize,
     projectedSize: report.aggressiveProjectedOptimizedSize,
     fullSavingBytes,
@@ -271,7 +237,7 @@ export function createSubmissionPlan(
   const floorExpectedBytes =
     mode === "safe"
       ? baselineSummarySizeBytes
-      : (projectedAggressive ?? sizeEstimate(JPEG_QUALITY_FLOOR));
+      : modelResult ? sizeEstimate(JPEG_QUALITY_FLOOR) : (projectedAggressive ?? sizeEstimate(JPEG_QUALITY_FLOOR));
 
   // Aggressive always uses the quality floor (manual JPEG % is ignored).
   const manualQuality =
@@ -426,11 +392,11 @@ function createPriorityActionRows(actionRows: RawSubmissionActionRow[]): Submiss
 }
 
 function actionBucket(action: OptimizationOpportunityGroup["action"]): SubmissionActionBucket {
-  return ACTION_BUCKETS[action] ?? "image";
+  return ACTION_CATALOG[action]?.bucket ?? "image";
 }
 
 function actionPriority(action: SubmissionActionId): number {
-  return ACTION_PRIORITY_ORDER[action] ?? 100;
+  return ACTION_CATALOG[action]?.priority ?? 100;
 }
 
 function clampRatio(value: number): number {
@@ -486,8 +452,8 @@ function meetsTarget(sizeBytes: number, targetBytes: number): boolean {
 
 function targetStatusFor(originalSize: number, expectedSize: number, targetBytes: number | undefined): PlanStatus {
   if (!targetBytes) return "no-target";
-  if (meetsTarget(originalSize, targetBytes)) return "already-under-target";
-  return meetsTarget(expectedSize, targetBytes) ? "target-met" : "target-missed";
+  const status = targetStatusForBytes(originalSize, expectedSize, targetBytes);
+  return status === "already-under-target" ? status : status === "met" ? "target-met" : "target-missed";
 }
 
 function clamp(value: number, min: number, max: number): number {

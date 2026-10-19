@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -18,6 +18,9 @@ await writeFile(join(root, "dist", "app-icon.png"), await sharp(iconSvg).resize(
 const fontsSource = join(root, "src", "fonts");
 const fontsTarget = join(root, "dist", "fonts");
 await mkdir(fontsTarget, { recursive: true });
-for (const fontFile of await readdir(fontsSource)) {
+for (const fontFile of ["PretendardVariable.woff2", "OFL.txt"]) {
   await copyFile(join(fontsSource, fontFile), join(fontsTarget, fontFile));
 }
+
+// Renderer runs without Node/bare-module resolution. Keep one implementation.
+await copyFile(join(root, "../../packages/core/dist/planning.js"), join(root, "dist/shared/corePlanning.js"));

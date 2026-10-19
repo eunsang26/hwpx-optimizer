@@ -1,5 +1,17 @@
 # Testing
 
+## Pull Request and Windows CI
+
+Use Node **22.12.0 or newer** locally; `.nvmrc` and `.node-version` select **24.21.0**. Node 20 is not supported by the current toolchain. The PR matrix tests both the minimum supported runtime (22.12.0) and the pinned development runtime (24.21.0).
+
+`.github/workflows/pr-checks.yml` runs for every pull request, pushes to `main`, and merge queue groups, including documentation changes and draft PRs. Linux jobs independently run `npm ci`, prepare fixed-version Windows sharp binary fixtures for PE/stage tests in an isolated npm prefix (Linux does not execute those binaries), then run repository hygiene, all tests (two workers), typecheck, build, the synthetic regression corpus, and the real Electron smoke under Xvfb. Before smoke, the disposable hosted runner downloads the pinned Electron binary and sets its SUID sandbox helper to root:root/4755, as required by the [Chromium helper contract](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/linux/suid_sandbox_development.md); CI does not pass `--no-sandbox` or modify the application sandbox settings. A failure stops the remaining steps of that job; matrix jobs run independently. A newer revision cancels superseded runs for the same event/ref.
+
+The same workflow calls `cli-portable-release.yml` on Windows/Node 24.21.0. It runs all tests, typecheck, build, the shipped-runtime audit, builds the CLI ZIP with the Windows sharp native runtime, verifies extracted package/native files and the manifest, then executes the actual portable CLI's optimize/verify/batch/launcher smoke with a generated HWPX. Uploads are explicitly disabled. The separate Windows desktop release workflow runs on version tags or manual dispatch and additionally verifies the actual packaged desktop offline, including its font and native runtime. These are build/runtime checks, not evidence of Hancom or institutional-PC manual QA.
+
+PR and `main` checks use read-only repository permissions, no inherited secrets, and no artifact upload steps. The reusable Windows workflow uploads only for a `v*` tag push or an explicit manual upload request; a `main` push calling it cannot upload artifacts. CI uses generated documents; never pass private samples, reports, screenshots, or local output directories to CI. Release uploads retain explicit file allowlists. Neither workflow enables network-dependent document processing.
+
+Repository rules must select the Linux matrix and Windows native/portable checks if merges should require them; adding the workflows does not itself configure branch protection. Checkout/setup-node actions are pinned to their verified v6 commit SHAs and run on Node 24 independently of the project's Node matrix ([checkout](https://github.com/actions/checkout/tree/v6), [setup-node](https://github.com/actions/setup-node/tree/v6)). Merge queue triggering follows the [GitHub event contract](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group).
+
 ## Test Commands
 
 Run a targeted test while developing:
@@ -69,6 +81,9 @@ Core tests cover:
 - Reference graph construction.
 - Safe optimization planning.
 - Safe optimizer output.
+- Significant XML whitespace/numeric strings, mixed content and UTF-8 validation; original-to-output text/layout/resource-position comparisons.
+- Alpha/orientation/protected image representations, font/OLE retention and duplicate/converted resource mappings.
+- ZIP64/path/streaming-expanded-size limits and bounded decoded-cache disposal.
 - Balanced image conversion and resizing behavior.
 - Aggressive image profile behavior.
 - Report shape.
@@ -91,6 +106,9 @@ Desktop tests cover:
 - Non-overwrite naming.
 - Report saving.
 - Verification call path.
+- Original inode protection across worker recreation, exclusive output claims and pair rollback on failed publication.
+- Real worker CPU-phase cancellation, timeout and graceful-shutdown recovery; DOM-free stale-result and batch-planning behavior.
+- Settings whitelist/schema migration, range validation, atomic publication failures and shutdown draining.
 
 Desktop smoke tests cover:
 
@@ -104,28 +122,31 @@ Desktop smoke tests cover:
 
 The smoke test uses a synthetic local HWPX under `.tmp/electron-smoke` by default. When `HWPX_OPT_SMOKE_INPUT` is set, the app copies that local file into `.tmp/electron-smoke` for the run. `HWPX_OPT_SMOKE_MODE` can be `safe`, `balanced`, or `aggressive`; invalid values fall back to `safe`. It does not upload data, and sample files remain ignored by git.
 
+The smoke additionally runs 11 named workflow regressions in `apps/desktop/src/main/workflowSmoke.ts`. They use actual visible DOM controls, the sandboxed preload, IPC handlers and the production worker, covering selection/addition/removal, single/batch cancellation and retry, selected-only batch completion, and document/aggregate report write failures. Each case verifies original/sentinel SHA-256 hashes; cancellation/reset cases compare the entire directory tree. Completed pairs are cross-verified against the original document and checked against measured report sizes. `desktop-workflow-complete` is emitted only after every case passes. Deliberate cancellation and blocked report paths produce expected handled IPC errors in the logs; the process must still exit zero with both workflow and final smoke completion markers.
+
+The UI cancellation gate pauses delivery after the real worker returns, before publication, making UI/IPC ordering deterministic. Separate Vitest `documentCancellation.test.ts` tests pause real worker CPU phases and asynchronous filesystem operations to prove termination, rollback, timeout and restart behavior. Static repository tests retain manifest, packaging, version and privacy configuration checks; UI state is verified by execution rather than renderer source snippets. `documentController.test.ts` exercises the extracted controller with a real worker and filesystem, including grants, earlier-input protection after worker recreation, forged report paths and close ordering. `workflowState.test.ts` runs DOM-free cancellation/stale-finalizer, retry and batch-budget/quality scenarios. The whole desktop smoke is now loaded through `main/smoke/runtime.ts` in smoke mode only. `settingsStore.test.ts` additionally exercises damaged/legacy/newer schemas, private-property filtering, bounded custom limits, write/sync/rename failures, queued readers/patches and shutdown draining. `main/smoke/settingsSmoke.ts` adds four real Electron settings scenarios; final smoke completion requires both document and settings completion markers. See [settings evidence](DESKTOP_SETTINGS_2026-10-15.md). See [workflow evidence and scope](DESKTOP_WORKFLOW_TESTS_2026-10-15.md).
+
+`main/smoke/interactionSmoke.ts` adds nine native keyboard scenarios using Electron input events, actual IPC/worker operations and generated files: modal focus confinement/restoration, progress and completion focus, comparison dialog close, native cancellation with a delayed acknowledgment after the next selection, checkbox/quality/removal focus retention, partial document failure and retry/removal recovery, report-only retry without changing completed output hashes, and delayed report success/failure after reset and a new selection. Report delivery is gated before the real filesystem operation; an existing directory produces the actual write failure. Partial failure uses an invalid synthetic ZIP alongside a valid document and verifies both original hashes and the completed output hash after recovery. The smoke restores all temporary method overrides in `finally` and requires `desktop-interaction-complete` with nine cases before final completion. These checks cover DOM accessibility state and keyboard behavior, not spoken output from a real screen reader. Real screen-reader speech and Hancom/institutional-PC acceptance remain manual checks.
+
+`main/smoke/readabilitySmoke.ts` adds three layout scenarios covering 40 viewport/state combinations: default 800×560 at 100%, and minimum 720×520 at 75/100/125/150/175/200/225%, across empty, single plan/result and partial batch plan/result. It verifies separate workspace/footer bounds, no page/workspace horizontal overflow, native zoom shortcuts, actual control hit tests and 24 CSS pixel targets, long-name wrapping, and real Chromium table/row-header accessibility at 320 CSS pixels. Partial-result denominators include failed inputs; invalid new settings must not disable opening/reviewing completed results. Completion requires `desktop-readability-complete` with three cases in addition to 11 workflow, four settings and nine interaction cases. Source and actual packaged Windows smoke run the same checks. See [visual evidence and limits](UI_READABILITY_2026-10-16.md).
+
 ## Fixture Strategy
 
 Synthetic HWPX fixtures live in `packages/core/test/fixtures.ts`. They build ZIP packages with controlled XML and resource entries.
 
-Fixture categories still needed for broader product confidence:
+Existing synthetic cases cover text-only packages, PNG/JPEG/BMP, JPEG EXIF, unused/duplicate resources, oversized images, retained OLE/font parts and malformed packages. `createReportLikeHwpxFixture` combines report-shaped XML and mixed resources; `regressionFixtures.test.ts` verifies that controlled case through analysis/optimization/original comparison. These fixtures are generated structures, not evidence of Hancom-authored documents or representative institutional rendering.
 
-- Text-only HWPX.
-- PNG and JPEG HWPX.
-- BMP HWPX.
-- EXIF-heavy JPEG HWPX.
-- Unused BinData HWPX.
-- Duplicate image HWPX.
-- Large image HWPX.
-- OLE HWPX.
-- Embedded font HWPX.
-- Broken or malformed HWPX.
+Broader confidence still needs current-version real-document/Hancom checks, representative very large documents on target PCs, and measured long-duration restart tests. Record their exact version/environment/results separately in [the release evidence ledger](RELEASE_EVIDENCE_2026-10-15.md); do not relabel synthetic corpus passes as those manual checks. A standalone CLI/Desktop verify pass validates package/XML/references; optimization's original-plus-mode verifier checks additional preservation invariants, and neither renders in Hancom.
 
 Real user sample files and local optimization outputs must not be committed. Root-level `sample*.hwpx`, `sample*.hwp`, `sample*.json`, `sample*.txt`, and `결과/` are ignored.
 
+## Benchmark Accounting
+
+Benchmark accounting is tested separately under `scripts/bench/test`: generated inputs in a manifest-verified test directory exercise actual ZIP/Sharp/repack operations with controlled RD curves and encoder stand-ins. Tests cover profitable survivors plus corrupt documents, partial/no-data JPEG exclusions, real/fixture scope consistency, tool loss and actual command report writing. They do not establish real jpegli capacity GO. `npm run typecheck` additionally checks bench source/tests without emitting JS. See [benchmark policy](../scripts/bench/README.md#failure-and-statistics-policy).
+
 ## Manual Desktop Checks
 
-Automated smoke checks only confirm that Electron can create and load the app window. Before a desktop release, still run:
+Automated smoke checks exercise synthetic workflows and failure recovery. Visual fidelity in Hancom and target-machine integration still require manual checks. Before a desktop release, run:
 
 1. `npm run build`
 2. `npm run desktop:start`
@@ -136,6 +157,8 @@ Automated smoke checks only confirm that Electron can create and load the app wi
 7. Confirm report JSON is created when enabled.
 8. Confirm `Open File` and `Show Folder` work on the target OS.
 9. Repeat with balanced and aggressive modes on disposable copies.
+
+Follow [Windows QA](WINDOWS_QA_CHECKLIST.md) for packaged, target-machine acceptance; source launch alone does not establish the packaged app's dependencies, institutional policies or Hancom behavior. Save non-sensitive version/environment/timing/outcome metadata in the evidence ledger; keep actual documents, reports and captures local.
 
 ## Pre-Commit Gate
 
@@ -148,3 +171,5 @@ npm run build
 ```
 
 If a command fails, fix the cause or document the blocker before committing.
+
+Current personal-PC Hancom and large real-document observations are recorded in [the 2026-10-16 ledger](HANCOM_QA_2026-10-16.md), with source/artifact hashes, original-plus-mode checks, full-page rendering comparisons, exact target misses and remaining institutional-PC acceptance. Private inputs/renderings remain local and are never CI fixtures or uploaded artifacts.

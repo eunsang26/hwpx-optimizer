@@ -13,7 +13,7 @@ const api = {
   },
   loadSettings: () => ipcRenderer.invoke("settings:load"),
   saveSettings: (patch) => ipcRenderer.invoke("settings:save", patch),
-  analyze: (filePath) => ipcRenderer.invoke("hwpx:analyze", filePath),
+  analyze: (filePath, options) => ipcRenderer.invoke("hwpx:analyze", filePath, options),
   optimize: (input) => ipcRenderer.invoke("hwpx:optimize", input),
   cancelAnalyze: () => ipcRenderer.invoke("hwpx:cancel-analyze"),
   cancelOptimize: () => ipcRenderer.invoke("hwpx:cancel-optimize"),

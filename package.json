@@ -8,15 +8,16 @@
   "license": "UNLICENSED",
   "main": "apps/desktop/dist/main.cjs",
   "engines": {
-    "node": ">=20.20.0"
+    "node": ">=22.12.0"
   },
   "workspaces": [
     "apps/desktop",
     "packages/core",
-    "packages/cli"
+    "packages/cli",
+    "packages/io"
   ],
   "scripts": {
-    "build": "npm run clean:build && tsc -b packages/core packages/cli apps/desktop && npm run desktop:assets",
+    "build": "npm run clean:build && tsc -b packages/core packages/io packages/cli apps/desktop && npm run desktop:assets",
     "build:win-portable": "node scripts/build-win-portable.mjs",
     "desktop:assets": "node apps/desktop/scripts/copy-assets.mjs",
     "desktop:icons": "node scripts/generate-desktop-icons.mjs",
@@ -32,7 +33,7 @@
     "desktop:local:win:self-signed": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win portable zip --x64 -c.win.signAndEditExecutable=false && node scripts/sign-self-signed-release-artifacts.mjs",
     "desktop:dist:win": "npm run build && npm run desktop:icons && node scripts/prepare-win-sharp-runtime.mjs && node scripts/run-electron-builder.mjs --win --x64",
     "test": "vitest run",
-    "typecheck": "tsc -b packages/core packages/cli apps/desktop --pretty false",
+    "typecheck": "tsc -b packages/core packages/io packages/cli apps/desktop --pretty false && tsc -p scripts/bench/tsconfig.json --pretty false",
     "release:clean": "node scripts/clean-release-artifacts.mjs",
     "clean:build": "node scripts/clean-build-artifacts.mjs",
     "clean:local-artifacts": "node scripts/clean-local-artifacts.mjs",
@@ -60,7 +61,8 @@
     "release:verify-cli-portable": "node scripts/verify-cli-portable.mjs",
     "release:verify-cli-portable-smoke": "node scripts/run-cli-portable-smoke.mjs",
     "release:check:cli-portable": "npm run release:clean && npm run release:hygiene && node scripts/ensure-win-sharp-test-fixtures.mjs && npm test && npm run typecheck && npm run build && npm run release:audit && npm run build:win-portable -- --skip-build && npm run release:verify-artifacts && npm run release:verify-cli-portable && npm run release:manifest && npm run release:verify-manifest",
-    "release:check:cli-portable:ci": "npm run release:clean && npm run release:hygiene && node scripts/ensure-win-sharp-test-fixtures.mjs && npm test && npm run typecheck && npm run build && npm run release:audit && npm run build:win-portable -- --skip-build && npm run release:verify-artifacts && npm run release:verify-cli-portable && npm run release:manifest && npm run release:verify-manifest"
+    "release:check:cli-portable:ci": "npm run release:clean && npm run release:hygiene && node scripts/ensure-win-sharp-test-fixtures.mjs && npm test && npm run typecheck && npm run build && npm run release:audit && npm run build:win-portable -- --skip-build && npm run release:verify-artifacts && npm run release:verify-cli-portable && npm run release:manifest && npm run release:verify-manifest",
+    "desktop:smoke:packaged:win": "node scripts/run-packaged-desktop-smoke.mjs"
   },
   "build": {
     "appId": "local.hwpxoptimizer.app",
@@ -70,7 +72,8 @@
     },
     "afterPack": "scripts/prune-electron-locales.cjs",
     "electronLanguages": [
-      "ko"
+      "ko",
+      "en-US"
     ],
     "asarUnpack": [
       "node_modules/@img/sharp-win32-x64/**/*"
@@ -92,6 +95,7 @@
       "apps/desktop/dist/main.js",
       "apps/desktop/dist/preload.js",
       "apps/desktop/dist/renderer.js",
+      "apps/desktop/dist/renderer/**/*.js",
       "apps/desktop/dist/main/**/*.js",
       "apps/desktop/dist/shared/**/*.js",
       "apps/desktop/dist/**/*.cjs",
@@ -99,9 +103,19 @@
       "apps/desktop/dist/**/*.css",
       "apps/desktop/dist/**/*.png",
       "apps/desktop/dist/**/*.svg",
+      "apps/desktop/dist/fonts/PretendardVariable.woff2",
+      "apps/desktop/dist/fonts/OFL.txt",
       {
         "from": "packages/core",
         "to": "node_modules/@hwpx-optimizer/core",
+        "filter": [
+          "package.json",
+          "dist/**/*.js"
+        ]
+      },
+      {
+        "from": "packages/io",
+        "to": "node_modules/@hwpx-optimizer/io",
         "filter": [
           "package.json",
           "dist/**/*.js"
@@ -156,11 +170,11 @@
   "dependencies": {
     "fast-xml-parser": "^5.7.3",
     "jszip": "^3.10.1",
-    "sharp": "0.35.3"
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
-    "electron": "^42.0.0",
+    "electron": "^42.11.13",
     "electron-builder": "^26.15.7",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
