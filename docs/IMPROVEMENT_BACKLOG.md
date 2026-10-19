@@ -365,6 +365,8 @@ Electron 패치의 npm tooling 최소 버전(22.12)에 맞춰 Node 개발/CI/CLI
 
 Windows 검증: 보정 커밋 `1363fda`에서 [CLI ZIP/native 실행 스모크](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38527067723)와 [데스크톱 릴리즈 빌드·Electron 스모크·unpacked native 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/38527071838) 모두 통과했다. 두 실행 모두 495개 테스트·타입 검사·빌드·audit 통과. 합성 문서만 사용하고 산출물 업로드는 비활성화했다. clean 기관 PC·한컴 수동 QA는 OPT-021에 남아 있다.
 
+후속 갱신(2026-10-19, `579d0a8`): 개발·패키징 도구에 호환 범위의 `npm audit fix`를 적용했다. 로컬 npm 11.6.2는 `@emnapi/core`·`@emnapi/runtime`을 lockfile에서 지워 위 Windows 설치 실패를 재현할 수 있어 버리고, CI와 같은 npm 11.19.0으로 다시 만들어 `npm ci --dry-run`을 확인했다. sharp 0.35.5·Electron 42.11.13은 그대로이고 electron-builder 26.17.0·vitest 4.1.12 등이 올라갔다. full audit 20개(high 8)가 8개(moderate 8)로 줄었고 남은 것은 electron-builder major 변경이 필요한 계열이다. 로컬 전체 94개 파일·792개 통과·1개 skip, 타입 검사·빌드·hygiene·runtime audit, [PR 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/39202900671)와 [Windows 데스크톱 릴리즈 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/39202900772)가 통과했다. artifact는 0개다.
+
 ## 완료와 갱신 규칙
 
 한 번에 한 작업을 수행한다. 상태는 대기 → 진행 → 검증 → 완료로 갱신하며, 작업 시작 시 담당과 branch/PR을 기록한다. 범위가 달라지면 ID는 유지하고 변경 이유를 기록한다.

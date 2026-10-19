@@ -2,6 +2,8 @@
 
 이 문서는 OPT-021의 현재 계약과 검증 범위를 연결한다. 앱 버전은 **0.1.9**, 현재 검증 런타임은 **`209053f0b25a07123017099bdcd6f3ebff6c8f3d`**이다. `22546ee`의 최초 기록은 날짜·범위를 붙여 이력으로 보존한다. [현재 한컴·큰 실제 문서 기록](HANCOM_QA_2026-10-16.md)과 [화면 가독성 기록](UI_READABILITY_2026-10-16.md)을 함께 참고한다. 같은 앱 버전이라도 다른 커밋의 테스트를 그대로 승인 근거로 사용할 수 없다. 이 기록은 사전 배포 검증이며 최종 제품 출시·기관 배포 승인이 아니다.
 
+2026-10-19 의존성 갱신: `579d0a8`은 개발·패키징 도구의 lockfile만 바꿨다. 앱 코드와 배포 런타임(sharp 0.35.5, Electron 42.11.13)은 `209053f`와 같고 electron-builder는 26.17.0이 됐다. 이 head(`29eed90`)의 자동 검사와 Windows 실제 패키지 검사를 다시 통과했다(아래 보안 audit 판정). 한컴·큰 실제 문서 수동 확인은 계속 `209053f` 패키지 기준이며 새 패키지에서 반복하지 않았다.
+
 2026-10-15 문서 정합성 확인 이력: XML/문서/이미지/자원 보존 대상 57개와 audit 정책 9개 테스트를 먼저 통과한 뒤, 로컬 전체 90개 파일·730개 통과·1개 skip, typecheck/build·release hygiene·runtime audit를 통과했다. 변경 문서 9개의 상대 링크와 아래 Windows 실행의 정확한 head SHA·success·artifact 0개를 확인했다. 문서 수정으로 새 수동 QA나 새 Windows 런타임 검증을 수행했다고 주장하지 않는다.
 
 ## 보존 및 검증 계약
@@ -58,7 +60,7 @@ safe도 ZIP/XML 바이트 전체가 동일하다는 뜻은 아니다. advanced �
 
 ## 보안 audit 판정
 
-`npm run release:audit`는 production audit와 full audit의 완전한 응답을 요구하고 production 의존성 및 배포되는 Electron의 **moderate 이상** 취약점으로 차단한다. 나머지 빌드 도구도 전체 audit에 표시한다. `22546ee`의 과거 Windows 실행과 `209053f`의 현재 Windows 실행은 각각 runtime moderate 이상 **0**, full audit **20개(high 8·moderate 11·low 1)**였다. 이는 알려진 취약점의 당시 조회 결과이며 전체 취약점 0·미래 안전성 선언이 아니다. gate 실패·조회 실패를 통과로 기록하지 않는다.
+`npm run release:audit`는 production audit와 full audit의 완전한 응답을 요구하고 production 의존성 및 배포되는 Electron의 **moderate 이상** 취약점으로 차단한다. 나머지 빌드 도구도 전체 audit에 표시한다. `22546ee`의 과거 Windows 실행과 `209053f`의 현재 Windows 실행은 각각 runtime moderate 이상 **0**, full audit **20개(high 8·moderate 11·low 1)**였다. 2026-10-19 `29eed90`은 npm 11.19.0의 `npm audit fix`(호환 범위 갱신)로 runtime moderate 이상 **0**, full audit **8개(high 0·moderate 8·low 0)**가 됐다. 남은 8개는 electron-builder 계열이며 major 변경이 필요해 보류했다. [PR 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/39202900671)의 Linux/Node 22.12.0·24.21.0과 Windows CLI가 792개 테스트를, Linux 둘은 11+4+9+3개 Electron 흐름·40개 화면 조건을 통과했다. [Windows 데스크톱 릴리즈 검사](https://github.com/eunsang26/hwpx-optimizer/actions/runs/39202900772)는 같은 테스트·audit·NSIS와 소스/실제 패키지 각각의 11+4+9+3개 흐름을 통과했다. 두 실행의 artifact는 0개다. 이는 알려진 취약점의 당시 조회 결과이며 전체 취약점 0·미래 안전성 선언이 아니다. gate 실패·조회 실패를 통과로 기록하지 않는다.
 
 ## 실제 문서·한컴·기관 PC 수동 검증
 
